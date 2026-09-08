@@ -48,7 +48,13 @@ public sealed class MlpGenome : IGenome
 
     public MlpBrain ToBrain() => new MlpBrain(_sizes, _weights);
 
-    public static MlpGenome Random(DeterministicRandom rng, int[] sizes)
+    /// <summary>
+    /// Genoma aleatorio. <paramref name="rng"/> se pasa por REFERENCIA: consume
+    /// la secuencia del llamador (DeterministicRandom es un struct y por valor
+    /// se mutaría una copia: cada genoma saldría idéntico y el flujo jamás
+    /// avanzaría). Corregido en Fase 3.
+    /// </summary>
+    public static MlpGenome Random(ref DeterministicRandom rng, int[] sizes)
     {
         int n = MlpBrain.ExpectedWeightCount(sizes);
         var w = new float[n];
@@ -57,8 +63,9 @@ public sealed class MlpGenome : IGenome
         return new MlpGenome(sizes, w);
     }
 
-    /// <summary>Crossover uniforme: cada peso viene del padre A o del B (50/50).</summary>
-    public static MlpGenome Crossover(MlpGenome a, MlpGenome b, DeterministicRandom rng)
+    /// <summary>Crossover uniforme: cada peso viene del padre A o del B (50/50).
+    /// El RNG se pasa por referencia (ver <see cref="Random"/>).</summary>
+    public static MlpGenome Crossover(MlpGenome a, MlpGenome b, ref DeterministicRandom rng)
     {
         if (a.WeightCount != b.WeightCount)
             throw new ArgumentException("Los genomas deben tener la misma topología para cruzarse.");
@@ -70,8 +77,9 @@ public sealed class MlpGenome : IGenome
         return new MlpGenome(a._sizes, w);
     }
 
-    /// <summary>Mutación gaussiana aditiva con σ (Box-Muller sobre el RNG determinista).</summary>
-    public void Mutate(DeterministicRandom rng, float sigma = DefaultSigma)
+    /// <summary>Mutación gaussiana aditiva con σ (Box-Muller sobre el RNG determinista).
+    /// El RNG se pasa por referencia (ver <see cref="Random"/>).</summary>
+    public void Mutate(ref DeterministicRandom rng, float sigma = DefaultSigma)
     {
         for (int i = 0; i < _weights.Length; i++)
         {

@@ -5,8 +5,10 @@ Simulación en tiempo real de hormigueros realistas con **neuroevolución contin
 recursos, múltiples especies y render Unity 2D → 3D. Núcleo .NET **headless y
 determinista** desacoplado del motor gráfico.
 
-Estado actual: **Fases 0–2 completadas** (núcleo determinista + mundo + neuroevolución:
-pool élite, fitness al morir, cuarentena de inmigrantes y formato `.antgenome`). Ver
+Estado actual: **Fases 0–3 completadas** (núcleo determinista + mundo + neuroevolución:
+pool élite, fitness al morir, cuarentena de inmigrantes, formato `.antgenome` y
+**pre-entrenamiento headless** con currículo por etapas sobre una arena de WorldSim
+hasta alcanzar competencia mínima de forrajeo). Ver
 [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo y
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados.
 
@@ -41,6 +43,10 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode world --seed 7 --ticks 1200 
 # e importación de cerebros (.antgenome)
 dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 42 --ticks 900 --grid 96 --colonies 2 --export pool.antgenome
 dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 1 --ticks 240 --grid 96 --colonies 1 --import pool.antgenome
+
+# Pre-entrenamiento headless (Fase 3): currículo 12→25→40→60 u hasta competencia
+# mínima de forrajeo; exporta la población entrenada como .antgenome
+dotnet run --project src/Tools/AntSim.Cli -- --mode pretrain --seed 4242 --pop 32 --export pretrained.antgenome
 ```
 
 ## Garantía de determinismo

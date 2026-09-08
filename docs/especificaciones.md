@@ -89,6 +89,44 @@
   conexiones con peso/enabled/innovation, orden canónico por innovation); re-innovación
   determinista al importar (linaje extranjero con bloque local disjunto); feed-forward
   v1 con topes (500 nodos / 2 000 conexiones) y validación estructural estricta.
+- **⚠️ RNG por referencia (corregido en F3)**: `DeterministicRandom` es un struct;
+  `MlpGenome.Random/Crossover/Mutate` lo recibían por valor (cada llamada mutaba una
+  copia: la secuencia nunca avanzaba y todos los genomas salían idénticos) y los
+  campos `_rng` de `GenomePool`/`CurriculumTrainer` eran `readonly` (copia defensiva
+  en `Tournament`). Ahora toman `ref` y los campos son mutables; hay tests de regresión
+  (dos extracciones o dos nacimientos consecutivos difieren).
+
+## 4bis. Pre-entrenamiento headless — Fase 3 implementada
+
+- **Arena** (`ArenaEvaluator`): un `WorldSim` nuevo por prueba con la misma semilla;
+  una hormiga, un ítem a `FoodDistance` fija al este del nido, rastro de comida
+  sembrado (gota cada ~12 u, 0.9), sin respawn (`TargetItems=0`) ni cría, stock a
+  tope. Recompensas re-equilibradas para la señal: `RewardPickup 0.5`, `RewardUnloadPerEp
+  2`, `RewardUnloadBonus 4`, `RewardSurvivalPerSecond 0.002`, `RewardDepositPerUnit 0`
+  (sin depósito: se podría cultivar sin forrajear).
+- **Competencia mínima** = un ciclo completo ida-vuelta: fitness ≥ 0.5 + 4·2 + 4 =
+  **8.5** (umbral por etapa: 8.5). La señal fiable es el fitness acumulado de la
+  hormiga (los eventos solo cubren el último paso).
+- **Rumbo inicial aleatorio determinista** por prueba (semilla de la arena): evita el
+  punto fijo reactivo de "empezar mirando a la comida" (cerebros aleatorios que se
+  enclavan orbitando el nido); varias pruebas por genoma (best-of-K) suavizan la
+  lotería de puntos fijos.
+- **Estancamiento por progreso**: si la distancia máxima al nido no crece en 1 200
+  ticks, se corta la evaluación (orbitas y bordes no gastan el presupuesto; un
+  genoma competente también se corta tras el ciclo, con el fitness ya medido).
+- **Currículo calibrado** (`CurriculumTrainer.DefaultStages`): 12 u (2 500 ticks,
+  máx 30 gens) → 25 u (5 000, 60) → 40 u (7 000, 80) → 60 u (9 000, 100);
+  `CompetenceFitness 8.5`, `MinGenerations 4`. Cada etapa transfiere la población
+  competente de la anterior y se supera cuando el mejor fitness ≥ umbral. El
+  borrador inicial (120/300 u) era inalcanzable: la visión (~40 u) no llega y el
+  rastro se evapora antes de la vuelta.
+- **Evolución del trainer**: élite (25 %) + torneo (k=3) + crossover uniforme +
+  mutación σ 0.08; `Evolve()` se ejecuta DENTRO del bucle de generaciones (bug
+  corregido en F3: antes solo se evolucionaba al final de la etapa). Reporte
+  determinista por generación (`GenerationStats`).
+- **Siembra de partidas**: `GenomePool.ReplaceElite` / `WorldSim.SeedPoolFromGenomes`
+  sustituyen la élite por la población pre-entrenada (los nacimientos usan esa élite).
+  CLI `--mode pretrain` con `--pop/--generations/--export`.
 
 ## 5. Telemetría
 

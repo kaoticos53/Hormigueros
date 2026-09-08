@@ -129,10 +129,33 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 - **Exit**: 66 tests verdes; evolución y exportación deterministas entre procesos
   (salida y archivo byte a byte idénticos); la inmigración no degrada el pool.
 
-### Fase 3 — Pre-entrenamiento headless + herramientas
-- Entrenamiento sin gráficos a velocidad máx hasta competencia mínima.
-- Modo CLI: `train`, `export`, `verify` (re-ejecución con hashes de hito).
-- **Exit**: pools pre-entrenados superan el criterio; reproducciones verificadas.
+### Fase 3 — Pre-entrenamiento headless ✅ (completada)
+- **`ArenaEvaluator`**: arena de evaluación determinista de un genoma sobre
+  `WorldSim` (una hormiga, un ítem a distancia fija del nido, rastro de comida
+  sembrado, sin respawn ni cría, recompensas re-equilibradas). Rumbo inicial
+  aleatorio determinista y **varias pruebas por genoma** (suaviza los puntos
+  fijos reactivos); detección de estancamiento por progreso (distancia máxima al
+  nido) para no gastar ticks en genomas muertos.
+- **`CurriculumTrainer`**: poblaciones, selección élite + torneo, crossover
+  uniforme y mutación σ; **currículo por etapas** con criterio de competencia
+  mínima (ida-vuelta con comida: fitness ≥ 8.5). Currículo por defecto
+  CALIBRADO empíricamente a 12→25→40→60 u (las 4 etapas se superan en ~100 s
+  con pop 32; el borrador inicial de 120/300 u era inalcanzable: la visión no
+  llega y el rastro se evapora antes de volver).
+- **Integración**: `GenomePool.ReplaceElite` + `WorldSim.SeedPoolFromGenomes`
+  siembran partidas con la población pre-entrenada; CLI `--mode pretrain` con
+  `--pop/--generations/--export` (reporte determinista por generación y
+  `.antgenome` exportado).
+- **Bug raíz corregido (latente desde Fase 2)**: `DeterministicRandom` es un
+  struct y `MlpGenome.Random/Crossover/Mutate` lo recibían **por valor** — cada
+  llamada mutaba una copia y el flujo nunca avanzaba (todos los genomas salían
+  idénticos; además `_rng` era `readonly` en `GenomePool`/`CurriculumTrainer`,
+  con copias defensivas en `Tournament`). Ahora toman `ref` y los campos ya no
+  son readonly; se añadieron tests de regresión (dos extracciones/nacimientos
+  consecutivos difieren).
+- **Exit**: 73 tests verdes; el entrenador converge a competencia con semillas
+  conocidas y el pre-entrenamiento completo es determinista entre procesos
+  (salida y `.antgenome` byte a byte idénticos).
 
 ### Fase 4 — Aplicación Unity 2D (primer hito jugable)
 - `SimPresenter`: interpolación con retraso de 1 tick, pool, feromonas GPU por tiles.

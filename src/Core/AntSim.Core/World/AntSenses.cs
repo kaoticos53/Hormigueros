@@ -72,8 +72,12 @@ public static class AntSenses
             float dist = MathF.Sqrt(bestDist2);
             if (dist > 1e-4f)
             {
-                s.FoodDx = Math.Clamp((nearest.X - a.X) / dist, -1f, 1f);
-                s.FoodDy = Math.Clamp((nearest.Y - a.Y) / dist, -1f, 1f);
+                // Vector al ítem en el marco LOCAL (X = rumbo, Y = izquierda), igual
+                // que la brújula: el cerebro ve "adelante/detrás" y "izquierda/derecha".
+                float dx = (nearest.X - a.X) / dist;
+                float dy = (nearest.Y - a.Y) / dist;
+                s.FoodDx = Math.Clamp(dx * cosH + dy * sinH, -1f, 1f);
+                s.FoodDy = Math.Clamp(-dx * sinH + dy * cosH, -1f, 1f);
             }
             s.FoodSize = nearest.SizeNormalized;
         }

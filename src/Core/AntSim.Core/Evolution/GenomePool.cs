@@ -28,7 +28,9 @@ public sealed class GenomePool
 
     private readonly List<MlpGenome> _elite = new();
     private readonly List<(MlpGenome Genome, ulong QueuedTick)> _immigrants = new();
-    private readonly DeterministicRandom _rng;
+    // No readonly: DeterministicRandom es un struct y mutar una copia defensiva
+    // descartaría el avance del flujo (bug corregido en Fase 3).
+    private DeterministicRandom _rng;
     private readonly int[] _sizes;
 
     public int TrialsEntered;
@@ -59,7 +61,7 @@ public sealed class GenomePool
         _rng = rng;
         _sizes = (int[])sizes.Clone();
         for (int i = 0; i < seedCount; i++)
-            TryAdd(MlpGenome.Random(_rng, _sizes));
+            TryAdd(MlpGenome.Random(ref _rng, _sizes));
     }
 
     /// <summary>
@@ -70,8 +72,8 @@ public sealed class GenomePool
     {
         var a = Tournament();
         var b = Tournament();
-        var child = MlpGenome.Crossover(a, b, _rng);
-        child.Mutate(_rng);
+        var child = MlpGenome.Crossover(a, b, ref _rng);
+        child.Mutate(ref _rng);
         child.Fitness = 0.0;
         return child;
     }
@@ -82,6 +84,20 @@ public sealed class GenomePool
         if (genome is null || double.IsNaN(fitness) || double.IsInfinity(fitness)) return;
         genome.Fitness = fitness;
         TryAdd(genome);
+    }
+
+    /// <summary>
+    /// Reemplaza la élite completa por una lista de genomas (Fase 3: siembra
+    /// del pool con poblaciones pre-entrenadas). Inserta ordenado por fitness
+    /// descendente y respeta la capacidad; los genomas se clonan para que el
+    /// pool sea dueño de su estado.
+    /// </summary>
+    public void ReplaceElite(IReadOnlyList<MlpGenome> genomes)
+    {
+        _elite.Clear();
+        if (genomes is null) return;
+        foreach (var g in genomes)
+            TryAdd(g.Clone());
     }
 
     /// <summary>Inserta ordenado por fitness descendente; descarta si es peor que el peor élite.</summary>

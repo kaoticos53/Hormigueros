@@ -1,6 +1,8 @@
 using System;
 using System.Globalization;
+using AntSim.Core.Evolution;
 using AntSim.Core.Scenario;
+using AntSim.Core.Training;
 using AntSim.Core.World;
 
 namespace AntSim.Cli;
@@ -9,17 +11,22 @@ namespace AntSim.Cli;
 /// antsim — herramienta headless (predecesora del modo análisis/verificación).
 ///
 /// Uso:
-///   antsim [--mode micro|world|evolve] [--seed N] [--ticks N] [--grid N]
+///   antsim [--mode micro|world|evolve|pretrain] [--seed N] [--ticks N] [--grid N]
 ///          [--colonies N] [--import archivo.antgenome] [--export archivo.antgenome]
+///          [--pop N] [--generations N]
 ///
 /// Modos:
-///   micro  — microcosmos de cimientos (RNG + feromonas + MLP + validación).
-///   world  — mundo completo de Fase 1 (hormigas, comida, nido, ColonyController).
-///   evolve — mundo con neuroevolución (Fase 2): pool élite, fitness al morir,
-///            inmigración con cuarentena; con --import encola genomas externos y
-///            con --export escribe la élite final.
+///   micro    — microcosmos de cimientos (RNG + feromonas + MLP + validación).
+///   world    — mundo completo de Fase 1 (hormigas, comida, nido, ColonyController).
+///   evolve   — mundo con neuroevolución (Fase 2): pool élite, fitness al morir,
+///              inmigración con cuarentena; con --import encola genomas externos y
+///              con --export escribe la élite final.
+///   pretrain — pre-entrenamiento headless (Fase 3): currículo por etapas sobre la
+///              arena de WorldSim hasta alcanzar competencia mínima (ida-vuelta con
+///              comida); con --export escribe la población entrenada.
 ///
-/// Todos emiten hashes de hito por tick: misma semilla ⇒ salida idéntica.
+/// Todos emiten hashes de hito por tick (o reportes deterministas): misma semilla ⇒
+/// salida idéntica.
 /// </summary>
 internal static class Program
 {
@@ -30,6 +37,8 @@ internal static class Program
         int ticks = 1200;
         int grid = 96;
         int colonies = 2;
+        int pop = 16;
+        int generations = 0; // 0 = usa el tope de cada etapa (30/60/80/100)
         string? importPath = null;
         string? exportPath = null;
 
@@ -43,8 +52,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                    if (mode != "micro" && mode != "world" && mode != "evolve")
-                        return Fail("--mode debe ser 'micro', 'world' o 'evolve'.");
+                    if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain")
+                        return Fail("--mode debe ser 'micro', 'world', 'evolve' o 'pretrain'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -61,6 +70,14 @@ internal static class Program
                 case "--colonies":
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out colonies) || colonies < 1)
                         return Fail("--colonies requiere un entero ≥ 1.");
+                    break;
+                case "--pop":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out pop) || pop < 2)
+                        return Fail("--pop requiere un entero ≥ 2.");
+                    break;
+                case "--generations":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out generations) || generations < 1)
+                        return Fail("--generations requiere un entero ≥ 1.");
                     break;
                 case "--import":
                     importPath = Next(args, ref i);
@@ -79,6 +96,7 @@ internal static class Program
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, exportPath),
+                "pretrain" => RunPretrain(seed, pop, generations, exportPath),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);
@@ -138,6 +156,49 @@ internal static class Program
         return sb.ToString();
     }
 
+    private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath)
+    {
+        // Currículo calibrado (Fase 3); --generations limita el máximo por etapa.
+        var stages = new System.Collections.Generic.List<CurriculumStage>();
+        foreach (var s in CurriculumTrainer.DefaultStages())
+        {
+            stages.Add(new CurriculumStage
+            {
+                Name = s.Name,
+                FoodDistance = s.FoodDistance,
+                TickBudget = s.TickBudget,
+                CompetenceFitness = s.CompetenceFitness,
+                MinGenerations = s.MinGenerations,
+                MaxGenerations = generations > 0 ? Math.Min(s.MaxGenerations, generations) : s.MaxGenerations
+            });
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("seed ").Append(seed).Append(" pop ").Append(pop).AppendLine();
+
+        var trainer = new CurriculumTrainer(seed, pop, stages, stats =>
+        {
+            sb.Append("gen stage=").Append(stats.Stage)
+              .Append(" gen=").Append(stats.Generation)
+              .Append(" best=").Append(stats.BestFitness.ToString("0.000", CultureInfo.InvariantCulture))
+              .Append(" mean=").Append(stats.MeanFitness.ToString("0.000", CultureInfo.InvariantCulture))
+              .Append(" competent=").Append(stats.CompetentCount)
+              .AppendLine();
+        });
+
+        var trained = trainer.Run();
+        sb.Append("trained ").Append(trained.Count).Append(" genomes, stages ").Append(trainer.Report[trainer.Report.Count - 1].Stage).AppendLine();
+
+        if (exportPath != null)
+        {
+            AntGenomeFile.WriteFile(exportPath, "pretrain", SpeciesDescriptor.LasiusNiger.Name,
+                seed, 0, trained, AntSim.Core.Brain.BrainContract.CurrentVersion);
+            sb.Append("exported ").Append(trained.Count).Append(" genomes to ").Append(exportPath).AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
     private static string PoolStatsLine(WorldSim sim)
     {
         var sb = new System.Text.StringBuilder();
@@ -181,6 +242,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--export f]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--export f] [--pop N] [--generations N]");
     }
 }

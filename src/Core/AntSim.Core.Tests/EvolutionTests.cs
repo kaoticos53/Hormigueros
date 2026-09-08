@@ -16,13 +16,33 @@ public class EvolutionTests
 
     private static DeterministicRandom NewRng(ulong seed) => new(seed);
 
+    // Los métodos de MlpGenome toman el RNG por referencia (Fase 3): helpers
+    // que crean un flujo local por llamada para conservar la semántica anterior.
+    private static MlpGenome Rand(ulong seed)
+    {
+        var rng = NewRng(seed);
+        return MlpGenome.Random(ref rng, Sizes);
+    }
+
+    private static MlpGenome Cross(MlpGenome a, MlpGenome b, ulong seed)
+    {
+        var rng = NewRng(seed);
+        return MlpGenome.Crossover(a, b, ref rng);
+    }
+
+    private static void Mut(MlpGenome g, ulong seed, float sigma = MlpGenome.DefaultSigma)
+    {
+        var rng = NewRng(seed);
+        g.Mutate(ref rng, sigma);
+    }
+
     [Fact]
     public void MlpGenome_Clone_IsIndependent()
     {
-        var g = MlpGenome.Random(NewRng(1), Sizes);
+        var g = Rand(1);
         g.Fitness = 5.0;
         var clone = g.Clone();
-        clone.Mutate(NewRng(2));
+        Mut(clone, 2);
 
         Assert.NotEqual(clone.CopyWeights(), g.CopyWeights());
         Assert.Equal(5.0, g.Fitness);
@@ -31,10 +51,10 @@ public class EvolutionTests
     [Fact]
     public void Crossover_IsDeterministic_AndMixesParents()
     {
-        var a = MlpGenome.Random(NewRng(1), Sizes);
-        var b = MlpGenome.Random(NewRng(2), Sizes);
-        var c1 = MlpGenome.Crossover(a, b, NewRng(42));
-        var c2 = MlpGenome.Crossover(a, b, NewRng(42));
+        var a = Rand(1);
+        var b = Rand(2);
+        var c1 = Cross(a, b, 42);
+        var c2 = Cross(a, b, 42);
 
         Assert.Equal(c1.CopyWeights(), c2.CopyWeights());
         // El hijo mezcla pesos de ambos padres (no es idéntico a ninguno en general).
@@ -45,11 +65,11 @@ public class EvolutionTests
     [Fact]
     public void Mutate_IsDeterministic_AndChangesWeights()
     {
-        var g1 = MlpGenome.Random(NewRng(7), Sizes);
+        var g1 = Rand(7);
         var g2 = g1.Clone();
         float[] orig = g1.CopyWeights(); // antes de mutar
-        g1.Mutate(NewRng(9), 0.05f);
-        g2.Mutate(NewRng(9), 0.05f);
+        Mut(g1, 9, 0.05f);
+        Mut(g2, 9, 0.05f);
         Assert.Equal(g1.CopyWeights(), g2.CopyWeights());
 
         int changed = 0;
@@ -61,9 +81,9 @@ public class EvolutionTests
     [Fact]
     public void Distance_SameGenome_IsZero_AndDifferentIsPositive()
     {
-        var a = MlpGenome.Random(NewRng(3), Sizes);
+        var a = Rand(3);
         Assert.Equal(0.0, a.DistanceTo(a.Clone()));
-        Assert.True(a.DistanceTo(MlpGenome.Random(NewRng(4), Sizes)) > 0.0);
+        Assert.True(a.DistanceTo(Rand(4)) > 0.0);
     }
 
     [Fact]
@@ -75,15 +95,15 @@ public class EvolutionTests
         int toFill = GenomePool.EliteCapacity - pool.EliteCount;
         for (int i = 0; i < toFill; i++)
         {
-            var filler = MlpGenome.Random(NewRng((ulong)(1000 + i)), Sizes);
+            var filler = Rand((ulong)(1000 + i));
             filler.Fitness = 0.0;
             pool.TryAdd(filler);
         }
         Assert.Equal(GenomePool.EliteCapacity, pool.EliteCount);
 
-        var good = MlpGenome.Random(NewRng(2), Sizes);
+        var good = Rand(2);
         good.Fitness = 100.0;
-        var bad = MlpGenome.Random(NewRng(3), Sizes);
+        var bad = Rand(3);
         bad.Fitness = -100.0;
 
         Assert.False(pool.TryAdd(bad)); // peor que el peor ⇒ no entra
@@ -112,10 +132,38 @@ public class EvolutionTests
     }
 
     [Fact]
+    public void MlpGenome_Random_AdvancesTheRng_SoDrawsDiffer()
+    {
+        // Regresión Fase 3: DeterministicRandom es un struct; pasar el flujo por
+        // valor congelaba la secuencia y todos los genomas salían idénticos.
+        var rng = NewRng(7);
+        var g1 = MlpGenome.Random(ref rng, Sizes);
+        var g2 = MlpGenome.Random(ref rng, Sizes);
+        var g3 = MlpGenome.Random(ref rng, Sizes);
+
+        Assert.NotEqual(g1.CopyWeights(), g2.CopyWeights());
+        Assert.NotEqual(g2.CopyWeights(), g3.CopyWeights());
+    }
+
+    [Fact]
+    public void Pool_Birth_AdvancesTheRng_SoConsecutiveBirthsDiffer()
+    {
+        // Regresión Fase 3: el RNG del pool también era readonly (copia
+        // defensiva): todos los nacimientos eran el mismo crossover + mutación.
+        var pool = new GenomePool(NewRng(5), Sizes, seedCount: 16);
+        var b1 = pool.Birth();
+        var b2 = pool.Birth();
+        var b3 = pool.Birth();
+
+        Assert.NotEqual(b1.CopyWeights(), b2.CopyWeights());
+        Assert.NotEqual(b2.CopyWeights(), b3.CopyWeights());
+    }
+
+    [Fact]
     public void Immigrant_UsedBeforeNative_AndExpires_AfterWindow()
     {
         var pool = new GenomePool(NewRng(1), Sizes, seedCount: 4);
-        var immigrant = MlpGenome.Random(NewRng(2), Sizes);
+        var immigrant = Rand(2);
         pool.QueueImmigrant(immigrant, nowTick: 0);
 
         // Dentro de la ventana: el inmigrante se usa antes que un nacimiento.
@@ -124,7 +172,7 @@ public class EvolutionTests
         Assert.False(pool.TryNextImmigrant(nowTick: 11, out _)); // cola vacía
 
         // Un inmigrante encolado demasiado tarde vence sin usarse.
-        pool.QueueImmigrant(MlpGenome.Random(NewRng(3), Sizes), nowTick: 0);
+        pool.QueueImmigrant(Rand(3), nowTick: 0);
         Assert.False(pool.TryNextImmigrant(nowTick: GenomePool.ImmigrantWindowTicks + 1, out _));
         Assert.Equal(1, pool.TrialsExpired);
     }
@@ -136,7 +184,7 @@ public class EvolutionTests
         var pool = new GenomePool(NewRng(1), Sizes, seedCount: 16);
         for (int i = 0; i < GenomePool.EliteCapacity; i++)
         {
-            var g = MlpGenome.Random(NewRng((ulong)(100 + i)), Sizes);
+            var g = Rand((ulong)(100 + i));
             g.Fitness = 50.0 + i; // 50..113
             pool.TryAdd(g);
         }
@@ -144,12 +192,12 @@ public class EvolutionTests
         double p50 = pool.Elite[pool.EliteCount / 2].Fitness;
         Assert.True(p50 > 50.0);
 
-        var weak = MlpGenome.Random(NewRng(7), Sizes);
+        var weak = Rand(7);
         Assert.Equal(TrialResult.Discarded, pool.CompleteTrial(weak, fitness: 1.0, nowTick: 0));
         Assert.DoesNotContain(weak, pool.Elite);
         Assert.Equal(1, pool.TrialsDiscarded);
 
-        var strong = MlpGenome.Random(NewRng(8), Sizes);
+        var strong = Rand(8);
         Assert.Equal(TrialResult.EnteredElite, pool.CompleteTrial(strong, fitness: 100.0, nowTick: 0));
         Assert.Contains(strong, pool.Elite);
         Assert.Equal(1, pool.TrialsEntered);
@@ -160,8 +208,8 @@ public class EvolutionTests
     {
         var genomes = new List<MlpGenome>
         {
-            MlpGenome.Random(NewRng(1), Sizes),
-            MlpGenome.Random(NewRng(2), Sizes)
+            Rand(1),
+            Rand(2)
         };
         genomes[0].Fitness = 7.5;
         genomes[1].Fitness = 3.25;
@@ -189,7 +237,7 @@ public class EvolutionTests
     [Fact]
     public void AntGenomeFile_RejectsCorruption_AndContractMismatch()
     {
-        var genomes = new List<MlpGenome> { MlpGenome.Random(NewRng(1), Sizes) };
+        var genomes = new List<MlpGenome> { Rand(1) };
         byte[] data = AntGenomeFile.Serialize("n", "s", 0UL, 0, genomes, BrainContract.CurrentVersion);
 
         var corrupted = (byte[])data.Clone();
@@ -222,7 +270,7 @@ public class EvolutionTests
     public void Import_QueuesImmigrants_AndExport_MatchesElite()
     {
         var sim = new WorldSim(8UL, 128, 1);
-        var genomes = new List<MlpGenome> { MlpGenome.Random(NewRng(9), Sizes), MlpGenome.Random(NewRng(10), Sizes) };
+        var genomes = new List<MlpGenome> { Rand(9), Rand(10) };
         sim.ImportGenomes(0, genomes);
 
         Assert.Equal(2, sim.Colonies[0].Pool.PendingImmigrants);

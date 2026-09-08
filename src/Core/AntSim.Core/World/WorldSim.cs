@@ -27,7 +27,7 @@ public sealed class WorldSim
     public const float NestRadius = 24f;
     public const int InitialAdults = 10;
     public const int InitialEggs = 4;
-    public const int TargetItems = 24;
+    public const int TargetItemsDefault = 24;
     public const int RespawnBudgetPerStep = 2;
     public const int PheromoneUpdateEvery = 10;
     public const float NestMinSpawnDistance = 200f;
@@ -41,10 +41,17 @@ public sealed class WorldSim
 
     private static readonly int[] BrainSizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
 
-    // — Fitness (Fase 2): recompensas de por vida —
-    private const float RewardPickup = 0.5f;
-    private const float RewardUnloadPerEp = 2.0f;
-    private const float RewardSurvivalPerSecond = 0.01f;
+    // — Fitness (Fase 2): recompensas de por vida. Configurables para que la
+    // arena de pre-entrenamiento (Fase 3) pueda re-equilibrar la señal sin
+    // tocar el contrato de determinismo (mismos valores ⇒ mismo mundo).
+    public float RewardPickup { get; set; } = 0.5f;
+    public float RewardUnloadPerEp { get; set; } = 2.0f;
+    public float RewardSurvivalPerSecond { get; set; } = 0.01f;
+    public float RewardDepositPerUnit { get; set; } = 0.0f; // refuerzo del depósito de feromona (arena)
+    public float RewardUnloadBonus { get; set; } = 0.0f;    // bonus plano por ciclo completo (arena)
+
+    /// <summary>Objetivo de ítems en el mundo (la arena lo pone a 0).</summary>
+    public int TargetItems { get; set; } = TargetItemsDefault;
 
     public ulong Tick { get; private set; }
 
@@ -77,7 +84,7 @@ public sealed class WorldSim
             _colonies.Add(colony);
         }
 
-        for (int i = 0; i < TargetItems; i++)
+        for (int i = 0; i < TargetItemsDefault; i++)
             SpawnItem();
     }
 
@@ -241,6 +248,8 @@ public sealed class WorldSim
             colony.AlarmLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
         }
         ant.Energy = Math.Max(0f, ant.Energy - deposited * sp.CostDeposit / ant.EnergyCapacity);
+        if (deposited > 0f && RewardDepositPerUnit > 0f)
+            ant.Fitness += deposited * RewardDepositPerUnit;
 
         // — Interacción (gating físico) —
         ant.InteractCooldown = Math.Max(0f, ant.InteractCooldown - dt);
@@ -265,7 +274,7 @@ public sealed class WorldSim
                 float dy = ant.Y - colony.NestY;
                 if (dx * dx + dy * dy <= NestRadius * NestRadius)
                 {
-                    ant.Fitness += ant.LoadValue * RewardUnloadPerEp;
+                    ant.Fitness += ant.LoadValue * RewardUnloadPerEp + RewardUnloadBonus;
                     colony.RecordInflow(ant.LoadValue);
                     colony.InflowAccum += ant.LoadValue;
                     ant.HasLoad = false;
@@ -458,6 +467,17 @@ public sealed class WorldSim
             colony.Pool.QueueImmigrant(g, Tick);
     }
 
+    /// <summary>Vacía la lista de ítems (uso de la arena de pre-entrenamiento).</summary>
+    public void ClearItems() => _items.Clear();
+
+    /// <summary>Añade un ítem directamente (uso de la arena de pre-entrenamiento).</summary>
+    public void AddItem(FoodItem item)
+    {
+        if (item is null) throw new ArgumentNullException(nameof(item));
+        if (item.Id == 0) item.Id = _nextItemId++;
+        _items.Add(item);
+    }
+
     /// <summary>Élite actual de una colonia (orden de mérito descendente).</summary>
     public IReadOnlyList<MlpGenome> ExportElite(int colonyId) => _colonies[colonyId].Pool.Elite;
 
@@ -466,6 +486,13 @@ public sealed class WorldSim
         var (_, genomes) = AntGenomeFile.ReadFile(path, BrainContract.CurrentVersion);
         ImportGenomes(colonyId, genomes);
     }
+
+    /// <summary>
+    /// Siembra el pool élite de una colonia con genomas pre-entrenados
+    /// (Fase 3): desde ese momento los nacimientos usan esta élite.
+    /// </summary>
+    public void SeedPoolFromGenomes(int colonyId, IReadOnlyList<MlpGenome> genomes)
+        => _colonies[colonyId].Pool.ReplaceElite(genomes);
 
     public void ExportEliteToFile(int colonyId, string path, string name, string speciesHint)
     {
