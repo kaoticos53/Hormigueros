@@ -102,13 +102,18 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 - Microcosmos headless con hashes de hito (determinismo fin-a-fin verificado).
 - **Exit**: 36 tests verdes; dos ejecuciones de la CLI con la misma semilla ⇒ salida idéntica.
 
-### Fase 1 — Core de simulación
-- Mundo continuo, hormigas (movimiento, energía, muerte), comida y nido.
-- Feromonas por colonia completa (sonda 3 puntos, regiones activas, tiles sucios).
-- `IBrain` MLP conectado a la simulación; validación con gating físico/químico.
-- `ColonyController`: puesta, vigor, cría (huevo→larva→pupa→adulta), escasez.
-- Snapshot/eventos (canales A/B) y `ColonyStat`.
-- **Exit**: simulación 30 Hz determinista con 2 colonias; tests de gating, feromonas y ColonyController verdes.
+### Fase 1 — Core de simulación ✅ (completada)
+- Mundo continuo con hormigas (movimiento, energía, muerte por edad/hambre), ítems
+  de comida con respawn y nidos; feromonas por colonia (Food/Home/Alarm) con
+  sonda de 3 puntos y evaporación/difusión periódica.
+- `IBrain` MLP conectado a la simulación; validación con sanitización/clamp y
+  gating físico/químico (pickup/unload/depósito con carga).
+- `ColonyController` completo: puesta con ρ_res por T_runway, vigor del recién
+  nacido (fuerte/minim), cría huevo→larva→pupa→adulta con tope duro de 40
+  adultas, y canibalismo escalonado por umbrales (oofagia → larvas débiles → pupas).
+- Eventos del Canal B (nacimientos, muertes, pickups, unloads, puesta, eclosiones).
+- Hashes de hito del mundo completo (`WorldSim.HashLine`); CLI `--mode world`.
+- **Exit**: 54 tests verdes; dos ejecuciones del mundo con la misma semilla ⇒ salida idéntica.
 
 ### Fase 2 — Neuroevolución (GA)
 - `IGenome`, pool élite, crossover/mutación, fitness al morir.

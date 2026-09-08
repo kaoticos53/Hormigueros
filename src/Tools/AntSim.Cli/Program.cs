@@ -8,18 +8,24 @@ namespace AntSim.Cli;
 /// antsim — herramienta headless (predecesora del modo análisis/verificación).
 ///
 /// Uso:
-///   antsim --seed 12345 --ticks 1200 [--grid 96]
+///   antsim [--mode micro|world] [--seed N] [--ticks N] [--grid N] [--colonies N]
 ///
-/// Ejecuta el microcosmos determinista e imprime hashes de hito por tick.
-/// Dos ejecuciones con la misma semilla deben producir salida idéntica.
+/// Modos:
+///   micro — microcosmos de cimientos (RNG + feromonas + MLP + validación).
+///   world — mundo completo de Fase 1 (hormigas, comida, nido, ColonyController).
+///
+/// Ambos emiten hashes de hito por tick. Dos ejecuciones con la misma semilla
+/// deben producir salida idéntica.
 /// </summary>
 internal static class Program
 {
     private static int Main(string[] args)
     {
+        string mode = "micro";
         ulong seed = 12345UL;
         int ticks = 1200;
         int grid = 96;
+        int colonies = 2;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -29,6 +35,11 @@ internal static class Program
                 case "-h":
                     PrintUsage();
                     return 0;
+                case "--mode":
+                    mode = Next(args, ref i);
+                    if (mode != "micro" && mode != "world")
+                        return Fail("--mode debe ser 'micro' o 'world'.");
+                    break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
                         return Fail("--seed requiere un entero sin signo.");
@@ -41,6 +52,10 @@ internal static class Program
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out grid) || grid < 8)
                         return Fail("--grid requiere un entero ≥ 8.");
                     break;
+                case "--colonies":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out colonies) || colonies < 1)
+                        return Fail("--colonies requiere un entero ≥ 1.");
+                    break;
                 default:
                     return Fail($"Argumento desconocido: {args[i]}");
             }
@@ -48,7 +63,9 @@ internal static class Program
 
         try
         {
-            string output = Microcosm.Run(seed, ticks, grid);
+            string output = mode == "world"
+                ? WorldScenario.Run(seed, ticks, colonies, grid)
+                : Microcosm.Run(seed, ticks, grid);
             Console.Out.Write(output);
             return 0;
         }
@@ -75,6 +92,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--seed N] [--ticks N] [--grid N]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world] [--seed N] [--ticks N] [--grid N] [--colonies N]");
     }
 }

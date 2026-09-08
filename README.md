@@ -5,7 +5,8 @@ Simulación en tiempo real de hormigueros realistas con **neuroevolución contin
 recursos, múltiples especies y render Unity 2D → 3D. Núcleo .NET **headless y
 determinista** desacoplado del motor gráfico.
 
-Estado actual: **Fase 0 completada** (andamiaje + cimientos de Fase 1). Ver
+Estado actual: **Fase 0 y Fase 1 completadas** (núcleo determinista + mundo con
+hormigas, comida, nido y ColonyController). Ver
 [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo y
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados.
 
@@ -31,7 +32,10 @@ AntSim.slnx
 dotnet test AntSim.slnx
 
 # Microcosmos determinista (dos ejecuciones con la misma semilla → salida idéntica)
-dotnet run --project src/Tools/AntSim.Cli -- --seed 42 --ticks 600 --grid 64
+dotnet run --project src/Tools/AntSim.Cli -- --mode micro --seed 42 --ticks 600 --grid 64
+
+# Mundo completo de Fase 1 (2 colonias con hormigas, comida, cría y ColonyController)
+dotnet run --project src/Tools/AntSim.Cli -- --mode world --seed 7 --ticks 1200 --grid 128 --colonies 2
 ```
 
 ## Garantía de determinismo

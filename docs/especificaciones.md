@@ -55,10 +55,15 @@
   *minim* débil si `K_min ≤ nutr < K_full` en `τ_larvaMax`, muerte si no llega.
   `v = clamp(g0·(0.55 + 0.45·n̄), 0.15, 1.15)` modula energía inicial, vida,
   velocidad, carga y radios. Atta: `n̄ ≥ 1.15` habilita la casta soldado (F5).
+  `b_ideal` se deriva de las constantes (`K_full/τ_larvaMax × 1.1`) para que una
+  larva bien alimentada siempre pueda alcanzar K_full dentro del plazo.
 - **Umbrales de escasez** (runway en segundos; Lasius): `T_safe 40` → puesta a tope;
   `T_ooph 25` → oofagia (reabsorber huevos, η ≈ 0.3); `T_cann 15` → canibalismo
   larval (las más débiles primero, `η_larva·nutr`); `T_crit 8` → racionar adultas
   y, en último recurso, pupas. Orden de sacrificio: huevos → larvas débiles → pupas.
+  El acumulador de canibalismo **solo come lo que puede pagar** (compara contra la
+  recuperación de la víctima más barata): no sobregira, es determinista y corta
+  los bucles con recuperación 0.
 - Alimentación priorizada por paso: reina → adultas → larvas (si `T_runway > T_cann`);
   reparto equitativo; nodrizas limitan la tasa de alimentación larval.
 
