@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>AntSim.Core</RootNamespace>
+    <AssemblyName>AntSim.Core</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- El Core no debe depender de Unity ni de ningún motor gráfico. -->
+  </PropertyGroup>
+
+</Project>

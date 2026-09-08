@@ -1,0 +1,33 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Unity (cuando se añada src/App/AntSim.Unity)
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+*.csproj.bak
+
+# Artefactos de ejecución
+*.antsave
+*.antlog
+*.antgenome
+*.antmetrics
+*.anttrace
+
+# Estado de la aplicación (Freebuff/IDE)
+.freebuff/
+
+# Sistema
+.DS_Store
+Thumbs.db

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/AntSim.Core.Tests/AntSim.Core.Tests.csproj" />
+    <Project Path="src/Core/AntSim.Core/AntSim.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Tools/">
+    <Project Path="src/Tools/AntSim.Cli/AntSim.Cli.csproj" />
+  </Folder>
+</Solution>
