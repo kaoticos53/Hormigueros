@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using AntSim.Core.Brain;
 using AntSim.Core.Contracts;
+using AntSim.Core.Evolution;
 using AntSim.Core.Pheromone;
 using AntSim.Core.Serialization;
 using AntSim.Core.Sim;
@@ -32,11 +33,18 @@ public sealed class WorldSim
     public const float NestMinSpawnDistance = 200f;
 
     private readonly ulong _seed;
-    private readonly DeterministicRandom _worldRng;
+    private DeterministicRandom _worldRng; // mutable: SpawnItem/Forks avanzan el flujo
     private readonly List<SimEvent> _events = new();
     private uint _nextAntId = 1;
     private uint _nextItemId = 1;
     private readonly int _gridCells;
+
+    private static readonly int[] BrainSizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
+
+    // — Fitness (Fase 2): recompensas de por vida —
+    private const float RewardPickup = 0.5f;
+    private const float RewardUnloadPerEp = 2.0f;
+    private const float RewardSurvivalPerSecond = 0.01f;
 
     public ulong Tick { get; private set; }
 
@@ -62,22 +70,10 @@ public sealed class WorldSim
         WorldHeight = gridCells * SimConstants.CellSizeUnits;
         _worldRng = new DeterministicRandom(seed);
 
-        // Cerebros deterministas por colonia (los genomas llegan en Fase 2).
-        var brains = new IBrain[colonyCount];
-        for (int c = 0; c < colonyCount; c++)
-        {
-            int[] sizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
-            int n = MlpBrain.ExpectedWeightCount(sizes);
-            var w = new float[n];
-            for (int i = 0; i < n; i++)
-                w[i] = (float)(_worldRng.NextDouble01() * 2.0 - 1.0);
-            brains[c] = new MlpBrain(sizes, w);
-        }
-
         for (int c = 0; c < colonyCount; c++)
         {
             var sp = species != null && c < species.Count ? species[c] : SpeciesDescriptor.LasiusNiger;
-            var colony = CreateColony(c, sp, brains[c], colonyCount);
+            var colony = CreateColony(c, sp, colonyCount);
             _colonies.Add(colony);
         }
 
@@ -85,7 +81,7 @@ public sealed class WorldSim
             SpawnItem();
     }
 
-    private Colony CreateColony(int id, SpeciesDescriptor sp, IBrain brain, int colonyCount)
+    private Colony CreateColony(int id, SpeciesDescriptor sp, int colonyCount)
     {
         var colony = new Colony
         {
@@ -97,7 +93,7 @@ public sealed class WorldSim
             StockMax = sp.StockMax,
             QueenEnergy = 1f,
             Rng = _worldRng.Fork(0x9E3779B97F4A7C15UL + (ulong)id * 0xBF58476D1CE4E5B9UL),
-            Brain = brain,
+            Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), BrainSizes),
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
             HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
             AlarmLayer = new PheromoneLayer(_gridCells, _gridCells),
@@ -115,6 +111,9 @@ public sealed class WorldSim
                 Heading = (float)(colony.Rng.NextDouble01() * Math.PI * 2.0 - Math.PI)
             };
             ant.InitFromVigor(sp.EnergyCapacity, sp.BaseLifespan, 0.8f);
+            // Los mejores candidatos se usan al nacer (Fase 2).
+            ant.Genome = colony.Pool.Birth();
+            ant.Brain = ant.Genome.ToBrain();
             colony.Adults.Add(ant);
         }
 
@@ -142,8 +141,36 @@ public sealed class WorldSim
         foreach (var colony in _colonies)
             ApplyDeaths(colony);
 
+        // Contamos las adultas antes del controlador para detectar las eclosiones.
+        var adultCounts = new int[_colonies.Count];
+        for (int c = 0; c < _colonies.Count; c++)
+            adultCounts[c] = _colonies[c].Adults.Count;
+
         foreach (var colony in _colonies)
             ColonyController.Step(colony, SimConstants.FixedDtSeconds, Tick, _events, ref _nextAntId);
+
+        // Los recién eclosionados reciben genoma y cerebro: inmigrante en cola
+        // (cuarentena) o nacimiento del pool élite (los mejores al nacer).
+        for (int c = 0; c < _colonies.Count; c++)
+        {
+            var colony = _colonies[c];
+            for (int i = adultCounts[c]; i < colony.Adults.Count; i++)
+            {
+                var ant = colony.Adults[i];
+                if (ant.Genome != null) continue;
+
+                if (colony.Pool.TryNextImmigrant(Tick, out var immigrant))
+                {
+                    ant.Genome = immigrant;
+                    ant.IsImmigrantTrial = true;
+                }
+                else
+                {
+                    ant.Genome = colony.Pool.Birth();
+                }
+                ant.Brain = ant.Genome.ToBrain();
+            }
+        }
 
         if (Tick % PheromoneUpdateEvery == 0)
         {
@@ -179,8 +206,11 @@ public sealed class WorldSim
 
         var sensors = AntSenses.Build(colony, ant, _items, WorldWidth, WorldHeight);
         var decision = AntDecision.Neutral();
-        colony.Brain.Evaluate(in sensors, ref decision);
+        ant.Brain.Evaluate(in sensors, ref decision);
         DecisionValidator.SanitizeAndClamp(in decision, out decision);
+
+        // Supervivencia: pequeña recompensa por estar viva cada paso.
+        ant.Fitness += RewardSurvivalPerSecond * dt;
 
         // — Movimiento —
         ant.Heading = WrapPi(ant.Heading + decision.Steer * sp.OmegaMax * dt);
@@ -223,6 +253,7 @@ public sealed class WorldSim
                 {
                     ant.HasLoad = true;
                     ant.LoadValue = item.Amount;
+                    ant.Fitness += RewardPickup;
                     _items.Remove(item);
                     ant.InteractCooldown = 0.5f;
                     _events.Add(new SimEvent(SimEventKind.Pickup, Tick, colony.Id, ant.Id, ant.X, ant.Y));
@@ -234,6 +265,7 @@ public sealed class WorldSim
                 float dy = ant.Y - colony.NestY;
                 if (dx * dx + dy * dy <= NestRadius * NestRadius)
                 {
+                    ant.Fitness += ant.LoadValue * RewardUnloadPerEp;
                     colony.RecordInflow(ant.LoadValue);
                     colony.InflowAccum += ant.LoadValue;
                     ant.HasLoad = false;
@@ -257,6 +289,23 @@ public sealed class WorldSim
             {
                 ant.Alive = false;
                 byte cause = ant.Age >= ant.Lifespan ? (byte)DeathCause.Age : (byte)DeathCause.Starvation;
+
+                // Fase 2: el fitness de por vida alimenta el acervo (o evalúa
+                // al inmigrante en cuarentena).
+                if (ant.Genome != null)
+                {
+                    if (ant.IsImmigrantTrial)
+                    {
+                        var result = colony.Pool.CompleteTrial(ant.Genome, ant.Fitness, Tick);
+                        _events.Add(new SimEvent(
+                            result == TrialResult.EnteredElite ? SimEventKind.GenomeEnteredElite : SimEventKind.GenomeDiscarded,
+                            Tick, colony.Id, ant.Id, ant.X, ant.Y, (byte)(result == TrialResult.EnteredElite ? 0 : 1)));
+                    }
+                    else
+                    {
+                        colony.Pool.RecordFitness(ant.Genome, ant.Fitness);
+                    }
+                }
                 if (ant.HasLoad)
                 {
                     var item = new FoodItem { Id = _nextItemId++, X = ant.X, Y = ant.Y, Amount = ant.LoadValue };
@@ -375,6 +424,12 @@ public sealed class WorldSim
             h.AppendFloat(col.HomeLayer.SumOfValues());
             h.AppendFloat(col.AlarmLayer.SumOfValues());
 
+            // Pool genético: estado relevante para la reproducción.
+            h.AppendInt32(col.Pool.EliteCount);
+            h.AppendInt32(col.Pool.PendingImmigrants);
+            for (int i = 0; i < col.Pool.EliteCount; i++)
+                h.AppendDouble(col.Pool.Elite[i].Fitness);
+
             for (int i = 0; i < col.Adults.Count; i++)
             {
                 var a = col.Adults[i];
@@ -382,6 +437,8 @@ public sealed class WorldSim
                 h.AppendFloat(a.X); h.AppendFloat(a.Y); h.AppendFloat(a.Heading);
                 h.AppendFloat(a.Energy); h.AppendFloat(a.Age); h.AppendFloat(a.LoadValue);
                 h.AppendBool(a.Alive); h.AppendFloat(a.InteractCooldown);
+                h.AppendDouble(a.Fitness);
+                h.AppendBool(a.IsImmigrantTrial);
             }
             for (int i = 0; i < col.Eggs.Count; i++) AppendBrood(h, col.Eggs[i]);
             for (int i = 0; i < col.Larvae.Count; i++) AppendBrood(h, col.Larvae[i]);
@@ -389,6 +446,31 @@ public sealed class WorldSim
         }
 
         return h.FinalizeHex();
+    }
+
+    // — Fase 2: intercambio de cerebros (.antgenome) —
+
+    /// <summary>Encola genomas importados como inmigrantes en cuarentena de una colonia.</summary>
+    public void ImportGenomes(int colonyId, IReadOnlyList<MlpGenome> genomes)
+    {
+        var colony = _colonies[colonyId];
+        foreach (var g in genomes)
+            colony.Pool.QueueImmigrant(g, Tick);
+    }
+
+    /// <summary>Élite actual de una colonia (orden de mérito descendente).</summary>
+    public IReadOnlyList<MlpGenome> ExportElite(int colonyId) => _colonies[colonyId].Pool.Elite;
+
+    public void ImportGenomesFromFile(int colonyId, string path)
+    {
+        var (_, genomes) = AntGenomeFile.ReadFile(path, BrainContract.CurrentVersion);
+        ImportGenomes(colonyId, genomes);
+    }
+
+    public void ExportEliteToFile(int colonyId, string path, string name, string speciesHint)
+    {
+        AntGenomeFile.WriteFile(path, name, speciesHint, _seed, 0, ExportElite(colonyId),
+            BrainContract.CurrentVersion);
     }
 
     private static void AppendBrood(CanonicalHasher h, BroodMember b)

@@ -11,7 +11,9 @@ public enum SimEventKind : byte
     Unload = 5,
     EggLaid = 6,
     Eclosed = 7,
-    ColonyFounded = 8
+    ColonyFounded = 8,
+    GenomeEnteredElite = 9,
+    GenomeDiscarded = 10
 }
 
 /// <summary>Causa de muerte (para telemetría y reproducción).</summary>

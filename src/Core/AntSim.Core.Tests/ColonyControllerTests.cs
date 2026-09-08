@@ -33,7 +33,6 @@ public class ColonyControllerTests
             StockMax = sp.StockMax,
             QueenEnergy = 1f,
             Rng = new DeterministicRandom(7UL),
-            Brain = new MlpBrain(new[] { 19, 4, 6 }, new float[MlpBrain.ExpectedWeightCount(new[] { 19, 4, 6 })]),
             FoodLayer = new PheromoneLayer(64, 64),
             HomeLayer = new PheromoneLayer(64, 64),
             AlarmLayer = new PheromoneLayer(64, 64),

@@ -76,10 +76,10 @@ public class WorldSimTests
     {
         var sim = NewSim();
         var colony = sim.Colonies[0];
-        colony.Brain = ForceBrain(0f, 2f, 10f, 0f); // interact ≈ 1
         IsolateSingleAnt(colony);
 
         var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 2f, 10f, 0f); // interact ≈ 1
         var item = sim.Items[0];
         item.X = ant.X;
         item.Y = ant.Y;
@@ -98,10 +98,10 @@ public class WorldSimTests
     {
         var sim = NewSim();
         var colony = sim.Colonies[0];
-        colony.Brain = ForceBrain(0f, 2f, 10f, 0f);
         IsolateSingleAnt(colony);
 
         var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 2f, 10f, 0f);
         ant.HasLoad = true;
         ant.LoadValue = 5f;
         float stockBefore = colony.Stock;
@@ -128,10 +128,10 @@ public class WorldSimTests
     {
         var sim = NewSim();
         var colony = sim.Colonies[0];
-        colony.Brain = ForceBrain(0f, 2f, -10f, depositBias: 10f); // depositFood ≈ 1, sin interact
         IsolateSingleAnt(colony);
 
         var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 2f, -10f, depositBias: 10f); // depositFood ≈ 1, sin interact
         int cx = (int)(ant.X / 8f);
         int cy = (int)(ant.Y / 8f);
 
@@ -154,11 +154,11 @@ public class WorldSimTests
     {
         var sim = NewSim();
         var colony = sim.Colonies[0];
-        colony.Brain = ForceBrain(0f, 10f, -10f, 0f); // velocidad alta, sin interact
-        colony.Stock = 0f; // sin alimentación
         IsolateSingleAnt(colony);
 
         var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 10f, -10f, 0f); // velocidad alta, sin interact
+        colony.Stock = 0f; // sin alimentación
         ant.Energy = 0.0005f;
         ant.HasLoad = true;
         ant.LoadValue = 3f;
@@ -178,9 +178,9 @@ public class WorldSimTests
     {
         var sim = NewSim();
         var colony = sim.Colonies[0];
-        colony.Brain = ForceBrain(0f, 0f, 0f, 0f);
 
         var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 0f, 0f, 0f);
         // El interact neutro (sigmoid(0)=0.5) puede recoger ítems: lo dejamos,
         // la muerte por edad es independiente de la carga.
         ant.Age = ant.Lifespan - 0.01f;

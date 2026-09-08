@@ -77,7 +77,7 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 | Cerebro | `IBrain`: 19 canales `AntSensors` → 6 salidas `AntDecision`; validación en 4 etapas (sanitizar NaN, clamp, gating físico/químico, cooldowns) |
 | Feromonas | Capas por colonia (Food/Home/Alarm + Territory F5); celdas 8 u; evaporación exponencial + difusión estable; sonda de 3 puntos bilineal; actualización por región activa |
 | Demografía | `ColonyController`: `λ_eggs` con ρ_res por `T_runway`; vigor del recién nacido `v = g0·(0.55+0.45·n̄)`; canibalismo escalonado determinista por umbrales |
-| Evolución | GA: pool élite, crossover/mutación, fitness de por vida; inmigración con cuarentena (120 s, fitness ≥ p50; modo diversidad si D < D_floor); σ adaptativa; diversidad comportamental sobre sondas canónicas |
+| Evolución | GA: pool élite (torneo + crossover uniforme + mutación σ), fitness de por vida; inmigración con cuarentena (ventana 120 s, fitness ≥ p50; modo diversidad si D < D_floor); diversidad v1 en espacio de pesos (sondas comportamentales y NEAT en F5) |
 | Telemetría | `ColonyStat` (tick) + `MetricFrame` (1 s sim); contadores incrementales O(1); determinista |
 | Persistencia | `.antsave` (mundo) · `.antlog` (eventos + comandos + hashes de hito) · `.antgenome` (cerebros MLP/NEAT) · `.antmetrics/.csv` · `.antevents.csv` · `.anttrace` |
 | Determinismo | RNG propio por flujo serializado; floats por bits exactos; orden canónico; etapas en orden fijo |
@@ -115,10 +115,19 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 - Hashes de hito del mundo completo (`WorldSim.HashLine`); CLI `--mode world`.
 - **Exit**: 54 tests verdes; dos ejecuciones del mundo con la misma semilla ⇒ salida idéntica.
 
-### Fase 2 — Neuroevolución (GA)
-- `IGenome`, pool élite, crossover/mutación, fitness al morir.
-- Diversidad comportamental + σ adaptativa; `.antgenome` (MLP) con cuarentena.
-- **Exit**: el fitness medio mejora en runs de referencia; la inmigración no degrada el pool.
+### Fase 2 — Neuroevolución (GA) ✅ (completada)
+- `IGenome` + `MlpGenome`: crossover uniforme, mutación gaussiana (σ 0.05),
+  clonación y distancia de pesos.
+- `GenomePool` por colonia: élite con reemplazo por fitness (los mejores al
+  nacer), nacimiento por torneo binario, diversidad v1 en espacio de pesos.
+- Fitness de por vida (pickups, descargas, supervivencia) alimenta el acervo al morir.
+- **Cuarentena de inmigrantes**: genomas importados ocupan eclosiones dentro de
+  una ventana de 120 s; entran si fitness ≥ p50 (o p25 + novedad si la diversidad
+  cae bajo el suelo); nunca degradan el pool.
+- Formato **`.antgenome` v1** canónico (magic, versiones, metadatos, pesos bit
+  exactos, SHA-256) con exportación/importación; CLI `--mode evolve` con `--import/--export`.
+- **Exit**: 66 tests verdes; evolución y exportación deterministas entre procesos
+  (salida y archivo byte a byte idénticos); la inmigración no degrada el pool.
 
 ### Fase 3 — Pre-entrenamiento headless + herramientas
 - Entrenamiento sin gráficos a velocidad máx hasta competencia mínima.

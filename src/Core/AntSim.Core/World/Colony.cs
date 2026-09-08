@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using AntSim.Core.Brain;
+using AntSim.Core.Evolution;
 using AntSim.Core.Pheromone;
 using AntSim.Core.Sim;
 
@@ -27,9 +27,8 @@ public sealed class Colony
     // — RNG propio (Fork del flujo del mundo) —
     public DeterministicRandom Rng;
 
-    // — Cerebro por defecto de la colonia (los genomas llegan en Fase 2) —
-    // Se asigna siempre en la construcción (WorldSim o tests).
-    public IBrain Brain = null!;
+    // — Pool genético de la colonia (los mejores candidatos se usan al nacer) —
+    public GenomePool Pool = null!;
 
     // — Feromonas por colonia —
     public PheromoneLayer FoodLayer = null!;

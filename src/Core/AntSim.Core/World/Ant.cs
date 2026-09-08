@@ -30,6 +30,12 @@ public sealed class Ant
     public bool HasLoad;
     public float LoadValue;         // ep del ítem transportado
 
+    // Neuroevolución (Fase 2)
+    public Evolution.MlpGenome? Genome;   // genoma con el que nació (nativo o inmigrante)
+    public Brain.IBrain Brain = null!;    // cerebro construido desde el genoma
+    public double Fitness;                // fitness acumulado de por vida
+    public bool IsImmigrantTrial;         // es un inmigrante en cuarentena
+
     public bool Alive = true;
     public float InteractCooldown;  // s
 

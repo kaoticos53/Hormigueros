@@ -5,8 +5,8 @@ Simulación en tiempo real de hormigueros realistas con **neuroevolución contin
 recursos, múltiples especies y render Unity 2D → 3D. Núcleo .NET **headless y
 determinista** desacoplado del motor gráfico.
 
-Estado actual: **Fase 0 y Fase 1 completadas** (núcleo determinista + mundo con
-hormigas, comida, nido y ColonyController). Ver
+Estado actual: **Fases 0–2 completadas** (núcleo determinista + mundo + neuroevolución:
+pool élite, fitness al morir, cuarentena de inmigrantes y formato `.antgenome`). Ver
 [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo y
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados.
 
@@ -36,6 +36,11 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode micro --seed 42 --ticks 600 
 
 # Mundo completo de Fase 1 (2 colonias con hormigas, comida, cría y ColonyController)
 dotnet run --project src/Tools/AntSim.Cli -- --mode world --seed 7 --ticks 1200 --grid 128 --colonies 2
+
+# Neuroevolución (Fase 2): pool élite + fitness + cuarentena, con exportación
+# e importación de cerebros (.antgenome)
+dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 42 --ticks 900 --grid 96 --colonies 2 --export pool.antgenome
+dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 1 --ticks 240 --grid 96 --colonies 1 --import pool.antgenome
 ```
 
 ## Garantía de determinismo

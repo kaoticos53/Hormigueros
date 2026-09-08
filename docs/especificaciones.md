@@ -67,17 +67,24 @@
 - Alimentación priorizada por paso: reina → adultas → larvas (si `T_runway > T_cann`);
   reparto equitativo; nodrizas limitan la tasa de alimentación larval.
 
-## 4. Evolución (GA)
+## 4. Evolución (GA) — Fase 2 implementada
 
-- Pool élite top-K; los **mejores candidatos se usan al nacer**; el fitness de por
-  vida alimenta el acervo al morir. Demérito por decisiones inválidas (NaN).
-- **Inmigración con cuarentena**: importación = comando con tick; los inmigrantes
-  ocupan eclosiones dentro de una ventana (120 s) en orden de mérito de origen;
-  entran a la élite si fitness ≥ p50 (modo estricto) o, con `D < D_floor` (0.05),
-  fitness ≥ p25 **y** novedad > p75 (modo sensible a diversidad).
-- **Diversidad** comportamental: 64 sondas canónicas × huella de salidas; distancia
-  media sobre 256 pares muestreados con RNG determinista; comparable entre especies
-  y entre MLP/NEAT. **σ adaptativa**: `σ·(1 + 3·(D_floor − D)/D_floor)` bajo el suelo.
+- **`MlpGenome`** (v1): topología + pesos; crossover uniforme por peso (padre A/B
+  con el RNG), mutación gaussiana Box-Muller (σ 0.05), clonación, distancia = media
+  de |Δw| (proxy v1 de diversidad; sondas comportamentales en F5).
+- **`GenomePool`** por colonia (élite top-K=64): **los mejores candidatos se usan al
+  nacer** (torneo binario → crossover → mutación); el fitness de por vida alimenta
+  el acervo al morir (recompensas: +0.5/pickup, +2·ep/descarga, +0.01·s⁻¹/supervivencia).
+- **Inmigración con cuarentena**: la importación encola inmigrantes que ocupan
+  eclosiones dentro de la ventana (120 s) en orden de mérito de origen; al morir la
+  hormiga de prueba entran a la élite si fitness ≥ p50 (modo estricto) o, con
+  `D < D_floor` (0.03 en espacio de pesos), fitness ≥ p25 **y** novedad ≥ diversidad
+  media (modo sensible a diversidad). Si no lo demuestran, se descartan.
+- **`.antgenome` v1**: layout canónico (magic `ANTGENOM`, formatVersion 1,
+  contractVersion, count, nombre/speciesHint UTF-8, originSeed, generación,
+  fitness de exportación informativo, por genoma: tamaños u16 + pesos f32 bit
+  exactos + fitness, SHA-256 final). El orden de mérito descendente se conserva;
+  el fitness absoluto no es comparable entre partidas.
 - **NEAT (F5)**: genes estructurales en `.antgenome` (nodos con bias/activación,
   conexiones con peso/enabled/innovation, orden canónico por innovation); re-innovación
   determinista al importar (linaje extranjero con bloque local disjunto); feed-forward
