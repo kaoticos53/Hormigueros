@@ -7,11 +7,23 @@
 #     → revalidación MULTI-SEMILLA con --seed-pool
 #       (baseline sin sembrar vs pool en frío vs pool refinado), TABLA final.
 #
+# Modo --verify (regresión del relevo): SALTATE el entrenamiento y revalida una
+# lista de pools (--pools "baseline a.antgenome b.antgenome"); falla (exit 1)
+# si entre dos pools CONSECUTIVOS:
+#   · desaparece first-unload (el pool previo descargaba en alguna semilla y el
+#     siguiente no descarga en ninguna), o
+#   · sube drop-avg en >10% (las sueltas caen más lejos del nido ⇒ homing
+#     degradado).
+# Pares con métrica ausente en el pool previo (p. ej. baseline sin actividad de
+# relevo) no se comparan en ese campo.
+#
 # Uso:
 #   scripts/pipeline.sh [--help]
 #   scripts/pipeline.sh [--pop N] [--gens N] [--seed-pretrain N]
 #                       [--band-min F] [--band-max F]
 #                       [--ticks N] [--seeds "42 7 99"] [--out DIR]
+#   scripts/pipeline.sh --verify [--pools "baseline a.antgenome b.antgenome"]
+#                                [--ticks N] [--seeds "42 7"] [--out DIR]
 #
 # Parámetros:
 #   --pop N          población del entrenamiento (def. 24)
@@ -25,6 +37,10 @@
 #   --ticks N        ticks de cada partida de revalidación (def. 24000 = 800 s)
 #   --seeds "S..."   semillas de revalidación (def. "42 7 99 1234 777")
 #   --out DIR        carpeta de salida (def. artifacts/)
+#   --verify         modo verificación de regresión del relevo (sin entrenar)
+#   --pools "..."    pools a verificar, en orden de comparación; la palabra
+#                    "baseline" corre sin --seed-pool (def.: baseline +
+#                    pipe-cold + pipe-warm de este mismo --out)
 #
 # Determinista: mismas semillas + mismos parámetros ⇒ mismos resultados y la
 # misma tabla (el mundo es byte a byte idéntico entre procesos).
@@ -42,12 +58,14 @@ BAND_MIN=200
 BAND_MAX=260
 EVOLVE_TICKS=24000
 EVOLVE_SEEDS="42 7 99 1234 777"
+VERIFY=0
+VERIFY_POOLS=""
 # Nombres propios del pipeline (no pisan pools validados como
 # pretrain-warm.antgenome/pretrain-warm2.antgenome de vueltas anteriores).
 COLD_POOL="pipe-cold"
 WARM_POOL="pipe-warm"
 
-usage() { sed -n '2,24p' "$0"; }
+usage() { sed -n '2,38p' "$0"; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -60,6 +78,8 @@ while [[ $# -gt 0 ]]; do
         --ticks) EVOLVE_TICKS="$2"; shift 2 ;;
         --seeds) EVOLVE_SEEDS="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
+        --verify) VERIFY=1; shift ;;
+        --pools) VERIFY_POOLS="$2"; shift 2 ;;
         *) echo "Argumento desconocido: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
@@ -80,10 +100,6 @@ run_pretrain() {
         --band-min "$BAND_MIN" --band-max "$BAND_MAX" "$@" \
         --export "$OUT/$label.antgenome") > "$OUT/$label.txt" 2>&1
 }
-
-start=$SECONDS
-run_pretrain "$COLD_POOL"
-run_pretrain "$WARM_POOL" --warm-start "$OUT/$COLD_POOL.antgenome"
 
 # ── Revalidación ──────────────────────────────────────────────────────────────
 # $1 = seed, $2 = pool (vacío ⇒ baseline sin sembrar); imprime la línea totals.
@@ -106,65 +122,137 @@ run_evolve() {
             else if ($i == "died")   d = $(i+1)
             else if ($i == "eggs")   g = $(i+1)
             else if ($i == "first-unload") fu = $(i+1)
-            else if ($i == "drop-avg") da = $(i+1) }
-        t = p " " u " " e " " d " " g " " fu " " da }
+            else if ($i == "drop-avg") da = $(i+1)
+            else if ($i == "carry-leg") cl = $(i+1) }
+        t = p " " u " " e " " d " " g " " fu " " da " " cl }
         /^final-hash / { h = substr($2, 1, 8) }
         END { print t, h }'
 }
 
-# Declarar el mapa pool|seed → métricas y la lista de pools.
-declare -A PICK UNL ECL DIE EGG HASH FU DA
-POOLS=("baseline" "$COLD_POOL" "$WARM_POOL")
+start=$SECONDS
+if [[ "$VERIFY" == "1" ]]; then
+    # Sin entrenamiento: los pools vienen de --pools o de los del propio --out.
+    if [[ -n "$VERIFY_POOLS" ]]; then
+        read -r -a VERIFY_LIST <<< "$VERIFY_POOLS"
+    else
+        VERIFY_LIST=("baseline" "$OUT/$COLD_POOL.antgenome" "$OUT/$WARM_POOL.antgenome")
+    fi
+else
+    run_pretrain "$COLD_POOL"
+    run_pretrain "$WARM_POOL" --warm-start "$OUT/$COLD_POOL.antgenome"
+    VERIFY_LIST=("baseline" "$OUT/$COLD_POOL.antgenome" "$OUT/$WARM_POOL.antgenome")
+fi
 
-echo "== revalidación --seed-pool (ticks $EVOLVE_TICKS, semillas: ${SEEDS[*]})"
-for pool in "${POOLS[@]}"; do
+# Declarar el mapa label|seed → métricas y la lista de etiquetas.
+declare -A PICK UNL ECL DIE EGG HASH FU DA CL
+LABELS=()
+for entry in "${VERIFY_LIST[@]}"; do
+    if [[ "$entry" == "baseline" ]]; then
+        label="baseline"; poolfile=""
+    else
+        [[ -f "$entry" ]] || { echo "Pool no encontrado: $entry" >&2; exit 2; }
+        label="$(basename "$entry" .antgenome)"; poolfile="$entry"
+    fi
+    LABELS+=("$label")
+    echo "== revalidación $label (ticks $EVOLVE_TICKS, semillas: ${SEEDS[*]})"
     for seed in "${SEEDS[@]}"; do
-        if [[ "$pool" == "baseline" ]]; then
-            read -r p u e d g fu da h <<< "$(run_evolve "$seed" "")"
-        else
-            read -r p u e d g fu da h <<< "$(run_evolve "$seed" "$OUT/$pool.antgenome")"
-        fi
-        PICK["$pool|$seed"]=$p; UNL["$pool|$seed"]=$u; ECL["$pool|$seed"]=$e
-        DIE["$pool|$seed"]=$d;  EGG["$pool|$seed"]=$g; HASH["$pool|$seed"]=$h
-        FU["$pool|$seed"]=$fu;  DA["$pool|$seed"]=$da
+        read -r p u e d g fu da cl h <<< "$(run_evolve "$seed" "$poolfile")"
+        PICK["$label|$seed"]=$p; UNL["$label|$seed"]=$u; ECL["$label|$seed"]=$e
+        DIE["$label|$seed"]=$d;  EGG["$label|$seed"]=$g; HASH["$label|$seed"]=$h
+        FU["$label|$seed"]=$fu;  DA["$label|$seed"]=$da; CL["$label|$seed"]=$cl
     done
 done
 
 # ── Salida ────────────────────────────────────────────────────────────────────
-echo
-echo "== Entrenamiento (mejor fitness por etapa, última generación) =="
-for label in "$COLD_POOL" "$WARM_POOL"; do
-    echo "--- $label"
-    grep "^gen " "$OUT/$label.txt" | tail -3 | \
-        sed -E 's/^gen stage=([0-9]+) gen=([0-9]+) best=([0-9.]+) mean=([0-9.]+) competent=([0-9]+)/  etapa \1 gen \2: best=\3 mean=\4 competentes=\5/'
-done
+if [[ "$VERIFY" != "1" ]]; then
+    echo
+    echo "== Entrenamiento (mejor fitness por etapa, última generación) =="
+    for label in "$COLD_POOL" "$WARM_POOL"; do
+        echo "--- $label"
+        grep "^gen " "$OUT/$label.txt" | tail -3 | \
+            sed -E 's/^gen stage=([0-9]+) gen=([0-9]+) best=([0-9.]+) mean=([0-9.]+) competent=([0-9]+)/  etapa \1 gen \2: best=\3 mean=\4 competentes=\5/'
+    done
+fi
 
 echo
 echo "== Revalidación multi-semilla (--seed-pool, ticks $EVOLVE_TICKS) =="
-printf "%-14s %-6s %6s %6s %6s %6s %6s %7s %7s   %s\n" pool seed pickup unload eclosed died eggs unload1st dropavg hash
-for pool in "${POOLS[@]}"; do
+printf "%-14s %-6s %6s %6s %6s %6s %6s %9s %8s %9s   %s\n" \
+    pool seed pickup unload eclosed died eggs unload1st dropavg carryleg hash
+for label in "${LABELS[@]}"; do
     for seed in "${SEEDS[@]}"; do
-        printf "%-14s %-6s %6d %6d %6d %6d %6d %7s %7s   %s\n" \
-            "$pool" "$seed" \
-            "${PICK[$pool|$seed]}" "${UNL[$pool|$seed]}" "${ECL[$pool|$seed]}" \
-            "${DIE[$pool|$seed]}" "${EGG[$pool|$seed]}" \
-            "${FU[$pool|$seed]}" "${DA[$pool|$seed]}" "${HASH[$pool|$seed]}"
+        printf "%-14s %-6s %6d %6d %6d %6d %6d %9s %8s %9s   %s\n" \
+            "$label" "$seed" \
+            "${PICK[$label|$seed]}" "${UNL[$label|$seed]}" "${ECL[$label|$seed]}" \
+            "${DIE[$label|$seed]}" "${EGG[$label|$seed]}" \
+            "${FU[$label|$seed]}" "${DA[$label|$seed]}" "${CL[$label|$seed]}" \
+            "${HASH[$label|$seed]}"
     done
 done
+
+# ── Resumen agregado + verificación de regresión del relevo ───────────────────
+# Media de una métrica numérica sobre las semillas donde existe ("-": sin dato).
+# $1 = nombre del array asociativo (nameref), $2 = etiqueta del pool.
+mean_over_seeds() {
+    local -n arr=$1
+    local label="$2" sum=0 n=0 v
+    for seed in "${SEEDS[@]}"; do
+        v="${arr[$label|$seed]}"
+        [[ "$v" == "-" || -z "$v" ]] && continue
+        sum="$(awk -v a="$sum" -v b="$v" 'BEGIN { print a + b }')"
+        n=$((n + 1))
+    done
+    if [[ "$n" -eq 0 ]]; then echo "-"; else awk -v a="$sum" -v n="$n" 'BEGIN { printf "%.1f", a / n }'; fi
+}
 
 echo
 echo "== Resumen (totales sobre ${#SEEDS[@]} semillas) =="
-for pool in "${POOLS[@]}"; do
+declare -A WITH_UNLOAD MEAN_DA MEAN_CL
+for label in "${LABELS[@]}"; do
     tp=0; tu=0; te=0; with_unload=0
     for seed in "${SEEDS[@]}"; do
-        tp=$((tp + PICK[$pool|$seed]))
-        tu=$((tu + UNL[$pool|$seed]))
-        te=$((te + ECL[$pool|$seed]))
-        (( UNL[$pool|$seed] >= 1 )) && with_unload=$((with_unload + 1))
+        tp=$((tp + PICK[$label|$seed]))
+        tu=$((tu + UNL[$label|$seed]))
+        te=$((te + ECL[$label|$seed]))
+        if [[ "${UNL[$label|$seed]}" -ge 1 ]]; then with_unload=$((with_unload + 1)); fi
     done
-    printf "%-10s pickups %3d | descargas %3d (%d/%d semillas con descarga) | eclosiones %3d\n" \
-        "$pool" "$tp" "$tu" "$with_unload" "${#SEEDS[@]}" "$te"
+    WITH_UNLOAD["$label"]=$with_unload
+    MEAN_DA["$label"]="$(mean_over_seeds DA "$label")"
+    MEAN_CL["$label"]="$(mean_over_seeds CL "$label")"
+    printf "%-10s pickups %3d | descargas %3d (%d/%d semillas con descarga) | eclosiones %3d | drop-avg %6s | carry-leg %6s\n" \
+        "$label" "$tp" "$tu" "$with_unload" "${#SEEDS[@]}" "$te" \
+        "${MEAN_DA[$label]}" "${MEAN_CL[$label]}"
 done
 
+if [[ "$VERIFY" == "1" ]]; then
+    echo
+    echo "== Verificación de regresión del relevo (pares consecutivos) =="
+    regression=0
+    for (( i = 1; i < ${#LABELS[@]}; i++ )); do
+        prev="${LABELS[$((i - 1))]}"; next="${LABELS[$i]}"
+        verdict="OK"
+        # 1) first-unload no puede desaparecer: si el previo descargaba en
+        #    alguna semilla y el siguiente en ninguna, es regresión.
+        if [[ ${WITH_UNLOAD[$prev]} -gt 0 && ${WITH_UNLOAD[$next]} -eq 0 ]]; then
+            verdict="REGRESIÓN: first-unload desapareció ($prev → $next)"
+            regression=1
+        fi
+        # 2) drop-avg no puede subir >10% (homing degradado: sueltas más lejos).
+        pda="${MEAN_DA[$prev]}"; nda="${MEAN_DA[$next]}"
+        if [[ "$verdict" == "OK" && "$pda" != "-" && "$nda" != "-" ]]; then
+            rise="$(awk -v a="$pda" -v b="$nda" 'BEGIN { print (b > a * 1.10) ? 1 : 0 }')"
+            if [[ "$rise" == "1" ]]; then
+                verdict="REGRESIÓN: drop-avg subió ${pda} → ${nda} (>10%)"
+                regression=1
+            fi
+        fi
+        printf "  %-12s → %-12s %s\n" "$prev" "$next" "$verdict"
+    done
+    if [[ "$regression" == "1" ]]; then
+        echo "== verify: FALLO (regresión del relevo) =="
+        exit 1
+    fi
+    echo "== verify: OK (relevo sin regresiones) =="
+fi
+
 echo
-echo "== fin ($((SECONDS - start)) s); pools: $OUT/$COLD_POOL.antgenome, $OUT/$WARM_POOL.antgenome"
+echo "== fin ($((SECONDS - start)) s); salida en $OUT"
