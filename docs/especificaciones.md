@@ -302,8 +302,12 @@
    (`carry-leg se encogió 91.8 → 46.6 (>20%)`): el límite práctico del
    currículo actual está en ~350 u de banda; más allá, la competencia de
    forrajeo crece a costa de la profundidad del relevo.
- - **Benchmark de referencia Fase 3ter** (`artifacts/benchmark-fase3ter.txt`):
-   6 pools × 10 semillas × 24 000 ticks, determinista (hashes byte a byte).
+ - **Benchmark de referencia Fase 3ter** (`artifacts/benchmark-fase3ter.txt`,
+   regenerado): 8 filas × 10 semillas × 24 000 ticks, determinista (hashes
+   byte a byte). La fila warm-v2 se REGENERÓ con la misma receta antes del
+   benchmark: el pool es byte a byte reproducible (warm-start determinista
+   desde warm2), así que la fila de referencia es reproducible de ahora en
+   adelante.
    Resumen agregado:
 
    | pool | pickups | descargas | semillas c/ descarga | drop-avg | carry-leg |

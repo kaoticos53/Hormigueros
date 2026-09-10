@@ -1,11 +1,13 @@
 == 0) build
-Tiempo transcurrido 00:00:00.80
+Tiempo transcurrido 00:00:02.05
 == revalidación baseline (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-60 (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-warm (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
+== revalidación pretrain-warm-v2 (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-warm2 (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-warm3 (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-warm3c (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
+== revalidación pretrain-hybrid (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 
 == Revalidación multi-semilla (--seed-pool, ticks 24000) ==
 pool           seed   pickup unload eclosed   died   eggs unload1st  dropavg  carryleg   hash
@@ -39,6 +41,16 @@ pretrain-warm  555         1      0     26     46     39         -    214.0     
 pretrain-warm  808         0      0     25     45     39         -        -         -   0b2fd0ce
 pretrain-warm  1000        0      0     25     45     39         -        -         -   2abc8f2d
 pretrain-warm  2026        0      0     24     44     40         -        -         -   d5e7c772
+pretrain-warm-v2 42          9      1     24     44     56      4426    168.9      78.0   744be8ed
+pretrain-warm-v2 7          12      1     24     44     49      7286    181.0      34.0   064f2e15
+pretrain-warm-v2 99          8      0     24     44     39         -    172.8         -   bcc6f5a6
+pretrain-warm-v2 1234        6      2     26     46     61      4989    165.3      88.5   ff96ff2a
+pretrain-warm-v2 777         6      1     27     47     53      5323    166.2     107.0   31750fd8
+pretrain-warm-v2 314        10      2     25     45     63      4505    177.6      60.0   53411d3b
+pretrain-warm-v2 555        12      1     26     46     53      5175    194.7       8.0   245b674e
+pretrain-warm-v2 808        11      2     24     44     68      4803    215.2      90.0   75f94713
+pretrain-warm-v2 1000        9      2     25     45     60      4901    147.4      62.0   f200c9a4
+pretrain-warm-v2 2026       11      2     24     44     55      6463    161.2     118.0   f2ae0619
 pretrain-warm2 42          9      3     24     44     72      5130    186.7      84.0   d886ef99
 pretrain-warm2 7          10      0     24     44     39         -    190.7         -   ba30f694
 pretrain-warm2 99          7      1     24     44     47      6789    188.8     138.0   bd113c09
@@ -69,19 +81,33 @@ pretrain-warm3c 555         9      1     27     47     47      5847    173.0    
 pretrain-warm3c 808         8      1     24     44     56      4704    145.7      67.0   e2acfd24
 pretrain-warm3c 1000        5      1     25     45     44      6336    228.3      68.0   22947183
 pretrain-warm3c 2026       12      0     24     44     40         -    186.8         -   eec09125
+pretrain-hybrid 42         11      1     24     44     55      4625    189.5      79.0   83cb0eda
+pretrain-hybrid 7          12      2     24     44     55      6301    201.5      68.0   049fcc8d
+pretrain-hybrid 99          9      1     25     45     47      5673    168.5      45.0   3dc9a7ad
+pretrain-hybrid 1234        6      1     25     45     46      6368    175.8     106.0   4d04f0a9
+pretrain-hybrid 777        10      3     27     47     68      5547    165.0      67.3   38c86b50
+pretrain-hybrid 314        10      1     26     46     51      5252    169.0      83.0   5c86769d
+pretrain-hybrid 555        10      0     26     46     39         -    196.0         -   b4150fc1
+pretrain-hybrid 808         4      1     25     45     48      5591    206.7     124.0   ff4024db
+pretrain-hybrid 1000       11      2     25     45     57      5907    153.2      55.5   b48f6dba
+pretrain-hybrid 2026        8      1     24     44     47      6554    168.4      18.0   fa34d973
 
 == Resumen (totales sobre 10 semillas) ==
 baseline   pickups   1 | descargas   0 (0/10 semillas con descarga) | eclosiones 250 | drop-avg  254.0 | carry-leg      -
 pretrain-60 pickups  77 | descargas   6 (6/10 semillas con descarga) | eclosiones 250 | drop-avg  216.7 | carry-leg   68.3
 pretrain-warm pickups   2 | descargas   0 (0/10 semillas con descarga) | eclosiones 250 | drop-avg  217.5 | carry-leg      -
+pretrain-warm-v2 pickups  94 | descargas  14 (9/10 semillas con descarga) | eclosiones 249 | drop-avg  175.0 | carry-leg   71.7
 pretrain-warm2 pickups  88 | descargas  11 (6/10 semillas con descarga) | eclosiones 252 | drop-avg  189.0 | carry-leg   80.5
 pretrain-warm3 pickups  98 | descargas  11 (7/10 semillas con descarga) | eclosiones 249 | drop-avg  166.7 | carry-leg   57.0
 pretrain-warm3c pickups  82 | descargas  10 (7/10 semillas con descarga) | eclosiones 249 | drop-avg  171.7 | carry-leg   57.7
+pretrain-hybrid pickups  91 | descargas  13 (9/10 semillas con descarga) | eclosiones 251 | drop-avg  179.4 | carry-leg   71.8
 
 == Verificación de regresión del relevo (pares consecutivos) ==
   baseline     → pretrain-60  OK
   pretrain-60  → pretrain-warm REGRESIÓN: first-unload desapareció (pretrain-60 → pretrain-warm)
-  pretrain-warm → pretrain-warm2 OK
+  pretrain-warm → pretrain-warm-v2 OK
+  pretrain-warm-v2 → pretrain-warm2 OK
   pretrain-warm2 → pretrain-warm3 REGRESIÓN: carry-leg se encogió 80.5 → 57.0 (>20%)
   pretrain-warm3 → pretrain-warm3c OK
+  pretrain-warm3c → pretrain-hybrid OK
 == verify: FALLO (regresión del relevo) ==
