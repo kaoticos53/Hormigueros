@@ -232,8 +232,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
    idénticos con y sin el tracker (verificado, semilla 42). 86/86 tests verdes.
    `scripts/pipeline.sh` muestra las columnas `unload1st`/`dropavg`/`carryleg`
    y añade el modo `--verify`: revalida pools consecutivos y falla (exit 1) si
-   `first-unload` desaparece o `drop-avg` sube >10 % — regresión del relevo en
-   CI sin sondas.
+   `first-unload` desaparece, `drop-avg` sube >10 % o `carry-leg` se encoge
+   >20 % — regresión del relevo en CI sin sondas.
 - **Refinado con banda extendida**: `--band-min/--band-max` re-bandan todas las
   etapas del currículo (validación ≥ `NestMinSpawnDistance`). Segundo
   warm-start desde `pretrain-warm.antgenome` con el anillo 200–350 u (~3×

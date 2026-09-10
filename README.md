@@ -82,8 +82,9 @@ métricas (pickups, descargas, eclosiones, hash, `unload1st`, `dropavg`,
 Determinista; flags para `--pop`, `--gens` (por etapa), `--band-min/max`,
 `--ticks`, `--seeds` y `--out`. El modo `--verify` salta el entrenamiento y
 solo revalida una lista de pools (`--pools "baseline a.antgenome b.antgenome"`),
-fallando (exit 1) si entre dos pools consecutivos desaparece `first-unload` o
-`drop-avg` sube >10 % — detección de regresión del relevo lista para CI:
+fallando (exit 1) si entre dos pools consecutivos desaparece `first-unload`,
+`drop-avg` sube >10 % o `carry-leg` se encoge >20 % — detección de regresión
+del relevo lista para CI:
 
 ```bash
 bash scripts/pipeline.sh                         # defaults: pop 24, 10 gens/etapa, 5 semillas

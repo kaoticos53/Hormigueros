@@ -272,8 +272,12 @@
    entrenamiento y revalida una lista de pools (`--pools "baseline a.antgenome
    b.antgenome"`); falla (exit 1) si entre dos pools CONSECUTIVOS desaparece
    `first-unload` (el previo descargaba en alguna semilla, el siguiente en
-   ninguna) o `drop-avg` sube >10 % (homing degradado: sueltas más lejos).
-   Pares sin métrica en el pool previo no se comparan en ese campo.
+   ninguna), `drop-avg` sube >10 % (homing degradado: sueltas más lejos) o
+   `carry-leg` se encoge >20 % (la descendencia completa menos tramo por
+   carga: el relevo pierde alcance sin dejar de descargar — un umbral más
+   holgado que el de `drop-avg` porque la media sobre pocas semillas con
+   descarga es ruidosa). Pares sin métrica en el pool previo no se comparan
+   en ese campo.
 - **Refinado con banda extendida (200–350 u)**: `--band-min/--band-max`
   re-bandan todas las etapas (mínimo respetado: ≥ `NestMinSpawnDistance`).
   Segundo warm-start desde `pretrain-warm.antgenome` (seed 7, pop 24, 15
@@ -283,8 +287,21 @@
   ~245–298, ítems más dispersos) SIN pérdida de transferencia — en el mundo
   abierto (5 semillas, 24 000 ticks): **pickup 7–10, descarga 1–3 en 3/5
   semillas (máximo histórico 3 en la semilla 42), eclosiones 24–27** vs
-  baseline 0/0. El pool de banda extendida no olvida el relevo: lo conserva y
-  generaliza a distancias mayores.
+   baseline 0/0. El pool de banda extendida no olvida el relevo: lo conserva y
+   generaliza a distancias mayores.
+ - **Tercer eslabón de la cadena (200–450 u) — límite de generalización**:
+   tercer warm-start desde `pretrain-warm2.antgenome` (misma receta: seed 7,
+   pop 24, 15 gens/etapa). En arena, la etapa corta sigue sin ciclos (0
+   competentes) pero relevo y mundo convergen (competentes 13→19 y 20–24/24,
+   best ~282). En el mundo abierto (5 semillas, 24 000 ticks) el forrajeo
+   MEJORA (pickups 45→51, descargas 6→7, 4/5 semillas con descarga, drop-avg
+   186→163: las sueltas caen más cerca del nido) pero el `carry-leg` se
+   ENCOGE 91.8→46.6 u — la descendencia completa tramos más cortos, señal de
+   que la política está optimizando el forrajeo del anillo amplio en vez del
+   cierre de relevo largo. `--verify` lo detecta como regresión
+   (`carry-leg se encogió 91.8 → 46.6 (>20%)`): el límite práctico del
+   currículo actual está en ~350 u de banda; más allá, la competencia de
+   forrajeo crece a costa de la profundidad del relevo.
 
 ## 5. Telemetría
 
