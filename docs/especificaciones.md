@@ -310,20 +310,47 @@
    |---|---|---|---|---|---|
    | baseline | 1 | 0 | 0/10 | 254.0 | — |
    | pretrain-60 (frío, 60 gens) | 77 | 6 | 6/10 | 216.7 | 68.3 |
-   | pretrain-warm (200–260) | 2 | 0 | 0/10 | 217.5 | — |
-   | pretrain-warm2 (200–350) | 88 | 11 | 6/10 | 189.0 | **80.5** |
+   | pretrain-warm (200–260, pop 6 — OBSOLETO) | 2 | 0 | 0/10 | 217.5 | — |
+   | pretrain-warm-v2 (200–260, recalibrado) | 94 | **14** | **9/10** | 175.0 | 71.7 |
+   | pretrain-warm2 (200–350) | 88 | 11 | 6/10 | 189.0 | 80.5 |
    | pretrain-warm3 (200–450) | **98** | 11 | 7/10 | 166.7 | 57.0 |
    | pretrain-warm3c (200–450 + carry-leg) | 82 | 10 | 7/10 | 171.7 | 57.7 |
+   | pretrain-hybrid (alternado 200–325/200–450) | 91 | 13 | **9/10** | 179.4 | 71.8 |
 
    Lecturas: baseline sin forrajeo; el pool en frío de 60 gens transfiere
-   forrajeo y algo de relevo; el warm de banda calibrada (warm2) es el mejor
-   equilibrio forrajeo/relevo; la banda extendida (warm3) maximiza forrajeo
+   forrajeo y algo de relevo; la banda extendida (warm3) maximiza forrajeo
    pero reduce el carry-leg; el densado de carry-leg (warm3c) recupera el
-   tramo medio sin sacrificar descargas ni semillas cubiertas. Veredictos
-   verify de la cadena completa: warm→warm2 OK, warm2→warm3 REGRESIÓN
-   (carry-leg), warm3→warm3c OK. Las curvas de la cadena (warm mejor que
-   warm2 en forrajeo) muestran la varianza entre recetas de pool: la
-   comparación fiable es por métricas, no por orden de cadena.
+   tramo medio sin sacrificar descargas ni semillas cubiertas.
+
+   **Revalidación del eslabón warm (200–260)**: la fila original
+   `pretrain-warm` era un artefacto de RECETA, no del mundo — el pool viejo
+   se entrenó con pop 6 × 2 gens/etapa (un humo del pipeline), así que sus 0
+   descargas reflejaban un pool débil, no una pérdida de transferencia.
+   Re-entrenado con la receta estándar de la cadena (warm2 → banda 200–260,
+   seed 7, pop 24, 15 gens/etapa, best 458.8 y 23–24/24 competentes en
+   arena), el pool recalibrado `pretrain-warm-v2` es el MEJOR del benchmark
+   en fiabilidad de relevo: **14 descargas en 9/10 semillas**, pickups 94,
+   drop-avg 175, carry-leg 71.7. La cadena warm-v2 → warm2 verifica OK:
+   acortar la banda tras el refinado amplio CONSOLIDA el relevo (fiabilidad
+   9/10 vs 6/10) a costa de algo de tramo medio (71.7 vs 80.5).   Recomendación
+   de pool: warm-v2 para el modo evolución general; warm2 si se prioriza el
+   tramo medio del relevo.
+
+   **Currículo híbrido alternado** (`CurriculumTrainer.HybridStages`, flag CLI
+   `--hybrid`): dentro de cada etapa, las generaciones IMPARES evalúan en la
+   banda media (200–325) y las PARES en la ancha (200–450) — función pura de
+   (etapa, generación), determinista y sin coste extra (mismo presupuesto por
+   generación). Obliga a la selección a mantener AMBAS competencias: un
+   genoma que explote solo el anillo amplio pierde posición en las
+   generaciones de banda media y viceversa. Resultado (10 semillas,
+   `pretrain-hybrid`, warm-start desde warm2): pickups 91, **13 descargas en
+   9/10 semillas**, drop-avg 179.4, carry-leg 71.8 — la combinación buscada:
+   la FIABILIDAD de la banda corta (9/10, como warm-v2) con el FORRAJEO de la
+   banda ancha (91 pickups, entre warm2 88 y warm3 98) y tramo medio
+   intermedio. Verify de la cadena warm-v2 → warm2 → hybrid: OK en ambos
+   pares. Veredictos verify de la cadena original:
+   warm2→warm3 REGRESIÓN (carry-leg), warm3→warm3c OK. La comparación fiable
+   entre pools es por métricas, no por orden de cadena.
  - **Densado de carry-leg en la arena (mitigación del shallowing)**: nuevo
    término de fitness `CarryLegPerUnit` (0.15 ep/u): en cada descarga REAL de
    la arena se paga la distancia recta pickup→descarga de esa carga — pagar
