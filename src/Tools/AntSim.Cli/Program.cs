@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using AntSim.Core.Evolution;
+using AntSim.Core.Serialization;
 using AntSim.Core.Scenario;
 using AntSim.Core.Training;
 using AntSim.Core.World;
@@ -11,11 +12,18 @@ namespace AntSim.Cli;
 /// antsim — herramienta headless (predecesora del modo análisis/verificación).
 ///
 /// Uso:
-///   antsim [--mode micro|world|evolve|pretrain] [--seed N] [--ticks N] [--grid N]
+///   antsim [--mode micro|world|evolve|pretrain|verify] [--seed N] [--ticks N] [--grid N]
 ///          [--colonies N] [--import archivo.antgenome] [--seed-pool archivo.antgenome]
 ///          [--export archivo.antgenome] [--pop N] [--generations N] [--warm-start f]
+///          [--save f] [--save-tick N] [--antlog f] [--load f]
 ///
 /// Modos:
+///   verify   — Fase 4 (persistencia): carga un checkpoint .antsave (--load) y
+///              re-ejecuta --ticks pasos; con --antlog contrasta cada hash de
+///              hito (cada 1024 ticks) y cada evento contra el log de
+///              referencia — cualquier divergencia aborta con exit 3. Es la
+///              verificación "se guarda la causa, no los efectos": reproducir
+///              desde un guardado regenera el mundo bit a bit.
 ///   micro    — microcosmos de cimientos (RNG + feromonas + MLP + validación).
 ///   world    — mundo completo de Fase 1 (hormigas, comida, nido, ColonyController).
 ///   evolve   — mundo con neuroevolución (Fase 2): pool élite, fitness al morir,
@@ -52,6 +60,10 @@ internal static class Program
         string? seedPoolPath = null;
         string? warmStartPath = null;
         string? exportPath = null;
+        string? savePath = null;      // Fase 4: checkpoint .antsave
+        int saveTick = 0;             // 0 = guardar al final de la ejecución
+        string? antlogPath = null;    // Fase 4: registro de eventos .antlog
+        string? loadPath = null;      // Fase 4: cargar checkpoint (modo verify)
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -63,8 +75,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                    if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain")
-                        return Fail("--mode debe ser 'micro', 'world', 'evolve' o 'pretrain'.");
+                    if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify")
+                        return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain' o 'verify'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -110,6 +122,19 @@ internal static class Program
                 case "--export":
                     exportPath = Next(args, ref i);
                     break;
+                case "--save":
+                    savePath = Next(args, ref i);
+                    break;
+                case "--save-tick":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out saveTick) || saveTick < 0)
+                        return Fail("--save-tick requiere un entero ≥ 0 (0 = guardar al final).");
+                    break;
+                case "--antlog":
+                    antlogPath = Next(args, ref i);
+                    break;
+                case "--load":
+                    loadPath = Next(args, ref i);
+                    break;
                 default:
                     return Fail($"Argumento desconocido: {args[i]}");
             }
@@ -117,9 +142,14 @@ internal static class Program
 
         try
         {
+            // El modo verify escribe su propio reporte y devuelve su propio exit
+            // code (0 = reproducción idéntica, 3 = divergencia).
+            if (mode == "verify")
+                return RunVerify(ticks, loadPath, antlogPath);
+
             string output = mode switch
             {
-                "world" => WorldScenario.Run(seed, ticks, colonies, grid),
+                "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax),
                 _ => Microcosm.Run(seed, ticks, grid)
@@ -298,6 +328,140 @@ internal static class Program
         return args[i];
     }
 
+    /// <summary>
+    /// Modo verify (Fase 4): reproduce desde un checkpoint y contrasta con el
+    /// log de referencia. SIN --antlog: solo re-ejecuta y emite los hashes
+    /// (misma semilla ⇒ idénticos, la salida es comparable a ojo o por script).
+    /// CON --antlog: compara cada hash de hito y cada evento del intervalo;
+    /// cualquier divergencia aborta con código 3.
+    /// </summary>
+    private static int RunVerify(int ticks, string? loadPath, string? antlogPath)
+    {
+        if (loadPath is null)
+            return Fail("--mode verify requiere --load checkpoint.antsave.");
+
+        var sim = WorldSimSave.Load(loadPath);
+        var sb = new System.Text.StringBuilder();
+        sb.Append("verify ").Append(loadPath)
+          .Append(" tick ").Append(sim.Tick)
+          .Append(" colonies ").Append(sim.Colonies.Count)
+          .Append(" items ").Append(sim.Items.Count).AppendLine();
+
+        var reference = antlogPath != null ? AntEventLogFile.Read(antlogPath) : (AntEventLogFile.LogData?)null;
+        if (reference != null)
+        {
+            sb.Append("antlog ").Append(antlogPath)
+              .Append(" seed ").Append(reference.Value.Seed)
+              .Append(" events ").Append(reference.Value.Events.Count)
+              .Append(" milestones ").Append(reference.Value.Milestones.Count).AppendLine();
+            if (reference.Value.Seed != sim.Seed)
+            {
+                Console.Error.WriteLine("Error: la semilla del checkpoint no coincide con la del log.");
+                return 3;
+            }
+        }
+
+        int refIdx = 0;                 // cursor sobre los eventos de referencia
+        int nextMilestone = 0;          // cursor sobre los hitos de referencia
+        int comparedEvents = 0;
+        int comparedMilestones = 0;
+
+        if (reference != null)
+        {
+            // El log de referencia arranca en el tick 1 de la partida original;
+            // la reproducción arranca en el tick del checkpoint. Los eventos
+            // previos NO deben reproducirse (ya ocurrieron antes del guardado):
+            // se descartan, igual que los hitos anteriores al punto de carga.
+            ulong fromTick = sim.Tick;
+            while (refIdx < reference.Value.Events.Count &&
+                   reference.Value.Events[refIdx].Tick <= fromTick)
+                refIdx++;
+            while (nextMilestone < reference.Value.Milestones.Count &&
+                   reference.Value.Milestones[nextMilestone].Tick <= fromTick)
+                nextMilestone++;
+            int skipped = refIdx;
+            if (skipped > 0)
+                sb.Append("(descartados ").Append(skipped)
+                  .Append(" eventos previos al checkpoint y sus hitos)").AppendLine();
+        }
+
+        for (int i = 0; i < ticks; i++)
+        {
+            sim.Step();
+
+            if (reference != null)
+            {
+                // Eventos del intervalo: deben coincidir uno a uno (tick, kind,
+                // colonia, hormiga, posición y causa).
+                var evs = sim.LastEvents;
+                for (int e = 0; e < evs.Count; e++)
+                {
+                    var ev = evs[e];
+                    if (refIdx >= reference.Value.Events.Count)
+                    {
+                        Console.Error.WriteLine($"Error: evento inesperado en tick {ev.Tick} ({ev.Kind}) — el log de referencia terminó antes.");
+                        return 3;
+                    }
+                    var exp = reference.Value.Events[refIdx++];
+                    if (exp.Tick != ev.Tick || exp.Kind != ev.Kind || exp.ColonyId != ev.ColonyId ||
+                        exp.AntId != ev.AntId || exp.X != ev.X || exp.Y != ev.Y || exp.Cause != ev.Cause)
+                    {
+                        Console.Error.WriteLine($"Error: divergencia en el evento {refIdx - 1} del tick {ev.Tick}: " +
+                            $"esperado ({exp.Tick}, {exp.Kind}, col {exp.ColonyId}, ant {exp.AntId}, {exp.X:R}, {exp.Y:R}, causa {exp.Cause}) — " +
+                            $"obtenido ({ev.Tick}, {ev.Kind}, col {ev.ColonyId}, ant {ev.AntId}, {ev.X:R}, {ev.Y:R}, causa {ev.Cause}).");
+                        return 3;
+                    }
+                    comparedEvents++;
+                }
+
+                // Hito de hash: si este tick era uno de los del log, el hash debe coincidir.
+                if (nextMilestone < reference.Value.Milestones.Count &&
+                    sim.Tick == reference.Value.Milestones[nextMilestone].Tick)
+                {
+                    string expected = reference.Value.Milestones[nextMilestone].HashHex;
+                    string actual = sim.HashLine();
+                    if (expected != actual)
+                    {
+                        Console.Error.WriteLine($"Error: hash de hito divergente en el tick {sim.Tick}.");
+                        Console.Error.WriteLine($"  esperado: {expected}");
+                        Console.Error.WriteLine($"  obtenido: {actual}");
+                        return 3;
+                    }
+                    comparedMilestones++;
+                    nextMilestone++;
+                }
+            }
+            else if (sim.Tick > 0 && sim.Tick % AntEventLog.MilestoneEvery == 0)
+            {
+                sb.Append("tick ").Append(sim.Tick).Append("  ").Append(sim.HashLine()).AppendLine();
+            }
+        }
+
+        sb.Append("final-hash ").Append(sim.HashLine()).AppendLine();
+        if (reference != null)
+        {
+            if (refIdx != reference.Value.Events.Count)
+            {
+                Console.Error.WriteLine($"Error: el log de referencia tiene {reference.Value.Events.Count - refIdx} eventos que la reproducción no emitió.");
+                return 3;
+            }
+            if (nextMilestone != reference.Value.Milestones.Count)
+            {
+                Console.Error.WriteLine($"Error: la reproducción no alcanzó {reference.Value.Milestones.Count - nextMilestone} hitos del log.");
+                return 3;
+            }
+            sb.Append("compared events ").Append(comparedEvents)
+              .Append(" milestones ").Append(comparedMilestones)
+              .AppendLine(" — reproducción bit a bit idéntica ✓");
+        }
+        else
+        {
+            sb.AppendLine("reproducción completada (sin log de contraste: compara los hashes manualmente o con --antlog).");
+        }
+        Console.Out.Write(sb.ToString());
+        return 0;
+    }
+
     private static int Fail(string message)
     {
         Console.Error.WriteLine(message);
@@ -307,6 +471,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f]");
     }
 }

@@ -37,6 +37,18 @@ public sealed class GenomePool
     public int TrialsDiscarded;
     public int TrialsExpired;
 
+    // — Checkpoints (.antsave): el RNG del pool es parte del estado —
+
+    /// <summary>Estado exacto del RNG del pool (serialización de checkpoints).</summary>
+    internal (ulong S0, ulong S1, ulong S2, ulong S3) RngState => _rng.State;
+
+    /// <summary>Restaura el RNG del pool desde su estado exacto (carga de checkpoints).</summary>
+    internal void RestoreRng(in DeterministicRandom rng) => _rng = rng;
+
+    /// <summary>Copia los inmigrantes pendientes con su tick de encolado (checkpoints).</summary>
+    internal IReadOnlyList<(MlpGenome Genome, ulong QueuedTick)> CopyPendingImmigrants()
+        => _immigrants.ToArray();
+
     public int EliteCount => _elite.Count;
     public int PendingImmigrants => _immigrants.Count;
 

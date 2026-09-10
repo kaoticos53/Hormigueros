@@ -57,6 +57,18 @@ public sealed class SpeciesDescriptor
     // — Constantes predefinidas (tabla de la especificación) —
     public static readonly SpeciesDescriptor LasiusNiger = new() { Name = "Lasius niger" };
 
+    /// <summary>
+    /// Recupera una especie predefinida por su nombre (checkpoints .antsave).
+    /// Un nombre desconocido es corrupción del archivo: se rechaza.
+    /// </summary>
+    public static SpeciesDescriptor ByName(string name)
+    {
+        if (name == LasiusNiger.Name) return LasiusNiger;
+        if (name == Atta.Name) return Atta;
+        if (name == Eciton.Name) return Eciton;
+        throw new System.FormatException($"Especie desconocida en el checkpoint: '{name}'.");
+    }
+
     public static readonly SpeciesDescriptor Atta = new()
     {
         Name = "Atta (cortadora)",

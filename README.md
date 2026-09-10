@@ -9,7 +9,9 @@ Estado actual: **Fases 0–3bis completadas** (núcleo determinista + mundo + ne
 pool élite, fitness al morir, cuarentena de inmigrantes, formato `.antgenome` y
 **pre-entrenamiento headless** sobre una arena realista — colonia completa con cría,
 comida a ≥ 200 u con el spawn del mundo, sin rastro plantado — con transferencia
-validada al mundo real vía `--seed-pool`). Ver
+validada al mundo real vía `--seed-pool`) y **Fase 4 (persistencia) implementada**:
+checkpoints `.antsave` reproducibles bit a bit, registro de eventos `.antlog` con
+hitos de hash cada 1024 ticks y modo `verify` de contraste. Ver
 [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo y
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados.
 
@@ -59,6 +61,15 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode pretrain --seed 4242 --pop 2
 # Sembrar una partida con la población pre-entrenada (transferencia validada:
 # pickups 0 → 4–7 frente a la élite aleatoria en 300 s)
 dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 42 --ticks 9000 --colonies 1 --seed-pool pretrained.antgenome
+
+# Persistencia (Fase 4): grabar partida con log de eventos y checkpoint a mitad
+dotnet run --project src/Tools/AntSim.Cli -- --mode world --seed 42 --ticks 2400 --grid 128 \
+    --save partida.antsave --save-tick 1200 --antlog partida.antlog
+
+# Verificar: cargar el checkpoint y re-ejecutar; el hash final y cada evento
+# deben coincidir byte a byte con el log (exit 0 = reproducción idéntica)
+dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
+    --load partida.antsave --antlog partida.antlog
 ```
 
 ## Pipeline encadenado (scripts/pipeline.sh)

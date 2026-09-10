@@ -62,6 +62,12 @@ public sealed class WorldSim
     public IReadOnlyList<FoodItem> Items => _items;
     public IReadOnlyList<SimEvent> LastEvents => _events;
 
+    /// <summary>Semilla original del mundo (los checkpoints la reproducen).</summary>
+    public ulong Seed => _seed;
+
+    /// <summary>Celdas por lado del grid de feromonas.</summary>
+    public int GridCells => _gridCells;
+
     private readonly List<Colony> _colonies = new();
     private readonly List<FoodItem> _items = new();
 
@@ -539,5 +545,66 @@ public sealed class WorldSim
         h.AppendFloat(b.G0);
         h.AppendFloat(b.Nutrition);
         h.AppendBool(b.Weak);
+    }
+
+    // — Fase 4: carga de checkpoints (.antsave) —
+    // Accesores internos: WorldSimSave reconstruye el estado COMPLETO (se
+    // guarda la causa, no los efectos), incluyendo los RNGs por su estado
+    // exacto y los contadores de identidad. No son parte de la API pública.
+
+    /// <summary>Restablece el tick tras cargar (los contadores vienen después).</summary>
+    internal void ResetForLoad(ulong tick)
+    {
+        Tick = tick;
+    }
+
+    /// <summary>Estado exacto del RNG del mundo (serialización de checkpoints).</summary>
+    internal (ulong S0, ulong S1, ulong S2, ulong S3) WorldRngState => _worldRng.State;
+
+    /// <summary>Restaura el RNG del mundo desde su estado exacto (carga de checkpoints).</summary>
+    internal void RestoreWorldRng(in DeterministicRandom rng) => _worldRng = rng;
+
+    /// <summary>Contadores de identidad actuales (serialización de checkpoints).</summary>
+    internal (uint NextAntId, uint NextItemId) IdentityCounters => (_nextAntId, _nextItemId);
+
+    /// <summary>Restaura los contadores de identidad desde un checkpoint.</summary>
+    internal void RestoreIdentityCounters(uint nextAntId, uint nextItemId)
+    {
+        _nextAntId = nextAntId;
+        _nextItemId = nextItemId;
+    }
+
+    /// <summary>Vacía las colonias provisionales antes de reconstruirlas desde el checkpoint.</summary>
+    internal void ClearColoniesForLoad() => _colonies.Clear();
+
+    /// <summary>Añade un ítem SIN reasignar Id (carga de checkpoint: el Id es parte del estado).</summary>
+    internal void AddItemUnchecked(FoodItem item) => _items.Add(item);
+
+    /// <summary>
+    /// Añade durante la carga de un checkpoint una colonia reconstruida: Id y
+    /// nido guardados, RNG por estado exacto y especie recuperada por nombre.
+    /// Devuelve la colonia vacía (sin adultas ni cría) con capas y pool ya
+    /// construidos; el pool se siembra con 0 genomas (la élite llega del
+    /// archivo) y su RNG se restaura después por estado exacto.
+    /// </summary>
+    internal Colony AddColonyForLoad(int id, string speciesName, float nestX, float nestY,
+        float stockMax, DeterministicRandom rng)
+    {
+        var sp = SpeciesDescriptor.ByName(speciesName);
+        var colony = new Colony
+        {
+            Id = id,
+            Species = sp,
+            NestX = nestX,
+            NestY = nestY,
+            StockMax = stockMax,
+            Rng = rng,
+            Pool = new GenomePool(rng.Fork(0xA5C3E7B9UL), BrainSizes, seedCount: 0),
+            FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
+            HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
+            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells)
+        };
+        _colonies.Add(colony);
+        return colony;
     }
 }

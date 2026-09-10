@@ -4,6 +4,7 @@ obj/
 *.user
 *.suo
 .vs/
+.dotnet/
 TestResults/
 
 # Unity (cuando se añada src/App/AntSim.Unity)

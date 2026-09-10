@@ -158,6 +158,24 @@ public sealed class PheromoneLayer
         Array.Copy(_values, destination, _values.Length);
     }
 
+    /// <summary>Versión cruda de un tile por índice lineal (serialización de checkpoints).</summary>
+    internal uint RawTileVersion(int index) => _tileVersions[index];
+
+    /// <summary>
+    /// Restaura el estado completo de la capa desde un checkpoint .antsave:
+    /// valores celda a celda, versiones por tile y contador global de mutaciones.
+    /// </summary>
+    internal void LoadState(float[] values, uint[] tileVersions, ulong mutationCount)
+    {
+        if (values is null || values.Length != _values.Length)
+            throw new ArgumentException("Los valores no coinciden con el tamaño de la capa.", nameof(values));
+        if (tileVersions is null || tileVersions.Length != _tileVersions.Length)
+            throw new ArgumentException("Las versiones de tile no coinciden con la teselación.", nameof(tileVersions));
+        Array.Copy(values, _values, values.Length);
+        Array.Copy(tileVersions, _tileVersions, tileVersions.Length);
+        _mutationCounter = mutationCount;
+    }
+
     public int CellCount => _values.Length;
 
     private void MarkDirty(int x, int y)

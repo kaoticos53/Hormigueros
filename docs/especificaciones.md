@@ -299,6 +299,14 @@
   re-ejecutar; eventos y cambios de grid se regeneran idénticos.
 - Verificación: `antsim verify` re-ejecuta y compara hashes de hito (mundo y métricas).
 
+**Estado (implementado):** `.antsave` v1 binario canónico (mundo RNG + identidad,
+colonias/nidos/cría/adultas con genomas MLP bit exactos, comida, grids de
+feromonas con revisión por tile, RNG del pool élite; SHA-256 del cuerpo en la
+cabecera), `.antlog` texto (eventos tick+kind+ant+datos y hashes de hito cada
+1024 ticks) y `antsim --mode verify` (carga el checkpoint, re-ejecuta y contrasta
+eventos e hitos; exit 0 idéntico / 3 divergencia). Pendiente: `.antmetrics`/
+`.antevents.csv`/`.anttrace` (exportaciones de telemetría).
+
 ## 7. Vista (Unity, Fase 4)
 
 - `SimPresenter` consume Canales A/B/C/D; **nunca** escribe en el Core.
