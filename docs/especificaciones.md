@@ -351,8 +351,49 @@
    9/10 semillas**, drop-avg 179.4, carry-leg 71.8 — la combinación buscada:
    la FIABILIDAD de la banda corta (9/10, como warm-v2) con el FORRAJEO de la
    banda ancha (91 pickups, entre warm2 88 y warm3 98) y tramo medio
-   intermedio. Verify de la cadena warm-v2 → warm2 → hybrid: OK en ambos
-   pares. Veredictos verify de la cadena original:
+   intermedio.   Verify de la cadena warm-v2 → warm2 → hybrid: OK en ambos
+   pares.
+
+   **Evaluación de MODO JUEGO (2 colonias competidoras, 48 000 ticks =
+   1600 s, grid 256², 5 semillas; `artifacts/game-mode-probe.txt`)**: la
+   colonia 0 sembrada con el pool, la 1 baseline (la atrición a los 6 min
+   da simetría total entre ambas — los eventos identicos por colonia son la
+   prueba de que el resultado no depende del seeding cuando el mundo se
+   vuelve estático). Resultados (colonia sembrada): warm-v2 5 pickups /
+   1 descarga; warm2 5/2; hybrid 6/0 — todos los pools se degradan frente
+   a la ventana de 800 s (donde warm-v2 lograba 9/10 semillas) porque el
+   96 % del horizonte de 1600 s es mundo muerto: los founders mueren
+   ~3600 ticks y sin inflow la colonia no puede sostener más generaciones
+   que las que el stock fundador alimenta. La evaluación en ventana larga
+   con UNA colonia (24 000 ticks) sigue siendo el mejor discriminador de
+   pools; el modo juego a 1600 s NO distingue warm-v2/warm2/hybrid y las
+   diferencias observadas (±1 descarga) son ruido de muestreo.   Decisión:
+   el pool para el modo juego es **warm-v2** (mejor fiabilidad en el
+   benchmark de referencia) y la mejora pendiente es de DISEÑO DEL MUNDO
+   (hacer que el relevo arranque antes de los 6 min), no de pool.
+
+ - **Ruptura del dead zone (Fase 3ter, diseño del mundo)**: dos cambios
+   mínimos y realistas en la fundación:
+   (1) **Vigor fundador 0.75–1.15** (antes 0.6–1.0): las reinas fundadoras
+   producen primeras obreras más robustas que la media (inversión
+   fundadora). La última fundadora vive ~125 s (antes ~117) y la más
+   frágil ~103.5 s (antes ~84): el pico forrajero experto se extiende y
+   solapa más con la primera descendencia.
+   (2) **Cría inicial adelantada**: los huevos de la fundación nacen con la
+   mitad de su tiempo de huevo ya consumido (`Age = EggTime/2`) — una
+   reina fundadora pone su primera puesta antes de que la colonia exista
+   como tal. La primera cohorte eclosiona ~4 s antes y entra en la
+   ventana forrajera de las fundadoras.
+   Resultado (2 colonias, 48 000 ticks, grid 96, 5 semillas): el relevo
+   se dispara — first-unload medio **4548 ticks (~69 s antes que antes)**,
+   8/10 combinaciones pool×semilla con descarga (warm-v2 5/5 semillas,
+   warm2 4/5, hybrid 5/5), pickups 7–15 por corrida. En grid 256 (mundo
+   grande) la mejora es parcial (2/4 semillas con descarga): la densidad
+   de ítems por área cae ×7 y el forrajeo inicial de la banda 200–260
+   acierta menos — la falta de comida temprana sigue siendo el cuello de
+   botella del mundo grande, no el timing fundador. Determinismo intacto
+   (hash idéntico entre procesos).
+   Veredictos verify de la cadena original:
    warm2→warm3 REGRESIÓN (carry-leg), warm3→warm3c OK. La comparación fiable
    entre pools es por métricas, no por orden de cadena.
  - **Densado de carry-leg en la arena (mitigación del shallowing)**: nuevo
