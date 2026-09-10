@@ -12,8 +12,10 @@ comida a ≥ 200 u con el spawn del mundo, sin rastro plantado — con transfere
 validada al mundo real vía `--seed-pool`) y **Fase 4 (persistencia) implementada**:
 checkpoints `.antsave` reproducibles bit a bit, registro de eventos `.antlog` con
 hitos de hash cada 1024 ticks y modo `verify` de contraste. Ver
-[`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo y
-[`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados.
+[`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo,
+[`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados
+y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cierre
+de la Fase 3ter (arranque en frío, salud del relevo y jerarquía de pools).
 
 ## Requisitos
 
