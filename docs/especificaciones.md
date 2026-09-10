@@ -301,30 +301,39 @@
    cierre de relevo largo. `--verify` lo detecta como regresión
    (`carry-leg se encogió 91.8 → 46.6 (>20%)`): el límite práctico del
    currículo actual está en ~350 u de banda; más allá, la competencia de
-   forrajeo crece a costa de la profundidad del relevo.
- - **Benchmark de referencia Fase 3ter** (`artifacts/benchmark-fase3ter.txt`,
-   regenerado): 8 filas × 10 semillas × 24 000 ticks, determinista (hashes
-   byte a byte). La fila warm-v2 se REGENERÓ con la misma receta antes del
-   benchmark: el pool es byte a byte reproducible (warm-start determinista
-   desde warm2), así que la fila de referencia es reproducible de ahora en
-   adelante.
-   Resumen agregado:
+   forrajeo crece a costa de la profundidad del relevo. - **Benchmark de referencia Fase 3ter** (`artifacts/benchmark-fase3ter.txt`,
+   regenerado dos veces): 8 filas × 10 semillas × 24 000 ticks, determinista
+   (hashes byte a byte). La ÚLTIMA regeneración corre bajo las constantes
+   finales del mundo (vigor fundador 0.75–1.15, cría inicial adelantada y
+   densidad de comida constante por área) — las filas anteriores corresponden
+   al mundo pre-dead-zone y solo tienen valor histórico. Los POOLS no se
+   re-entrenaron (están congelados: entrenados bajo las constantes viejas y
+   transferidos al mundo nuevo — la prueba de robustez de la transferencia).
+   Resumen agregado (mundo final):
 
    | pool | pickups | descargas | semillas c/ descarga | drop-avg | carry-leg |
    |---|---|---|---|---|---|
-   | baseline | 1 | 0 | 0/10 | 254.0 | — |
-   | pretrain-60 (frío, 60 gens) | 77 | 6 | 6/10 | 216.7 | 68.3 |
-   | pretrain-warm (200–260, pop 6 — OBSOLETO) | 2 | 0 | 0/10 | 217.5 | — |
-   | pretrain-warm-v2 (200–260, recalibrado) | 94 | **14** | **9/10** | 175.0 | 71.7 |
-   | pretrain-warm2 (200–350) | 88 | 11 | 6/10 | 189.0 | 80.5 |
-   | pretrain-warm3 (200–450) | **98** | 11 | 7/10 | 166.7 | 57.0 |
-   | pretrain-warm3c (200–450 + carry-leg) | 82 | 10 | 7/10 | 171.7 | 57.7 |
-   | pretrain-hybrid (alternado 200–325/200–450) | 91 | 13 | **9/10** | 179.4 | 71.8 |
+   | baseline | 0 | 0 | 0/10 | — | — |
+   | pretrain-60 (frío, 60 gens) | 79 | 6 | 5/10 | 210.9 | 85.5 |
+   | pretrain-warm (200–260, pop 6 — OBSOLETO) | 6 | 0 | 0/10 | 229.3 | — |
+   | pretrain-warm-v2 (200–260) | 99 | 17 | **10/10** | **167.9** | 80.0 |
+   | pretrain-warm2 (200–350) | 91 | 8 | 7/10 | 192.3 | 76.1 |
+   | pretrain-warm3 (200–450) | **107** | **22** | 10/10 | 171.1 | 61.1 |
+   | pretrain-warm3c (200–450 + carry-leg) | 97 | 13 | 9/10 | 185.2 | 71.6 |
+   | pretrain-hybrid (alternado 200–325/200–450) | 107 | 14 | 9/10 | 175.2 | 64.2 |
 
-   Lecturas: baseline sin forrajeo; el pool en frío de 60 gens transfiere
-   forrajeo y algo de relevo; la banda extendida (warm3) maximiza forrajeo
-   pero reduce el carry-leg; el densado de carry-leg (warm3c) recupera el
-   tramo medio sin sacrificar descargas ni semillas cubiertas.
+   Lecturas (mundo final, con las constantes del dead zone rotas y densidad
+   constante): baseline sin forrajeo; el pool en frío de 60 gens transfiere
+   forrajeo y algo de relevo. **warm3 se convierte en el líder de descargas
+   (22, 10/10 semillas)**: la densidad de comida constante por área llena el
+   anillo amplio de objetivos y su banda de entrenamiento 200–450 pasa de
+   handicap a ventaja. warm-v2 mantiene su corona de FIABILIDAD con drop-avg
+   más sano (167.9, único pool con verify OK contra warm2) y carry-leg 80.0.
+   El antiguo carry-leg máximo (warm2, 80.5) cae a 76.1 y su drop-avg se
+   degrada (192.3, verify REGRESIÓN contra warm-v2): con más comida fuera de
+   su banda, sus portadoras sueltan más lejos. La banda extendida ya no es
+   un trade: con densidad constante, warm3 domina en descargas y pickups,
+   pero su carry-leg (61.1) sigue siendo la más corta de los pools fuertes.
 
    **Revalidación del eslabón warm (200–260)**: la fila original
    `pretrain-warm` era un artefacto de RECETA, no del mundo — el pool viejo
@@ -410,7 +419,8 @@
    mundo grande está CERRADO y el veredicto se reconfirma: **warm-v2** es
    el pool del modo juego (único con 5/5 en ambos tamaños de mundo).
    Veredictos verify de la cadena original:
-   warm2→warm3 REGRESIÓN (carry-leg), warm3→warm3c OK. La comparación fiable
+   warm2→warm3 REGRESIÓN (drop-avg 167.9→192.3 en el mundo final),
+   warm3→warm3c OK, warm3c→hybrid OK. La comparación fiable
    entre pools es por métricas, no por orden de cadena.
  - **Densado de carry-leg en la arena (mitigación del shallowing)**: nuevo
    término de fitness `CarryLegPerUnit` (0.15 ep/u): en cada descarga REAL de

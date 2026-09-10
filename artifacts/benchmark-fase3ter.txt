@@ -1,5 +1,5 @@
 == 0) build
-Tiempo transcurrido 00:00:02.05
+Tiempo transcurrido 00:00:01.23
 == revalidación baseline (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-60 (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
 == revalidación pretrain-warm (ticks 24000, semillas: 42 7 99 1234 777 314 555 808 1000 2026)
@@ -11,103 +11,103 @@ Tiempo transcurrido 00:00:02.05
 
 == Revalidación multi-semilla (--seed-pool, ticks 24000) ==
 pool           seed   pickup unload eclosed   died   eggs unload1st  dropavg  carryleg   hash
-baseline       42          0      0     24     44     39         -        -         -   15ebf310
-baseline       7           0      0     24     44     39         -        -         -   786f9742
-baseline       99          0      0     24     44     39         -        -         -   b2f0cf5f
-baseline       1234        0      0     25     45     39         -        -         -   821080de
-baseline       777         0      0     27     47     40         -        -         -   daf95e44
-baseline       314         0      0     26     46     40         -        -         -   3d662577
-baseline       555         0      0     26     46     39         -        -         -   63cb10d8
-baseline       808         1      0     25     45     39         -    254.0         -   311f6851
-baseline       1000        0      0     25     45     39         -        -         -   2b57032f
-baseline       2026        0      0     24     44     40         -        -         -   05ba53e4
-pretrain-60    42          8      1     24     44     51      8356    230.9     106.0   b7b45cf1
-pretrain-60    7           8      1     24     44     42      6410    220.4      61.0   f6f7c2bf
-pretrain-60    99          4      0     24     44     39         -    223.0         -   c48c6ef5
-pretrain-60    1234       10      1     25     45     50      5800    221.6      81.0   61055468
-pretrain-60    777         8      1     27     47     45      6668    184.1      23.0   1db06d6e
-pretrain-60    314         8      0     26     46     40         -    216.5         -   19c6bee4
-pretrain-60    555         5      0     26     46     39         -    265.8         -   908cc5e5
-pretrain-60    808        11      1     25     45     46      6543    231.0      39.0   3e37f30f
-pretrain-60    1000        8      1     25     45     47      7219    174.9     100.0   91dbf83d
-pretrain-60    2026        7      0     24     44     40         -    198.6         -   81e38df0
-pretrain-warm  42          0      0     24     44     39         -        -         -   71d37404
-pretrain-warm  7           1      0     24     44     39         -    221.0         -   0a3150da
-pretrain-warm  99          0      0     24     44     39         -        -         -   840e7823
-pretrain-warm  1234        0      0     25     45     39         -        -         -   8c1b22fd
-pretrain-warm  777         0      0     27     47     40         -        -         -   dff976fe
-pretrain-warm  314         0      0     26     46     40         -        -         -   1a3bd23e
-pretrain-warm  555         1      0     26     46     39         -    214.0         -   0255892f
-pretrain-warm  808         0      0     25     45     39         -        -         -   0b2fd0ce
-pretrain-warm  1000        0      0     25     45     39         -        -         -   2abc8f2d
-pretrain-warm  2026        0      0     24     44     40         -        -         -   d5e7c772
-pretrain-warm-v2 42          9      1     24     44     56      4426    168.9      78.0   744be8ed
-pretrain-warm-v2 7          12      1     24     44     49      7286    181.0      34.0   064f2e15
-pretrain-warm-v2 99          8      0     24     44     39         -    172.8         -   bcc6f5a6
-pretrain-warm-v2 1234        6      2     26     46     61      4989    165.3      88.5   ff96ff2a
-pretrain-warm-v2 777         6      1     27     47     53      5323    166.2     107.0   31750fd8
-pretrain-warm-v2 314        10      2     25     45     63      4505    177.6      60.0   53411d3b
-pretrain-warm-v2 555        12      1     26     46     53      5175    194.7       8.0   245b674e
-pretrain-warm-v2 808        11      2     24     44     68      4803    215.2      90.0   75f94713
-pretrain-warm-v2 1000        9      2     25     45     60      4901    147.4      62.0   f200c9a4
-pretrain-warm-v2 2026       11      2     24     44     55      6463    161.2     118.0   f2ae0619
-pretrain-warm2 42          9      3     24     44     72      5130    186.7      84.0   d886ef99
-pretrain-warm2 7          10      0     24     44     39         -    190.7         -   ba30f694
-pretrain-warm2 99          7      1     24     44     47      6789    188.8     138.0   bd113c09
-pretrain-warm2 1234       10      0     25     45     39         -    215.5         -   381cc1f7
-pretrain-warm2 777         9      2     27     47     57      5854    148.6      53.5   df2a4323
-pretrain-warm2 314        10      2     27     47     56      5514    190.5      76.5   d49c78ef
-pretrain-warm2 555         8      0     26     46     39         -    163.1         -   4b516e90
-pretrain-warm2 808         5      1     25     45     48      7152    199.5     100.0   fce2c332
-pretrain-warm2 1000        5      0     25     45     39         -    231.0         -   b5e3a3c9
-pretrain-warm2 2026       15      2     25     45     60      5542    175.7      31.0   b43f77b0
-pretrain-warm3 42         15      2     25     45     62      4787    136.2      58.0   b464396c
-pretrain-warm3 7           9      1     24     44     45      6158    162.9      58.0   3042f30d
-pretrain-warm3 99          8      0     24     44     39         -    185.9         -   64dd59d3
-pretrain-warm3 1234       11      2     25     45     58      6147    180.6      46.5   4397bad7
-pretrain-warm3 777         8      2     27     47     56      5989    148.0      24.0   0bc92492
-pretrain-warm3 314        11      2     25     45     59      4629    183.6      44.5   49505457
-pretrain-warm3 555         8      1     26     46     44      6291    200.7      99.0   7be6ec1f
-pretrain-warm3 808         9      0     25     45     39         -    161.7         -   0863dde2
-pretrain-warm3 1000       11      1     24     44     57      4382    159.9      69.0   4bdecce3
-pretrain-warm3 2026        8      0     24     44     40         -    147.3         -   421ff221
-pretrain-warm3c 42         12      3     24     44     63      5021    174.4      94.7   60c19a7a
-pretrain-warm3c 7           6      0     24     44     39         -    172.7         -   92385cc8
-pretrain-warm3c 99          8      2     24     44     58      5934    192.7     100.5   fc12993e
-pretrain-warm3c 1234       11      1     25     45     47      6246    140.7      24.0   3d59e081
-pretrain-warm3c 777         4      0     27     47     40         -    121.3         -   5fbfe35e
-pretrain-warm3c 314         7      1     25     45     56      4433    181.3      49.0   e6bf65a7
-pretrain-warm3c 555         9      1     27     47     47      5847    173.0       1.0   a69175f9
-pretrain-warm3c 808         8      1     24     44     56      4704    145.7      67.0   e2acfd24
-pretrain-warm3c 1000        5      1     25     45     44      6336    228.3      68.0   22947183
-pretrain-warm3c 2026       12      0     24     44     40         -    186.8         -   eec09125
-pretrain-hybrid 42         11      1     24     44     55      4625    189.5      79.0   83cb0eda
-pretrain-hybrid 7          12      2     24     44     55      6301    201.5      68.0   049fcc8d
-pretrain-hybrid 99          9      1     25     45     47      5673    168.5      45.0   3dc9a7ad
-pretrain-hybrid 1234        6      1     25     45     46      6368    175.8     106.0   4d04f0a9
-pretrain-hybrid 777        10      3     27     47     68      5547    165.0      67.3   38c86b50
-pretrain-hybrid 314        10      1     26     46     51      5252    169.0      83.0   5c86769d
-pretrain-hybrid 555        10      0     26     46     39         -    196.0         -   b4150fc1
-pretrain-hybrid 808         4      1     25     45     48      5591    206.7     124.0   ff4024db
-pretrain-hybrid 1000       11      2     25     45     57      5907    153.2      55.5   b48f6dba
-pretrain-hybrid 2026        8      1     24     44     47      6554    168.4      18.0   fa34d973
+baseline       42          0      0     24     44     38         -        -         -   ce2202d5
+baseline       7           0      0     24     44     38         -        -         -   6f72cc38
+baseline       99          0      0     24     44     38         -        -         -   ef94539e
+baseline       1234        0      0     24     44     38         -        -         -   cb390ba1
+baseline       777         0      0     24     44     38         -        -         -   7f546985
+baseline       314         0      0     24     44     38         -        -         -   1b8c7e5a
+baseline       555         0      0     24     44     38         -        -         -   4e4e2daf
+baseline       808         0      0     24     44     38         -        -         -   99b748b6
+baseline       1000        0      0     24     44     38         -        -         -   1c9e7c52
+baseline       2026        0      0     24     44     38         -        -         -   4eac82d4
+pretrain-60    42          9      0     24     44     38         -    195.7         -   857c3bcd
+pretrain-60    7           7      1     24     44     43      6102    189.2      79.0   111dff2b
+pretrain-60    99          2      0     24     44     38         -    262.5         -   4daa4f47
+pretrain-60    1234        8      1     24     44     50      7112    188.4      71.0   a083efb8
+pretrain-60    777         7      1     24     44     45      5548    214.0     119.0   ca1f5db7
+pretrain-60    314         7      0     24     44     38         -    226.6         -   44f519f1
+pretrain-60    555         9      0     24     44     38         -    210.3         -   afe38c54
+pretrain-60    808        10      1     25     45     50      4800    209.3      56.0   777ffc9d
+pretrain-60    1000       12      2     25     45     59      5092    215.8     102.5   1c6e06bc
+pretrain-60    2026        8      0     24     44     38         -    197.6         -   78f083d8
+pretrain-warm  42          0      0     24     44     38         -        -         -   f4c338db
+pretrain-warm  7           1      0     24     44     38         -    256.0         -   7ee1a1e8
+pretrain-warm  99          1      0     24     44     38         -    213.0         -   fbae75ea
+pretrain-warm  1234        0      0     24     44     38         -        -         -   f8395667
+pretrain-warm  777         0      0     24     44     38         -        -         -   be428c3b
+pretrain-warm  314         1      0     24     44     38         -    234.0         -   74abe050
+pretrain-warm  555         0      0     24     44     38         -        -         -   4639d223
+pretrain-warm  808         1      0     24     44     38         -    207.0         -   d2121140
+pretrain-warm  1000        1      0     24     44     38         -    225.0         -   bbf53ef4
+pretrain-warm  2026        1      0     24     44     38         -    241.0         -   c001b32d
+pretrain-warm-v2 42         10      1     23     43     54      3943    174.6      33.0   1a908fa2
+pretrain-warm-v2 7          15      3     24     44     69      4266    154.3      79.0   c7e56d67
+pretrain-warm-v2 99          8      1     25     45     47      5201    170.6      80.0   79967ef7
+pretrain-warm-v2 1234        7      2     24     44     52      5018    148.6      71.0   c24bf187
+pretrain-warm-v2 777         5      1     24     44     50      4811    167.5      86.0   c9494246
+pretrain-warm-v2 314        10      2     24     44     53      5463    176.5      66.5   d5243319
+pretrain-warm-v2 555        12      1     24     44     47      5280    183.5     116.0   41af92f5
+pretrain-warm-v2 808        12      2     24     44     56      5335    193.5      79.5   5df59ccb
+pretrain-warm-v2 1000       10      2     24     44     62      3739    172.0     131.5   593d4568
+pretrain-warm-v2 2026       10      2     24     44     55      5480    138.1      58.0   d268debe
+pretrain-warm2 42         14      0     24     44     38         -    192.2         -   859f7759
+pretrain-warm2 7           9      1     24     44     49      4718    176.8      57.0   ad7ca2d5
+pretrain-warm2 99         10      2     24     44     54      6318    206.8     108.0   1063c90e
+pretrain-warm2 1234       11      1     25     45     47      4954    229.6      54.0   4e116e47
+pretrain-warm2 777         6      1     24     44     54      4418    141.8      69.0   8e539cf6
+pretrain-warm2 314         9      1     25     45     48      4955    187.4      73.0   c4f0ed40
+pretrain-warm2 555         9      1     24     44     49      7220    209.9      70.0   1703aa05
+pretrain-warm2 808         6      1     24     44     51      7919    171.2     102.0   4444967b
+pretrain-warm2 1000        6      0     24     44     38         -    223.8         -   5eb3eec6
+pretrain-warm2 2026       11      0     24     44     38         -    183.3         -   0d183b80
+pretrain-warm3 42         15      5     25     45     75      4623    145.9      68.2   fadd0e02
+pretrain-warm3 7          12      2     25     45     54      4631    162.4      88.5   49844107
+pretrain-warm3 99          7      1     24     44     45      5851    193.5      86.0   3e86f0c7
+pretrain-warm3 1234       15      3     25     45     61      4947    155.8      38.7   4f9559b2
+pretrain-warm3 777        10      3     24     44     68      4007    153.3      42.0   e764055f
+pretrain-warm3 314         8      1     23     43     53      4126    172.4      38.0   8c524a6f
+pretrain-warm3 555         9      1     24     44     48      6860    202.1      62.0   26acf222
+pretrain-warm3 808        11      2     24     44     62      6982    178.4      41.5   98df5c49
+pretrain-warm3 1000       13      3     24     44     65      4480    168.2      56.7   207a95c4
+pretrain-warm3 2026        7      1     24     44     44      5742    178.7      89.0   6143fb07
+pretrain-warm3c 42         13      2     25     45     54      4875    163.8      63.5   bd9533cd
+pretrain-warm3c 7          11      0     24     44     38         -    176.0         -   0e3e0a75
+pretrain-warm3c 99         13      2     25     45     55      4694    184.0      81.0   da9b866b
+pretrain-warm3c 1234       10      2     25     45     60      4962    193.3      70.5   318c241a
+pretrain-warm3c 777         4      1     24     44     44      5641    187.3     125.0   fae3dfd3
+pretrain-warm3c 314        12      1     24     44     52      4394    204.2       1.0   9228accd
+pretrain-warm3c 555         8      1     25     45     48      4799    207.6     101.0   2037d693
+pretrain-warm3c 808         7      1     24     44     53      4487    172.0      42.0   2931910f
+pretrain-warm3c 1000        9      2     24     44     57      5005    172.4      59.5   07338404
+pretrain-warm3c 2026       10      1     24     44     50      7541    191.0     101.0   b4a89add
+pretrain-hybrid 42         10      1     24     44     48      5139    167.8      45.0   de82d7f4
+pretrain-hybrid 7          13      1     24     44     43      5580    188.1      95.0   3a4dddc3
+pretrain-hybrid 99         11      1     25     45     47      5130    164.3      74.0   5bd1da99
+pretrain-hybrid 1234        8      2     24     44     59      6504    163.5      69.0   f7f8c040
+pretrain-hybrid 777        10      1     24     44     54      4409    170.7      25.0   0b08142c
+pretrain-hybrid 314         8      0     24     44     38         -    170.1         -   15840f5e
+pretrain-hybrid 555        11      1     24     44     49      7062    196.0      72.0   47f21d99
+pretrain-hybrid 808        12      2     24     44     57      5533    191.9      88.5   80be3d93
+pretrain-hybrid 1000       13      3     25     45     63      4695    158.1      60.0   4862e5e0
+pretrain-hybrid 2026       11      2     24     44     59      6534    181.8      49.5   723e20eb
 
 == Resumen (totales sobre 10 semillas) ==
-baseline   pickups   1 | descargas   0 (0/10 semillas con descarga) | eclosiones 250 | drop-avg  254.0 | carry-leg      -
-pretrain-60 pickups  77 | descargas   6 (6/10 semillas con descarga) | eclosiones 250 | drop-avg  216.7 | carry-leg   68.3
-pretrain-warm pickups   2 | descargas   0 (0/10 semillas con descarga) | eclosiones 250 | drop-avg  217.5 | carry-leg      -
-pretrain-warm-v2 pickups  94 | descargas  14 (9/10 semillas con descarga) | eclosiones 249 | drop-avg  175.0 | carry-leg   71.7
-pretrain-warm2 pickups  88 | descargas  11 (6/10 semillas con descarga) | eclosiones 252 | drop-avg  189.0 | carry-leg   80.5
-pretrain-warm3 pickups  98 | descargas  11 (7/10 semillas con descarga) | eclosiones 249 | drop-avg  166.7 | carry-leg   57.0
-pretrain-warm3c pickups  82 | descargas  10 (7/10 semillas con descarga) | eclosiones 249 | drop-avg  171.7 | carry-leg   57.7
-pretrain-hybrid pickups  91 | descargas  13 (9/10 semillas con descarga) | eclosiones 251 | drop-avg  179.4 | carry-leg   71.8
+baseline   pickups   0 | descargas   0 (0/10 semillas con descarga) | eclosiones 240 | drop-avg      - | carry-leg      -
+pretrain-60 pickups  79 | descargas   6 (5/10 semillas con descarga) | eclosiones 242 | drop-avg  210.9 | carry-leg   85.5
+pretrain-warm pickups   6 | descargas   0 (0/10 semillas con descarga) | eclosiones 240 | drop-avg  229.3 | carry-leg      -
+pretrain-warm-v2 pickups  99 | descargas  17 (10/10 semillas con descarga) | eclosiones 240 | drop-avg  167.9 | carry-leg   80.0
+pretrain-warm2 pickups  91 | descargas   8 (7/10 semillas con descarga) | eclosiones 242 | drop-avg  192.3 | carry-leg   76.1
+pretrain-warm3 pickups 107 | descargas  22 (10/10 semillas con descarga) | eclosiones 242 | drop-avg  171.1 | carry-leg   61.1
+pretrain-warm3c pickups  97 | descargas  13 (9/10 semillas con descarga) | eclosiones 244 | drop-avg  185.2 | carry-leg   71.6
+pretrain-hybrid pickups 107 | descargas  14 (9/10 semillas con descarga) | eclosiones 242 | drop-avg  175.2 | carry-leg   64.2
 
 == Verificación de regresión del relevo (pares consecutivos) ==
   baseline     → pretrain-60  OK
   pretrain-60  → pretrain-warm REGRESIÓN: first-unload desapareció (pretrain-60 → pretrain-warm)
   pretrain-warm → pretrain-warm-v2 OK
-  pretrain-warm-v2 → pretrain-warm2 OK
-  pretrain-warm2 → pretrain-warm3 REGRESIÓN: carry-leg se encogió 80.5 → 57.0 (>20%)
+  pretrain-warm-v2 → pretrain-warm2 REGRESIÓN: drop-avg subió 167.9 → 192.3 (>10%)
+  pretrain-warm2 → pretrain-warm3 OK
   pretrain-warm3 → pretrain-warm3c OK
   pretrain-warm3c → pretrain-hybrid OK
 == verify: FALLO (regresión del relevo) ==
