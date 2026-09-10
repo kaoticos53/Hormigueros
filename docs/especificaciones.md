@@ -357,6 +357,21 @@
    de mundo completo), warm3 (máx descargas), warm3-v2 (banda ancha con
    mejor salud de relevo)**.
 
+ - **Quinto eslabón: híbrido + mundo completo (warm-5)**: warm-start desde
+   warm-4 con `--hybrid --full-world` (alternado 200–325/200–450 en las tres
+   etapas estándar + la 4ª de mundo completo, 12 gens/etapa). En la arena
+   grande la 4ª etapa converge (competentes 20–21/24, best ~222). En el
+   mundo estándar 96² (10 semillas): **pickups 118 (el mejor de todos los
+   pools)**, 17 descargas en 9/10 semillas — la alternancia recupera el
+   forrajeo que la 4ª etapa sola dejaba caer (warm-4: 106 pickups, 7/10).
+   Verify warm-4 → warm-5: OK. PERO en modo juego grid 256 (2 colonias,
+   48k, 5 semillas) decae: solo 2/5 semillas con descarga (vs 5/5 de
+   warm-4 y warm-v2) — la alternancia con banda media estrecha tras la
+   cobertura completa sacrifica parte del cierre a larga distancia, justo
+   lo que el mundo grande pide. La combinación híbrido+mundo-completo no
+   es gratis: la jerarquía del modo juego se mantiene (warm-v2 y warm-4
+   5/5; warm-5 9/10 en mundo estándar pero 2/5 en mundo grande).
+
    **Revalidación del eslabón warm (200–260)**: la fila original
    `pretrain-warm` era un artefacto de RECETA, no del mundo — el pool viejo
    se entrenó con pop 6 × 2 gens/etapa (un humo del pipeline), así que sus 0

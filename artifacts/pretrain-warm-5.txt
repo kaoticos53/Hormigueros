@@ -1,0 +1,52 @@
+seed 7 pop 24 band 200-450 hybrid full-world
+warm-started 24 genomes from artifacts/pretrain-warm-4.antgenome
+gen stage=1 gen=1 best=268.888 mean=152.700 competent=9
+gen stage=1 gen=2 best=166.328 mean=109.620 competent=5
+gen stage=1 gen=3 best=198.772 mean=105.235 competent=2
+gen stage=1 gen=4 best=168.253 mean=99.649 competent=2
+gen stage=1 gen=5 best=197.069 mean=125.920 competent=2
+gen stage=1 gen=6 best=150.899 mean=99.022 competent=3
+gen stage=1 gen=7 best=220.027 mean=117.326 competent=6
+gen stage=1 gen=8 best=196.980 mean=136.416 competent=10
+gen stage=1 gen=9 best=211.357 mean=132.988 competent=5
+gen stage=1 gen=10 best=164.169 mean=89.764 competent=2
+gen stage=1 gen=11 best=231.784 mean=125.055 competent=5
+gen stage=1 gen=12 best=134.352 mean=102.693 competent=2
+gen stage=2 gen=1 best=339.455 mean=234.717 competent=22
+gen stage=2 gen=2 best=267.992 mean=162.976 competent=20
+gen stage=2 gen=3 best=359.323 mean=217.435 competent=20
+gen stage=2 gen=4 best=269.139 mean=177.179 competent=21
+gen stage=2 gen=5 best=309.129 mean=199.575 competent=20
+gen stage=2 gen=6 best=242.806 mean=148.004 competent=19
+gen stage=2 gen=7 best=291.232 mean=223.966 competent=22
+gen stage=2 gen=8 best=251.188 mean=173.329 competent=21
+gen stage=2 gen=9 best=335.342 mean=249.031 competent=23
+gen stage=2 gen=10 best=220.506 mean=160.074 competent=23
+gen stage=2 gen=11 best=321.405 mean=242.178 competent=22
+gen stage=2 gen=12 best=253.874 mean=175.920 competent=22
+gen stage=3 gen=1 best=424.668 mean=330.472 competent=24
+gen stage=3 gen=2 best=364.182 mean=254.150 competent=23
+gen stage=3 gen=3 best=402.881 mean=317.796 competent=23
+gen stage=3 gen=4 best=348.926 mean=234.276 competent=23
+gen stage=3 gen=5 best=363.366 mean=221.518 competent=20
+gen stage=3 gen=6 best=353.074 mean=217.792 competent=24
+gen stage=3 gen=7 best=429.809 mean=337.965 competent=24
+gen stage=3 gen=8 best=290.566 mean=193.543 competent=20
+gen stage=3 gen=9 best=408.664 mean=298.169 competent=23
+gen stage=3 gen=10 best=329.351 mean=232.209 competent=23
+gen stage=3 gen=11 best=365.293 mean=288.967 competent=22
+gen stage=3 gen=12 best=331.096 mean=225.509 competent=21
+gen stage=4 gen=1 best=264.527 mean=141.500 competent=20
+gen stage=4 gen=2 best=219.640 mean=124.413 competent=18
+gen stage=4 gen=3 best=203.659 mean=134.412 competent=21
+gen stage=4 gen=4 best=261.954 mean=146.614 competent=21
+gen stage=4 gen=5 best=236.468 mean=137.068 competent=19
+gen stage=4 gen=6 best=310.789 mean=132.710 competent=20
+gen stage=4 gen=7 best=229.660 mean=127.677 competent=20
+gen stage=4 gen=8 best=254.629 mean=129.985 competent=19
+gen stage=4 gen=9 best=183.589 mean=103.197 competent=13
+gen stage=4 gen=10 best=162.717 mean=115.400 competent=17
+gen stage=4 gen=11 best=221.588 mean=141.950 competent=21
+gen stage=4 gen=12 best=221.991 mean=135.008 competent=20
+trained 24 genomes, stages 4
+exported 24 genomes to artifacts/pretrain-warm-5.antgenome
