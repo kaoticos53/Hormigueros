@@ -302,6 +302,42 @@
    (`carry-leg se encogió 91.8 → 46.6 (>20%)`): el límite práctico del
    currículo actual está en ~350 u de banda; más allá, la competencia de
    forrajeo crece a costa de la profundidad del relevo.
+ - **Benchmark de referencia Fase 3ter** (`artifacts/benchmark-fase3ter.txt`):
+   6 pools × 10 semillas × 24 000 ticks, determinista (hashes byte a byte).
+   Resumen agregado:
+
+   | pool | pickups | descargas | semillas c/ descarga | drop-avg | carry-leg |
+   |---|---|---|---|---|---|
+   | baseline | 1 | 0 | 0/10 | 254.0 | — |
+   | pretrain-60 (frío, 60 gens) | 77 | 6 | 6/10 | 216.7 | 68.3 |
+   | pretrain-warm (200–260) | 2 | 0 | 0/10 | 217.5 | — |
+   | pretrain-warm2 (200–350) | 88 | 11 | 6/10 | 189.0 | **80.5** |
+   | pretrain-warm3 (200–450) | **98** | 11 | 7/10 | 166.7 | 57.0 |
+   | pretrain-warm3c (200–450 + carry-leg) | 82 | 10 | 7/10 | 171.7 | 57.7 |
+
+   Lecturas: baseline sin forrajeo; el pool en frío de 60 gens transfiere
+   forrajeo y algo de relevo; el warm de banda calibrada (warm2) es el mejor
+   equilibrio forrajeo/relevo; la banda extendida (warm3) maximiza forrajeo
+   pero reduce el carry-leg; el densado de carry-leg (warm3c) recupera el
+   tramo medio sin sacrificar descargas ni semillas cubiertas. Veredictos
+   verify de la cadena completa: warm→warm2 OK, warm2→warm3 REGRESIÓN
+   (carry-leg), warm3→warm3c OK. Las curvas de la cadena (warm mejor que
+   warm2 en forrajeo) muestran la varianza entre recetas de pool: la
+   comparación fiable es por métricas, no por orden de cadena.
+ - **Densado de carry-leg en la arena (mitigación del shallowing)**: nuevo
+   término de fitness `CarryLegPerUnit` (0.15 ep/u): en cada descarga REAL de
+   la arena se paga la distancia recta pickup→descarga de esa carga — pagar
+   solo al cerrar el ciclo y proporcional al tramo hace farmeable exactamente
+   lo que se quiere (exige pickup + descarga reales, y el pago crece con la
+   longitud del tramo completado; una cría que recoge una suelta a 200 u y
+   llega cobra ~30 ep, más que el ciclo básico). Retrenando warm3 con el
+   término (warm3b, 0.08 → warm3c, 0.15) el carry-leg medio del mundo abierto
+   sube 46.6 → 57.7 u (10 semillas) y aparecen los mejores tramos de toda la
+   cadena (100.5 u); el residual frente a la banda 200–350 (80.5 u) es
+   GEOMÉTRICO, no de selección: con ítems a ≥ 200 u y sueltas más lejos del
+   nido, el presupuesto de vida de la cría que completa trunca los tramos
+   largos. El shallowing parcial de la banda 200–450 es estructural; el
+   densado lo recupera en parte y previene el colapso total.
 
 ## 5. Telemetría
 
