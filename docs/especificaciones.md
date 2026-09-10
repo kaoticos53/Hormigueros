@@ -393,6 +393,22 @@
    acierta menos — la falta de comida temprana sigue siendo el cuello de
    botella del mundo grande, no el timing fundador. Determinismo intacto
    (hash idéntico entre procesos).
+
+ - **Densidad de comida constante por área (Fase 3ter, cierre del gap del
+   mundo grande)**: el objetivo de ítems escala ahora con el área — 24
+   ítems por mundo 96² (la calibración de la arena) ⇒ ~171 ítems en 256².
+   Antes el mundo grande tenía los mismos 24 ítems en 7.1× el área:
+   densidad ×7 menor y el forrajeo inicial fallaba en la mitad de las
+   semillas. El escalado se aplica al spawn inicial y al respawn SOLO
+   cuando `TargetItems` sigue en su default (la arena lo fija a 0 y el
+   mundo de 96² no cambia: hash byte a byte idéntico). Resultado del modo
+   juego en grid 256 (2 colonias, 48 000 ticks, 5 semillas): warm-v2
+   **descarga en 5/5 semillas** (8 descargas, pickups 4–13, first-unload
+   3745–5876, carry-leg hasta 174 u), hybrid 5/5 (7 descargas), warm2 3/5
+   (4 descargas, la más débil: su banda de entrenamiento estrecha no
+   cubre los ítems que ahora aparecen por todo el mundo). El gap del
+   mundo grande está CERRADO y el veredicto se reconfirma: **warm-v2** es
+   el pool del modo juego (único con 5/5 en ambos tamaños de mundo).
    Veredictos verify de la cadena original:
    warm2→warm3 REGRESIÓN (carry-leg), warm3→warm3c OK. La comparación fiable
    entre pools es por métricas, no por orden de cadena.
