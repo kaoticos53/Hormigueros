@@ -335,6 +335,28 @@
    un trade: con densidad constante, warm3 domina en descargas y pickups,
    pero su carry-leg (61.1) sigue siendo la más corta de los pools fuertes.
 
+ - **Re-entrenamiento de la banda ancha bajo el mundo final (warm3-v2)**:
+   misma receta que warm3 (warm2 → banda 200–450, seed 7, pop 24, 15
+   gens/etapa) pero entrenada con las constantes del mundo actual (vigor
+   fundador 0.75–1.15, cría adelantada, densidad por área). En arena
+   converge mejor que su antecesor (best 554.7, competentes 23/24 vs ~282
+   y 20–24). En el mundo estándar 96² (10 semillas): pickups 88,
+   **descargas 18 en 10/10 semillas** — no recupera la corona de warm3
+   (22), pero iguala la fiabilidad perfecta y con drop-avg MÁS SANO que
+   warm3 (164.7 vs 171.1) y drop-avg más sano que warm-v2 también
+   (167.9). El carry-leg, sin embargo, NO mejora (61.6 vs 61.1): el
+   shallowing del tramo medio en bandas anchas es estructural (presupuesto
+   de vida de la cría que completa), no un artefacto de las constantes
+   viejas — el resultado de warm3 ya era el óptimo alcanzable y el nuevo
+   mundo no lo cambia. En modo juego grid 256 (2 colonias, 48k, 5
+   semillas): 5/5 semillas con descarga (7 descargas, pickups 5–16,
+   first-unload 4459–5217). Veredicto: la corona de descargas se queda
+   en warm3 (congelado); warm3-v2 es el pool de banda ancha con el
+   mejor drop-avg y fiabilidad perfecta — la jerarquía final del modo
+   juego: **warm-v2 (drop-avg más sano + carry-leg 80), warm-4 (cobertura
+   de mundo completo), warm3 (máx descargas), warm3-v2 (banda ancha con
+   mejor salud de relevo)**.
+
    **Revalidación del eslabón warm (200–260)**: la fila original
    `pretrain-warm` era un artefacto de RECETA, no del mundo — el pool viejo
    se entrenó con pop 6 × 2 gens/etapa (un humo del pipeline), así que sus 0
