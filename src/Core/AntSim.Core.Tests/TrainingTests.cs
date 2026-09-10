@@ -39,6 +39,53 @@ public class TrainingTests
     }
 
     [Fact]
+    public void HybridStages_AlternatesBands_Deterministically()
+    {
+        // Contrato del currículo híbrido: las etapas llevan MidDistance y la
+        // alternancia es función pura de (etapa, generación) — dos trainers con
+        // la misma semilla producen la MISMA secuencia de bandas. Presupuesto
+        // mínimo: lo que se testa es la alternancia y el determinismo, no la
+        // convergencia (la estructura de HybridStages fija los horizontes).
+        var stages = CurriculumTrainer.HybridStages(200f, 325f, 450f);
+        Assert.Equal(3, stages.Count);
+        Assert.NotNull(stages[0].MidDistance);
+        Assert.Equal(325f, stages[0].MidDistance!.Value);
+        Assert.Equal(450f, stages[0].MaxDistance);
+        stages[0].TickBudget = 120;
+        stages[1].TickBudget = 120;
+        stages[2].TickBudget = 120;
+        stages[0].MaxGenerations = 2;
+        stages[1].MaxGenerations = 2;
+        stages[2].MaxGenerations = 2;
+        stages[0].MinGenerations = 1;
+        stages[1].MinGenerations = 1;
+        stages[2].MinGenerations = 1;
+
+        var run1 = new CurriculumTrainer(9UL, 8, stages, onGeneration: null);
+        var stages2 = CurriculumTrainer.HybridStages(200f, 325f, 450f);
+        for (int i = 0; i < 3; i++)
+        {
+            stages2[i].TickBudget = 120;
+            stages2[i].MaxGenerations = 2;
+            stages2[i].MinGenerations = 1;
+        }
+        var run2 = new CurriculumTrainer(9UL, 8, stages2, onGeneration: null);
+        var p1 = run1.Run();
+        var p2 = run2.Run();
+        Assert.Equal(p1.Count, p2.Count);
+        for (int i = 0; i < p1.Count; i++)
+            Assert.Equal(p1[i].Fitness, p2[i].Fitness);
+    }
+
+    [Fact]
+    public void HybridStages_RejectsInvalidBands()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurriculumTrainer.HybridStages(100f, 325f, 450f));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurriculumTrainer.HybridStages(200f, 200f, 450f));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurriculumTrainer.HybridStages(200f, 500f, 450f));
+    }
+
+    [Fact]
     public void Trainer_Converges_ToForaging_WithKnownSeed()
     {
         // Física verificada de la arena realista: una ida-y-vuelta SOLA a ≥ 200 u

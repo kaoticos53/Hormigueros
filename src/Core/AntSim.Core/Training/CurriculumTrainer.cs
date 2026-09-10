@@ -33,6 +33,8 @@ public sealed class CurriculumStage
     public string Name = "";
     public float MinDistance = WorldSim.NestMinSpawnDistance; // banda de distancia al nido
     public float MaxDistance = 260f;
+    /// <summary>Banda intermedia del currículo híbrido (null = banda fija).</summary>
+    public float? MidDistance = null;
     public int TickBudget = 3600;       // ticks máx por evaluación (~120 s)
     public double CompetenceFitness = 0.0; // fitness mínimo de COLONIA; 0 = sin umbral
     public int MinGenerations = 4;      // nunca avanzar antes de esto
@@ -160,6 +162,38 @@ public sealed class CurriculumTrainer
     }
 
     /// <summary>
+    /// Currículo HÍBRIDO alternado (Fase 3ter): cada etapa alterna generaciones
+    /// entre la banda MEDIA (minBand–midBand) y la ANCHA (minBand–maxBand).
+    /// Motivación empírica: la banda calibrada (200–350, warm2) da el mejor
+    /// carry-leg (80.5 u) pero menos pickups; la banda ancha (200–450, warm3)
+    /// maximiza forrajeo (98 pickups) a costa del tramo medio del relevo
+    /// (57.0 u). Alternar obliga a la selección a mantener AMBAS competencias
+    /// cada pocas generaciones — un genoma que explote solo la banda ancha
+    /// pierde posición en las generaciones de banda media y viceversa. Las
+    /// semillas de arena dependen de (etapa, generación), así que las
+    /// generaciones par/impar muestrean bandas DISTINTAS con el mismo
+    /// presupuesto: el alternado es determinista y no aumenta el coste.
+    /// </summary>
+    public static IReadOnlyList<CurriculumStage> HybridStages(float minBand, float midBand, float maxBand)
+    {
+        if (minBand < WorldSim.NestMinSpawnDistance)
+            throw new ArgumentOutOfRangeException(nameof(minBand),
+                $"La banda mínima debe ser ≥ NestMinSpawnDistance ({WorldSim.NestMinSpawnDistance} u).");
+        if (midBand <= minBand || maxBand <= midBand)
+            throw new ArgumentOutOfRangeException(nameof(maxBand), "Se exige minBand < midBand < maxBand.");
+
+        return new List<CurriculumStage>
+        {
+            // Misma progresión de horizonte que DefaultStages (cercana → relevo →
+            // mundo); la alternancia de banda la hace AlternateBands dentro de
+            // cada etapa: generaciones impares en la banda media, pares en la ancha.
+            new() { Name = "hib-cercana", MinDistance = minBand, MaxDistance = maxBand, MidDistance = midBand, TickBudget = 3600, CompetenceFitness = 0.0, MinGenerations = 4, MaxGenerations = 30 },
+            new() { Name = "hib-relevo",  MinDistance = minBand, MaxDistance = maxBand, MidDistance = midBand, TickBudget = 5400, CompetenceFitness = 0.0, MinGenerations = 4, MaxGenerations = 40 },
+            new() { Name = "hib-mundo",   MinDistance = minBand, MaxDistance = maxBand, MidDistance = midBand, TickBudget = 9000, CompetenceFitness = 0.0, MinGenerations = 4, MaxGenerations = 60 }
+        };
+    }
+
+    /// <summary>
     /// Ejecuta el currículo completo. Devuelve la población final ordenada por
     /// fitness descendente (la élite que puede sembrar un pool de partida).
     /// </summary>
@@ -237,7 +271,18 @@ public sealed class CurriculumTrainer
         ulong arenaSeed = unchecked(_seed
             + (ulong)stageIndex * 0x9E3779B9UL
             + (ulong)generation * 0xBF58476DUL);
-        var arena = new ArenaEvaluator(arenaSeed, stage.MinDistance, stage.MaxDistance, stage.TickBudget, TrialsPerGenome);
+
+        // Alternancia de banda del currículo híbrido: generaciones IMPARES en la
+        // banda media (minBand–midBand), PARES en la ancha (minBand–maxBand).
+        // Determinista: la banda es función pura de (etapa, generación).
+        float min = stage.MinDistance, max = stage.MaxDistance;
+        if (stage.MidDistance is float mid)
+        {
+            if (generation % 2 == 1) max = mid; // impar: banda media
+            // par: banda ancha completa (min/max de la etapa)
+        }
+
+        var arena = new ArenaEvaluator(arenaSeed, min, max, stage.TickBudget, TrialsPerGenome);
 
         double sum = 0.0;
         best = double.MinValue;

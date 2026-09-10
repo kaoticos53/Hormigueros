@@ -56,6 +56,7 @@ internal static class Program
         int generations = 0; // 0 = usa el tope de cada etapa (30/60/80/100)
         float bandMin = 200f;   // banda de distancia del pretrain (por defecto: la calibrada)
         float bandMax = 260f;
+        bool hybrid = false;    // currículo híbrido alternado (200-mid / 200-max por generación)
         string? importPath = null;
         string? seedPoolPath = null;
         string? warmStartPath = null;
@@ -119,6 +120,9 @@ internal static class Program
                     if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out bandMax) || bandMax <= bandMin)
                         return Fail("--band-max requiere un float > --band-min.");
                     break;
+                case "--hybrid":
+                    hybrid = true;
+                    break;
                 case "--export":
                     exportPath = Next(args, ref i);
                     break;
@@ -151,7 +155,7 @@ internal static class Program
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
-                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax),
+                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);
@@ -238,20 +242,26 @@ internal static class Program
     }
 
     private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath,
-        string? warmStartPath, float bandMin, float bandMax)
+        string? warmStartPath, float bandMin, float bandMax, bool hybrid = false)
     {
         // Currículo calibrado (Fase 3bis, arena realista); --generations limita el
         // máximo por etapa y --band-min/--band-max re-bandan TODAS las etapas
         // (warm-start de refinado: extender el anillo de forrajeo sobre un pool ya
-        // competente).
+        // competente). --hybrid alterna generaciones entre la banda media
+        // (bandMin–punto medio) y la ancha (bandMin–bandMax) dentro de cada etapa.
+        System.Collections.Generic.IReadOnlyList<CurriculumStage> baseStages = hybrid
+            ? CurriculumTrainer.HybridStages(bandMin, (bandMin + bandMax) * 0.5f, bandMax)
+            : CurriculumTrainer.DefaultStages();
+
         var stages = new System.Collections.Generic.List<CurriculumStage>();
-        foreach (var s in CurriculumTrainer.DefaultStages())
+        foreach (var s in baseStages)
         {
             stages.Add(new CurriculumStage
             {
                 Name = s.Name,
-                MinDistance = bandMin,
-                MaxDistance = bandMax,
+                MinDistance = s.MinDistance,
+                MaxDistance = s.MaxDistance,
+                MidDistance = s.MidDistance,
                 TickBudget = s.TickBudget,
                 CompetenceFitness = s.CompetenceFitness,
                 MinGenerations = s.MinGenerations,
@@ -263,6 +273,7 @@ internal static class Program
         sb.Append("seed ").Append(seed).Append(" pop ").Append(pop)
           .Append(" band ").Append(bandMin.ToString("0", CultureInfo.InvariantCulture))
           .Append("-").Append(bandMax.ToString("0", CultureInfo.InvariantCulture))
+          .Append(hybrid ? " hybrid" : "")
           .AppendLine();
 
         System.Collections.Generic.List<MlpGenome>? seeded = null;
