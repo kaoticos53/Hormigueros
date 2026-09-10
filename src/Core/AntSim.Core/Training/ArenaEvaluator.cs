@@ -55,6 +55,19 @@ public readonly struct ArenaResult
 ///       enseña exactamente el comportamiento — volver por brújula con la carga —
 ///       que la descarga exige, y la recompensa del mundo (unload ≈ 12.5) domina en
 ///       cuanto aparece.
+///     · CARRY-LEG (al completar): en cada descarga real se paga la distancia
+///       recta pickup→descarga de ESA carga (× CarryLegPerUnit). Es el término
+///       que falta para el relevo: el homing premia el progreso PARCIAL de
+///       cualquier portadora, también el de una fundadora que muere a mitad de
+///       camino; en bandas anchas (200–450 u) esa señal parcial + el forrajeo
+///       del anillo amplio superan al cierre largo y la descendencia completa
+///       tramos cada vez más cortos (hallazgo warm3: carry-leg 91.8→46.6 u en
+///       el mundo abierto con drop-avg y descargas sanas). Pagar SOLO en la
+///       descarga y proporcional al tramo completo hace farmeable exactamente
+///       lo que queremos: exige pickup real + descarga real, y el pago crece
+///       con la longitud del tramo completado (una cría que recoge una suelta
+///       a 200 u y llega al nido cobra ~16 ep a 0.08 ep/u — más que el ciclo
+///       básico, así que seleccionar "relevo profundo" compite y gana).
 ///   La recompensa real del mundo (pickup + unload) sigue siendo la señal objetivo;
 ///   los densados solo hacen muestreable el camino hacia ella.
 /// - COMPETENCIA OBSERVADA: ≥ 1 descarga al nido (ciclo completo), contada por
@@ -69,6 +82,7 @@ public sealed class ArenaEvaluator
     public const int MaxSpawnAttempts = 64;
     public const float HomeShapingPerUnit = 0.12f;   // densado de homing con carga (ep/u)
     public const float ExplorePerUnit = 0.015f;      // densado de exploración sin carga (ep/u)
+    public const float CarryLegPerUnit = 0.15f;      // densado de tramo completado pickup→descarga (ep/u)
     // Calibración: sin densados el fitness de todos los genomas colapsa a la
     // supervivencia pura (10 × 0.002 × 106.2 s = 2.124 EXACTO: cero interacciones —
     // el paseo aleatorio no alcanza la banda de ≥ 200 u antes de morir y el ciclo
@@ -175,7 +189,10 @@ public sealed class ArenaEvaluator
         //   completo = mismo número de ticks para todos los genomas (comparabilidad
         //   y determinismo estrictos).
         int pickups = 0, unloads = 0;
-        double homeShaping = 0.0, exploreShaping = 0.0;
+        double homeShaping = 0.0, exploreShaping = 0.0, carryLegShaping = 0.0;
+        // Tramo abierto por (colonia, hormiga): posición del pickup sin descargar.
+        // Los eventos traen X/Y, así que no hay que consultar el estado del mundo.
+        var openCarries = new Dictionary<(int Colony, uint Ant), (float X, float Y)>();
         // Récords POR HORMIGA: los densados pagan solo en récord nuevo (monótonos,
         // no explotables: oscilar fuera-dentro-fuera junto a la banda no repite pago).
         // exploreRecord: máxima distancia alcanzada; homeRecord: mínima distancia
@@ -190,8 +207,24 @@ public sealed class ArenaEvaluator
             for (int e = 0; e < events.Count; e++)
             {
                 var kind = events[e].Kind;
-                if (kind == SimEventKind.Pickup) pickups++;
-                else if (kind == SimEventKind.Unload) unloads++;
+                if (kind == SimEventKind.Pickup)
+                {
+                    pickups++;
+                    openCarries[(events[e].ColonyId, events[e].AntId)] = (events[e].X, events[e].Y);
+                }
+                else if (kind == SimEventKind.Unload)
+                {
+                    unloads++;
+                    // Densado de tramo completado: la distancia recta del pickup
+                    // de esta carga a esta descarga. Solo paga al CERRAR el ciclo
+                    // y crece con el tramo — selecciona relevo profundo.
+                    if (openCarries.Remove((events[e].ColonyId, events[e].AntId), out var pick))
+                    {
+                        float ldx = events[e].X - pick.X;
+                        float ldy = events[e].Y - pick.Y;
+                        carryLegShaping += MathF.Sqrt(ldx * ldx + ldy * ldy) * CarryLegPerUnit;
+                    }
+                }
             }
 
             // — Densados ida-y-vuelta (ep/u), solo para vivas: los muertos no puntúan.
@@ -244,7 +277,7 @@ public sealed class ArenaEvaluator
         double total = 0.0;
         for (int a = 0; a < colony.Adults.Count; a++)
             total += colony.Adults[a].Fitness;
-        total += homeShaping + exploreShaping;
+        total += homeShaping + exploreShaping + carryLegShaping;
 
         return new ArenaResult(total, pickups, unloads);
     }
