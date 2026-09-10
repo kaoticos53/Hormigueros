@@ -11,9 +11,11 @@
 # lista de pools (--pools "baseline a.antgenome b.antgenome"); falla (exit 1)
 # si entre dos pools CONSECUTIVOS:
 #   · desaparece first-unload (el pool previo descargaba en alguna semilla y el
-#     siguiente no descarga en ninguna), o
+#     siguiente no descarga en ninguna),
 #   · sube drop-avg en >10% (las sueltas caen más lejos del nido ⇒ homing
-#     degradado).
+#     degradado), o
+#   · se encoge carry-leg en >20% (la descendencia completa menos tramo por
+#     carga: el relevo pierde alcance sin dejar de descargar).
 # Pares con métrica ausente en el pool previo (p. ej. baseline sin actividad de
 # relevo) no se comparan en ese campo.
 #
@@ -242,6 +244,16 @@ if [[ "$VERIFY" == "1" ]]; then
             rise="$(awk -v a="$pda" -v b="$nda" 'BEGIN { print (b > a * 1.10) ? 1 : 0 }')"
             if [[ "$rise" == "1" ]]; then
                 verdict="REGRESIÓN: drop-avg subió ${pda} → ${nda} (>10%)"
+                regression=1
+            fi
+        fi
+        # 3) carry-leg no puede encogerse >20% (la descendencia completa menos
+        #    tramo por carga: el relevo pierde alcance sin dejar de descargar).
+        pcl="${MEAN_CL[$prev]}"; ncl="${MEAN_CL[$next]}"
+        if [[ "$verdict" == "OK" && "$pcl" != "-" && "$ncl" != "-" ]]; then
+            shrink="$(awk -v a="$pcl" -v b="$ncl" 'BEGIN { print (b < a * 0.80) ? 1 : 0 }')"
+            if [[ "$shrink" == "1" ]]; then
+                verdict="REGRESIÓN: carry-leg se encogió ${pcl} → ${ncl} (>20%)"
                 regression=1
             fi
         fi
