@@ -128,15 +128,26 @@ public sealed class WorldSim
                 Y = colony.NestY + (float)(colony.Rng.NextDouble01() * 2.0 - 1.0) * 40f,
                 Heading = (float)(colony.Rng.NextDouble01() * Math.PI * 2.0 - Math.PI)
             };
-            // Vigor fundador ESCALONADO de 0.6 a 1.0: con vigor uniforme todas
-            // las fundadoras comparten esperanza de vida (90·(0.7+0.6·0.8) =
-            // 106.2 s) y mueren el MISMO tick — el relevo por suelta al morir
-            // (una portadora que cae deja el ítem en el suelo) era imposible por
-            // construcción y la colonia fundada moría en bloque sin descendencia.
-            // El escalonado desincroniza las muertes (vigor 0.6 → ~84 s, 1.0 →
-            // ~117 s) y escalona las sueltas a lo largo de la generación.
+            // Vigor fundador ESCALONADO de 0.75 a 1.15: con vigor uniforme todas
+            // las fundadoras comparten esperanza de vida y mueren el MISMO tick —
+            // el relevo por suelta al morir (una portadora que cae deja el ítem
+            // en el suelo) era imposible por construcción y la colonia fundada
+            // moría en bloque sin descendencia. El escalonado desincroniza las
+            // muertes y escalona las sueltas a lo largo de la generación.
+            // Fase 3ter (dead zone del modo juego): con 0.6–1.0 la ÚLTIMA
+            // fundadora moría ~117 s (tick 3510) y la primera eclosión madura
+            // ~120–140 s: en el mundo grande (grid 256) el relevo apenas
+            // arrancaba cuando ya no quedaban portadoras expertas — ventana
+            // muerta hasta el final de la partida (evaluación a 1600 s: 92 %
+            // del horizonte sin actividad). Rango 0.75–1.15: la última fundadora
+            // vive ~90·(0.7+0.6·1.15) = 125 s (tick 3750), la más frágil
+            // 90·(0.7+0.6·0.75) = 103.5 s, y la primera descendencia (de
+            // huevos iniciales, vigor alto con cría bien nodrizada) eclosiona
+            // en vida de las fundadoras con solapamiento completo. Realismo:
+            // las reinas fundadoras de Lasius niger producen primeras obreras
+            // más robustas que la media (inversión fundadora), no menos.
             float vigor = InitialAdults > 1
-                ? 0.6f + 0.4f * i / (InitialAdults - 1)
+                ? 0.75f + 0.4f * i / (InitialAdults - 1)
                 : 1f;
             ant.InitFromVigor(sp.EnergyCapacity, sp.BaseLifespan, vigor);
             // Los mejores candidatos se usan al nacer (Fase 2).
@@ -145,13 +156,24 @@ public sealed class WorldSim
             colony.Adults.Add(ant);
         }
 
+        // Cría inicial ADELANTADA (Fase 3ter, dead zone del modo juego): los
+        // huevos de la fundación nacen con la mitad de su tiempo de huevo ya
+        // consumido (Age = EggTime/2). Realismo: una reina fundadora pone su
+        // PRIMERA puesta antes de que la colonia exista como tal — los huevos
+        // que se encuentran al fundar no empiezan de cero. Efecto: la primera
+        // cohorte de obreras eclosiona ~4 s antes (8→4 s de huevo + 25 de
+        // larva + 12 de pupa ≈ 41 s → ~37 s), solapando con el pico de
+        // actividad forrajera de las fundadoras (103–125 s) y dando tiempo a
+        // que la descendencia esté VIVA y pueda recoger las sueltas del relevo
+        // mientras aún hay portadoras expertas.
         for (int i = 0; i < InitialEggs; i++)
         {
             colony.Eggs.Add(new BroodMember
             {
                 Kind = BroodKind.Egg,
                 Insert = colony.InsertCounter++,
-                G0 = 0.4f + 0.6f * colony.Rng.NextFloat01()
+                G0 = 0.4f + 0.6f * colony.Rng.NextFloat01(),
+                Age = sp.EggTime * 0.5f
             });
         }
 
