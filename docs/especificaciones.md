@@ -257,10 +257,23 @@
   desde el flujo de eventos sin tocar la simulación — los hashes son byte a
   byte idénticos con y sin el tracker — y distingue la suelta (ItemSpawned con
   ColonyId real) del spawn regular (centinela ColonyId = -1). Ejemplo real:
-  baseline `first-unload - drop-avg -` vs pool warm2 (semilla 42)
-  `first-unload 5130 drop-avg 186.7`. El script `scripts/pipeline.sh` muestra
-  ambas columnas en su tabla (`unload1st`/`dropavg`): una `drop-avg` alta con
-  `first-unload` ausente es la firma de un relevo que no cierra.
+  baseline `first-unload - drop-avg -` vs pool warm2 (semilla 42)   `first-unload 5130 drop-avg 186.7`. El script `scripts/pipeline.sh` muestra
+   ambas columnas en su tabla (`unload1st`/`dropavg`): una `drop-avg` alta con
+   `first-unload` ausente es la firma de un relevo que no cierra.
+ - **Salud del relevo por INTERVALO**: además de en `totals`, el CLI emite una
+   línea `relay tick=N first-unload … drop-avg … unload-avg … carry-leg …` en
+   cada hito de tick (cada 120), acumulada hasta ese instante: permite ver la
+   evolución del relevo DURANTE la partida (p. ej. drops aparecen en tick 3600,
+   primera descarga en 5130) sin sondas. `carry-leg` es la distancia media
+   pickup→descarga de las cargas completadas — el ÚLTIMO eslabón medido
+   directamente: cuánto tramo cierra el portador que termina (relevo real
+   ~80–250 u; descarga solo del fundador que llega sola, ~0–50 u).
+ - **Modo `--verify` del pipeline** (`scripts/pipeline.sh --verify`): salta el
+   entrenamiento y revalida una lista de pools (`--pools "baseline a.antgenome
+   b.antgenome"`); falla (exit 1) si entre dos pools CONSECUTIVOS desaparece
+   `first-unload` (el previo descargaba en alguna semilla, el siguiente en
+   ninguna) o `drop-avg` sube >10 % (homing degradado: sueltas más lejos).
+   Pares sin métrica en el pool previo no se comparan en ese campo.
 - **Refinado con banda extendida (200–350 u)**: `--band-min/--band-max`
   re-bandan todas las etapas (mínimo respetado: ≥ `NestMinSpawnDistance`).
   Segundo warm-start desde `pretrain-warm.antgenome` (seed 7, pop 24, 15

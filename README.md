@@ -77,14 +77,19 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
 `scripts/pipeline.sh` encadena el flujo completo: pretrain en frío → warm-start
 de refinado desde el pool en frío → revalidación multi-semilla con
 `--seed-pool` (baseline vs pool en frío vs pool refinado), con tabla final de
-métricas (pickups, descargas, eclosiones, hash por semilla) y resumen agregado.
+métricas (pickups, descargas, eclosiones, hash, `unload1st`, `dropavg`,
+`carryleg` por semilla) y resumen agregado.
 Determinista; flags para `--pop`, `--gens` (por etapa), `--band-min/max`,
-`--ticks`, `--seeds` y `--out`:
+`--ticks`, `--seeds` y `--out`. El modo `--verify` salta el entrenamiento y
+solo revalida una lista de pools (`--pools "baseline a.antgenome b.antgenome"`),
+fallando (exit 1) si entre dos pools consecutivos desaparece `first-unload` o
+`drop-avg` sube >10 % — detección de regresión del relevo lista para CI:
 
 ```bash
 bash scripts/pipeline.sh                         # defaults: pop 24, 10 gens/etapa, 5 semillas
 bash scripts/pipeline.sh --gens 60 --band-max 350  # réplica del pool de referencia con banda extendida
 bash scripts/pipeline.sh --pop 6 --gens 2 --seeds "42 7"  # humo rápido (~45 s)
+bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" --seeds "42 7"  # regresión del relevo (exit ≠ 0 si falla)
 ```
 
 ## Garantía de determinismo

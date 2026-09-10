@@ -224,12 +224,16 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   verificada en dos procesos). 74/74 tests verdes.
 - **Salud del relevo en el reporte**: `RelayTracker` (Scenario) observa el
   flujo de eventos de solo lectura y expone `first-unload` (primer tick de
-  descarga) y `drop-avg` (distancia media al nido de las sueltas por muerte de
-  portadora, distinguidas del spawn regular por el centinela ColonyId = -1);
-  la línea `totals` de `evolve`/`world` los imprime (`-` si no hay). No toca la
-  simulación: hashes idénticos con y sin el tracker (verificado, semilla 42).
-  77/77 tests verdes (3 nuevos). `scripts/pipeline.sh` los muestra como
-  columnas `unload1st`/`dropavg`.
+  descarga) y `drop-avg` (distancia media al nido de las sueltas por muerte de   portadora, distinguidas del spawn regular por el centinela ColonyId = -1);
+   la línea `totals` de `evolve`/`world` los imprime (`-` si no hay), y cada
+   hito de tick emite una línea `relay` acumulada (first-unload/drop-avg/
+   unload-avg/carry-leg) vía `TickLine` (emisor compartido CLI+escenario, que
+   además evita divergencias de formato). No toca la simulación: hashes
+   idénticos con y sin el tracker (verificado, semilla 42). 86/86 tests verdes.
+   `scripts/pipeline.sh` muestra las columnas `unload1st`/`dropavg`/`carryleg`
+   y añade el modo `--verify`: revalida pools consecutivos y falla (exit 1) si
+   `first-unload` desaparece o `drop-avg` sube >10 % — regresión del relevo en
+   CI sin sondas.
 - **Refinado con banda extendida**: `--band-min/--band-max` re-bandan todas las
   etapas del currículo (validación ≥ `NestMinSpawnDistance`). Segundo
   warm-start desde `pretrain-warm.antgenome` con el anillo 200–350 u (~3×
