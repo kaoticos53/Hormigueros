@@ -403,6 +403,26 @@
    botella del mundo grande, no el timing fundador. Determinismo intacto
    (hash idéntico entre procesos).
 
+ - **4ª etapa del currículo: MUNDO COMPLETO** (`CurriculumTrainer.FullWorldStage`,
+   flag CLI `--full-world`): arena GRANDE de 176 celdas (1408 u, nido centrado,
+   radio útil 704 u) con ítems en la banda 200–700 u y horizonte de 14 400
+   ticks (480 s). Se AÑADE tras las tres etapas estándar (no las sustituye).
+   Física que enseña: a 700 u ninguna portadora completa el ciclo sola
+   (ida-y-vuelta ≈ 519 s frente a ~104–125 s de vida) — el relevo de 2+ saltos
+   es OBLIGATORIO, y el densado de carry-leg (0.15 ep/u) paga los tramos
+   largos. `CurriculumStage.ArenaCells` (null = 96 estándar) dimensiona la
+   arena por etapa; `ArenaEvaluator` acepta `customGridCells` con validación
+   de que la banda cabe (mitad del lado). Resultado (warm-4, warm-start desde
+   warm3c, 10 gens/etapa + 10 de la 4ª): en la arena grande converge
+   (competentes 19–21/24, best ~270). En el mundo estándar 96² (10 semillas):
+   pickups 106, descargas 14 en 7/10 semillas — transferencia sana pero sin
+   superar a warm3 (22 descargas) ni a warm-v2 en fiabilidad. En modo juego
+   grid 256 (2 colonias, 48k, 5 semillas): **5/5 semillas con descarga**
+   (8 descargas, pickups 7–12, first-unload 4138–6008) — empata con warm-v2
+   en fiabilidad de mundo grande y supera a warm3 (5/5 pero con carry-leg más
+   corto). El margen extra del currículo (4ª etapa) no cuesta nada en los
+   mundos pequeños: warm-4 es una alternativa validada para el modo juego en
+   mundo grande.
  - **Densidad de comida constante por área (Fase 3ter, cierre del gap del
    mundo grande)**: el objetivo de ítems escala ahora con el área — 24
    ítems por mundo 96² (la calibración de la arena) ⇒ ~171 ítems en 256².
