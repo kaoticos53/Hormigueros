@@ -48,10 +48,19 @@ public sealed class WorldSim
     public float RewardUnloadPerEp { get; set; } = 2.0f;
     public float RewardSurvivalPerSecond { get; set; } = 0.01f;
     public float RewardDepositPerUnit { get; set; } = 0.0f; // refuerzo del depósito de feromona (arena)
-    public float RewardUnloadBonus { get; set; } = 0.0f;    // bonus plano por ciclo completo (arena)
-
-    /// <summary>Objetivo de ítems en el mundo (la arena lo pone a 0).</summary>
+    public float RewardUnloadBonus { get; set; } = 0.0f;    // bonus plano por ciclo completo (arena)    /// <summary>Objetivo de ítems en el mundo (la arena lo pone a 0).
+    /// Por defecto escala con el ÁREA del mundo: 24 ítems por mundo de 96²
+    /// (la calibración de la arena), i.e. densidad constante ≈ 24/(96·8)² u².
+    /// Fase 3ter: con objetivo fijo, el mundo grande (256²) tenía 24 ítems en
+    /// 7.1× el área — densidad ×7 menor, y el forrajeo inicial en la banda
+    /// 200–260 acertaba tan raramente que el relevo no arrancaba en la
+    /// mitad de las semillas del modo juego. Escalar por área mantiene la
+    /// MISMA probabilidad de encuentro por unidad de recorrido en cualquier
+    /// tamaño de mundo (24 → 171 ítems en 256²).</summary>
     public int TargetItems { get; set; } = TargetItemsDefault;
+
+    private int DensityScaledTargetItems => (int)MathF.Round(
+        TargetItemsDefault * (WorldWidth * WorldHeight) / (96f * SimConstants.CellSizeUnits * 96f * SimConstants.CellSizeUnits));
 
     public ulong Tick { get; private set; }
 
@@ -90,7 +99,8 @@ public sealed class WorldSim
             _colonies.Add(colony);
         }
 
-        for (int i = 0; i < TargetItemsDefault; i++)
+        int initialItems = DensityScaledTargetItems;
+        for (int i = 0; i < initialItems; i++)
             SpawnItem();
     }
 
@@ -372,7 +382,12 @@ public sealed class WorldSim
     private void RespawnItems()
     {
         int spawned = 0;
-        while (_items.Count < TargetItems && spawned < RespawnBudgetPerStep)
+        // Objetivo escalado por área (ver DensityScaledTargetItems): el setter
+        // explícito de TargetItems (la arena lo pone a 0; el CLI podría fijarlo)
+        // tiene prioridad — solo cuando sigue en el default se aplica la
+        // densidad constante.
+        int target = TargetItems != TargetItemsDefault ? TargetItems : DensityScaledTargetItems;
+        while (_items.Count < target && spawned < RespawnBudgetPerStep)
         {
             if (SpawnItem()) spawned++;
             else break;
