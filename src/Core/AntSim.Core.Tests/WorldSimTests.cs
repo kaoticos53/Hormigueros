@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using AntSim.Core.Brain;
 using AntSim.Core.Contracts;
+using AntSim.Core.Scenario;
 using AntSim.Core.World;
 using Xunit;
 
@@ -113,7 +114,10 @@ public class WorldSimTests
         Assert.True(ant.HasLoad);
         Assert.True(colony.Stock <= stockBefore + 0.01f); // nada entró (solo gasta la reina)
 
-        // En el nido: descarga real.
+        // En el nido: descarga real. (Fase 3ter: la colonia funda con stock
+        // completo = StockMax, así que primero se libera margen — la descarga
+        // respeta el tope de reserva y sin hueco el crédito se trunca.)
+        colony.Stock = 20f;
         ant.X = colony.NestX;
         ant.Y = colony.NestY;
         float stockBeforeNest = colony.Stock;
@@ -199,6 +203,88 @@ public class WorldSimTests
         string run1 = Scenario.WorldScenario.Run(123UL, ticks: 600, colonies: 2, grid: 128);
         string run2 = Scenario.WorldScenario.Run(123UL, ticks: 600, colonies: 2, grid: 128);
         Assert.Equal(run1, run2);
+    }
+
+    [Fact]
+    public void RelayTracker_RecordsFirstUnloadTick()
+    {
+        var sim = NewSim();
+        var colony = sim.Colonies[0];
+        IsolateSingleAnt(colony);
+
+        var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 2f, 10f, 0f); // interact ≈ 1
+        ant.HasLoad = true;
+        ant.LoadValue = 5f;
+        colony.Stock = 20f; // margen bajo el tope de reserva (Fase 3ter)
+        ant.X = colony.NestX;
+        ant.Y = colony.NestY;
+
+        var relay = new RelayTracker();
+        sim.Step();
+        relay.Observe(sim.LastEvents, sim);
+
+        // La descarga ocurre en el primer paso: el tracker debe reportar ESE tick.
+        Assert.True(relay.HasUnload);
+        Assert.Equal(sim.Tick, relay.FirstUnloadTick);
+    }
+
+    [Fact]
+    public void RelayTracker_CountsDeathDrops_WithNestDistance()
+    {
+        var sim = NewSim();
+        var colony = sim.Colonies[0];
+        IsolateSingleAnt(colony);
+
+        var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 0f, -10f, 0f); // sin interacciones: muere con la carga
+        colony.Stock = 0f;
+        ant.Energy = 0.0005f;
+        ant.HasLoad = true;
+        ant.LoadValue = 3f;
+        ant.X = colony.NestX + 250f; // suelta lejos del nido: debe caer AQUÍ
+        ant.Y = colony.NestY;
+
+        var relay = new RelayTracker();
+        int steps = 0;
+        while (ant.Alive && steps < 40)
+        {
+            sim.Step();
+            relay.Observe(sim.LastEvents, sim);
+            steps++;
+        }
+
+        Assert.False(ant.Alive);
+        // La suelta por muerte es ItemSpawned con ColonyId real (≠ -1 del spawn
+        // regular) y el tracker mide su distancia al nido.
+        Assert.True(relay.DropCount >= 1);
+        Assert.NotNull(relay.DropDistanceMean);
+        Assert.InRange(relay.DropDistanceMean!.Value, 200.0, 300.0);
+        Assert.False(relay.HasUnload); // murió sin llegar al nido
+    }
+
+    [Fact]
+    public void RelayTracker_IgnoresRegularItemSpawns()
+    {
+        var sim = NewSim();
+        var colony = sim.Colonies[0];
+        IsolateSingleAnt(colony);
+
+        var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 0f, -10f, 0f); // sin interacciones ni muertes
+        sim.TargetItems = sim.TargetItems + 2; // fuerza respawn: ItemSpawned(-1)
+
+        var relay = new RelayTracker();
+        for (int i = 0; i < 30; i++)
+        {
+            sim.Step();
+            relay.Observe(sim.LastEvents, sim);
+        }
+
+        // El mundo re-spawneó ítems con el centinela ColonyId = -1: no son sueltas.
+        Assert.Equal(0, relay.DropCount);
+        Assert.Null(relay.DropDistanceMean);
+        Assert.False(relay.HasUnload);
     }
 
     private static void IsolateSingleAnt(Colony colony)

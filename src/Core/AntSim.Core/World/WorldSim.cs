@@ -96,7 +96,12 @@ public sealed class WorldSim
             Species = sp,
             NestX = WorldWidth * (id + 1) / (colonyCount + 1),
             NestY = WorldHeight * 0.5f,
-            Stock = sp.StockMax * 0.5f,
+            // Fundamento a pleno rendimiento: una colonia fundada debe sobrevivir
+            // al arranque en frío con SU reserva completa (StockMax), como una
+            // colonia real que funda con sus reservas propias. Al 50 % el stock se
+            // agotaba (~1.1 ep/s de quema) antes de la primera ventana de forrajeo
+            // (~80–110 s: la comida está a ≥ NestMinSpawnDistance, fuera de visión).
+            Stock = sp.StockMax,
             StockMax = sp.StockMax,
             QueenEnergy = 1f,
             Rng = _worldRng.Fork(0x9E3779B97F4A7C15UL + (ulong)id * 0xBF58476D1CE4E5B9UL),
@@ -117,7 +122,17 @@ public sealed class WorldSim
                 Y = colony.NestY + (float)(colony.Rng.NextDouble01() * 2.0 - 1.0) * 40f,
                 Heading = (float)(colony.Rng.NextDouble01() * Math.PI * 2.0 - Math.PI)
             };
-            ant.InitFromVigor(sp.EnergyCapacity, sp.BaseLifespan, 0.8f);
+            // Vigor fundador ESCALONADO de 0.6 a 1.0: con vigor uniforme todas
+            // las fundadoras comparten esperanza de vida (90·(0.7+0.6·0.8) =
+            // 106.2 s) y mueren el MISMO tick — el relevo por suelta al morir
+            // (una portadora que cae deja el ítem en el suelo) era imposible por
+            // construcción y la colonia fundada moría en bloque sin descendencia.
+            // El escalonado desincroniza las muertes (vigor 0.6 → ~84 s, 1.0 →
+            // ~117 s) y escalona las sueltas a lo largo de la generación.
+            float vigor = InitialAdults > 1
+                ? 0.6f + 0.4f * i / (InitialAdults - 1)
+                : 1f;
+            ant.InitFromVigor(sp.EnergyCapacity, sp.BaseLifespan, vigor);
             // Los mejores candidatos se usan al nacer (Fase 2).
             ant.Genome = colony.Pool.Birth();
             ant.Brain = ant.Genome.ToBrain();
@@ -489,10 +504,26 @@ public sealed class WorldSim
 
     /// <summary>
     /// Siembra el pool élite de una colonia con genomas pre-entrenados
-    /// (Fase 3): desde ese momento los nacimientos usan esta élite.
+    /// (Fase 3): desde ese momento los nacimientos usan esta élite. Además
+    /// re-asigna cerebros a las adultas VIVAS ya construidas (fundadoras): en el
+    /// constructor WorldSim las fundadoras nacen ANTES de que exista la élite
+    /// (Pool.Birth cae al aleatorio), de modo que sembrar solo el pool dejaba
+    /// a la generación 0 con cerebros aleatorios — la causa de que --seed-pool
+    /// no mejorara la supervisión inicial pese a que la arena demuestra que los
+    /// genomas pre-entrenados SÍ forrajean en el régimen del mundo real.
     /// </summary>
     public void SeedPoolFromGenomes(int colonyId, IReadOnlyList<MlpGenome> genomes)
-        => _colonies[colonyId].Pool.ReplaceElite(genomes);
+    {
+        var colony = _colonies[colonyId];
+        colony.Pool.ReplaceElite(genomes);
+        for (int i = 0; i < colony.Adults.Count; i++)
+        {
+            var ant = colony.Adults[i];
+            if (!ant.Alive) continue;
+            ant.Genome = colony.Pool.Birth();
+            ant.Brain = ant.Genome.ToBrain();
+        }
+    }
 
     public void ExportEliteToFile(int colonyId, string path, string name, string speciesHint)
     {

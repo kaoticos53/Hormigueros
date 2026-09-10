@@ -27,7 +27,16 @@ public static class ColonyController
     public const float EtaPupa = 0.3f;    // recuperación de pupa (último recurso)
     public const float QueenUpkeep = 0.02f;
     public const float NurseShare = 0.15f; // fracción de adultas nodrizas
-    public const float NurseRate = 0.04f;  // ep/s por nodriza
+    // b_nurse (Fase 3ter): antes 0.04 ep/s — INSUFICIENTE incluso para una sola
+    // larva: la ventana larval exige ≥ KFull/LarvaTimeMax = 2/25 = 0.08 ep/s
+    // (la LarvaIdeal de la propia especificación, 0.088) para pupar fuerte. Con
+    // 0.04 repartido a partes iguales sobre la oleada de puesta, ninguna larva
+    // alcanzaba NI KMin: no había eclosión JAMÁS, con abundancia o sin ella —
+    // el relevo intergeneracional no podía arrancar y el arranque en frío era
+    // un bloqueo estructural. Ahora la constante DERIVA de la especificación
+    // (LarvaIdeal): una nodriza sostiene la tasa ideal de una larva bien
+    // alimentada; la escasez la recorta vía presupuesto y runway, como antes.
+    public const float NurseRate = 0.088f; // ep/s por nodriza = LarvaIdeal(0.088)
     public const float EmuTau = 5f;        // constante de tiempo de EWMAs (s)
 
     public static void Step(Colony c, float dt, ulong tick, List<SimEvent> events, ref uint nextAntId)
@@ -65,7 +74,13 @@ public static class ColonyController
             }
         }
 
-        // 2c. Larvas (solo si hay reserva para ello)
+        // 2c. Larvas (solo si hay reserva para ello): alimentación SERIALIZADA y
+        // PRIORIZADA — la larva MÁS INVERTIDA primero (ver orden abajo).
+        // Repartir el presupuesto a partes iguales sobre toda la oleada
+        // (≈ 0.004 ep/s por larva) no madura a NINGUNA — mejor una larva
+        // pupando que treinta muriendo de inanición, y es exactamente cómo
+        // nodrizan las colonias reales bajo escasez (prioridad a la cría más
+        // cercana a pupar). Si hay margen (superávit), se extiende a las demás.
         int larvaCount = c.Larvae.Count;
         if (larvaCount > 0 && runway > sp.TCann && c.Stock > 0f)
         {
@@ -75,9 +90,47 @@ public static class ColonyController
             float budget = Math.Min(c.Stock, Math.Min(target, nurseBudget));
             c.Stock -= budget;
             consumed += budget;
-            float perLarva = budget / larvaCount;
-            for (int i = 0; i < larvaCount; i++)
-                c.Larvae[i].Nutrition += perLarva;
+
+            // Orden MÁS INVESTIDA primero (mayor nutrición; empate: larva MÁS
+            // JOVEN — mayor ventana larval restante), determinista. Dos trampas
+            // empíricas detectadas con la sonda (Fase 3ter): (1) repartir a partes
+            // iguales no madura a ninguna larva (maxNutr ≈ 0.1 eterno); (2) con
+            // empate hacia la más VIEJA, en régimen de puesta continua el
+            // "campeón" era siempre la larva a punto de cumplir LarvaTimeMax: se
+            // alimentaba ~0.1 ep y moría de edad — rotación improductiva. Con el
+            // empate hacia la más joven, cada campeón tiene ~25 s por delante:
+            // alcanza KFull (0.088 ep/s ⇒ ~14 s) con margen y pupa.
+            Span<int> order = larvaCount <= 64 ? stackalloc int[larvaCount] : new int[larvaCount];
+            for (int i = 0; i < larvaCount; i++) order[i] = i;
+            for (int i = 1; i < larvaCount; i++)
+            {
+                int key = order[i];
+                int j = i - 1;
+                while (j >= 0 &&
+                       (c.Larvae[order[j]].Nutrition < c.Larvae[key].Nutrition ||
+                        (c.Larvae[order[j]].Nutrition == c.Larvae[key].Nutrition &&
+                         c.Larvae[order[j]].Insert < c.Larvae[key].Insert)))
+                {
+                    order[j + 1] = order[j];
+                    j--;
+                }
+                order[j + 1] = key;
+            }
+
+            // Serial: satura la larva más invertida hasta KFull·(1+surplus) antes
+            // de pasar a la siguiente — el excedente del presupuesto se concentra.
+            float remaining = budget;
+            for (int i = 0; i < larvaCount && remaining > 0f; i++)
+            {
+                var l = c.Larvae[order[i]];
+                float cap = sp.KFull * (1f + surplus) - l.Nutrition;
+                if (cap <= 0f) continue;
+                float bite = Math.Min(remaining, cap);
+                l.Nutrition += bite;
+                remaining -= bite;
+            }
+            // (Si sobra presupuesto tras saturar todas, queda sin usar: no se
+            // sobrealimenta, coherente con el tope de 'target'.)
         }
 
         // — 3. Canibalismo escalonado (recupera energía al stock) —
@@ -180,8 +233,19 @@ public static class ColonyController
         float rho = Math.Clamp((runway - sp.TCrit) / (sp.TSafe - sp.TCrit), 0f, 1f);
         float qQueen = Math.Clamp(c.QueenEnergy, 0.3f, 1f);
         float huecos = c.Eggs.Count < EggCap ? (EggCap - c.Eggs.Count) / (float)EggCap : 0f;
+        // (Fase 3ter) Arranque conservador: el término de DEFICIT (crecer hasta
+        // MaxAdultsPerColony) se escala por la entrada REAL de comida
+        // (InflowEma, 1 tras ~0.1 ep/s). Antes la reina fundadora inundaba la
+        // colonia de huevos (~1.6/s = 0.8 ep/s ≈ 47 % de la reserva fundadora)
+        // para "crecer a 40" SIN comida — el arranque en frío quemaba el stock
+        // en ~120 s y la colonia moría antes de que el relevo de sueltas pudiera
+        // completar la primera descarga (sonda: eclosed 6, unload 0, extinta a
+        // los 240 s). Sin entrada solo se reponen bajas (A·λ_death); la
+        // expansión espera al primer ciclo de comida — biología de fundación
+        // real: primera puesta limitada, expansión ligada a la entrada.
+        float inflowGate = Math.Clamp(c.InflowEma * 10f, 0f, 1f);
         float lambda = Math.Clamp(
-            (MaxAdultsPerColony - c.AdultCountAlive) * KRepl + c.AdultCountAlive * sp.DeathRate,
+            (MaxAdultsPerColony - c.AdultCountAlive) * KRepl * inflowGate + c.AdultCountAlive * sp.DeathRate,
             0f, LambdaMax) * rho * qQueen * huecos;
 
         c.EggAccumulator += lambda * dt;

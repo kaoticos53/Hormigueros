@@ -4,6 +4,7 @@ using AntSim.Core.Brain;
 using AntSim.Core.Contracts;
 using AntSim.Core.Evolution;
 using AntSim.Core.Sim;
+using AntSim.Core.World;
 
 namespace AntSim.Core.Training;
 
@@ -30,22 +31,28 @@ public readonly struct GenerationStats
 public sealed class CurriculumStage
 {
     public string Name = "";
-    public float FoodDistance = 120f;   // u desde el nido
-    public int TickBudget = 4200;       // ticks máx por evaluación (~140 s)
-    public double CompetenceFitness = 2.5; // fitness mín del mejor para superar la etapa
-    public int MinGenerations = 6;      // nunca avanzar antes de esto
-    public int MaxGenerations = 80;     // tope duro: se avanza con lo que haya
+    public float MinDistance = WorldSim.NestMinSpawnDistance; // banda de distancia al nido
+    public float MaxDistance = 260f;
+    public int TickBudget = 3600;       // ticks máx por evaluación (~120 s)
+    public double CompetenceFitness = 0.0; // fitness mínimo de COLONIA; 0 = sin umbral
+    public int MinGenerations = 4;      // nunca avanzar antes de esto
+    public int MaxGenerations = 60;     // tope duro: se avanza con lo que haya
 }
 
 /// <summary>
-/// Trainer de pre-entrenamiento headless (Fase 3): entrena una población de
-/// genomas sobre la arena de WorldSim a velocidad máxima, con currículo por
-/// etapas y criterio de competencia mínima (ida-vuelta con comida).
+/// Trainer de pre-entrenamiento headless (Fase 3bis): entrena una población de
+/// genomas sobre la arena REALISTA de WorldSim a velocidad máxima — colonia
+/// completa con cría, comida a ≥ 200 u sin rastro plantado — con currículo por
+/// etapas que ensancha la banda de distancia.
 ///
 /// - Población por generación: evaluación completa en la arena (determinista),
 ///   selección por élite + torneo, crossover uniforme y mutación gaussiana.
-/// - Etapas: cada una sube la distancia del ítem; la etapa se supera cuando el
-///   mejor fitness ≥ umbral (tras MinGenerations) o se corta en MaxGenerations.
+/// - Etapas (Fase 3bis, arena realista): la comida está a ≥ 200 u del nido (el
+///   mínimo del mundo); cada etapa ensancha la banda de distancia y alarga el
+///   presupuesto para dar tiempo al relevo intergeneracional. La etapa se supera
+///   cuando el mejor fitness de COLONIA ≥ umbral (si es > 0) tras MinGenerations,
+///   o se corta en MaxGenerations: el techo real lo marca el tiempo, y la élite
+///   ordenada por fitness es el producto de la etapa.
 /// - Reporte determinista por generación vía <paramref name=\"onGeneration\"/>:
 ///   misma semilla ⇒ misma secuencia de estadísticas byte a byte.
 /// </summary>
@@ -54,6 +61,15 @@ public sealed class CurriculumTrainer
     public const double EliteFraction = 0.25;
     public const int TournamentSize = 3;
     public const float MutationSigma = 0.08f;
+    // Pruebas por genoma (Fase 3ter): el PRIMER ciclo completo no lo cierra una
+    // fundadora (pickup a ≥200 u deja ~50–60 u de capacidad de regreso frente a
+    // las ~200 necesarias — techo físico) sino el RELEVO: una descendiente
+    // recoge la suelta al morir de una portadora (~170 u del nido) y completa el
+    // tramo final. Ese encuentro es RARO: con una sola prueba por genoma el
+    // muestreo es insuficiente para que la selección lo vea. Tres pruebas con
+    // posiciones de comida distintas triplican las sueltas y los encuentros
+    // (determinista: el RNG de pruebas avanza en orden fijo).
+    public const int TrialsPerGenome = 3;
 
     private static readonly int[] Sizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
 
@@ -64,14 +80,26 @@ public sealed class CurriculumTrainer
     private readonly int _populationSize;
     private readonly IReadOnlyList<CurriculumStage> _stages;
     private readonly Action<GenerationStats>? _onGeneration;
+    private readonly List<MlpGenome>? _seedGenomes;
     private readonly List<MlpGenome> _population = new();
     private readonly List<GenerationStats> _report = new();
 
     /// <summary>Secuencia completa de estadísticas por generación (determinista).</summary>
     public IReadOnlyList<GenerationStats> Report => _report;
 
+    /// <summary>
+    /// Crea el trainer. Con <paramref name="seedGenomes"/> no nulo, la población
+    /// inicial NO es aleatoria sino SEMBRADA (warm-start, Fase 3ter): se toman
+    /// hasta <paramref name="populationSize"/> genomas (ordenados por fitness
+    /// descendente) y el resto se completa con variantes mutadas de la élite
+    /// sembrada. Permite continuar un pre-entrenamiento desde un `.antgenome`
+    /// existente en lugar de empezar de cero cada vez — el pool de 60 gens ya
+    /// tiene homing por brújula y la arena nueva necesita evaluarlo/re-evolverlo
+    /// bajo las constantes del mundo corregido (Fase 3ter).
+    /// </summary>
     public CurriculumTrainer(ulong seed, int populationSize,
-        IReadOnlyList<CurriculumStage>? stages = null, Action<GenerationStats>? onGeneration = null)
+        IReadOnlyList<CurriculumStage>? stages = null, Action<GenerationStats>? onGeneration = null,
+        IReadOnlyList<MlpGenome>? seedGenomes = null)
     {
         if (populationSize < 2) throw new ArgumentOutOfRangeException(nameof(populationSize), "Mínimo 2 genomas.");
         _seed = seed;
@@ -79,25 +107,55 @@ public sealed class CurriculumTrainer
         _populationSize = populationSize;
         _stages = stages ?? DefaultStages();
         _onGeneration = onGeneration;
+        if (seedGenomes is { Count: > 0 })
+        {
+            foreach (var g in seedGenomes)
+            {
+                if (g is null) throw new ArgumentNullException(nameof(seedGenomes), "Genoma semilla nulo.");
+                if (g.Sizes.Length != Sizes.Length) throw new ArgumentException(
+                    $"Topología de la semilla incompatible: {string.Join("→", g.Sizes)} ≠ {string.Join("→", Sizes)}.",
+                    nameof(seedGenomes));
+                for (int i = 0; i < Sizes.Length; i++)
+                {
+                    if (g.Sizes[i] != Sizes[i]) throw new ArgumentException(
+                        $"Topología de la semilla incompatible: {string.Join("→", g.Sizes)} ≠ {string.Join("→", Sizes)}.",
+                        nameof(seedGenomes));
+                }
+            }
+            _seedGenomes = new List<MlpGenome>(seedGenomes);
+        }
     }
 
     /// <summary>
-    /// Currículo por defecto, CALIBRADO empíricamente en Fase 3: cada etapa sube
-    /// la distancia del ítem y transfiere la población competente de la anterior.
-    /// Las distancias verificadas (el entrenador pasa las 4 etapas con semilla 7,
-    /// pop 32, en ~100 s) están muy por debajo de los 120/300 u del borrador
-    /// inicial: más allá de ~80 u ningún cerebro aleatorio ni evolucionado completa
-    /// el ciclo en el presupuesto de ticks (la visión no alcanza y el rastro se
-    /// evapora antes de volver).
+    /// Currículo por defecto de la arena realista (Fase 3bis), CALIBRADO
+    /// empíricamente: la comida SIEMPRE nace a ≥ 200 u del nido (mínimo del mundo,
+    /// fuera de la visión) en la banda CERCANA 200–260 u — la que maximiza el
+    /// muestreo de pickups con densidad real del mundo.
+    ///
+    /// NO se ensancha la banda por etapa: calibrado empíricamente, la banda ancha
+    /// (200–520 u) multiplica ×27 el área del anillo, los ítems se vuelven
+    /// irencontrables y el densado de exploración (récord de distancia) pasa a
+    /// dominar el fitness — evolución selecciona "correr hacia fuera" y olvida el
+    /// pickup aprendido en la banda cercana (el mejor de la banda ancha: 0 pickups
+    /// transferidos al mundo real frente a 3 del de banda cercana). El eje del
+    /// currículo es el HORIZONTE TEMPORAL: el mismo régimen, con presupuesto para
+    /// que el relevo intergeneracional (muerte con carga → cría completa) madure.
+    ///
+    /// Física del relevo: una fundadora no puede ida-y-vuelta a 200 u dentro de su
+    /// vida (~148 s a VMax 2.7 frente a ~90–110 s), así que la política aprende a
+    /// orientarse a casa por brújula y a soltar la carga al morir cerca del camino;
+    /// la descendencia —con inflow— completa los ciclos.
     /// </summary>
     public static IReadOnlyList<CurriculumStage> DefaultStages()
     {
         return new List<CurriculumStage>
         {
-            new() { Name = "corto", FoodDistance = 12f, TickBudget = 2500, CompetenceFitness = 8.5, MinGenerations = 4, MaxGenerations = 30 },
-            new() { Name = "medio", FoodDistance = 25f, TickBudget = 5000, CompetenceFitness = 8.5, MinGenerations = 4, MaxGenerations = 60 },
-            new() { Name = "largo", FoodDistance = 40f, TickBudget = 7000, CompetenceFitness = 8.5, MinGenerations = 4, MaxGenerations = 80 },
-            new() { Name = "muy-largo", FoodDistance = 60f, TickBudget = 9000, CompetenceFitness = 8.5, MinGenerations = 4, MaxGenerations = 100 }
+            // "cercana": comida en 200–260 u (~3–5 veces la visión); una vida de fundadora.
+            new() { Name = "cercana", MinDistance = 200f, MaxDistance = 260f, TickBudget = 3600, CompetenceFitness = 0.0, MinGenerations = 4, MaxGenerations = 30 },
+            // "relevo": misma banda; presupuesto para morir CON carga y ver la suelta.
+            new() { Name = "relevo", MinDistance = 200f, MaxDistance = 260f, TickBudget = 5400, CompetenceFitness = 0.0, MinGenerations = 4, MaxGenerations = 40 },
+            // "mundo": misma banda; horizonte completo de validación (~300 s).
+            new() { Name = "mundo", MinDistance = 200f, MaxDistance = 260f, TickBudget = 9000, CompetenceFitness = 0.0, MinGenerations = 4, MaxGenerations = 60 }
         };
     }
 
@@ -119,14 +177,22 @@ public sealed class CurriculumTrainer
                 gen++;
                 Evaluate(stage, s + 1, gen, out double best, out double mean, out int competent);
 
-                // La etapa se supera cuando el mejor fitness alcanza el umbral
-                // (tras MinGenerations); si no, se evoluciona la población y se
-                // re-evalúa. Evolve() vive DENTRO del bucle: sin selección por
-                // generación la población nunca mejora (bug corregido en Fase 3).
-                if (best >= stage.CompetenceFitness && gen >= stage.MinGenerations)
+                // La etapa se supera cuando el mejor fitness de colonia alcanza el
+                // umbral (tras MinGenerations); con umbral 0 se agota el tope de
+                // generaciones: el techo real lo marca el tiempo, y la élite final
+                // es el producto de la etapa. Evolve() vive DENTRO del bucle: sin
+                // selección por generación la población nunca mejora (bug corregido
+                // en Fase 3).
+                if (stage.CompetenceFitness > 0.0 && best >= stage.CompetenceFitness && gen >= stage.MinGenerations)
                     break;
 
-                Evolve();
+                // Evolve SOLO si habrá otra evaluación: reproducir tras la última
+                // evaluación de la etapa sustituía la población evaluada por hijos
+                // con Fitness=0 — y esa población sin evaluar era la que devolvía
+                // Run() y exportaba el CLI (el archivo .antgenome contenía 25%
+                // de élite entrenada y 75% de mutantes sin evaluar).
+                if (gen < stage.MaxGenerations)
+                    Evolve();
             }
         }
 
@@ -137,6 +203,27 @@ public sealed class CurriculumTrainer
     private void SeedPopulation()
     {
         _population.Clear();
+        if (_seedGenomes is { Count: > 0 })
+        {
+            // Copia ordenada por fitness (el `.antgenome` ya viene ordenado por
+            // mérito, pero el contrato del parámetro no debe asumirlo).
+            var sorted = new List<MlpGenome>(_seedGenomes);
+            sorted.Sort((a, b) => b.Fitness.CompareTo(a.Fitness));
+            int take = Math.Min(_populationSize, sorted.Count);
+            for (int i = 0; i < take; i++)
+                _population.Add(sorted[i].Clone());
+
+            // Relleno determinista con variantes mutadas de la élite sembrada
+            // (mismo flujo de RNG ⇒ misma población inicial byte a byte).
+            while (_population.Count < _populationSize)
+            {
+                var clone = sorted[_rng.NextInt(0, sorted.Count)].Clone();
+                clone.Mutate(ref _rng, MutationSigma);
+                clone.Fitness = 0.0;
+                _population.Add(clone);
+            }
+            return;
+        }
         for (int i = 0; i < _populationSize; i++)
             _population.Add(MlpGenome.Random(ref _rng, Sizes));
     }
@@ -150,7 +237,7 @@ public sealed class CurriculumTrainer
         ulong arenaSeed = unchecked(_seed
             + (ulong)stageIndex * 0x9E3779B9UL
             + (ulong)generation * 0xBF58476DUL);
-        var arena = new ArenaEvaluator(arenaSeed, stage.FoodDistance, stage.TickBudget, seedTrail: true);
+        var arena = new ArenaEvaluator(arenaSeed, stage.MinDistance, stage.MaxDistance, stage.TickBudget, TrialsPerGenome);
 
         double sum = 0.0;
         best = double.MinValue;

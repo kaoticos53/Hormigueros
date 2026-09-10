@@ -213,6 +213,11 @@ public class ColonyControllerTests
         var rich = NewColony(stock: 90f);
         var scarce = NewColony(stock: 9f);
         scarce.ConsumeEma = 5f;
+        // (Fase 3ter) La puesta de EXPANSIÓN está ligada a la entrada real de
+        // comida (inflowGate); ambas colonias tienen entrada para que la
+        // diferencia del test siga siendo el RUNWAY (stock escaso ⇒ ρ = 0).
+        rich.InflowEma = 0.5f;
+        scarce.InflowEma = 0.5f;
 
         var evR = new List<SimEvent>();
         var evS = new List<SimEvent>();

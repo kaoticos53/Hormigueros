@@ -157,6 +157,90 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   conocidas y el pre-entrenamiento completo es determinista entre procesos
   (salida y `.antgenome` byte a byte idénticos).
 
+### Fase 3bis — Arena realista y transferencia ✅ (completada)
+- La validación de transferencia de la Fase 3 falló: sembrar el mundo con la
+  población entrenada en la arena (hormiga sola, ítem a la vista, rastro
+  plantado) daba pickup 0 en el mundo abierto. **`ArenaEvaluator` reescrita**
+  para replicar el régimen real: colonia completa (10 fundadoras + cría +
+  `ColonyController`), 24 ítems reales a ≥ 200 u con el spawn del mundo, sin
+  rastro ni respawn, señal de COLONIA (Σ fitness de adultas + densados récord
+  de exploración sin carga y homing con carga, monótonos y no explotables).
+- **Currículo por horizonte temporal** (cercana→relevo→mundo, banda fija
+  200–260 u): ensanchar la banda estaba calibrado y rechazado — el campeón de
+  banda ancha olvida el pickup; el de banda cercana transfiere.
+- Bugs corregidos en la calibración: export de población SIN evaluar (75 % de
+  hijos con Fitness=0 en el `.antgenome`), fundadoras sin cerebro entrenado
+  (`SeedPoolFromGenomes` ahora re-asigna cerebros a las adultas vivas) y olvido
+  por banda ancha. Física verificada: la ida-y-vuelta sola a ≥ 200 u es
+  imposible (~148 s vs ~110 s de vida); la generación 0 compite explorando,
+  cargando y volviendo parcialmente — la descarga exige relevo con inflow.
+- **Transferencia revalidada** (`--seed-pool`): pickup 0 → 4–7, pool best
+  1.06 → 48.7, portadores a ~105 u del nido (óptimo físico de la generación 0).
+- **Exit**: 72 tests verdes; determinismo arena↔mundo intacto.
+
+### Fase 3ter — Arranque en frío del mundo ✅ (implementada)
+- El bloqueo no era de la arena sino del MUNDO: descompuesto en tres mecanismos
+  acoplados y corregido con cambios mínimos y realistas en `WorldSim` /
+  `ColonyController` (todos deterministas; 72/72 tests verdes tras retirar
+  sondas temporales):
+  1. **Vigor fundador escalonado** 0.6→1.0 por índice (antes 0.8 uniforme ⇒ las
+     10 fundadoras morían el mismo tick y el relevo por suelta era imposible).
+  2. **Reserva fundadora completa** (`Stock = StockMax`): la ventana de forrajeo
+     (~80–110 s) sobrevive al arranque en frío.
+  3. **`NurseRate` = LarvaIdeal (0.088)** — antes 0.04, matemáticamente
+     incapaz de pupar ni una larva; y **alimentación larval serializada,
+     priorizando la más invertida y, en empate, la más joven** (el reparto
+     equitativo sobre la oleada no maduraba ninguna; priorizar la más vieja
+     rotaba el presupuesto sobre larvas a punto de morir — detectado con sonda).
+  4. **Puesta ligada a la entrada real** (`inflowGate` sobre el término de
+     déficit): la reina fundadora ya no inunda ~1.6 huevos/s (0.8 ep/s ≈ 47 %
+     de la reserva) para "crecer a 40" sin comida; sin inflow solo repone bajas.
+- **Física del relevo verificada con sonda de política artesanal**: la primera
+  descarga es el relevo multigeneracional (portador homing máximo → suelta a
+  ~115 u → descendiente completa el tramo final); con ítems plantados a 120 u:
+  5 descargas; mundo abierto 800 s: eclosiones 0→13, descargas 0→2.
+- **Revalidación `--seed-pool`** (5 semillas, 800 s): baseline pickup 0 /
+  descarga 0; sembrada (pool 60 gens) **pickup 6–12, descarga 1–3 en 3/4
+  semillas**; el campeón en la arena nueva: fitness 295.7, 22 pickups,
+  6 descargas (la señal de la arena selecciona el relevo). El pool recién
+  entrenado (15–30 gens) aún no converge al homing por brújula — configuración
+  rara en el espacio de pesos; el de 60 gens sí — tiempo de entrenamiento, no
+  diseño del mundo.
+
+### Warm-start — siembra del entrenamiento desde `.antgenome` ✅ (implementada)
+- `CurriculumTrainer` acepta población inicial opcional (`--warm-start f`): los
+  genomas del archivo se clonan y mutan hasta `PopSize` y se RE-EVALUAN en la
+  arena actual (las `Fitness` del archivo quedan obsoletas con cada cambio de
+  mundo); rechazo si la topología de red difiere. Sin archivo: nacimiento
+  aleatorio como antes.
+- **Resultado**: entrenando desde el pool de 60 gens (pop 24, 10 gens/etapa)
+  el comportamiento se conserva en la arena nueva desde la generación 1 —
+  **21/24 genomas competentes (descargas ≥ 1), best 358.2 vs ~47 del arranque
+  en frío**; el warm-start evita las 60+ gens que el frío necesita para
+  encontrar el homing por brújula.
+- **Revalidación `--seed-pool`** con el pool warm-entrenado (5 semillas,
+  24 000 ticks): **pickup 6–10, descarga 1–2 en 4/5 semillas, eclosiones
+  24–27**; determinismo entre procesos intacto (hash byte a byte, semilla 777
+  verificada en dos procesos). 74/74 tests verdes.
+- **Salud del relevo en el reporte**: `RelayTracker` (Scenario) observa el
+  flujo de eventos de solo lectura y expone `first-unload` (primer tick de
+  descarga) y `drop-avg` (distancia media al nido de las sueltas por muerte de
+  portadora, distinguidas del spawn regular por el centinela ColonyId = -1);
+  la línea `totals` de `evolve`/`world` los imprime (`-` si no hay). No toca la
+  simulación: hashes idénticos con y sin el tracker (verificado, semilla 42).
+  77/77 tests verdes (3 nuevos). `scripts/pipeline.sh` los muestra como
+  columnas `unload1st`/`dropavg`.
+- **Refinado con banda extendida**: `--band-min/--band-max` re-bandan todas las
+  etapas del currículo (validación ≥ `NestMinSpawnDistance`). Segundo
+  warm-start desde `pretrain-warm.antgenome` con el anillo 200–350 u (~3×
+  área): la etapa corta pierde competencia (el relevo necesita horizonte) pero
+  relevo+mundo recuperan 19–23/24; fitness de arena menor (~245–298, ítems más
+  dispersos) SIN pérdida de transferencia — mundo abierto: pickup 7–10,
+  descarga 1–3 en 3/5 semillas (máx histórico 3), eclosiones 24–27 vs baseline
+  0/0. El pool de banda ancha conserva el relevo y generaliza a distancias
+  mayores. 74/74 tests verdes; determinismo verificado (hash idéntico, semilla
+  42, dos procesos).
+
 ### Fase 4 — Aplicación Unity 2D (primer hito jugable)
 - `SimPresenter`: interpolación con retraso de 1 tick, pool, feromonas GPU por tiles.
 - HUD, inspección con traza, alertas, biblioteca de cerebros, checkpoints desde UI.

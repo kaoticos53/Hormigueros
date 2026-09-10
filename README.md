@@ -5,10 +5,11 @@ Simulación en tiempo real de hormigueros realistas con **neuroevolución contin
 recursos, múltiples especies y render Unity 2D → 3D. Núcleo .NET **headless y
 determinista** desacoplado del motor gráfico.
 
-Estado actual: **Fases 0–3 completadas** (núcleo determinista + mundo + neuroevolución:
+Estado actual: **Fases 0–3bis completadas** (núcleo determinista + mundo + neuroevolución:
 pool élite, fitness al morir, cuarentena de inmigrantes, formato `.antgenome` y
-**pre-entrenamiento headless** con currículo por etapas sobre una arena de WorldSim
-hasta alcanzar competencia mínima de forrajeo). Ver
+**pre-entrenamiento headless** sobre una arena realista — colonia completa con cría,
+comida a ≥ 200 u con el spawn del mundo, sin rastro plantado — con transferencia
+validada al mundo real vía `--seed-pool`). Ver
 [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo y
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados.
 
@@ -44,9 +45,35 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode world --seed 7 --ticks 1200 
 dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 42 --ticks 900 --grid 96 --colonies 2 --export pool.antgenome
 dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 1 --ticks 240 --grid 96 --colonies 1 --import pool.antgenome
 
-# Pre-entrenamiento headless (Fase 3): currículo 12→25→40→60 u hasta competencia
-# mínima de forrajeo; exporta la población entrenada como .antgenome
+# Pre-entrenamiento headless (Fase 3bis): arena realista (colonia completa, comida
+# a ≥ 200 u sin rastro), currículo por horizonte temporal; exporta la población
+# entrenada como .antgenome
 dotnet run --project src/Tools/AntSim.Cli -- --mode pretrain --seed 4242 --pop 32 --export pretrained.antgenome
+
+# Warm-start: continuar el entrenamiento desde un pool existente (clon+mutación
+# hasta --pop, re-evaluado en la arena actual) en vez de genomas aleatorios;
+# --band-min/--band-max re-bandan todas las etapas (p. ej. extender el anillo de
+# forrajeo 200-350 u) sin romper la transferencia
+dotnet run --project src/Tools/AntSim.Cli -- --mode pretrain --seed 4242 --pop 24 --warm-start pretrained.antgenome --band-min 200 --band-max 350 --export refined.antgenome
+
+# Sembrar una partida con la población pre-entrenada (transferencia validada:
+# pickups 0 → 4–7 frente a la élite aleatoria en 300 s)
+dotnet run --project src/Tools/AntSim.Cli -- --mode evolve --seed 42 --ticks 9000 --colonies 1 --seed-pool pretrained.antgenome
+```
+
+## Pipeline encadenado (scripts/pipeline.sh)
+
+`scripts/pipeline.sh` encadena el flujo completo: pretrain en frío → warm-start
+de refinado desde el pool en frío → revalidación multi-semilla con
+`--seed-pool` (baseline vs pool en frío vs pool refinado), con tabla final de
+métricas (pickups, descargas, eclosiones, hash por semilla) y resumen agregado.
+Determinista; flags para `--pop`, `--gens` (por etapa), `--band-min/max`,
+`--ticks`, `--seeds` y `--out`:
+
+```bash
+bash scripts/pipeline.sh                         # defaults: pop 24, 10 gens/etapa, 5 semillas
+bash scripts/pipeline.sh --gens 60 --band-max 350  # réplica del pool de referencia con banda extendida
+bash scripts/pipeline.sh --pop 6 --gens 2 --seeds "42 7"  # humo rápido (~45 s)
 ```
 
 ## Garantía de determinismo

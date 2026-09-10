@@ -1,0 +1,205 @@
+seed 42 ticks 12000 colonies 1 grid 96
+seeded 32 genomes from artifacts/pretrain-60.antgenome
+tick 120  2c85a93406fd021e259be7c670afe75652e7f0f70dc27b490c496056111b69f9
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 240  8d46208e60ca2d4859090650ebca856184e94cec0d0216d3a0f30fd951f4592e
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 360  914549d1dbc203df36f47469119d282f1f1d992bca74e72ef73da4228c2b0873
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 480  298d32dc5579f296bd250de1c3dfbdc8305f8d27f24d7775e832b3ec2ed21372
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 600  e6cab223df6ebfddaf37de294a05a62be58c8b22997c08748c68b83e6040cfca
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 720  d7a21469c87b7ea668a08782574fa9439b6d9e169ebb0db6c3f1508d71d85e29
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 840  684f415f34d108d8ce405d8b68ce10b5ed9678c424e973f0ce48b91364fa9f37
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 960  7bcb18e0ab5135fd0fd8dac924031298b051e43ea3f3e748046036d63448d454
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1080  72b566b6b93ed368216cd6d74daa4b9fe0703b3c86a638b74e2db17fa1c5557d
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1200  93c93f24bfc3a6e95042152aac1f7778c4d4aee718e5439fd6dc5f5f49655d9f
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1320  e8692cfae94f385d356632e408b2987561d5ae4ae175f8674e8f21d918e81f2c
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1440  38aba4e95cb3193561a6555deb4000db8fd02f7af2e5a239d292e4162495fc90
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1560  2a17b8d9d157f484a640da84ed9f047be8d146e32ebc13f6cd78e041ea85a251
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1680  6f330c0cf3bba8a01a4a9960e6d9757a4a5a68b3f778b0c87632d847a9794dbb
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1800  c39fa489d755fbb7bcc77a61b061a688d91e2f3ae84de106dcdb12804df0e39e
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 1920  642b54ddf0f9173903da9bd896c95bd01f7714666217f22cf3f473b4672c6950
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2040  4d91e236b2c610446a22741ea70d393bd9818f30625a76a3fa53f7cc7b346fd2
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2160  7da667783f35aa513d1c7f6c45661d611b48605f6dcc93dbe633bdf673c7cf85
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2280  286303b81e192fd862a5c329d04eb570cbe421dc6d8c50fa1295d582d17256df
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2400  74aaadc50eaf180a10bccae8cee9cd62ac9c78015484686fdf4d31d8fc196315
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2520  29d1da0eb7380a8187d1c83de1a61eb4378a2d3ba9a041dc9e9a78926e6c3e41
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2640  439f9fbf310f70d871fbd0570f59cbf6713e3c77069a8f780199d72ed7729a3f
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2760  91b486e2ee99cc723e51749ca557b68f942af6f18ae59e83c80c29eb6fbd01da
+pool colony=0 elite=32 best=78.6649 avg=55.1747 div=0.2278 imm=0 entered=0 discarded=0 inflow=0.000
+tick 2880  9451d920baf6c69989e2baadf20621a762175f0d3b879eaa69eea63a558d0db6
+pool colony=0 elite=33 best=78.6649 avg=53.5468 div=0.2285 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3000  3bf3a4888901d2fdf3e54793044b8b9ad0bb7441a1e8fa0ed5d7033f6d3ef1c2
+pool colony=0 elite=34 best=78.6649 avg=52.0007 div=0.2285 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3120  62059ce3041f2b6a487569cbe0db190a398d116c7e4245beac81ddb443958a9b
+pool colony=0 elite=36 best=78.6649 avg=49.1681 div=0.2289 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3240  acb76ddf1e69994e69d2316e94bcba1a843bb8f2c275f91a8abaf3d49259c14e
+pool colony=0 elite=38 best=78.6649 avg=46.6362 div=0.2314 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3360  d226c83d6d937d3f5747fa43941bb331ef30af5a180902157ba98fbcf5e7903c
+pool colony=0 elite=39 best=78.6649 avg=45.4814 div=0.2306 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3480  1e713fc0d4aedeadf58b92232489c62675d784ee4079097d2ea6c943f11ae8bc
+pool colony=0 elite=41 best=78.6649 avg=43.3303 div=0.2308 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3600  a2984be7fa689d7ff9cbe6650f4ec0051518a17c57c39aa65503d2ce5584965d
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3720  024b2dc19fe60814481e26ba3410877a525c3b6ea8c23c6c442a53856b02ea46
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3840  3b2d7d38855992f3735d039e34571cebb22cf110ed2bb489824753f961844bf3
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 3960  7c81c41393495b37b86e7f36627a22057a1ceb00a2674e8bf7e87a4d2c292cbe
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4080  b65a45c1a683681ca08b50379551a6c5a1622dee984348b00d5437c22af9fb2a
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4200  fe9100610750103b6f51931498483dfd71a3d01d694e181251aadc0504a6e5ba
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4320  e3669aeab13ea0a64af1066a8c2a9c7fb1feeebddc05bd7ee2e5caf6a336553e
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4440  b04aecf1fbf72e067668492df7edbdee45f8b013c797772d6f88a10e9b345a58
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4560  18df37d2788d599e05ffb27e08a61be5fe0135d8a104deefa36bf646c4d324b4
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4680  95eda316b0780a93858af0fcfdf4ce26d3d48c6065fb8a1c979550da022c5000
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4800  5d46f7597e347f924d125a5adc215a04f12ea745960dc8153fbe14155ef46849
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 4920  51ce78a9b6e38ce578c1443c78bc63340f52f3c82add022934e7df4821eac816
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5040  425ae2110ccd008f8ec3179a281c7849f1c26e1569094d6aed7a3fe7587864b3
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5160  5842f594e1f074806bc8e9279874bee2a5b44824cf571ac6c3aa2e37cf6ca4e0
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5280  ed3cc7aeaf0331147a23ceafc8fa0d4e66b6240be0339de77bc86ddf3e029222
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5400  0b579c22bd59b1871c55052073fd29c686a790ca038d4ab631a449de578a9ab2
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5520  91757a5fa39c59587c2398b9de1abf539af8b72dae4a68dc44f30caa0b036b0a
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5640  e43a344e1dfc8ea077d4b6fa8fda16dffb21d3789492fc1713ce9b79fb931b79
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5760  eaa9a1706b789d9309e31f2d12b37e92a0e8f9f70f47d98d0f482c9ac0dc3f01
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 5880  b4496c20fddcf490dc0f4eb7fd1045108d91cd19d698dc6f2135df07d493752d
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6000  8a3a612e11a8158565fa321d0dbf753c19daca12da9e0df78d532c9083efd1b4
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6120  6ff63f534afb5e96ff1b99c4cff995a0fccc2c33b0945d3e98df7b54b16aaafc
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6240  a7c7f4f698a6864786e17fa8825964b79dffaa843e6ce618bbc1d503a7397167
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6360  bdd2db4184344fac47e569b34a93402527b4f462b4c82a537e9b464df05a19c9
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6480  78ef895f0fca0ebf742ab305fcf02093a6fd02b88c2d660b956e9dcc20782672
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6600  d34a0ac60af1d76a9916c994ba5ec8ebe856832f190ea5d294242e505a01d01d
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6720  f4eb9c9fce3ae9e85a7acdd2979c4b24fc3f0b98fa0046ec437c2c40e1b4fcc3
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6840  a7b5238c88820d87c1330992f9a753c5840196e2f6b792f9f4cbe4802a10c56d
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 6960  504d1fd0e559bf588eb0aabff3e24ce68c7fafcadd5decf9a56f32a5787424ae
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7080  4c1b32be63541e89266d22b45d468d646afb91cbe68ca83bba7c177a717d2b80
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7200  bb33a2f3c401398ea09426f7d2ce2ffa774a182c202e8bbf6421445f3a8acce8
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7320  1b281dafb6df7d6d637f04e1d1f702e64bb93441ea353e79c02631f0e9afb5fc
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7440  bc229830daaec9303ed9cdf4714f411e8b347d2cfeca6104e544fe13a19c26b9
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7560  a12028998ea1a4958f96b5e8feff7e00d69b6f768399de91bd12d547bfa2a216
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7680  81d7cebcb09d2cd929a779e79e1784cf5dd407e69fd532ae31e5dc1bf952b3c9
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7800  a19372da93b17d591dc93a3859cf6b8e2872fffe356382658a16bffe7ab34437
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 7920  ebc1752a61c5544272dda23a072f4a071f1326abe5f04afc3b510b4c8ba5a7c2
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8040  f56eec049e0942e6a5c35d008a6a08941843bb36b59d731f5a0496ad0346fbf4
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8160  8a4e6d5865fce4e35e23c068322dbaa2c8a2b1e7fdefa3650c3ac0714414eb3e
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8280  4c4a503846eb8375b8898b2415343c95c8ad65fc6001dec3c9c7b4b9d9db3424
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8400  76b07391433d8f5684bec2037f9dece548a945c1e042d5f49d5caedf982e443e
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8520  338706109bdd90185f84ee8c57243224dbc35502436c055da2b77f7649cb5cf9
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8640  7d6ed9cf9bfe3f8bcaa9c5ca03ef0bc38934bdb238c190c174c19b2037177b7a
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8760  c1c9db0b0113c8164034733f79d87559f21497cdaaf9ee6440c57697c9165d35
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 8880  7bed6165ddf3ce4e0f8b22dee248afa16a87195c8341518d1eb1f41c5f7bc53c
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9000  b35303e82a285f9ff359694fc7b55696757ce917e57a55e30e03fa404e05d97f
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9120  a2f0fff163e545807028ef83793eb54a24101cc77fc11719bfd31ee083ccabae
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9240  58744a0640a55b20acef204ee2f072618651ab6977f75502d50a6595c08aa2a4
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9360  bb8817f9ae34ed61a6c857a2429ce3efc483204c8669d660158af7c28577af99
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9480  30f5d23ed4f8ed2ad457572c36ddd7438f8325a067cc5827cc897ea245c13382
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9600  72d3942d1887a30a200a5480e57a5b3f4b18d6d86f7afd66e2a26bf9a413ef82
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9720  c00132608a81562a07797f7cd28b31da939def0408d894da1b5beb862ebbef80
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9840  0ca5a5be75940a63023b61f2ec7f2e82f7568196a71c6d6d7cb6d7c900028d89
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 9960  7be7e48a8857b0b3c34da401fb8cf9c1a74f35b36219c56ff73dd360dc30f44b
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10080  bac69ace4362579b5572452adb9d816089bb427b8ee8ef697e74264be31cd10e
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10200  c453a0e22f2562c74453ecf9058e9ef5aefdeaa6e066e11f75ef590fb1b4cc29
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10320  71bbc717366d8c79c055b5494ae77516bedd1616f2fe6b9552d88433c4bcaa4e
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10440  4fb2394bb4f286869739eb76bcdb9fbd706b4d0c675e818a6e0c7730deb90035
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10560  a6a97ef6a79bcb489ebc039034ecec6f1105b2371ad6c969b7cf0d3472076b1b
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10680  97e70ed0c6ba65031ae2966ce8d472fa3f1ad4e9986087b81c6ef100231aaa82
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10800  5804f29312c40c7610d45af212c5ec4fe91f22bf183630646c830271c8e81964
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 10920  5c177c8a2c60e31146cc31fc261b2f6b25c8f0649377adbbf9a205a55aecedc5
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11040  786f04ae737f2d19809aa41ae6258f92d0d4649bc4d661e0859acb716ec676f6
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11160  61a81756ff97876d3b7095fbbd887d8accb5828c42accd5d5ca5ce57a5292b36
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11280  ced0510d346e1256d74491ffc40cf795cecdb5cc578953544d95c16e2ec22d27
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11400  85a778b1243d7f4269614123e16e67429aa5d348f35cf4473915dd69d7fb1c6f
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11520  4f17973fe07ddbb92cafdc35a1b01f83d6146c1a74881bcd4d1c445b4b7a2305
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11640  5721249d1f88898cf3b64679784e6cd2d7bb3c3d2313bd2770ade2dc7f566eed
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11760  99898faa6be7e492840f3b64aa50e682e42af5f23e97aa5b9a44518a1631e1de
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 11880  3a68a9885c3051e7748610a5fb5e308a3b009f93a451b7641a993e26208e0694
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+tick 12000  0ae3d1fd3285c3499477c8bf29d9fb3641ed9b87e8ef748070e40b182d3de11d
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+final-hash 0ae3d1fd3285c3499477c8bf29d9fb3641ed9b87e8ef748070e40b182d3de11d
+pool colony=0 elite=42 best=78.6649 avg=42.3384 div=0.2338 imm=0 entered=0 discarded=0 inflow=0.000
+totals adults 0 items 28 events 135 pickup 4 unload 0 eclosed 0 died 10 eggs 113

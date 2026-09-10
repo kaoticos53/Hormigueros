@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using AntSim.Core.Evolution;
 using AntSim.Core.Sim;
 using AntSim.Core.World;
@@ -9,74 +10,112 @@ namespace AntSim.Core.Training;
 public readonly struct ArenaResult
 {
     public readonly double Fitness;
-    /// <summary>Competencia mínima: al menos un ciclo completo ida-vuelta (pickup + unload).</summary>
-    public readonly bool Competent;
+    public readonly int Pickups;
+    public readonly int Unloads;
 
-    public ArenaResult(double fitness, bool competent)
+    public ArenaResult(double fitness, int pickups, int unloads)
     {
         Fitness = fitness;
-        Competent = competent;
+        Pickups = pickups;
+        Unloads = unloads;
     }
+
+    /// <summary>Competencia mínima: al menos un ciclo completo (una descarga al nido).</summary>
+    public bool Competent => Unloads >= 1;
 }
 
 /// <summary>
-/// Arena de evaluación determinista de un genoma (Fase 3, pre-entrenamiento headless):
+/// Arena de evaluación determinista de un genoma (Fase 3bis: transferencia arena↔mundo).
+/// Réplica de las condiciones del mundo real para cerrar la brecha detectada al validar
+/// la transferencia del pre-entrenamiento (la arena antigua — hormiga sola, ítem a la
+/// vista, rastro plantado — no transfería: pickup 0 en el mundo abierto).
 ///
-/// - Una sola hormiga, una sola colonia, un solo ítem de comida en un punto fijo
-///   relativo al nido; sin respawn de comida (TargetItems = 0) y sin cría que
-///   distraiga al ColonyController.
-/// - La arena construye un WorldSim NUEVO por evaluación con la misma semilla,
-///   de modo que cada prueba parte del mismo estado inicial exacto.
-/// - Recompensas re-equilibradas (Fase 3): el refuerzo de depósito y descarga
-///   domina sobre la supervivencia, para que la señal de fitness sea aprendible.
-/// - Determinista: mismo genoma + misma semilla ⇒ misma secuencia de pasos y el
-///   mismo resultado bit a bit (verificable en CI con doble ejecución).
+/// - COLONIA COMPLETA: las 10 fundadoras y las 4 crías iniciales de
+///   <see cref="WorldSim"/>, con el ColonyController operando (alimentación, puesta,
+///   cría, canibalismo). Las fundadoras llevan clones del genoma evaluado y el pool de
+///   la colonia se siembra con él, de modo que la descendencia nace de variantes
+///   mutadas — el mismo régimen que `--seed-pool` en el mundo real.
+/// - COMIDA REAL: 24 ítems de 4 ep (la densidad del mundo: TargetItemsDefault)
+///   repartidos con el muestreo del mundo (posición uniforme, ≥
+///   NestMinSpawnDistance del nido), restringidos a la banda de distancia de la
+///   etapa del currículo. Sin rastro plantado y sin respawn (TargetItems = 0):
+///   descubrir la comida solo con visión (60 u) y búsqueda. La densidad del mundo
+///   no es solo fidelidad: multiplica las oportunidades de pickup y densifica el
+///   gradiente de descubrimiento.
+/// - SEÑAL DE COLONIA: fitness = suma de la aptitud de TODAS las adultas (fundadoras
+///   y descendencia; los muertos conservan su fitness) más dos términos DENSADOS que
+///   forman el gradiente ida-y-vuelta:
+///     · EXPLORACIÓN (sin carga): progreso hacia FUERA del nido, solo mientras d ≤
+///       MaxDistance de la etapa (acampar en una esquina no premia) y clamped ≥ 0
+///       (volver con las manos vacías no castiga). Sin él el PRIMER eslabón — llegar
+///       a la banda de comida a ≥ 200 u dentro de la vida de una fundadora — nunca
+///       se muestrea: la dispersión de un paseo aleatorio apenas alcanza ~190 u.
+///     · HOMING (con carga): progreso neto hacia el nido (× HomeShapingPerUnit).
+///       Un portador aleatorio jamás regresa a casa dentro de su vida; el término
+///       enseña exactamente el comportamiento — volver por brújula con la carga —
+///       que la descarga exige, y la recompensa del mundo (unload ≈ 12.5) domina en
+///       cuanto aparece.
+///   La recompensa real del mundo (pickup + unload) sigue siendo la señal objetivo;
+///   los densados solo hacen muestreable el camino hacia ella.
+/// - COMPETENCIA OBSERVADA: ≥ 1 descarga al nido (ciclo completo), contada por
+///   eventos del mundo — no se infiere del fitness. Un ciclo vale 0.5 + 4·2 + 4 = 12.5.
+/// - Determinista: mismo genoma + misma semilla ⇒ mismo resultado bit a bit.
 /// </summary>
 public sealed class ArenaEvaluator
 {
-    public const int GridCells = 160;          // 1280 × 1280 u
-    public const float FoodAmount = 4.0f;      // ep del ítem de prueba
-    public const float TrailStrength = 0.9f;   // feromona sembrada en el rastro
-    public const int NoProgressWindow = 1200; // ticks sin nuevo récord de distancia
+    public const int GridCells = 96;            // mundo de 768 u: el mismo del CLI por defecto
+    public const float FoodAmount = 4.0f;       // ep por ítem (la banda del mundo es 4–6)
+    public const int TestItemCount = WorldSim.TargetItemsDefault; // 24: densidad real del mundo
+    public const int MaxSpawnAttempts = 64;
+    public const float HomeShapingPerUnit = 0.12f;   // densado de homing con carga (ep/u)
+    public const float ExplorePerUnit = 0.015f;      // densado de exploración sin carga (ep/u)
+    // Calibración: sin densados el fitness de todos los genomas colapsa a la
+    // supervivencia pura (10 × 0.002 × 106.2 s = 2.124 EXACTO: cero interacciones —
+    // el paseo aleatorio no alcanza la banda de ≥ 200 u antes de morir y el ciclo
+    // completo nunca se muestrea). Exploración récord (máx ~3.3 por hormiga en
+    // etapa cercana) selecciona "salir de aquí"; homing récord a 0.06 (máx 12 por
+    // ciclo) selecciona "volver a casa con la carga" y compite con la exploración;
+    // la descarga real (12.5) sigue siendo el pago máximo del ciclo completo.
 
     private readonly ulong _seed;
-    private readonly float _foodDistance;
+    private readonly float _minDistance;
+    private readonly float _maxDistance;
     private readonly int _tickBudget;
-    private readonly bool _seedTrail;
     private readonly int _trials;
-    private DeterministicRandom _headingRng;
+    // No readonly: DeterministicRandom es un struct y mutar una copia defensiva
+    // descartaría el avance del flujo (bug corregido en Fase 3).
+    private DeterministicRandom _trialRng;
 
-    public ArenaEvaluator(ulong seed, float foodDistance, int tickBudget, bool seedTrail = true, int trials = 1)
+    public ArenaEvaluator(ulong seed, float minDistance, float maxDistance, int tickBudget, int trials = 1)
     {
+        if (minDistance < WorldSim.NestMinSpawnDistance)
+            throw new ArgumentOutOfRangeException(nameof(minDistance),
+                $"La distancia mínima debe ser ≥ NestMinSpawnDistance ({WorldSim.NestMinSpawnDistance} u).");
+        if (maxDistance < minDistance)
+            throw new ArgumentOutOfRangeException(nameof(maxDistance), "La banda de distancia está vacía.");
         _seed = seed;
-        _foodDistance = foodDistance;
+        _minDistance = minDistance;
+        _maxDistance = maxDistance;
         _tickBudget = tickBudget;
-        _seedTrail = seedTrail;
         _trials = Math.Max(1, trials);
-        _headingRng = new DeterministicRandom(_seed);
+        _trialRng = new DeterministicRandom(_seed);
     }
 
     public ArenaResult Evaluate(MlpGenome genome)
     {
         if (genome is null) throw new ArgumentNullException(nameof(genome));
 
-        // Varias pruebas con rumbo inicial distinto: un genoma "competente" lo
-        // es si completa el ciclo en CUALQUIER prueba. Suaviza la lotería de
-        // puntos fijos reactivos (orbita vs. forrajea) que depende del rumbo
-        // inicial, sin romper el determinismo (el RNG de rumbos avanza en orden
-        // fijo de pruebas).
-        double bestFitness = double.MinValue;
-        bool bestCompetent = false;
+        // Varias pruebas con posiciones de comida distintas: un genoma "competente"
+        // es el mejor de K por fitness. El RNG de pruebas avanza en orden fijo, así
+        // que el resultado sigue siendo determinista.
+        ArenaResult best = default;
         for (int t = 0; t < _trials; t++)
         {
             var result = EvaluateTrial(genome);
-            if (result.Fitness > bestFitness)
-            {
-                bestFitness = result.Fitness;
-                bestCompetent = result.Competent;
-            }
+            if (t == 0 || result.Fitness > best.Fitness)
+                best = result;
         }
-        return new ArenaResult(bestFitness, bestCompetent);
+        return best;
     }
 
     private ArenaResult EvaluateTrial(MlpGenome genome)
@@ -93,96 +132,145 @@ public sealed class ArenaEvaluator
         sim.RewardDepositPerUnit = 0.0f;
         sim.RewardUnloadBonus = 4.0f;
 
-        // — Arena: una sola hormiga, un solo ítem, sin respawn —
+        // — Sin respawn: solo los ítems de prueba —
         sim.TargetItems = 0;
-        colony.Adults.Clear();
-        colony.Eggs.Clear();
-        colony.Larvae.Clear();
-        colony.Pupae.Clear();
-        colony.Stock = colony.StockMax;
 
-        // Rumbo inicial aleatorio pero determinista (semilla de la arena): evita
-        // el punto fijo degenerado de "empezar mirando a la comida" (muchos
-        // cerebros aleatorios se enclavan orbitando en el nido porque sus
-        // sensores iniciales no cambian) y es más realista: las hormigas salen
-        // del nido en todas direcciones.
-        var ant = new Ant
+        // — Colonia completa del constructor (10 fundadoras con posiciones y rumbos
+        //   del flujo RNG real + cría inicial). La política evaluada va en todas las
+        //   fundadoras (clones: cada muerte alimenta el pool con SU fitness) y el
+        //   pool se siembra con el genoma para que la descendencia sean variantes.
+        sim.SeedPoolFromGenomes(0, new[] { genome });
+        for (int i = 0; i < colony.Adults.Count; i++)
         {
-            Id = 1,
-            ColonyId = 0,
-            X = colony.NestX,
-            Y = colony.NestY,
-            Heading = (float)(_headingRng.NextDouble01() * Math.PI * 2.0 - Math.PI)
-        };
-        ant.InitFromVigor(colony.Species.EnergyCapacity, colony.Species.BaseLifespan, 0.8f);
-        ant.Genome = genome;
-        ant.Brain = genome.ToBrain();
-        colony.Adults.Add(ant);
+            var ant = colony.Adults[i];
+            ant.Genome = genome.Clone();
+            ant.Brain = ant.Genome.ToBrain();
+        }
+        // Las FUNDADORAS son el genoma evaluado; la descendencia que eclosione
+        // durante la prueba son variantes mutadas (Pool.Birth). Los índices <
+        // founderCount son fundadoras (los adultos nunca se eliminan de la
+        // lista, solo se marcan muertos) — el densado de exploración solo paga
+        // para ellas. Sonda empírica (Fase 3ter): con pago universal, el
+        // campeón del relevo EXPLOTABA el término creciendo la colonia (hasta
+        // 14 adultas) — cada neonata marcaba su propio récord de exploración
+        // (~3.6 ep) y ese multiplicador superaba al homing (12/ciclo):
+        // evolución seleccionaba "crecer y pasear" y el portador jamás volvía a
+        // casa (distancia mínima con carga: 251 u — ni un paso de regreso).
+        int founderCount = colony.Adults.Count;
 
-        // — Comida en un punto fijo relativo al nido (+X) —
-        var food = new FoodItem
-        {
-            Id = 1,
-            X = colony.NestX + _foodDistance,
-            Y = colony.NestY,
-            Amount = FoodAmount
-        };
+        // — Comida: spawn con el mecanismo del mundo (uniforme, ≥ 200 u del nido),
+        //   dentro de la banda de distancia de la etapa. Sin rastro plantado. —
         sim.ClearItems();
-        sim.AddItem(food);
+        for (int k = 0; k < TestItemCount; k++)
+        {
+            (float x, float y) = DrawFoodPosition(colony);
+            sim.AddItem(new FoodItem { X = x, Y = y, Amount = FoodAmount });
+        }
 
-        // — Rastro de comida sembrado del nido a la comida (el gradiente enseña a salir) —
-        if (_seedTrail)
-            SeedTrail(colony, _foodDistance, 0f);
-
-        // — Ejecución con detección de estancamiento por progreso (genoma muerto:
-        // no gastar ticks). Un genoma inútil orbita el nido o se queda contra un
-        // borde: su distancia máxima al nido deja de crecer y se corta la
-        // evaluación. Un genoma competente completa el ciclo y después se queda
-        // quieto (no hay más comida): también se corta, con el fitness ya medido.
-        double maxDist = 0.0;
-        int noProgress = 0;
+        // — Ejecución con presupuesto completo, SIN corte por estancamiento. En el
+        //   relevo intergeneracional el récord de distancia máxima NO mide progreso:
+        //   un portador que vuelve a casa lo REDUCE, y una colonia que completa
+        //   ciclos a radio constante no marca récords — el corte de la arena antigua
+        //   amputaba precisamente las pruebas productivas. Además, presupuesto
+        //   completo = mismo número de ticks para todos los genomas (comparabilidad
+        //   y determinismo estrictos).
+        int pickups = 0, unloads = 0;
+        double homeShaping = 0.0, exploreShaping = 0.0;
+        // Récords POR HORMIGA: los densados pagan solo en récord nuevo (monótonos,
+        // no explotables: oscilar fuera-dentro-fuera junto a la banda no repite pago).
+        // exploreRecord: máxima distancia alcanzada; homeRecord: mínima distancia
+        // desde el último pickup (MaxValue = sin carga activa).
+        var exploreRecord = new List<float>();
+        var homeRecord = new List<float>();
         for (int i = 0; i < _tickBudget; i++)
         {
             sim.Step();
-            if (!ant.Alive) break;
 
-            double dx = ant.X - colony.NestX;
-            double dy = ant.Y - colony.NestY;
-            double dist = Math.Sqrt(dx * dx + dy * dy);
-            if (dist > maxDist)
+            var events = sim.LastEvents;
+            for (int e = 0; e < events.Count; e++)
             {
-                maxDist = dist;
-                noProgress = 0;
+                var kind = events[e].Kind;
+                if (kind == SimEventKind.Pickup) pickups++;
+                else if (kind == SimEventKind.Unload) unloads++;
             }
-            else if (++noProgress >= NoProgressWindow)
+
+            // — Densados ida-y-vuelta (ep/u), solo para vivas: los muertos no puntúan.
+            //   · Exploración SIN carga: pago por récord de distancia hacia fuera,
+            //     solo bajo el tope de la etapa (acampar en una esquina no premia).
+            //   · Homing CON carga: pago por récord de acercamiento al nido desde el
+            //     último pickup; la descarga resetea el récord (nuevo ciclo, nuevo pago).
+            for (int a = 0; a < colony.Adults.Count; a++)
             {
-                break; // sin avance real durante la ventana: genoma estancado
+                var ant = colony.Adults[a];
+                if (!ant.Alive) continue;
+                while (exploreRecord.Count <= a) { exploreRecord.Add(-1f); homeRecord.Add(float.MaxValue); }
+
+                float dx = ant.X - colony.NestX;
+                float dy = ant.Y - colony.NestY;
+                float d = MathF.Sqrt(dx * dx + dy * dy);
+
+                if (ant.HasLoad)
+                {
+                    if (homeRecord[a] == float.MaxValue)
+                    {
+                        homeRecord[a] = d; // pickup reciente: referencia inicial
+                    }
+                    else if (d < homeRecord[a])
+                    {
+                        homeShaping += (homeRecord[a] - d) * HomeShapingPerUnit;
+                        homeRecord[a] = d;
+                    }
+                }
+                else
+                {
+                    homeRecord[a] = float.MaxValue; // tras descarga: ciclo nuevo
+                    // Exploración: SOLO fundadoras (ver founderCount arriba).
+                    if (a >= founderCount) continue;
+                    if (exploreRecord[a] < 0f)
+                    {
+                        exploreRecord[a] = d; // referencia inicial (posición de nacimiento)
+                    }
+                    else if (d <= _maxDistance && d > exploreRecord[a])
+                    {
+                        exploreShaping += (d - exploreRecord[a]) * ExplorePerUnit;
+                        exploreRecord[a] = d;
+                    }
+                }
             }
         }
 
-        // — Competencia: al menos un ciclo completo ida-vuelta. La señal fiable
-        // es el fitness acumulado de la hormiga (los eventos solo cubren el
-        // último paso): un ciclo completo vale pickup + descarga + bonus.
-        double cycleThreshold = sim.RewardPickup + FoodAmount * sim.RewardUnloadPerEp + sim.RewardUnloadBonus;
-        bool competent = ant.Fitness >= cycleThreshold;
+        // — Fitness de colonia: suma sobre todas las adultas (los muertos conservan
+        //   su aptitud de por vida en la lista) + los densados. —
+        double total = 0.0;
+        for (int a = 0; a < colony.Adults.Count; a++)
+            total += colony.Adults[a].Fitness;
+        total += homeShaping + exploreShaping;
 
-        return new ArenaResult(ant.Fitness, competent);
+        return new ArenaResult(total, pickups, unloads);
     }
 
-    private static void SeedTrail(Colony colony, float distance, float angle)
+    /// <summary>
+    /// Posición de comida con el mecanismo del mundo (muestreo uniforme del mundo,
+    /// rechazo si viola la banda de distancia de la etapa; la banda es siempre
+    /// ≥ NestMinSpawnDistance). Reserva determinista al este del nido si 64 intentos
+    /// no caen en la banda (bandas sanas: probabilidad de fallo &lt; 1e-4).
+    /// </summary>
+    private (float X, float Y) DrawFoodPosition(Colony colony)
     {
-        float cos = MathF.Cos(angle);
-        float sin = MathF.Sin(angle);
-        int steps = Math.Max(8, (int)(distance / 12f)); // una gota cada ~12 u
-        for (int i = 0; i <= steps; i++)
+        float worldSize = GridCells * SimConstants.CellSizeUnits;
+        float min2 = _minDistance * _minDistance;
+        float max2 = _maxDistance * _maxDistance;
+        for (int attempt = 0; attempt < MaxSpawnAttempts; attempt++)
         {
-            float t = (float)i / steps;
-            float x = colony.NestX + cos * distance * t;
-            float y = colony.NestY + sin * distance * t;
-            colony.FoodLayer.Deposit(
-                (int)Math.Clamp(x / SimConstants.CellSizeUnits, 0, colony.FoodLayer.Width - 1),
-                (int)Math.Clamp(y / SimConstants.CellSizeUnits, 0, colony.FoodLayer.Height - 1),
-                TrailStrength);
+            float x = (float)(_trialRng.NextDouble01() * worldSize);
+            float y = (float)(_trialRng.NextDouble01() * worldSize);
+            float dx = x - colony.NestX;
+            float dy = y - colony.NestY;
+            float d2 = dx * dx + dy * dy;
+            if (d2 >= min2 && d2 <= max2)
+                return (x, y);
         }
+        float d = (_minDistance + _maxDistance) * 0.5f;
+        return (Math.Clamp(colony.NestX + d, 0f, worldSize), colony.NestY);
     }
 }

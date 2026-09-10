@@ -1,0 +1,10 @@
+seed 4242 pop 6 band 200-260
+warm-started 6 genomes from E:/Users/kaoti/Documentos/GitHub/Hormigueros/artifacts/pretrain-cold.antgenome
+gen stage=1 gen=1 best=35.452 mean=20.516 competent=0
+gen stage=1 gen=2 best=35.993 mean=23.999 competent=0
+gen stage=2 gen=1 best=41.097 mean=25.475 competent=0
+gen stage=2 gen=2 best=38.369 mean=32.733 competent=0
+gen stage=3 gen=1 best=41.171 mean=34.202 competent=0
+gen stage=3 gen=2 best=40.478 mean=34.643 competent=0
+trained 6 genomes, stages 3
+exported 6 genomes to E:/Users/kaoti/Documentos/GitHub/Hormigueros/artifacts/pretrain-warm.antgenome

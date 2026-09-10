@@ -98,35 +98,180 @@
 
 ## 4bis. Pre-entrenamiento headless — Fase 3 implementada
 
-- **Arena** (`ArenaEvaluator`): un `WorldSim` nuevo por prueba con la misma semilla;
-  una hormiga, un ítem a `FoodDistance` fija al este del nido, rastro de comida
-  sembrado (gota cada ~12 u, 0.9), sin respawn (`TargetItems=0`) ni cría, stock a
-  tope. Recompensas re-equilibradas para la señal: `RewardPickup 0.5`, `RewardUnloadPerEp
-  2`, `RewardUnloadBonus 4`, `RewardSurvivalPerSecond 0.002`, `RewardDepositPerUnit 0`
-  (sin depósito: se podría cultivar sin forrajear).
-- **Competencia mínima** = un ciclo completo ida-vuelta: fitness ≥ 0.5 + 4·2 + 4 =
-  **8.5** (umbral por etapa: 8.5). La señal fiable es el fitness acumulado de la
-  hormiga (los eventos solo cubren el último paso).
-- **Rumbo inicial aleatorio determinista** por prueba (semilla de la arena): evita el
-  punto fijo reactivo de "empezar mirando a la comida" (cerebros aleatorios que se
-  enclavan orbitando el nido); varias pruebas por genoma (best-of-K) suavizan la
-  lotería de puntos fijos.
-- **Estancamiento por progreso**: si la distancia máxima al nido no crece en 1 200
-  ticks, se corta la evaluación (orbitas y bordes no gastan el presupuesto; un
-  genoma competente también se corta tras el ciclo, con el fitness ya medido).
-- **Currículo calibrado** (`CurriculumTrainer.DefaultStages`): 12 u (2 500 ticks,
-  máx 30 gens) → 25 u (5 000, 60) → 40 u (7 000, 80) → 60 u (9 000, 100);
-  `CompetenceFitness 8.5`, `MinGenerations 4`. Cada etapa transfiere la población
-  competente de la anterior y se supera cuando el mejor fitness ≥ umbral. El
-  borrador inicial (120/300 u) era inalcanzable: la visión (~40 u) no llega y el
-  rastro se evapora antes de la vuelta.
+### Arena realista (Fase 3bis, vigente)
+
+> La arena original de la Fase 3 (hormiga sola, ítem a la vista, rastro plantado)
+> **no transfería** al mundo real: sembrar la partida con su población producía
+> pickup 0 en 300 s. La arena vigente replica el régimen del mundo real.
+
+- **Colonia completa** (`ArenaEvaluator`): un `WorldSim` nuevo por prueba con las
+  10 fundadoras y las 4 crías del constructor, con el `ColonyController` operando
+  (alimentación, puesta, cría, canibalismo). Las fundadoras llevan clones del
+  genoma evaluado y el pool se siembra con él — exactamente el régimen de
+  `--seed-pool` en el mundo real (la descendencia nace de variantes mutadas).
+- **Comida real**: 24 ítems de 4 ep (densidad del mundo, `TargetItemsDefault`)
+  con el muestreo del mundo (uniforme, ≥ `NestMinSpawnDistance` del nido), dentro
+  de la banda de la etapa. Sin rastro plantado y sin respawn (`TargetItems=0`).
+- **Señal de colonia**: fitness = Σ aptitud de TODAS las adultas (los muertos
+  conservan su fitness de por vida) + dos densados RÉCORD (monótonos, no
+  explotables por oscilación): · exploración SIN carga: pago por récord de
+  distancia hacia fuera, solo bajo el tope de la etapa (`ExplorePerUnit 0.015`) —
+  sin él el primer eslabón (alcanzar la banda a ≥ 200 u) nunca se muestrea (un
+  paseo aleatorio apenas llega a ~190 u); · homing CON carga: pago por récord de
+  acercamiento al nido desde el último pickup (`HomeShapingPerUnit 0.06`), la
+  descarga resetea el ciclo. La recompensa real (pickup 0.5, descarga 2/ep +
+  bonus 4, supervivencia 0.002/s, depósito 0) sigue siendo la señal objetivo.
+- **Sin corte por estancamiento**: el corte por distancia máxima amputaba las
+  pruebas productivas del relevo (un portador que vuelve a casa REDUCE esa
+  distancia; ciclar a radio constante no marca récords). Presupuesto completo
+  para todos los genomas: comparabilidad y determinismo estrictos.
+- **Física verificada que condiciona el diseño**: una ida-y-vuelta SOLA a ≥ 200 u
+  es imposible para cualquier política (~148 s a VMax 2.7 frente a ~90–110 s de
+  vida de fundadora). La competencia observable de generación 0 es explorar +
+  cargar + volver parcialmente (homing ~97 u ≈ óptimo físico: pickup a 200 u
+  cuesta 74 s y deja ~36 s de vuelta). La descarga exige el RELEVO (muerte con
+  carga → el mundo re-spawnea el ítem donde cae → otra hormiga completa el tramo)
+  que necesita inflow primero → cría → eclosión (~45+ s huevo-adulta).
+- **Currículo por HORIZONTE temporal** (`CurriculumTrainer.DefaultStages`), no por
+  banda de distancia: `cercana` (banda 200–260 u, 3 600 ticks, máx 30 gens) →
+  `relevo` (misma banda, 5 400, 40) → `mundo` (misma banda, 9 000, 60).
+  `CompetenceFitness 0` (sin umbral: el producto de cada etapa es su élite
+  evaluada) y `MinGenerations 4`. Ensanchar la banda estaba calibrado y
+  RECHAZADO empíricamente: la banda ancha (200–520 u) multiplica ×27 el área del
+  anillo, la comida se vuelve irencontrable y el densado de exploración domina —
+  el campeón de banda ancha olvida el pickup (0 transferidos) mientras el de
+  banda cercana transfiere.
+- **Tres bugs corregidos durante la calibración (F3bis)**:
+  1. **Export sin evaluar**: `Run()` devolvía la población tras el último
+     `Evolve()` (25 % élite + 75 % hijos con `Fitness=0`): el `.antgenome`
+     contenía 3 de cada 4 genomas sin evaluar. Ahora no se reproduce tras la
+     última evaluación de cada etapa.
+  2. **Fundadoras sin cerebro entrenado**: en el constructor de `WorldSim` las
+     fundadoras nacen ANTES de que exista la élite sembrada (`Pool.Birth` cae al
+     genoma aleatorio); `SeedPoolFromGenomes` solo sembraba el pool. Ahora
+     también re-asigna cerebros a las adultas vivas — causa directa de que
+     `--seed-pool` no mejorara la supervisión inicial pese a que los genomas
+     entrenados SÍ forrajean en el régimen del mundo.
+  3. **Olvido por banda ancha**: descrito arriba; el eje correcto del currículo
+     es el horizonte temporal.
+- **Transferencia revalidada** (`--mode evolve --ticks 9000 --colonies 1
+  --seed-pool`, semillas 42/7/99): baseline (élite aleatoria) → pickup 0, best
+  1.06, colonia extinta; sembrada (seed 7, pop 32, 60 gens) → **pickup 4–7**,
+  pool best 48.7, portadores que homing hasta ~105 u del nido. `unload 0` es
+  estructural del cold-start del mundo (todas las fundadoras mueren a la vez y el
+  relevo necesita una eclosión, que necesita inflow), no de la arena.
 - **Evolución del trainer**: élite (25 %) + torneo (k=3) + crossover uniforme +
-  mutación σ 0.08; `Evolve()` se ejecuta DENTRO del bucle de generaciones (bug
-  corregido en F3: antes solo se evolucionaba al final de la etapa). Reporte
-  determinista por generación (`GenerationStats`).
+  mutación σ 0.08; `Evolve()` vive DENTRO del bucle de generaciones y SOLO si
+  habrá otra evaluación. Reporte determinista por generación (`GenerationStats`).
 - **Siembra de partidas**: `GenomePool.ReplaceElite` / `WorldSim.SeedPoolFromGenomes`
-  sustituyen la élite por la población pre-entrenada (los nacimientos usan esa élite).
-  CLI `--mode pretrain` con `--pop/--generations/--export`.
+  sustituyen la élite por la población pre-entrenada, re-aseñan cerebros a las
+  adultas vivas y los nacimientos usan esa élite. CLI `--mode pretrain` con
+  `--pop/--generations/--export`; `--mode evolve` con `--seed-pool`. Además
+  `--warm-start archivo.antgenome` siembra la población INICIAL del
+  entrenamiento desde un pool existente (clon+mutación hasta `PopSize`,
+  re-evaluación en la arena actual, rechazo por topología distinta) en vez de
+  genomas aleatorios.
+
+### Arranque en frío — Fase 3ter (implementada)
+
+> Objetivo: que una colonia fundada pre-entrenada alcance su PRIMERA descarga y
+> su primera eclosión. El bloqueo del arranque en frío no era de la arena sino
+> del MUNDO: descompuesto en tres mecanismos acoplados y corregido con cambios
+> de diseño mínimos, realistas y deterministas (72→77 tests, luego 72 tras
+> retirar las sondas).
+
+1. **Extinción sincronizada** — las 10 fundadoras nacían con vigor IDÉNTICO
+   (0.8) ⇒ esperanza de vida idéntica (106.2 s) ⇒ morían el MISMO tick. El
+   relevo por suelta al morir era imposible por construcción. Ahora el vigor
+   fundador se ESCALONA 0.6→1.0 por índice (sin RNG): muertes desincronizadas
+   (~84→117 s) y sueltas escalonadas a lo largo de la generación.
+2. **Reserva fundadora** — la colonia funda con stock COMPLETO (`StockMax`, 100
+   ep en lugar de 50): la reserva cubre la ventana de forrajeo (~80–110 s: la
+   comida está a ≥ 200 u, fuera de visión). Al 50 % el runway se agotaba antes
+   de la primera oportunidad.
+3. **La cría no podía eclosionar NUNCA** — `NurseRate` 0.04 daba un presupuesto
+   de 0.06 ep/s frente a los 0.08 ep/s que exige UNA larva para pupar en su
+   ventana (la propia `LarvaIdeal` de la especificación es 0.088). La constante
+   ahora DERIVA de la especificación (0.088). Además el reparto equitativo sobre
+   la oleada de puesta (hasta ~30 larvas a 0.004 ep/s) no maduraba a ninguna:
+   ahora la alimentación larval es SERIALIZADA y PRIORIZADA (la larva más
+   invertida primero; empate a la más JOVEN — la más vieja está a un tick de
+   morir y rotar el presupuesto sobre ella era improductivo, detectado con
+   sonda). Resultado: eclosiones desde ~40 s y ~1 cada ~20 s.
+4. **La reina fundadora inundaba de huevos** — el término de déficit
+   `(MaxAdults − A)·k_repl` (1.6 huevos/s = 0.8 ep/s ≈ 47 % de la reserva
+   fundadora) quemaba el stock en ~120 s para "crecer a 40" SIN comida. La
+   expansión ahora se escala por la entrada REAL (`inflowGate = clamp(InflowEma·10)`):
+   sin inflow solo se reponen bajas (`A·λ_death`); la expansión espera al
+   primer ciclo de comida — biología de fundación real (primera puesta
+   limitada, expansión ligada a la entrada).
+5. **Física del relevo (verificada con sonda de política artesanal)**: ningún
+   individuo puede cerrar un ciclo (ida y vuelta a ≥ 200 u ≈ 148 s a VMax vs
+   ~125 s máx de vida a vigor 1.15); ni siquiera una suelta a ~200 u es
+   completable por una sola descendiente (0.76·d s de presupuesto). La primera
+   descarga es el RELEVO MULTIGENERACIONAL: portador homing máximo → suelta a
+   ~115 u del nido → descendiente joven la encuentra y completa el tramo final.
+   Con ítems plantados a 120 u la política artesanal consigue 5 descargas;
+   en el mundo abierto (sonda, 800 s): **eclosiones 0→13, descargas 0→2,
+   portador a 24 u (el propio umbral de descarga)**.
+- **Revalidación con `--seed-pool`** (`--ticks 24000`, semillas 42/7/99/1234/777):
+  baseline → pickup 0, descarga 0, colonia extinta; sembrada con la población
+  de 60 gens (exploración + homing fuerte) → **pickup 6–12, descarga 1–3 en 3
+  de 4 semillas**, eclosiones 11–14 (baseline también eclosiona: el arranque en
+  frío demográfico está resuelto por diseño). El mismo campeón en la arena
+  nueva: fitness 295.7, 22 pickups, **6 descargas** — la señal de la arena
+  selecciona el relevo; el pool recién entrenado (15–30 gens) aún no ha
+  convergido al homing por brújula (configuración rara en el espacio de pesos;
+  el pool antiguo de 60 gens sí lo encontró) — cuestión de tiempo de
+  entrenamiento, no de diseño del mundo.
+- **Historia (arena original de la F3)**: hormiga sola, un ítem a `FoodDistance`
+  fija al este, rastro sembrado (0.9), umbral de competencia 8.5, estancamiento
+  a 1 200 ticks y currículo 12→25→40→60 u. Sustituida por la arena realista al
+  demostrar la validación de transferencia que no transfería.
+
+### Warm-start — siembra desde `.antgenome` (implementada)
+
+> Objetivo: continuar el entrenamiento de un pool existente en lugar de partir
+> de genomas aleatorios. `CurriculumTrainer` acepta una población inicial
+> opcional: si se provee, se clona y muta para llenar `PopSize` (los genomas
+> del archivo se RE-EVALUAN en la arena actual — sus `Fitness` almacenadas
+> quedan obsoletas con cada cambio de mundo); si no, nace aleatoria. CLI:
+> `--mode pretrain --warm-start pool.antgenome`. Se rechaza un archivo con
+> topología distinta (otro layout de red).
+
+- **Resultado (entrenando desde el pool de 60 gens, pop 24, 10 gens/etapa)**:
+  la población conserva el comportamiento en la arena NUEVA desde la primera
+  generación — **7–14/16 genomas competentes (descargas ≥ 1) en el smoke y
+  21/24 en el entrenamiento completo, best 358.2 vs ~47 del arranque en frío**
+  (el entrenamiento en frío necesita 60+ gens para converger al homing por
+  brújula; el warm-start lo conserva y lo refina).
+- **Revalidación `--seed-pool` con el pool warm-entrenado** (`--ticks 24000`,
+  semillas 42/7/99/1234/777): **pickup 6–10, descarga 1–2 en 4/5 semillas,
+  eclosiones 24–27** — frente a pickup 0/descarga 0 del baseline. Determinismo
+  entre procesos intacto (hash final byte a byte idéntico, verificado con la
+  semilla 777 en dos procesos).
+- **Salud del relevo en el reporte (sin sondas)**: la línea `totals` del CLI
+  (`--mode evolve` y `--mode world`) incluye ahora `first-unload` (primer tick
+  de descarga; `-` si no hubo) y `drop-avg` (distancia media al nido de las
+  sueltas por muerte de portadora; `-` si no hubo). Los detecta `RelayTracker`
+  desde el flujo de eventos sin tocar la simulación — los hashes son byte a
+  byte idénticos con y sin el tracker — y distingue la suelta (ItemSpawned con
+  ColonyId real) del spawn regular (centinela ColonyId = -1). Ejemplo real:
+  baseline `first-unload - drop-avg -` vs pool warm2 (semilla 42)
+  `first-unload 5130 drop-avg 186.7`. El script `scripts/pipeline.sh` muestra
+  ambas columnas en su tabla (`unload1st`/`dropavg`): una `drop-avg` alta con
+  `first-unload` ausente es la firma de un relevo que no cierra.
+- **Refinado con banda extendida (200–350 u)**: `--band-min/--band-max`
+  re-bandan todas las etapas (mínimo respetado: ≥ `NestMinSpawnDistance`).
+  Segundo warm-start desde `pretrain-warm.antgenome` (seed 7, pop 24, 15
+  gens/etapa): el anillo 200–350 u es ~3× el área del 200–260, así que la
+  etapa corta (3600 ticks) no completa ciclos (competente 0) pero relevo y
+  mundo recuperan **19–23/24 competentes**; el fitness de arena baja (~358 →
+  ~245–298, ítems más dispersos) SIN pérdida de transferencia — en el mundo
+  abierto (5 semillas, 24 000 ticks): **pickup 7–10, descarga 1–3 en 3/5
+  semillas (máximo histórico 3 en la semilla 42), eclosiones 24–27** vs
+  baseline 0/0. El pool de banda extendida no olvida el relevo: lo conserva y
+  generaliza a distancias mayores.
 
 ## 5. Telemetría
 

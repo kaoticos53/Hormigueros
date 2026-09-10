@@ -26,11 +26,13 @@ public static class WorldScenario
 
         var sim = new WorldSim(seed, grid, colonies);
         long totalEvents = 0;
+        var relay = new RelayTracker(); // salud del relevo: 1ª descarga + sueltas
 
         for (int i = 0; i < ticks; i++)
         {
             sim.Step();
             totalEvents += sim.LastEvents.Count;
+            relay.Observe(sim.LastEvents, sim);
 
             if (sim.Tick > 0 && sim.Tick % MilestoneEvery == 0)
                 sb.Append("tick ").Append(sim.Tick).Append("  ").Append(sim.HashLine()).AppendLine();
@@ -43,6 +45,9 @@ public static class WorldScenario
           .Append(" larvae ").Append(TotalBrood(sim, BroodKind.Larva))
           .Append(" pupae ").Append(TotalBrood(sim, BroodKind.Pupa))
           .Append(" events ").Append(totalEvents)
+          .Append(" first-unload ").Append(relay.HasUnload ? relay.FirstUnloadTick.ToString() : "-")
+          .Append(" drop-avg ").Append(relay.DropDistanceMean is double dm
+              ? dm.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : "-")
           .AppendLine();
         return sb.ToString();
     }

@@ -1,0 +1,9 @@
+seed 4242 pop 6 band 200-260
+gen stage=1 gen=1 best=7.685 mean=4.369 competent=0
+gen stage=1 gen=2 best=11.587 mean=5.595 competent=0
+gen stage=2 gen=1 best=13.112 mean=6.734 competent=0
+gen stage=2 gen=2 best=37.853 mean=19.555 competent=0
+gen stage=3 gen=1 best=38.042 mean=19.899 competent=0
+gen stage=3 gen=2 best=38.540 mean=22.714 competent=0
+trained 6 genomes, stages 3
+exported 6 genomes to E:/Users/kaoti/Documentos/GitHub/Hormigueros/artifacts/pipe-cold.antgenome
