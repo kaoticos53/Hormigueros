@@ -35,6 +35,11 @@ public sealed class CurriculumStage
     public float MaxDistance = 260f;
     /// <summary>Banda intermedia del currículo híbrido (null = banda fija).</summary>
     public float? MidDistance = null;
+    /// <summary>Tamaño de la arena de la etapa en celdas (null = el estándar,
+    /// 96 = 768 u). La etapa de mundo completo exige arenas mayores: ítems a
+    /// > 450 u no caben en 768 u (el nido está en el centro, radio útil 384 u).
+    /// </summary>
+    public int? ArenaCells = null;
     public int TickBudget = 3600;       // ticks máx por evaluación (~120 s)
     public double CompetenceFitness = 0.0; // fitness mínimo de COLONIA; 0 = sin umbral
     public int MinGenerations = 4;      // nunca avanzar antes de esto
@@ -194,6 +199,42 @@ public sealed class CurriculumTrainer
     }
 
     /// <summary>
+    /// 4ª etapa del currículo (Fase 3ter: MUNDO COMPLETO): arena GRANDE (176
+    /// celdas = 1408 u) con ítems en la banda 200–700 u y horizonte de 14 400
+    /// ticks (480 s — el doble del horizonte "mundo", porque los ciclos a
+    /// radio > 450 u exigen relevo de 2+ saltos). Motivación: el mundo real del
+    /// juego es 256² (2048 u) y con densidad de comida constante por área los
+    /// ítems aparecen por TODO el mapa; los pools entrenados solo hasta 450 u
+    /// dejan de encontrar comida más allá. Física que la etapa debe enseñar:
+    /// a 700 u ninguna portadora completa el ciclo sola (ida-y-vuelta ≈ 519 s
+    /// frente a ~104–125 s de vida) — el relevo de 2+ saltos es OBLIGATORIO,
+    /// y el densado de carry-leg (0.15 ep/u) paga los tramos largos que lo
+    /// hacen viable. La arena de 176 celdas (1408 u) contiene el radio 700 con
+    /// margen (mitad del lado = 704 u, nido centrado).
+    /// </summary>
+    public static IReadOnlyList<CurriculumStage> FullWorldStage(float minDistance, float maxDistance)
+    {
+        if (minDistance < WorldSim.NestMinSpawnDistance)
+            throw new ArgumentOutOfRangeException(nameof(minDistance),
+                $"La distancia mínima debe ser ≥ NestMinSpawnDistance ({WorldSim.NestMinSpawnDistance} u).");
+        if (maxDistance <= minDistance)
+            throw new ArgumentOutOfRangeException(nameof(maxDistance), "La banda de distancia está vacía.");
+        // La arena de 176 celdas = 1408 u tiene radio útil de 704 u (mitad del
+        // lado, nido centrado): la banda debe caber entera (el spawn muestrea
+        // hasta maxDistance desde el nido).
+        if (maxDistance > 704f)
+            throw new ArgumentOutOfRangeException(nameof(maxDistance),
+                "La banda de la etapa de mundo completo debe caber en la arena de 176 celdas (radio útil 704 u).");
+
+        return new List<CurriculumStage>
+        {
+            new() { Name = "mundo-completo", MinDistance = minDistance, MaxDistance = maxDistance,
+                    ArenaCells = 176, TickBudget = 14400, CompetenceFitness = 0.0,
+                    MinGenerations = 4, MaxGenerations = 40 }
+        };
+    }
+
+    /// <summary>
     /// Ejecuta el currículo completo. Devuelve la población final ordenada por
     /// fitness descendente (la élite que puede sembrar un pool de partida).
     /// </summary>
@@ -282,7 +323,8 @@ public sealed class CurriculumTrainer
             // par: banda ancha completa (min/max de la etapa)
         }
 
-        var arena = new ArenaEvaluator(arenaSeed, min, max, stage.TickBudget, TrialsPerGenome);
+        var arena = new ArenaEvaluator(arenaSeed, min, max, stage.TickBudget, TrialsPerGenome,
+            stage.ArenaCells);
 
         double sum = 0.0;
         best = double.MinValue;

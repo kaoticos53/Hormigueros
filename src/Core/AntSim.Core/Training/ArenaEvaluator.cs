@@ -76,7 +76,17 @@ public readonly struct ArenaResult
 /// </summary>
 public sealed class ArenaEvaluator
 {
-    public const int GridCells = 96;            // mundo de 768 u: el mismo del CLI por defecto
+    /// <summary>Mundo de arena por defecto: 96 celdas = 768 u (el del CLI pequeño).
+    /// La 4ª etapa del currículo (FullWorldStages) usa arenas más grandes vía
+    /// <see cref="CustomGridCells"/> — ítems a > 450 u no caben en 768 u.</summary>
+    public const int GridCells = 96;
+
+    /// <summary>Celdas del grid de feromonas de la arena (null = usar GridCells).
+    /// Configurable SOLO en el constructor: cambiarlo en curso alteraría el
+    /// determinismo de las evaluaciones en vuelo.</summary>
+    public int? CustomGridCells { get; }
+
+    private int EffectiveGridCells => CustomGridCells ?? GridCells;
     public const float FoodAmount = 4.0f;       // ep por ítem (la banda del mundo es 4–6)
     public const int TestItemCount = WorldSim.TargetItemsDefault; // 24: densidad real del mundo
     public const int MaxSpawnAttempts = 64;
@@ -100,18 +110,28 @@ public sealed class ArenaEvaluator
     // descartaría el avance del flujo (bug corregido en Fase 3).
     private DeterministicRandom _trialRng;
 
-    public ArenaEvaluator(ulong seed, float minDistance, float maxDistance, int tickBudget, int trials = 1)
+    public ArenaEvaluator(ulong seed, float minDistance, float maxDistance, int tickBudget, int trials = 1,
+        int? customGridCells = null)
     {
         if (minDistance < WorldSim.NestMinSpawnDistance)
             throw new ArgumentOutOfRangeException(nameof(minDistance),
                 $"La distancia mínima debe ser ≥ NestMinSpawnDistance ({WorldSim.NestMinSpawnDistance} u).");
         if (maxDistance < minDistance)
             throw new ArgumentOutOfRangeException(nameof(maxDistance), "La banda de distancia está vacía.");
+        if (customGridCells is int g && g < 16)
+            throw new ArgumentOutOfRangeException(nameof(customGridCells), "El grid de arena exige ≥ 16 celdas.");
+        // El ítem más lejano debe caber en el mundo de la arena: el nido está en
+        // el centro, así que basta maxDistance < mitad del lado (con margen para
+        // el cuerpo y el radio de pickup).
+        if (customGridCells is int cells && maxDistance > cells * SimConstants.CellSizeUnits * 0.5f)
+            throw new ArgumentOutOfRangeException(nameof(customGridCells),
+                $"La banda {minDistance}-{maxDistance} no cabe en una arena de {cells} celdas.");
         _seed = seed;
         _minDistance = minDistance;
         _maxDistance = maxDistance;
         _tickBudget = tickBudget;
         _trials = Math.Max(1, trials);
+        CustomGridCells = customGridCells;
         _trialRng = new DeterministicRandom(_seed);
     }
 
@@ -134,7 +154,7 @@ public sealed class ArenaEvaluator
 
     private ArenaResult EvaluateTrial(MlpGenome genome)
     {
-        var sim = new WorldSim(_seed, GridCells, 1);
+        var sim = new WorldSim(_seed, EffectiveGridCells, 1);
         var colony = sim.Colonies[0];
 
         // — Re-equilibrio de la señal de fitness (Fase 3) —
@@ -290,7 +310,7 @@ public sealed class ArenaEvaluator
     /// </summary>
     private (float X, float Y) DrawFoodPosition(Colony colony)
     {
-        float worldSize = GridCells * SimConstants.CellSizeUnits;
+        float worldSize = EffectiveGridCells * SimConstants.CellSizeUnits;
         float min2 = _minDistance * _minDistance;
         float max2 = _maxDistance * _maxDistance;
         for (int attempt = 0; attempt < MaxSpawnAttempts; attempt++)

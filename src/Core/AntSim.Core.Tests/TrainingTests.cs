@@ -78,6 +78,30 @@ public class TrainingTests
     }
 
     [Fact]
+    public void FullWorldStage_CarriesArenaCells_AndRejectsInvalidBands()
+    {
+        var stages = CurriculumTrainer.FullWorldStage(200f, 700f);
+        Assert.Single(stages);
+        Assert.Equal("mundo-completo", stages[0].Name);
+        Assert.Equal(176, stages[0].ArenaCells);
+        Assert.Equal(700f, stages[0].MaxDistance);
+        Assert.Equal(14400, stages[0].TickBudget);
+
+        // La banda debe caber en la arena de 176 celdas (radio útil 704 u).
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurriculumTrainer.FullWorldStage(200f, 704f + 1f));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CurriculumTrainer.FullWorldStage(200f, 200f));
+        // Y el evaluador debe rechazar una banda que no quepa en un grid dado.
+        var genome = DrawGenome(3, 0);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new ArenaEvaluator(1UL, 200f, 700f, 100, customGridCells: 96));
+        // ... y aceptarla en la de 176.
+        var arena = new ArenaEvaluator(1UL, 200f, 700f, 60, customGridCells: 176);
+        var r1 = arena.Evaluate(genome);
+        var r2 = arena.Evaluate(genome);
+        Assert.Equal(r1.Fitness, r2.Fitness); // determinista
+    }
+
+    [Fact]
     public void HybridStages_RejectsInvalidBands()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => CurriculumTrainer.HybridStages(100f, 325f, 450f));

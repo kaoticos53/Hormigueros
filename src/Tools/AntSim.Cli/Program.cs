@@ -57,6 +57,7 @@ internal static class Program
         float bandMin = 200f;   // banda de distancia del pretrain (por defecto: la calibrada)
         float bandMax = 260f;
         bool hybrid = false;    // currículo híbrido alternado (200-mid / 200-max por generación)
+        bool fullWorld = false; // añade la 4ª etapa mundo-completo (arena 160, 200–700 u)
         string? importPath = null;
         string? seedPoolPath = null;
         string? warmStartPath = null;
@@ -123,6 +124,9 @@ internal static class Program
                 case "--hybrid":
                     hybrid = true;
                     break;
+                case "--full-world":
+                    fullWorld = true;
+                    break;
                 case "--export":
                     exportPath = Next(args, ref i);
                     break;
@@ -155,7 +159,7 @@ internal static class Program
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
-                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid),
+                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);
@@ -242,13 +246,16 @@ internal static class Program
     }
 
     private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath,
-        string? warmStartPath, float bandMin, float bandMax, bool hybrid = false)
+        string? warmStartPath, float bandMin, float bandMax, bool hybrid = false, bool fullWorld = false)
     {
         // Currículo calibrado (Fase 3bis, arena realista); --generations limita el
         // máximo por etapa y --band-min/--band-max re-bandan TODAS las etapas
         // (warm-start de refinado: extender el anillo de forrajeo sobre un pool ya
         // competente). --hybrid alterna generaciones entre la banda media
         // (bandMin–punto medio) y la ancha (bandMin–bandMax) dentro de cada etapa.
+        // --full-world AÑADE una 4ª etapa (mundo-completo): arena grande de 160
+        // celdas, banda 200–700 u, horizonte 14 400 ticks — cubre el mundo real
+        // del juego (256²) con relevo multi-salto obligatorio.
         System.Collections.Generic.IReadOnlyList<CurriculumStage> baseStages = hybrid
             ? CurriculumTrainer.HybridStages(bandMin, (bandMin + bandMax) * 0.5f, bandMax)
             : CurriculumTrainer.DefaultStages();
@@ -262,6 +269,7 @@ internal static class Program
                 MinDistance = s.MinDistance,
                 MaxDistance = s.MaxDistance,
                 MidDistance = s.MidDistance,
+                ArenaCells = s.ArenaCells,
                 TickBudget = s.TickBudget,
                 CompetenceFitness = s.CompetenceFitness,
                 MinGenerations = s.MinGenerations,
@@ -269,11 +277,31 @@ internal static class Program
             });
         }
 
+        if (fullWorld)
+        {
+            float fwMax = MathF.Max(bandMax, 700f);
+            foreach (var s in CurriculumTrainer.FullWorldStage(bandMin, fwMax))
+            {
+                stages.Add(new CurriculumStage
+                {
+                    Name = s.Name,
+                    MinDistance = s.MinDistance,
+                    MaxDistance = s.MaxDistance,
+                    ArenaCells = s.ArenaCells,
+                    TickBudget = s.TickBudget,
+                    CompetenceFitness = s.CompetenceFitness,
+                    MinGenerations = s.MinGenerations,
+                    MaxGenerations = generations > 0 ? Math.Min(s.MaxGenerations, generations) : s.MaxGenerations
+                });
+            }
+        }
+
         var sb = new System.Text.StringBuilder();
         sb.Append("seed ").Append(seed).Append(" pop ").Append(pop)
           .Append(" band ").Append(bandMin.ToString("0", CultureInfo.InvariantCulture))
           .Append("-").Append(bandMax.ToString("0", CultureInfo.InvariantCulture))
           .Append(hybrid ? " hybrid" : "")
+          .Append(fullWorld ? " full-world" : "")
           .AppendLine();
 
         System.Collections.Generic.List<MlpGenome>? seeded = null;
