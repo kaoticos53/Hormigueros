@@ -46,7 +46,7 @@ public static class WorldScenario
             antlog?.Observe(sim.LastEvents);
 
             if (sim.Tick > 0 && sim.Tick % MilestoneEvery == 0)
-                sb.Append("tick ").Append(sim.Tick).Append("  ").Append(sim.HashLine()).AppendLine();
+                TickLine.Append(sb, sim, relay);
 
             if (sim.Tick > 0 && sim.Tick % AntEventLog.MilestoneEvery == 0)
                 antlog?.RecordMilestone(sim.Tick, sim.HashLine());
@@ -80,6 +80,10 @@ public static class WorldScenario
           .Append(" first-unload ").Append(relay.HasUnload ? relay.FirstUnloadTick.ToString() : "-")
           .Append(" drop-avg ").Append(relay.DropDistanceMean is double dm
               ? dm.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : "-")
+          .Append(" unload-avg ").Append(relay.UnloadDistanceMean is double um
+              ? um.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : "-")
+          .Append(" carry-leg ").Append(relay.CarryLegMean is double cl
+              ? cl.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) : "-")
           .AppendLine();
         return sb.ToString();
     }

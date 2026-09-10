@@ -203,8 +203,7 @@ internal static class Program
 
             if (sim.Tick > 0 && sim.Tick % 120 == 0)
             {
-                sb.Append("tick ").Append(sim.Tick).Append("  ").Append(sim.HashLine()).AppendLine();
-                sb.Append(PoolStatsLine(sim));
+                TickLine.Append(sb, sim, relay, includePoolStats: true, poolStatsLine: PoolStatsLine(sim));
             }
         }
 
@@ -221,6 +220,10 @@ internal static class Program
           .Append(" first-unload ").Append(relay.HasUnload ? relay.FirstUnloadTick.ToString() : "-")
           .Append(" drop-avg ").Append(relay.DropDistanceMean is double dm
               ? dm.ToString("0.0", CultureInfo.InvariantCulture) : "-")
+          .Append(" unload-avg ").Append(relay.UnloadDistanceMean is double um
+              ? um.ToString("0.0", CultureInfo.InvariantCulture) : "-")
+          .Append(" carry-leg ").Append(relay.CarryLegMean is double cl
+              ? cl.ToString("0.0", CultureInfo.InvariantCulture) : "-")
           .AppendLine();
 
         if (exportPath != null)

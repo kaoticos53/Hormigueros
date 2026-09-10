@@ -18,6 +18,15 @@ namespace AntSim.Core.Scenario;
 ///     que la descendencia debe completar). Cuanto más cerca del nido caen las
 ///     sueltas, más sano está el homing; un drop-avg en descenso indica que la
 ///     política está cerrando el ciclo.
+///   - <see cref="UnloadCount"/> / <see cref="UnloadDistanceMean"/>: el ÚLTIMO
+///     eslabón — distancia al nido en el momento de cada descarga (por
+///     construcción ≤ NestRadius = 24 u). No mide el tramo recorrido: para eso
+///     está <see cref="CarryLegMean"/> — distancia del PICKUP a la descarga de
+///     cada carga completada, i.e. cuánto del ciclo cierra el portador que
+///     termina. Un relevo sano (descendencia que recoge sueltas lejanas) da
+///     carry-leg ~150-250 u; un pool que solo descarga lo que recoge en el
+///     anillo cercano al nido da carry-leg ~0-50 u. Es la métrica que separa
+///     "descarga del fundador" de "descarga por relevo".
 ///
 /// Distinción de eventos: el spawn REGULAR de ítems emite ItemSpawned con el
 /// centinela ColonyId = -1 (WorldSim.SpawnItem); la suelta por muerte emite
@@ -26,14 +35,29 @@ namespace AntSim.Core.Scenario;
 /// </summary>
 public sealed class RelayTracker
 {
+    // (colonyId, antId) → posición del pickup sin descargar todavía.
+    private readonly Dictionary<(int Colony, uint Ant), (float X, float Y)> _openCarries = new();
+
     public ulong FirstUnloadTick { get; private set; }
+    public ulong LastUnloadTick { get; private set; }
 
     public long DropDistanceSum { get; private set; }
     public int DropCount { get; private set; }
 
+    public long UnloadDistanceSum { get; private set; }
+    public int UnloadCount { get; private set; }
+
+    public long CarryLegSum { get; private set; }
+    public int CarryLegCount { get; private set; }
+
     public bool HasUnload => FirstUnloadTick > 0;
 
     public double? DropDistanceMean => DropCount > 0 ? DropDistanceSum / (double)DropCount : null;
+
+    public double? UnloadDistanceMean => UnloadCount > 0 ? UnloadDistanceSum / (double)UnloadCount : null;
+
+    /// <summary>Tramo medio pickup→descarga de las cargas completadas (el eslabón final del relevo).</summary>
+    public double? CarryLegMean => CarryLegCount > 0 ? CarryLegSum / (double)CarryLegCount : null;
 
     /// <summary>Acumula las métricas de una tanda de eventos (un paso del mundo).</summary>
     public void Observe(IReadOnlyList<SimEvent> events, WorldSim sim)
@@ -44,10 +68,35 @@ public sealed class RelayTracker
         for (int e = 0; e < events.Count; e++)
         {
             var ev = events[e];
-            if (ev.Kind == SimEventKind.Unload)
+            if (ev.Kind == SimEventKind.Pickup)
+            {
+                // Nota: un pickup de un genoma que ya tenía una carga abierta con
+                // la misma clave no ocurre (HasLoad excluye re-pickup); si la
+                // hormiga muere cargada, la muerte la elimina sin Unload — la
+                // entrada queda huérfana y se sobrescribe con el próximo pickup
+                // del mismo antId (los ids no se reciclan, así que no ocurre).
+                _openCarries[(ev.ColonyId, ev.AntId)] = (ev.X, ev.Y);
+            }
+            else if (ev.Kind == SimEventKind.Unload)
             {
                 if (FirstUnloadTick == 0)
                     FirstUnloadTick = ev.Tick;
+                LastUnloadTick = ev.Tick;
+
+                var colony = sim.Colonies[ev.ColonyId];
+                float udx = ev.X - colony.NestX;
+                float udy = ev.Y - colony.NestY;
+                UnloadDistanceSum += (long)MathF.Sqrt(udx * udx + udy * udy);
+                UnloadCount++;
+
+                // Eslabón final: del pickup de esta carga a esta descarga.
+                if (_openCarries.Remove((ev.ColonyId, ev.AntId), out var pick))
+                {
+                    float cdx = ev.X - pick.X;
+                    float cdy = ev.Y - pick.Y;
+                    CarryLegSum += (long)MathF.Sqrt(cdx * cdx + cdy * cdy);
+                    CarryLegCount++;
+                }
             }
             else if (ev.Kind == SimEventKind.ItemSpawned && ev.ColonyId >= 0
                      && ev.ColonyId < sim.Colonies.Count)

@@ -227,6 +227,41 @@ public class WorldSimTests
         // La descarga ocurre en el primer paso: el tracker debe reportar ESE tick.
         Assert.True(relay.HasUnload);
         Assert.Equal(sim.Tick, relay.FirstUnloadTick);
+        Assert.Equal(sim.Tick, relay.LastUnloadTick);
+        Assert.Equal(1, relay.UnloadCount);
+    }
+
+    [Fact]
+    public void RelayTracker_MeasuresLastLink_FromPickupToUnload()
+    {
+        // El ÚLTIMO eslabón: distancia pickup→descarga de la carga completada.
+        // Por construcción la descarga está a ≤ NestRadius (24 u) del nido, así
+        // que unload-avg es acotado; el carry-leg es el que mide cuánto tramo
+        // cierra el portador que completa (un relevo real: ~150-250 u).
+        var sim = NewSim();
+        var colony = sim.Colonies[0];
+        IsolateSingleAnt(colony);
+
+        var ant = colony.Adults[0];
+        ant.Brain = ForceBrain(0f, 2f, 10f, 0f); // interact ≈ 1
+        ant.HasLoad = true;
+        ant.LoadValue = 5f;
+        colony.Stock = 20f; // margen bajo el tope de reserva (Fase 3ter)
+        ant.X = colony.NestX;
+        ant.Y = colony.NestY;
+
+        var relay = new RelayTracker();
+        sim.Step();
+        relay.Observe(sim.LastEvents, sim);
+
+        Assert.True(relay.HasUnload);
+        Assert.Equal(1, relay.UnloadCount);
+        // Descarga dentro del radio del nido (unloads siempre en ≤ 24 u).
+        Assert.InRange(relay.UnloadDistanceMean!.Value, 0.0, 24.0);
+        // Sin pickup observado por el tracker (la carga se fijó a mano), no hay
+        // carry-leg que medir — el eslabón solo se contabiliza con pickup→unload
+        // observados por el propio tracker.
+        Assert.Null(relay.CarryLegMean);
     }
 
     [Fact]
