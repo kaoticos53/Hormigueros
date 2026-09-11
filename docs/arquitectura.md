@@ -246,6 +246,10 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   42, dos procesos).
 
 ### Fase 4 — Aplicación Unity 2D (primer hito jugable)
+- Contrato de datos del HUD (F4.2): [`fase4-hud-contrato.md`](fase4-hud-contrato.md)
+  — mapeo canal B/C → alertas, tarjeta de colonia (semáforo de relevo con los
+  umbrales del benchmark), estado global, historial de comandos, inspección
+  y las reglas duras del HUD (nunca consulta el Core, nunca suaviza métricas).
 - Diseño de UX aprobado: [`fase4-diseno-ux.md`](fase4-diseno-ux.md) (importar ·
   espectar · intervenir como comandos con tick; huecos del Core a cerrar:
   canal A `SimSnapshot`, canal C `MetricFrame`, sistema de comandos).
