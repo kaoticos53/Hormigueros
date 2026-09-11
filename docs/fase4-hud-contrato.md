@@ -54,6 +54,15 @@ acumulan sin límite — cola de 8, la más vieja sale.
 un único evento por colonia, por transición de estado (sin adultas NI cría).
 La alerta roja se gatilla con ese evento; x/y = posición del nido.
 
+**Transporte (canal D, F4.2)**: las alertas derivadas viajan EN el stream —
+`GameScenario` corre `AlertDeriver` y emite por tick `"alerts":[{k, lvl, col, x,
+y, t, txt}]` (k = clave estable para dedupe, lvl = 0 info/1 ámbar/2 verde/3 rojo,
+col = -1 si global, x/y = ancla de cámara, txt = texto del contrato). El semáforo
+de cada colonia llega en `"light":[[col, byte]]` cada 120 ticks (byte = RelayLight
+de `RelayVerdict.EvaluateNormalized`). **La UI nunca calcula umbrales ni niveles:
+pinta lo que llega** (regla dura §6.4). Implementado y verificado headless en
+`HudLayoutTests`.
+
 ## 2. Tarjeta de colonia (canal A + C + relay)
 
 Una por colonia, actualizada cada tick (canal A) con refresco de gráficas cada
@@ -61,7 +70,7 @@ ventana de métricas (1 s). Datos y componentes, en orden de tarjeta:
 
 | Componente | Dato | Regla de presentación |
 |---|---|---|
-| **Semáforo de relevo** | `relays[c].*` del stream (por colonia; el `relay` global queda para compatibilidad) | 🔘 gris: sin datos de relevo · 🟡 ámbar: descarga pero `carryLeg < 60 u` o `dropAvg > 190 × grid/96` · 🟢 verde: resto. **Regla implementada como código en `Core/Scenario/RelayVerdict.cs`** (`Evaluate(leg, drop, grid)`): el drop escala con la distancia de forrajeo del mundo (190 u en el 96 de calibración ⇒ 506.7 en 256), el tramo es invariante — umbrales del benchmark Fase 3ter (warm-v2 sano 167.9/80.0; regresión pipeline.sh: drop +10% / leg −20%) |
+| **Semáforo de relevo** | `light` del canal D (byte calculado por el Core con `RelayVerdict.EvaluateNormalized`: ratio ≥ 55% de la cadena disponible y drop ≤ umbral del mundo) | 🔘 gris: sin datos de relevo · 🟡 ámbar · 🟢 verde. **La UI NO evalúa umbrales**: pinta el byte recibido. La regla vive en `Core/Scenario/RelayVerdict.cs` |
 | Adultas | `colonies[c].adults` | "12 / 40" (tope duro del diseño) |
 | Cría | `eggs / larvae / pupae` | tres chips "🥚 4 · 🐛 2 · 🛑 1" |
 | Reserva | `stock` vs `stockMax` | barra horizontal; <20% = rojo (dispara alerta de puesta parada) |

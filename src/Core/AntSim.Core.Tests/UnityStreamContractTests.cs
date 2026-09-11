@@ -33,7 +33,7 @@ namespace AntSim.Core.Tests
         [Fact]
         public void ScriptsPurosExisten_YNoReferencianUnity()
         {
-            foreach (var rel in new[] { "Streaming/GameStreamParser.cs", "Presenter/GameStreamPresenter.cs", "UI/PoolPickerModel.cs", "UI/AntInspectorModel.cs" })
+            foreach (var rel in new[] { "Streaming/GameStreamParser.cs", "Presenter/GameStreamPresenter.cs", "UI/PoolPickerModel.cs", "UI/AntInspectorModel.cs", "UI/ColonyCardModel.cs", "UI/HudToastsModel.cs" })
             {
                 string path = Path.Combine(UnityScripts, rel);
                 Assert.True(File.Exists(path), "Falta el script puro: " + rel);

@@ -32,9 +32,12 @@ Core (`AntSim.Core.Tests`, ver abajo) antes de abrir Unity.
 | `Scripts/Presenter/GameStreamPresenter.cs` | interpolación con retraso de 1 tick → RenderState | ✅ |
 | `Scripts/UI/PoolPickerModel.cs` | JSON de presets → recomendados/especialistas | ✅ |
 | `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) + linaje de cerebros por huella | ✅ |
+| `Scripts/UI/ColonyCardModel.cs` | tarjeta de colonia: semáforo del canal D, reserva, chips de cría, flujo 1 s, cerebros | ✅ |
+| `Scripts/UI/HudToastsModel.cs` | pila de toasts del canal D: dedupe por clave, expiración en s de sim, tope de pila | ✅ |
 | `Scripts/Presenter/SimPresenterBehaviour.cs` | DrawMesh por frame, pausa/velocidad, estado para el raycast de selección | Unity |
 | `Scripts/UI/PoolPickerBehaviour.cs` | alimenta la UI del picker | Unity |
 | `Scripts/UI/AntInspectorBehaviour.cs` | selección (id/click) y pinta la tarjeta de inspección | Unity |
+| `Scripts/UI/HudLayoutBehaviour.cs` | reparte cada TickView a tarjetas/toasts/inspector y pinta los Texts uGUI | Unity |
 
 ## Verificación headless (sin abrir Unity)
 
@@ -60,6 +63,14 @@ dotnet test src/Core/AntSim.Core.Tests --filter "FullyQualifiedName~UnityStreamC
 5. `AntInspectorBehaviour`: asigna un uGUI Text y (opcional) el
    `SimPresenterBehaviour` — con `SelectAntId` se sigue una hormiga por id, o
    llama `PickNearest(point)` desde el raycast de la F4.2 para click-seleccionar.
+   El botón de la tarjeta llama `FollowTrackedBrain()` para el modo linaje:
+   rastrea todos los cuerpos del mismo cerebro (misma huella de genoma) y la
+   tarjeta muestra `cerebro #F · N cuerpos · M vivos` con el linaje completo.
+6. **HUD (F4.2)**: `HudLayoutBehaviour` — asigna `Presenter` (el
+   `SimPresenterBehaviour`), una uGUI Text por colonia en `ColonyCardTexts`, y
+   una Text vertical en `ToastsText`. Las tarjetas pintan el semáforo que
+   llega del canal D (el Core lo calcula con `RelayVerdict`: la UI no evalúa
+   umbrales) y los toasts llegan ya derivados con su nivel y ancla de cámara.
 
 ## Fixtures de stream (artifacts/, no trackeados — se regeneran con el repro)
 

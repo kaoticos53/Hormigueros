@@ -33,6 +33,10 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private readonly Streaming.GameStreamPresenter _presenter = new();
         private Streaming.StreamSource? _source;
+
+        /// <summary>Presenter puro subyacente (F4.2): el HUD lo consume para
+        /// repartir el último TickView a tarjetas/toasts/inspector.</summary>
+        public Streaming.GameStreamPresenter Presenter => _presenter;
         private float _simTime;           // segundos de sim consumidos
         private const float Dt = 1f / 30f; // tick fijo de la arquitectura
         private bool _streaming;

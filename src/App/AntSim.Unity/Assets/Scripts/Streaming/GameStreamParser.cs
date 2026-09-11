@@ -103,6 +103,33 @@ namespace AntSim.Unity.Scripts.Streaming
               CarryLeg = carryLeg; DropAvg = dropAvg; Unloads = unloads; ChainAvg = chainAvg; }
         }
 
+        /// <summary>Canal D (F4.2): alerta derivada POR EL CORE (AlertDeriver) y
+        /// emitida en el stream — la UI nunca inventa umbrales (contrato §6.4).
+        /// Key es estable para dedupe; X/Y anclan el salto de cámara (-1 = no aplica).</summary>
+        public readonly struct AlertView
+        {
+            public readonly string Key;
+            public readonly byte Level;    // 0 info · 1 ámbar · 2 verde · 3 rojo
+            public readonly int ColonyId;  // -1 = global
+            public readonly float X, Y;
+            public readonly ulong Tick;
+            public readonly string Text;
+
+            public AlertView(string key, byte level, int colonyId, float x, float y, ulong tick, string text)
+            { Key = key; Level = level; ColonyId = colonyId; X = x; Y = y; Tick = tick; Text = text; }
+        }
+
+        /// <summary>Semáforo de relevo de UNA colonia, calculado por el Core
+        /// (RelayVerdict.EvaluateNormalized): 0 gris · 1 ámbar · 2 verde.</summary>
+        public readonly struct ColonyLightView
+        {
+            public readonly int ColonyId;
+            public readonly byte Light;
+
+            public ColonyLightView(int colonyId, byte light)
+            { ColonyId = colonyId; Light = light; }
+        }
+
         /// <summary>Ventana de métricas de UNA colonia (F4.2).</summary>
         public readonly struct ColonyMetricsView
         {
@@ -127,6 +154,8 @@ namespace AntSim.Unity.Scripts.Streaming
             public RelayView? Relay;
             public readonly List<ColonyRelayView> ColonyRelays = new();
             public readonly List<ColonyMetricsView> ColonyMetrics = new();
+            public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
+            public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
         }
 
         /// <summary>Cabecera del stream (parámetros de la partida).</summary>
@@ -289,6 +318,32 @@ namespace AntSim.Unity.Scripts.Streaming
                         (int)Reader.NumOf(f[0]), (long)Reader.NumOf(f[1]), (long)Reader.NumOf(f[2]),
                         (long)Reader.NumOf(f[3]), (long)Reader.NumOf(f[4]),
                         (long)Reader.NumOf(f[5]), (long)Reader.NumOf(f[6])));
+                }
+            }
+
+            // — Canal D (F4.2): alertas del Core y semáforo por colonia —
+            int di = raw.IndexOf("\"alerts\":[", StringComparison.Ordinal);
+            if (di >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, di + "\"alerts\":[".Length - 1)))
+                {
+                    var p = new Reader(row); // {k, lvl, col, x, y, t, txt}
+                    v.Alerts.Add(new AlertView(
+                        p.Str("k"), (byte)p.Num("lvl"), (int)p.Num("col"),
+                        (float)p.Num("x"), (float)p.Num("y"), (ulong)p.Num("t"),
+                        p.Str("txt")));
+                }
+            }
+
+            int li = raw.IndexOf("\"light\":[", StringComparison.Ordinal);
+            if (li >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, li + "\"light\":[".Length - 1)))
+                {
+                    string[] f = RowFields(row); // [col, light]
+                    if (f.Length < 2) continue;
+                    v.Lights.Add(new ColonyLightView(
+                        (int)Reader.NumOf(f[0]), (byte)Reader.NumOf(f[1])));
                 }
             }
 

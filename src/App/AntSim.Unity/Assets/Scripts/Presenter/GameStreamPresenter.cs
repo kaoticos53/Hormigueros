@@ -19,6 +19,10 @@ namespace AntSim.Unity.Scripts.Streaming
         public string? FinalHash => _parser.FinalHash;
         public ulong FinalTick => _parser.FinalTick;
 
+        /// <summary>Último TickView completo recibido (F4.2): el repartidor del
+        /// HUD (tarjetas, toasts, inspector) lo consume una vez por tick.</summary>
+        public GameStreamParser.TickView? CurrentTick => _curr;
+
         /// <summary>Consume una línea del stream (en orden).</summary>
         public void Feed(string line) => Feed2(line);
 

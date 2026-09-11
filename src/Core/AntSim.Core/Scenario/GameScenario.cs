@@ -39,6 +39,8 @@ public static class GameScenario
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();
+        var alerts = new AlertDeriver();
+        var alertsOut = new List<AlertDeriver.Alert>();
 
         AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite);
 
@@ -65,7 +67,14 @@ public static class GameScenario
             relay.Observe(sim.LastEvents, sim);
             metrics.Observe(sim.LastEvents);
 
-            AppendTick(sb, sim, metrics, relay, frameEvery);
+            // Canal D (F4.2): las alertas derivadas del HUD viajan EN el stream —
+            // la UI nunca inventa umbrales (regla dura del contrato §6.4) y no
+            // necesita referenciar el Core. Consumo puro: no toca el mundo.
+            alertsOut.Clear();
+            var frame = metrics.TakeFrame(sim.Tick);
+            alerts.Observe(sim.LastEvents, frame, relay, sim, alertsOut);
+
+            AppendTick(sb, sim, metrics, relay, alerts, alertsOut, frame, grid, frameEvery);
         }
 
         sb.Append("{\"end\":true,\"tick\":").Append(sim.Tick)
@@ -90,7 +99,8 @@ public static class GameScenario
     }
 
     private static void AppendTick(StringBuilder sb, WorldSim sim, MetricRecorder metrics,
-        RelayTracker relay, int frameEvery)
+        RelayTracker relay, AlertDeriver alerts, List<AlertDeriver.Alert> alertsOut,
+        MetricRecorder.MetricFrame? metricFrame, int grid, int frameEvery)
     {
         bool firstField = true;
         sb.Append('{');
@@ -167,7 +177,9 @@ public static class GameScenario
         }
 
         // — Canal C (métricas): cuando la ventana de 1 s cierra —
-        if (metrics.TakeFrame(sim.Tick) is MetricRecorder.MetricFrame f)
+        //    (la ventana la consume UNA vez en el bucle principal para el deriver
+        //    y llega aquí ya extraída: TakeFrame es destructivo)
+        if (metricFrame is MetricRecorder.MetricFrame f)
         {
             if (!firstField) sb.Append(',');
             sb.Append("\"metrics\":{")
@@ -233,6 +245,48 @@ public static class GameScenario
                 sb.Append("[").Append(cid).Append(',').Append(pk).Append(',').Append(un)
                   .Append(',').Append(bi).Append(',').Append(de).Append(',')
                   .Append(eg).Append(',').Append(ec).Append(']');
+            }
+            sb.Append(']');
+            firstField = false;
+        }
+
+        // — Canal D (F4.2): alertas derivadas de este tick + semáforo por colonia.
+        //    El texto es la CARGA del toast; el color lo pone el nivel en la UI.
+        if (alertsOut.Count > 0)
+        {
+            if (!firstField) sb.Append(',');
+            sb.Append("\"alerts\":[");
+            for (int i = 0; i < alertsOut.Count; i++)
+            {
+                var a = alertsOut[i];
+                if (i > 0) sb.Append(',');
+                sb.Append("{\"k\":\"").Append(Escape(a.Key))
+                  .Append("\",\"lvl\":").Append((byte)a.Lvl)
+                  .Append(",\"col\":").Append(a.ColonyId)
+                  .Append(",\"x\":").Append(F(a.X)).Append(',').Append("\"y\":").Append(F(a.Y))
+                  .Append(",\"t\":").Append(a.Tick)
+                  .Append(",\"txt\":\"").Append(Escape(a.Text)).Append("\"}");
+            }
+            sb.Append(']');
+            firstField = false;
+        }
+        if (sim.Tick % 120 == 0)
+        {
+            if (!firstField) sb.Append(',');
+            sb.Append("\"light\":[");
+            for (int c = 0; c < sim.Colonies.Count; c++)
+            {
+                var col = sim.Colonies[c];
+                if (c > 0) sb.Append(',');
+                var v = relay.ForColony(col.Id);
+                RelayLight light = v is RelayTracker.ColonyView cv
+                    ? RelayVerdict.EvaluateNormalized(
+                        cv.CarryLegMean is double l ? (float)l : null,
+                        cv.ChainMean is double ch ? (float)ch : null,
+                        cv.DropMean is double d ? (float)d : null, grid)
+                    : RelayLight.Grey;
+                sb.Append('[').Append(col.Id).Append(',')
+                  .Append((byte)light).Append(']');
             }
             sb.Append(']');
             firstField = false;
