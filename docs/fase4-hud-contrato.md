@@ -59,7 +59,7 @@ ventana de métricas (1 s). Datos y componentes, en orden de tarjeta:
 
 | Componente | Dato | Regla de presentación |
 |---|---|---|
-| **Semáforo de relevo** | `relay.*` (global del stream; v1 no es por colonia) | 🔘 gris: `firstUnload == null` · 🟡 ámbar: descarga pero `carryLeg < 60 u` o `dropAvg > 190 u` · 🟢 verde: `carryLeg ≥ 60 u` y `dropAvg ≤ 190 u` (umbrales del benchmark: warm-v2 здоров 167.9/80.0; el límite de regresión de pipeline.sh es drop +10% / leg −20%) |
+| **Semáforo de relevo** | `relays[c].*` del stream (por colonia; el `relay` global queda para compatibilidad) | 🔘 gris: `firstUnload == null` · 🟡 ámbar: descarga pero `carryLeg < 60 u` o `dropAvg > 190 u` · 🟢 verde: `carryLeg ≥ 60 u` y `dropAvg ≤ 190 u` (umbrales del benchmark: warm-v2 sano 167.9/80.0; el límite de regresión de pipeline.sh es drop +10% / leg −20%) |
 | Adultas | `colonies[c].adults` | "12 / 40" (tope duro del diseño) |
 | Cría | `eggs / larvae / pupae` | tres chips "🥚 4 · 🐛 2 · 🛑 1" |
 | Reserva | `stock` vs `stockMax` | barra horizontal; <20% = rojo (dispara alerta de puesta parada) |
@@ -126,3 +126,32 @@ Los tres TODOs de F4.2 están **CERRADOS**:
   `colmetrics:[[col,pickups,unloads,births,deaths,eggs,eclosed]]` junto al
   `relay` global cada 120 ticks. El parser de Unity ya los consume
   (`ColonyRelays`/`ColonyMetrics` en `TickView`).
+
+## 8. Validación del semáforo con datos reales (smoke warm-v2, 5 semillas)
+
+Smoke end-to-end del contrato: `--mode game --grid 256 --colonies 2 --ticks
+48000 --seed-pool artifacts/pretrain-warm-v2.antgenome` sobre las 5 semillas
+de referencia, evaluando `relays[0]` final con los umbrales de §2:
+
+| semilla | firstUnload | dropAvg | carryLeg | unloads | semáforo |
+|---|---|---|---|---|---|
+| 42   | 5154 | 182.3 | 64.0  | 1 | 🟢 verde |
+| 7    | 4354 | 131.6 | 49.3  | 3 | 🟡 ámbar (leg < 60) |
+| 99   | 5298 | 190.3 | 85.0  | 1 | 🟡 ámbar (drop > 190) |
+| 1234 | 5876 | 177.0 | 71.0  | 2 | 🟢 verde |
+| 777  | 3745 | 240.0 | 174.0 | 1 | 🟡 ámbar (drop > 190) |
+
+**Resultado: 2/5 semillas en verde, 0 en gris o rojo.** Las 5 semillas
+arrancan el relevo (firstUnload 3 745–5 876, muy por debajo del fin de
+partida): el pool transfiere de forma consistente. Los amares son de
+salud del tramo, no de arranque: leg corto en la semilla 7, drops largos
+en 99 y 777 (el mundo de 256² produce transportes más largos que los
+umbrales calibrados en el benchmark de 96² — ver TODO de recalibración
+abajo). La colonia competidora sin sembrar queda gris en las 5
+(`relays[1] = {col,empty:true}`), que es exactamente el contraste que el
+selector de pools promete.
+
+TODO(F4.3): recalibrar los umbrales del semáforo para grid 256 (los
+actuales salen del benchmark en grid 96); candidato natural: verde con
+`carryLeg ≥ 60` y `dropAvg ≤ 240` (el drop escala con la distancia de
+forrajeo, el leg no).
