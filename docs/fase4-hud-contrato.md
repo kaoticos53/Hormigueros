@@ -1,7 +1,12 @@
 # Fase 4.2 — Contrato de datos del HUD (canal B/C → alertas e indicadores)
 
 Documento de trabajo para el equipo Unity: qué mostrar y cuándo, con los datos
-que el stream ya entrega. **Ningún dato del HUD se inventa ni se calcula en la
+que el stream ya entrega. **La derivación de alertas está IMPLEMENTADA en el
+Core**: `Scenario.AlertDeriver` (observador puro de canal B/C, mismo patrón que
+`RelayTracker`) produce las `Alert`s de §1 con niveles y textos finales — la UI
+solo las consume y las colorea; los umbrales y cadencias viven en el Core y
+están cubiertos por `AlertDeriverTests` (8 tests: un gatillo por alerta más
+purity y la integración warm-v2 → hito verde con el pool real). **Ningún dato del HUD se inventa ni se calcula en la
 UI** — todo viene del stream JSONL de `--mode game` (o, en proceso, de los
 canales A/B/C del Core). Referencias: [`fase4-diseno-ux.md`](fase4-diseno-ux.md)
 (diseño de UX), [`arquitectura.md`](arquitectura.md) §3 (canales),
