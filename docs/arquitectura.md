@@ -275,11 +275,31 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   los cuatro presets del diseño de UX (naturalista, warm-v2, warm-4, warm3)
   con las métricas REALES del benchmark de referencia (benchmark-fase3ter.txt:
   10 semillas × 24 000 ticks) y del modo juego grid 256 (5 semillas), banda,
-  archivo `.antgenome` y procedencia documental por preset, más el comando de
-  reproducción. Test de contrato con valores centinela: si el benchmark se
+  archivo `.antgenome` y procedencia documental por preset, más el comando de  reproducción. Test de contrato con valores centinela: si el benchmark se
   regenera con otro mundo, los tests obligan a actualizar las tarjetas — la UI
-  nunca muestra números que el repo no respalde. **109/109 tests verdes**
-  (8 nuevos).
+  nunca muestra números que el repo no respalde. **112/112 tests verdes**.
+  La cadena completa está en el picker (6 presets): los 4 recomendados del
+  diseño de UX más dos especialistas NO por defecto con su contrapartida
+  (`IsRecommended=false` + `TradeOff`) — warm3-v2 (banda ancha con el
+  drop-avg más sano, 164.7, sin la corona de warm3) y warm-5 (récord de
+  forrajeo, 118 pickups, pero 2/5 en mundo grande). Los especialistas se
+  ordenan tras los recomendados y su tarjeta lleva la advertencia ⚠ con el
+  pool alternativo sugerido.
+- **F4.0-ampliación ✅ (comando SaveGame)**: `SimCommandKind.SaveGame` es un
+  comando de OBSERVACIÓN — no muta el mundo (los hashes con y sin él son
+  idénticos; verificado en test), queda en el Canal B como `CommandExecuted`
+  con el slot en `Cause`, y expone `WorldSim.SaveRequests` tras el Step para
+  que el presenter escriba el `.antsave` con `WorldSimSave.Save`. Roundtrip
+  verificado bit a bit: partida con drops + save → checkpoint en el tick del
+  save → `WorldSimSave.Load` reproduce el hash exacto del momento → 299 ticks
+  de reproducción con hash a hash idénticos a la partida original.
+  **115/115 tests verdes** (3 nuevos).
+- **F4.5-parcial ✅ (diff del selector)**: `--mode presets [--json]` — emite las
+  tarjetas canónicas del selector (texto legible con fuente y comando de
+  reproducción, o JSON estructurado por preset con el campo `card` incluido).
+  Determinista byte a byte: la salida del CLI es el ORÁULO contra el que el
+  equipo Unity diffea su UI — cualquier desviación es un bug del HUD, no de
+  los datos.
 - `SimPresenter`: interpolación con retraso de 1 tick, pool, feromonas GPU por tiles.
 - HUD, inspección con traza, alertas, biblioteca de cerebros, checkpoints desde UI.
 - **Exit**: demo jugable 60 fps con 2 colonias; regresión visual con seeds fijas.
