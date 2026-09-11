@@ -14,11 +14,22 @@ namespace AntSim.Core.Tests;
 public sealed class PoolPresetsTests
 {
     [Fact]
-    public void CuatroPresets_ConIdsEstables()
+    public void SeisPresets_OrdenEstable_RecomendadosPrimero()
     {
-        Assert.Equal(4, PoolPresets.All.Count);
-        Assert.Equal(new[] { "naturalista", "warm-v2", "warm-4", "warm3" },
-            new[] { PoolPresets.All[0].Id, PoolPresets.All[1].Id, PoolPresets.All[2].Id, PoolPresets.All[3].Id });
+        Assert.Equal(6, PoolPresets.All.Count);
+        Assert.Equal(new[] { "naturalista", "warm-v2", "warm-4", "warm3", "warm3-v2", "warm-5" },
+            new[] { PoolPresets.All[0].Id, PoolPresets.All[1].Id, PoolPresets.All[2].Id,
+                    PoolPresets.All[3].Id, PoolPresets.All[4].Id, PoolPresets.All[5].Id });
+
+        // Los 4 recomendados del diseño de UX van primero y sin TradeOff.
+        var rec = new System.Collections.Generic.List<string>();
+        foreach (var p in PoolPresets.Recommended) rec.Add(p.Id);
+        Assert.Equal(new[] { "naturalista", "warm-v2", "warm-4", "warm3" }, rec);
+        foreach (var p in PoolPresets.All)
+        {
+            if (p.IsRecommended) Assert.Equal("", p.TradeOff);
+            else Assert.True(p.TradeOff.Length > 20); // contrapartida explicada, no un adjetivo
+        }
     }
 
     [Fact]
@@ -60,6 +71,38 @@ public sealed class PoolPresetsTests
     }
 
     [Fact]
+    public void Warm3V2_EspecialistaBandaAnchaSana()
+    {
+        var p = PoolPresets.ById("warm3-v2")!;
+        Assert.False(p.IsRecommended);
+        Assert.Equal(88, p.Benchmark.Pickups);
+        Assert.Equal(18, p.Benchmark.Unloads);
+        Assert.Equal(10, p.Benchmark.SeedsWithUnload);
+        Assert.Equal(164.7f, p.Benchmark.DropAvg!.Value, 1);   // el más sano de todos
+        Assert.Equal(61.6f, p.Benchmark.CarryLegMean!.Value, 1);
+        Assert.Equal(5, p.GameMode!.Value.SeedsWithUnload);
+        // La tarjeta del especialista lleva su contrapartida visible.
+        Assert.Contains("⚠", PoolPresets.FormatCard(p));
+        Assert.Contains("warm3", p.TradeOff);
+    }
+
+    [Fact]
+    public void Warm5_EspecialistaMundoPequeno()
+    {
+        var p = PoolPresets.ById("warm-5")!;
+        Assert.False(p.IsRecommended);
+        Assert.Equal(118, p.Benchmark.Pickups);               // récord absoluto
+        Assert.Equal(17, p.Benchmark.Unloads);
+        Assert.Equal(9, p.Benchmark.SeedsWithUnload);
+        Assert.Equal(181.6f, p.Benchmark.DropAvg!.Value, 1);
+        Assert.Equal(60.5f, p.Benchmark.CarryLegMean!.Value, 1);
+        Assert.Equal(2, p.GameMode!.Value.SeedsWithUnload);   // decae en mundo grande
+        Assert.Equal(5, p.GameMode.Value.SeedsTotal);
+        Assert.Contains("2/5", PoolPresets.FormatCard(p));
+        Assert.Contains("warm-4", p.TradeOff);
+    }
+
+    [Fact]
     public void Warm3_CoronaDeVolumen()
     {
         var p = PoolPresets.ById("warm3")!;
@@ -87,6 +130,7 @@ public sealed class PoolPresetsTests
     public void FormatCard_MetricasVisibles()
     {
         string card = PoolPresets.FormatCard(PoolPresets.ById("warm-v2")!);
+        Assert.DoesNotContain("⚠", card); // los recomendados no llevan advertencia
         Assert.Contains("99", card);      // pickups
         Assert.Contains("17", card);      // descargas
         Assert.Contains("10/10", card);   // fiabilidad

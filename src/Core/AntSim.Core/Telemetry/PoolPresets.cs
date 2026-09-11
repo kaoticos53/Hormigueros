@@ -47,7 +47,10 @@ public static class PoolPresets
         }
     }
 
-    /// <summary>Un preset del selector: identidad, archivo, métricas y procedencia.</summary>
+    /// <summary>Un preset del selector: identidad, archivo, métricas y procedencia.
+    /// Los presets RECOMENDADOS (IsRecommended) son los 4 del diseño de UX; los
+    /// demás son especialistas de la cadena completa y SIEMPRE llevan su
+    /// TradeOff — el picker los muestra con la contrapartida visible.</summary>
     public sealed class PoolPreset
     {
         public readonly string Id;            // estable, para saves y UI
@@ -59,19 +62,26 @@ public static class PoolPresets
         public readonly GameModeStats? GameMode; // null = no evaluado en grid 256
         public readonly string SourceDoc;     // procedencia: doc + artefacto
         public readonly string ReproCommand;  // cómo reproducir la partida sembrada
+        public readonly bool IsRecommended;   // los 4 del diseño de UX (tarjeta estándar)
+        public readonly string TradeOff;      // vacío en recomendados; contrapartida en especialistas
 
         public PoolPreset(string id, string displayName, string tagline, string? genomeFile,
             string band, BenchmarkStats benchmark, GameModeStats? gameMode,
-            string sourceDoc, string reproCommand)
+            string sourceDoc, string reproCommand,
+            bool isRecommended = true, string tradeOff = "")
         {
             Id = id; DisplayName = displayName; Tagline = tagline; GenomeFile = genomeFile;
             Band = band; Benchmark = benchmark; GameMode = gameMode;
             SourceDoc = sourceDoc; ReproCommand = reproCommand;
+            IsRecommended = isRecommended; TradeOff = tradeOff;
         }
     }
 
     private const string SourceBenchmark =
         "artifacts/benchmark-fase3ter.txt (benchmark Fase 3ter regenerado, mundo final; docs/especificaciones.md §4ter)";
+
+    private const string SourceOutsideBenchmark =
+        "docs/fase3ter-resumen.md §4 (pools evaluados fuera del benchmark de referencia)";
 
     /// <summary>Los cuatro presets del diseño de UX (docs/fase4-diseno-ux.md §2.1).</summary>
     public static readonly IReadOnlyList<PoolPreset> All = new[]
@@ -123,6 +133,35 @@ public static class PoolPresets
             gameMode: new GameModeStats(seedsWithUnload: 5, seedsTotal: 5, unloads: 8),
             sourceDoc: SourceBenchmark + "; modo juego grid 256 en docs/especificaciones.md",
             reproCommand: "antsim --mode game --seed <N> --seed-pool artifacts/pretrain-warm3.antgenome"),
+
+        // — Especialistas de la cadena completa (no recomendados por defecto; TradeOff visible) —
+        new PoolPreset(
+            id: "warm3-v2",
+            displayName: "warm3-v2 · banda ancha sana",
+            tagline: "Re-entrenado bajo el mundo final: 10/10 con el drop-avg más sano de todos (164.7). No recupera la corona de descargas de warm3.",
+            genomeFile: "artifacts/pretrain-warm3-v2.antgenome",
+            band: "200–450 u",
+            benchmark: new BenchmarkStats(pickups: 88, unloads: 18, seedsWithUnload: 10, seedsTotal: 10,
+                dropAvg: 164.7f, carryLegMean: 61.6f),
+            gameMode: new GameModeStats(seedsWithUnload: 5, seedsTotal: 5, unloads: 7),
+            sourceDoc: SourceOutsideBenchmark + "; docs/especificaciones.md §4ter (warm3-v2)",
+            reproCommand: "antsim --mode game --seed <N> --seed-pool artifacts/pretrain-warm3-v2.antgenome",
+            isRecommended: false,
+            tradeOff: "volumen menor que warm3 (18 vs 22 descargas) — elige warm3 para volumen o warm-v2 para el tramo más sano"),
+
+        new PoolPreset(
+            id: "warm-5",
+            displayName: "warm-5 · récord de forrajeo",
+            tagline: "118 pickups, el mejor de todos los pools. Especialista de mundo pequeño: en mundo grande solo 2/5 semillas.",
+            genomeFile: "artifacts/pretrain-warm-5.antgenome",
+            band: "200–325/200–450 alternado + 200–700 (mundo-completo)",
+            benchmark: new BenchmarkStats(pickups: 118, unloads: 17, seedsWithUnload: 9, seedsTotal: 10,
+                dropAvg: 181.6f, carryLegMean: 60.5f),
+            gameMode: new GameModeStats(seedsWithUnload: 2, seedsTotal: 5, unloads: 3),
+            sourceDoc: SourceOutsideBenchmark + "; docs/especificaciones.md §4ter (quinto eslabón)",
+            reproCommand: "antsim --mode game --seed <N> --seed-pool artifacts/pretrain-warm-5.antgenome",
+            isRecommended: false,
+            tradeOff: "decae en mundo grande (2/5 semillas) — el híbrido + mundo-completo combinados no son gratis; usa warm-4 para mapa completo"),
     };
 
     /// <summary>Busca un preset por Id estable (para saves/UI). null si no existe.</summary>
@@ -134,7 +173,8 @@ public static class PoolPresets
         return null;
     }
 
-    /// <summary>Línea de tarjeta lista para el HUD: métricas formateadas con su semilla de referencia.</summary>
+    /// <summary>Línea de tarjeta lista para el HUD: métricas formateadas con su semilla de referencia.
+    /// Los especialistas llevan su contrapartida (TradeOff) en la tarjeta.</summary>
     public static string FormatCard(PoolPreset p)
     {
         var b = p.Benchmark;
@@ -144,6 +184,17 @@ public static class PoolPresets
         string game = p.GameMode is GameModeStats g
             ? $" · mundo 256: {g.SeedsWithUnload}/{g.SeedsTotal} semillas"
             : "";
-        return $"{p.DisplayName} [{p.Band}] · pickups {b.Pickups} · descargas {b.Unloads} · relevo {seeds} semillas · drop {drop} u · tramo {leg} u{game}";
+        string trade = p.IsRecommended ? "" : $" · ⚠ {p.TradeOff}";
+        return $"{p.DisplayName} [{p.Band}] · pickups {b.Pickups} · descargas {b.Unloads} · relevo {seeds} semillas · drop {drop} u · tramo {leg} u{game}{trade}";
+    }
+
+    /// <summary>Los presets recomendados (los 4 del diseño de UX) en orden de tarjeta.</summary>
+    public static IEnumerable<PoolPreset> Recommended
+    {
+        get
+        {
+            for (int i = 0; i < All.Count; i++)
+                if (All[i].IsRecommended) yield return All[i];
+        }
     }
 }
