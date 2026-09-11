@@ -17,4 +17,14 @@
     <ProjectReference Include="..\AntSim.Core\AntSim.Core.csproj" />
   </ItemGroup>
 
+  <!-- F4.1: los scripts PUROS del esqueleto Unity (sin UnityEngine) se
+       compilan también aquí para verificar el contrato del stream/presets
+       headless — cualquier cambio del Core que rompa la UI rompe estos tests. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/GameStreamParser.cs" Link="UnityPure/GameStreamParser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/StreamReader.cs" Link="UnityPure/StreamReader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Presenter/GameStreamPresenter.cs" Link="UnityPure/GameStreamPresenter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/PoolPickerModel.cs" Link="UnityPure/PoolPickerModel.cs" />
+  </ItemGroup>
+
 </Project>

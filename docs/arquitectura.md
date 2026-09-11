@@ -285,6 +285,18 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   forrajeo, 118 pickups, pero 2/5 en mundo grande). Los especialistas se
   ordenan tras los recomendados y su tarjeta lleva la advertencia ⚠ con el
   pool alternativo sugerido.
+- **F4.1 ✅-parcial (esqueleto Unity, verificable headless)**: `src/App/AntSim.Unity`
+  — scripts PUROS sin UnityEngine (`GameStreamParser` JSONL → TickView,
+  `GameStreamPresenter` interpolación con retraso de 1 tick,
+  `PoolPickerModel` con los dos niveles del selector) que se COMPILAN en la
+  suite del Core (`AntSim.Core.Tests` los incluye vía `<Compile Include>` y
+  `UnityStreamContractTests` verifica el parser y el picker contra la salida
+  REAL de `GameScenario`/`PresetScenario`: reconstrucción fiel de poses/items/
+  colonias/eventos/métricas/relevo, movimiento coherente, tiers recomendados/
+  especialistas). MonoBehaviours finos (`SimPresenterBehaviour` con
+  `Graphics.DrawMesh` y pausa/velocidad; `PoolPickerBehaviour`). La escena,
+  feromonas por tiles y HUD rico quedan para el resto de F4.1/F4.2.
+  **120/120 tests verdes** (5 nuevos de contrato).
 - **F4.0-ampliación ✅ (comando SaveGame)**: `SimCommandKind.SaveGame` es un
   comando de OBSERVACIÓN — no muta el mundo (los hashes con y sin él son
   idénticos; verificado en test), queda en el Canal B como `CommandExecuted`
