@@ -43,10 +43,9 @@ acumulan sin límite — cola de 8, la más vieja sale.
 | `metrics.eggs == 0 && metrics.births == 0` durante 5 ventanas seguidas (5 s) Y `colonies[c].stock < 20%` de `stockMax` | "Puesta parada" | ámbar | *"La colonia {id} no pone huevos: reserva baja"* | hasta que cambie |
 | `relay.carryLeg` cae >20% respecto a la media de las últimas 5 emisiones | "Relevo débil" | ámbar | *"Las cargas completan tramos más cortos ({leg} u vs {media} u)"* | máx 1 por 60 s |
 
-**\*** `ColonyExtinct` hoy no existe como kind del canal B (la extinción es un
-estado: `adults == 0 && eggs == 0 && larvae == 0 && pupae == 0` en canal A). La
-UI lo detecta por transición de estado — y añadirlo como evento del Core es un
-`TODO(F4.2)` barato si se prefiere en el stream.
+**\*** **Implementado (F4.2)**: `ColonyExtinct` es el kind **12** del canal B —
+un único evento por colonia, por transición de estado (sin adultas NI cría).
+La alerta roja se gatilla con ese evento; x/y = posición del nido.
 
 ## 2. Tarjeta de colonia (canal A + C + relay)
 
@@ -81,6 +80,13 @@ partida) y muestra ✓/✗ del resultado.
 
 ## 5. Inspección de hormiga (canal A + seguimiento)
 
+**Implementado (F4.2)**: cada fila `ants` del canal A lleva 12 campos —
+`[id, colony, x, y, heading, load, alive, vigor, energy, age, immigrant,
+genomeFingerprint]`. La huella del genoma es un hash FNV de (tamaño + primeros
+4 pesos): identifica "el mismo cerebro" sin serializar pesos, determinista.
+La tarjeta de inspección muestra vigor, energía, edad, si está en cuarentena y
+su huella; el seguimiento detecta "el mismo cerebro" entre hormigas distintas.
+
 Clic en una hormiga (dentro de ~0.5 u en coords de mundo): tarjeta flotante con
 los datos del canal A de esa pose (id, colonia, carga, viva). Botón "seguir"
 fija la cámara a su id hasta que `alive == 0` — entonces la tarjeta cierra con
@@ -104,9 +110,14 @@ pendiente: enriquecer `ants` o emitir solo en "modo inspección").
 
 ## 7. Tareas del Core que este contrato destapa (baratas, para F4.2)
 
-- `TODO(F4.2)` — evento `ColonyExtinct` en el canal B (hoy: transición de
-  estado en canal A; el evento lo haría observable como el resto).
-- `TODO(F4.2)` — datos de inspección por hormiga en el canal A (genoma hash
-  corto, vigor, energía) — decidir si siempre o solo en modo inspección.
-- `TODO(F4.2)` — `relay` y `metrics` por colonia (hoy el relevo es global;
-  con 2 colonias compitiendo la tarjeta necesita su propio semáforo).
+Los tres TODOs de F4.2 están **CERRADOS**:
+
+- ✅ `ColonyExtinct` (kind 12) — un evento por colonia, transición de estado.
+- ✅ Inspección por hormiga en canal A — vigor/energía/edad/inmigrante/huella
+  del genoma en cada fila `ants` (siempre, no solo en modo inspección: 5
+  campos extra por hormiga es ancho de banda asumible a 30 Hz).
+- ✅ `relay` y `metrics` por colonia — el stream emite `relays:[{col,
+  firstUnload, unloadAvg, carryLeg, dropAvg, unloads}|{col,empty:true}]` y
+  `colmetrics:[[col,pickups,unloads,births,deaths,eggs,eclosed]]` junto al
+  `relay` global cada 120 ticks. El parser de Unity ya los consume
+  (`ColonyRelays`/`ColonyMetrics` en `TickView`).

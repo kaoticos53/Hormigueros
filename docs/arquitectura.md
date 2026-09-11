@@ -301,6 +301,16 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   `Graphics.DrawMesh` y pausa/velocidad; `PoolPickerBehaviour`). La escena,
   feromonas por tiles y HUD rico quedan para el resto de F4.1/F4.2.
   **120/120 tests verdes** (5 nuevos de contrato).
+- **F4.2 ✅-parcial (los tres TODOs del contrato HUD cerrados)**:
+  `ColonyExtinct` como evento 12 del canal B (UNA vez por colonia, por
+  transición de estado sin adultas ni cría; el camino de carga de checkpoints
+  inicializa su bandera perezosamente — verificado en test), inspección por
+  hormiga en el canal A (12 campos: +vigor/energía/edad/inmigrante/huella
+  FNV del genoma — identifica "el mismo cerebro" sin serializar pesos) y
+  desglose por colonia de relevo (`RelayTracker.ForColony` → `relays:[…]` en
+  el stream) y de métricas (`MetricRecorder.ColonyWindows` →
+  `colmetrics:[[…]]`); el parser de Unity ya consume ambos. Los desgloses
+  suman EXACTAMENTE los totales (tests). **126/126 tests verdes** (5 nuevos).
 - **F4.0-ampliación ✅ (comando SaveGame)**: `SimCommandKind.SaveGame` es un
   comando de OBSERVACIÓN — no muta el mundo (los hashes con y sin él son
   idénticos; verificado en test), queda en el Canal B como `CommandExecuted`
