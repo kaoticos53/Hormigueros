@@ -92,12 +92,16 @@ public static class GameScenario
         bool firstField = true;
         sb.Append('{');
 
+        // — El tick SIEMPRE (descubierto en el smoke warm-v2): los ticks donde el
+        // canal A no sale pero sí eventos, sin "tick", serían inatribuibles.
+        sb.Append("\"tick\":").Append(sim.Tick);
+        firstField = false;
+
         // — Canal A (snapshot): cada frameEvery ticks —
         if (sim.Tick % (ulong)frameEvery == 0)
         {
             var frame = SimSnapshot.Capture(sim);
-            sb.Append("\"tick\":").Append(sim.Tick)
-              .Append(",\"ants\":[");
+            sb.Append(",\"ants\":[");
             for (int i = 0; i < frame.Ants.Count; i++)
             {
                 var a = frame.Ants[i];

@@ -244,6 +244,24 @@ public sealed class Fase4Tests
     }
 
     [Fact]
+    public void GameStream_TickSiemprePresente_AtribuibilidadDeEventos()
+    {
+        // Gap descubierto en el smoke warm-v2 (seed 42, grid 256, frame-every 30):
+        // la descarga cae en un tick SIN canal A — sin "tick" la línea de eventos
+        // sería inatribuible (el parser la leería como tick 0).
+        var drops = new (int, float, float)[] { (100, 300f, 300f) };
+        string stream = RunGame(777, 200, 96, 30, drops); // canal A solo cada 30 ticks
+
+        foreach (var line in stream.Split('\n'))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (line.StartsWith("{\"header\"")) continue;      // la cabecera no lleva tick
+            if (line.StartsWith("{\"end\"")) continue;         // la end lleva su propio tick
+            Assert.StartsWith("{\"tick\":", line.TrimEnd('\r'));
+        }
+    }
+
+    [Fact]
     public void GameStream_RegistraCommandExecuted_YItemCae()
 
     {
