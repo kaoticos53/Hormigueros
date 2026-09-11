@@ -47,6 +47,7 @@ acumulan sin límite — cola de 8, la más vieja sale.
 | `metrics.deaths ≥ 5` en una ventana (1 s) | "Mortalidad en picada" | ámbar | *"{deaths} muertes en el último segundo (causa dominante: {edad|hambre})"* | máx 1 por 30 s de sim |
 | `metrics.eggs == 0 && metrics.births == 0` durante 5 ventanas seguidas (5 s) Y `colonies[c].stock < 20%` de `stockMax` | "Puesta parada" | ámbar | *"La colonia {id} no pone huevos: reserva baja"* | hasta que cambie |
 | `relay.carryLeg` cae >20% respecto a la media de las últimas 5 emisiones | "Relevo débil" | ámbar | *"Las cargas completan tramos más cortos ({leg} u vs {media} u)"* | máx 1 por 60 s |
+| **O** `relay.dropAvg` > umbral DEL MUNDO o `relay.carryLeg` < 60 u (umbral absoluto de `RelayVerdict.Evaluate(leg, drop, sim.GridCells)` — F4.3: el deriver ya no tiene umbrales propios, usa los del semáforo; el texto enseña el umbral del mundo) | "Relevo débil" | ámbar | *"Las sueltas caen demasiado lejos del nido para este mundo ({drop} u > {max} u)"* / *"Tramos demasiado cortos para completar el relevo ({leg} u < 60 u)"* | máx 1 por 60 s (misma alerta, prioridad drop > leg > encogimiento) |
 
 **\*** **Implementado (F4.2)**: `ColonyExtinct` es el kind **12** del canal B —
 un único evento por colonia, por transición de estado (sin adultas NI cría).

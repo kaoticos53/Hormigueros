@@ -185,19 +185,24 @@ public sealed class AlertDeriverTests
         // El contrato compara la media de carryLeg contra la media de las últimas
         // 5 emisiones: el shallowing debe ser SOSTENIDO (una pata suelta se diluye
         // en la media — así es el contrato, y así lo midió pipeline.sh).
-        var sim = Sim();
+        // Mundo grid 96 (umbrales de calibración de RelayVerdict): nido en
+        // (384, 384); coords de evento relativas a él para que el drop NO
+        // dispare su propio umbral y el test aísle el ENCOGIMIENTO.
+        var sim = new WorldSim(42, 96, colonyCount: 1);
+        for (int i = 0; i < 5; i++) sim.Step();
+        float nx = sim.Colonies[0].NestX, ny = sim.Colonies[0].NestY;
         var relay = new RelayTracker();
         var deriver = new AlertDeriver();
         var output = new List<AlertDeriver.Alert>();
 
         uint antId = 1;
-        // 5 cargas sanas de 100 u (media de historia ≈ 100).
+        // 5 cargas sanas de 100 u (media de historia ≈ 100), sueltas junto al nido.
         for (int i = 0; i < 5; i++)
         {
             var evs = new List<SimEvent>
             {
-                Ev(SimEventKind.Pickup, x: 0f, y: 0f, ant: antId),
-                Ev(SimEventKind.Unload, x: 100f, y: 0f, ant: antId)
+                Ev(SimEventKind.Pickup, x: nx - 100f, y: ny, ant: antId),
+                Ev(SimEventKind.Unload, x: nx, y: ny, ant: antId)
             };
             antId++;
             relay.Observe(evs, sim);
@@ -212,8 +217,8 @@ public sealed class AlertDeriverTests
         {
             var evs = new List<SimEvent>
             {
-                Ev(SimEventKind.Pickup, x: 0f, y: 0f, ant: antId),
-                Ev(SimEventKind.Unload, x: 20f, y: 0f, ant: antId)
+                Ev(SimEventKind.Pickup, x: nx - 20f, y: ny, ant: antId),
+                Ev(SimEventKind.Unload, x: nx, y: ny, ant: antId)
             };
             antId++;
             relay.Observe(evs, sim);
@@ -233,8 +238,8 @@ public sealed class AlertDeriverTests
             for (int i = 0; i < 100; i++) sim.Step(); // 10 s por ciclo
             var evs = new List<SimEvent>
             {
-                Ev(SimEventKind.Pickup, x: 0f, y: 0f, ant: antId),
-                Ev(SimEventKind.Unload, x: 20f, y: 0f, ant: antId)
+                Ev(SimEventKind.Pickup, x: nx - 20f, y: ny, ant: antId, tick: sim.Tick),
+                Ev(SimEventKind.Unload, x: nx, y: ny, ant: antId, tick: sim.Tick)
             };
             antId++;
             relay.Observe(evs, sim);
@@ -245,6 +250,54 @@ public sealed class AlertDeriverTests
         // 3 ciclos × 10 s < cadencia de 60 s: como mucho la primera repite (si
         // pasaron ≥60 ticks desde la última) — pero nunca una por ciclo.
         Assert.InRange(weakBefore, 0, 1);
+    }
+
+    [Fact]
+    public void RelevoDebil_Ambar_DropLejos_EscalaConElMundo()
+    {
+        // F4.3: el drop máximo del relevo débil es el de RelayVerdict PARA ESTE
+        // MUNDO (190 × grid/96). El mismo patrón de eventos es débil en 96 y
+        // sano en 256 — la alerta enseña el umbral del mundo en su texto.
+        var relay = new RelayTracker();
+        var deriver = new AlertDeriver();
+        var output = new List<AlertDeriver.Alert>();
+        uint antId = 1;
+
+        // — Grid 96: anillo de comida a 200 u del nido > 190 ⇒ débil —
+        //    (dropAvg del contrato = distancia de SPAWN de los ítems: el anillo
+        //    de forrajeo; el unload va aparte en unloadAvg). Para que el relevo
+        //    esté "activo" hace falta un Unload (en el nido, sin carry abierto).
+        var sim96 = new WorldSim(42, 96, colonyCount: 1);
+        for (int i = 0; i < 5; i++) sim96.Step();
+        float nx96 = sim96.Colonies[0].NestX, ny96 = sim96.Colonies[0].NestY;
+        var evs96 = new List<SimEvent>
+        {
+            Ev(SimEventKind.ItemSpawned, x: nx96 + 200f, y: ny96, ant: 0, tick: sim96.Tick),
+            Ev(SimEventKind.Unload, x: nx96, y: ny96, ant: antId, tick: sim96.Tick),
+        };
+        relay.Observe(evs96, sim96);
+        deriver.Observe(evs96, null, relay, sim96, output);
+        var weak96 = output.FindAll(a => a.Key == "relay-weak");
+        Assert.Single(weak96);
+        Assert.Equal(AlertDeriver.Level.Amber, weak96[0].Lvl);
+        Assert.Contains("demasiado lejos", weak96[0].Text);
+        Assert.Contains("190", weak96[0].Text); // el umbral del mundo 96 en el texto
+
+        // — El mismo patrón en grid 256 (umbral 506.7): SIN alerta —
+        var relay2 = new RelayTracker();
+        var deriver2 = new AlertDeriver();
+        var output2 = new List<AlertDeriver.Alert>();
+        var sim256 = new WorldSim(42, 256, colonyCount: 1);
+        for (int i = 0; i < 5; i++) sim256.Step();
+        float nx256 = sim256.Colonies[0].NestX, ny256 = sim256.Colonies[0].NestY;
+        var evs256 = new List<SimEvent>
+        {
+            Ev(SimEventKind.ItemSpawned, x: nx256 + 200f, y: ny256, ant: 0, tick: sim256.Tick),
+            Ev(SimEventKind.Unload, x: nx256, y: ny256, ant: 42, tick: sim256.Tick),
+        };
+        relay2.Observe(evs256, sim256);
+        deriver2.Observe(evs256, null, relay2, sim256, output2);
+        Assert.DoesNotContain(output2, a => a.Key == "relay-weak");
     }
 
     [Fact]

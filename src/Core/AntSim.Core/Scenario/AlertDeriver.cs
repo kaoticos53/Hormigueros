@@ -37,8 +37,7 @@ public sealed class AlertDeriver
     public const int MortalityWindowDeaths = 5;      // muertes en 1 ventana (1 s)
     public const int LayingHaltedWindows = 5;        // ventanas sin puesta seguidas
     public const float StockLowFraction = 0.20f;     // <20% de stockMax
-    public const float RelayWeakCarryLeg = 60f;      // tramo por debajo de esto
-    public const float RelayWeakShrink = 0.20f;      // o caída >20% vs media de 5
+    public const float RelayWeakShrink = 0.20f;      // caída >20% del tramo vs media de 5
     public const int MaxAlertsPerCall = 8;           // cola de la UI: la más vieja sale
 
     // — cadencias (ticks entre alertas del mismo tipo) —
@@ -138,30 +137,52 @@ public sealed class AlertDeriver
             }
         }
 
-        // — relevo débil: caída >20% del tramo portado vs media de las últimas 5 —
-        if (relay.CarryLegMean is double leg && relay.HasUnload)
+        // — relevo débil: UMBRALES DE RelayVerdict PARA ESTE MUNDO (F4.3: el drop
+        //    escala con el grid, el tramo es invariante) + encogimiento sostenido —
+        if (relay.HasUnload)
         {
-            float f = (float)leg;
-            if (_carryLegCount >= 5)
+            // — absoluto: los mismos umbrales que el semáforo de la tarjeta.
+            //    Prioridad: drop demasiado lejos (señal de mundo) > tramo corto.
+            string? absolute = null;
+            if (relay.DropDistanceMean is double dropD
+                && dropD > RelayVerdict.DropMaxFor(sim.GridCells))
             {
+                absolute = FormattableString.Invariant(
+                    $"Las sueltas caen demasiado lejos del nido para este mundo ({dropD:0.0} u > {RelayVerdict.DropMaxFor(sim.GridCells):0} u)");
+            }
+            else if (relay.CarryLegMean is double legD && (float)legD < RelayVerdict.CarryLegMin)
+            {
+                absolute = FormattableString.Invariant(
+                    $"Tramos demasiado cortos para completar el relevo ({legD:0.0} u < {RelayVerdict.CarryLegMin:0} u)");
+            }
+
+            // — encogimiento: caída >20% del tramo acumulado vs la media de las
+            //    5 emisiones PREVIAS (se compara antes de almacenar la actual) —
+            string? shrink = null;
+            if (_carryLegCount >= 5 && relay.CarryLegMean is double leg2)
+            {
+                float f2 = (float)leg2;
                 float mean = 0f;
                 for (int i = 0; i < _recentCarryLegs.Length; i++) mean += _recentCarryLegs[i];
                 mean /= _recentCarryLegs.Length;
-
-                bool weakAbsolute = f < RelayWeakCarryLeg;
-                bool weakShrink = mean > 0f && f < mean * (1f - RelayWeakShrink);
-                if ((weakAbsolute || weakShrink)
-                    && (_lastRelayWeakAlert == 0 || tick - _lastRelayWeakAlert >= RelayWeakCadenceTicks))
-                {
-                    _lastRelayWeakAlert = tick;
-                    output.Add(new Alert("relay-weak", Level.Amber,
-                        FormattableString.Invariant(
-                            $"Las cargas completan tramos más cortos ({f:0.0} u vs media {mean:0.0} u)"),
-                        -1, -1f, -1f, tick));
-                }
+                if (mean > 0f && f2 < mean * (1f - RelayWeakShrink))
+                    shrink = FormattableString.Invariant(
+                        $"Las cargas completan tramos más cortos ({f2:0.0} u vs media {mean:0.0} u)");
             }
-            _recentCarryLegs[_carryLegCount % _recentCarryLegs.Length] = f;
-            _carryLegCount++;
+
+            if (relay.CarryLegMean is double legNow)
+            {
+                _recentCarryLegs[_carryLegCount % _recentCarryLegs.Length] = (float)legNow;
+                _carryLegCount++;
+            }
+
+            var reason = absolute ?? shrink;
+            if (reason != null
+                && (_lastRelayWeakAlert == 0 || tick - _lastRelayWeakAlert >= RelayWeakCadenceTicks))
+            {
+                _lastRelayWeakAlert = tick;
+                output.Add(new Alert("relay-weak", Level.Amber, reason, -1, -1f, -1f, tick));
+            }
         }
 
         // — hito verde: primera descarga de la partida (disparo único) —
