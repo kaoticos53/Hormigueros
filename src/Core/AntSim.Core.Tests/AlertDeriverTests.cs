@@ -208,7 +208,7 @@ public sealed class AlertDeriverTests
             relay.Observe(evs, sim);
             deriver.Observe(evs, null, relay, sim, output);
         }
-        Assert.DoesNotContain(output, a => a.Key == "relay-weak");
+        Assert.DoesNotContain(output, a => a.Key.StartsWith("relay-weak:"));
 
         // Shallowing sostenido: cargas de 20 u. La media cae bajo 80 (−20% de la
         // historia) al segundo ciclo → alerta ámbar (aún >60: por ENCOGIMIENTO).
@@ -223,10 +223,10 @@ public sealed class AlertDeriverTests
             antId++;
             relay.Observe(evs, sim);
             deriver.Observe(evs, null, relay, sim, output);
-            fired = output.Exists(a => a.Key == "relay-weak");
+            fired = output.Exists(a => a.Key.StartsWith("relay-weak:"));
         }
         Assert.True(fired, "el shallowing sostenido debería disparar relay-weak");
-        var weak = output.FindAll(a => a.Key == "relay-weak");
+        var weak = output.FindAll(a => a.Key.StartsWith("relay-weak:"));
         Assert.Equal(AlertDeriver.Level.Amber, weak[0].Lvl);
         Assert.Contains("tramos más cortos", weak[0].Text);
 
@@ -244,7 +244,7 @@ public sealed class AlertDeriverTests
             antId++;
             relay.Observe(evs, sim);
             deriver.Observe(evs, null, relay, sim, output);
-            weakBefore += output.FindAll(a => a.Key == "relay-weak").Count;
+            weakBefore += output.FindAll(a => a.Key.StartsWith("relay-weak:")).Count;
             output.Clear();
         }
         // 3 ciclos × 10 s < cadencia de 60 s: como mucho la primera repite (si
@@ -277,7 +277,7 @@ public sealed class AlertDeriverTests
         };
         relay.Observe(evs96, sim96);
         deriver.Observe(evs96, null, relay, sim96, output);
-        var weak96 = output.FindAll(a => a.Key == "relay-weak");
+        var weak96 = output.FindAll(a => a.Key.StartsWith("relay-weak:"));
         Assert.Single(weak96);
         Assert.Equal(AlertDeriver.Level.Amber, weak96[0].Lvl);
         Assert.Contains("demasiado lejos", weak96[0].Text);
@@ -297,7 +297,47 @@ public sealed class AlertDeriverTests
         };
         relay2.Observe(evs256, sim256);
         deriver2.Observe(evs256, null, relay2, sim256, output2);
-        Assert.DoesNotContain(output2, a => a.Key == "relay-weak");
+        Assert.DoesNotContain(output2, a => a.Key.StartsWith("relay-weak:"));
+    }
+
+    [Fact]
+    public void RelevoDebil_PorColonia_SoloLaDegradadaDispara()
+    {
+        // F4.2 por-colonia: la colonia 0 con drop dentro del umbral del mundo y
+        // la colonia 1 con drop fuera — SOLO la 1 dispara, con su id en la clave
+        // y en el texto, ColonyId=1 y el nido de la 1 como ancla de cámara.
+        var sim = Sim(colonies: 2);
+        var relay = new RelayTracker();
+        var deriver = new AlertDeriver();
+        var output = new List<AlertDeriver.Alert>();
+        var n0 = sim.Colonies[0];
+        var n1 = sim.Colonies[1];
+
+        // Grid 32 ⇒ umbral de drop 190×32/96 = 63.3 u: la sana suelta a 50 u,
+        // la débil a 100 u. Mismo tick, mismo tracker.
+        var sana = new List<SimEvent>
+        {
+            Ev(SimEventKind.ItemSpawned, colony: 0, x: n0.NestX + 50f, y: n0.NestY, ant: 0, tick: sim.Tick),
+            Ev(SimEventKind.Unload, colony: 0, x: n0.NestX, y: n0.NestY, ant: 100, tick: sim.Tick),
+        };
+        var debil = new List<SimEvent>
+        {
+            Ev(SimEventKind.ItemSpawned, colony: 1, x: n1.NestX + 100f, y: n1.NestY, ant: 0, tick: sim.Tick),
+            Ev(SimEventKind.Unload, colony: 1, x: n1.NestX, y: n1.NestY, ant: 200, tick: sim.Tick),
+        };
+        var evs = new List<SimEvent>();
+        evs.AddRange(sana);
+        evs.AddRange(debil);
+        relay.Observe(evs, sim);
+        deriver.Observe(evs, null, relay, sim, output);
+
+        var weak = output.FindAll(a => a.Key.StartsWith("relay-weak:"));
+        Assert.Single(weak);
+        Assert.Equal("relay-weak:1", weak[0].Key);
+        Assert.Equal(1, weak[0].ColonyId);
+        Assert.Equal(n1.NestX, weak[0].X);
+        Assert.Equal(n1.NestY, weak[0].Y);
+        Assert.Contains("Colonia 1", weak[0].Text);
     }
 
     [Fact]

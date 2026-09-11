@@ -39,6 +39,7 @@ public sealed class AlertDeriver
     public const float StockLowFraction = 0.20f;     // <20% de stockMax
     public const float RelayWeakShrink = 0.20f;      // caída >20% del tramo vs media de 5
     public const int MaxAlertsPerCall = 8;           // cola de la UI: la más vieja sale
+    public const int RelayWeakHistory = 5;           // emisiones previas del comparador de encogimiento
 
     // — cadencias (ticks entre alertas del mismo tipo) —
     private const ulong GenomeCadenceTicks = 10 * 30;   // 10 s
@@ -47,10 +48,11 @@ public sealed class AlertDeriver
 
     private readonly HashSet<string> _once = new();          // alertas de disparo único
     // Último tick de cada alerta cadenciada (0 = nunca: el primer disparo siempre pasa).
-    private ulong _lastGenomeAlert, _lastMortalityAlert, _lastRelayWeakAlert;
+    private ulong _lastGenomeAlert, _lastMortalityAlert;
+    // F4.2: cadencia e historia de relevo POR COLONIA (cada tarjeta tiene la suya).
+    private readonly Dictionary<int, ulong> _lastRelayWeak = new();
+    private readonly Dictionary<int, (float[] Buf, int Count)> _legHistory = new();
     private int _layingHaltedStreak;                          // ventanas sin puesta
-    private readonly float[] _recentCarryLegs = new float[5]; // media móvil del relevo
-    private int _carryLegCount;
     private int _colonyCount = -1;
 
     /// <summary>Deriva las alertas de un paso: eventos del tick + métrica de la
@@ -137,54 +139,66 @@ public sealed class AlertDeriver
             }
         }
 
-        // — relevo débil: UMBRALES DE RelayVerdict PARA ESTE MUNDO (F4.3: el drop
-        //    escala con el grid, el tramo es invariante) + encogimiento sostenido —
+        // — relevo débil POR COLONIA (F4.2): la tarjeta de cada colonia juzga su
+        //    propio relevo con RelayTracker.ForColony y los UMBRALES DE
+        //    RelayVerdict PARA ESTE MUNDO (F4.3: el drop escala con el grid) más
+        //    su encogimiento sostenido. Prioridad: drop lejos > ratio de tramo >
+        //    encogimiento.
+        //    F4.4: el tramo se juzga por RATIO (leg vs cadena disponible) —
+        //    un leg corto con cadena corta es relevo de proximidad completo.
         if (relay.HasUnload)
         {
-            // — absoluto: los mismos umbrales que el semáforo de la tarjeta.
-            //    Prioridad: drop demasiado lejos (señal de mundo) > tramo corto.
-            //    F4.4: el tramo se juzga por RATIO (leg vs cadena disponible) —
-            //    un leg corto con cadena corta es relevo de proximidad completo.
-            string? absolute = null;
-            if (relay.DropDistanceMean is double dropD
-                && dropD > RelayVerdict.DropMaxFor(sim.GridCells))
+            float dropMax = RelayVerdict.DropMaxFor(sim.GridCells);
+            for (int c = 0; c < sim.Colonies.Count; c++)
             {
-                absolute = FormattableString.Invariant(
-                    $"Las sueltas caen demasiado lejos del nido para este mundo ({dropD:0.0} u > {RelayVerdict.DropMaxFor(sim.GridCells):0} u)");
-            }
-            else if (relay.CarryLegMean is double legD && relay.ChainMean is double chainD
-                     && RelayVerdict.LegRatio((float)legD, (float)chainD) < RelayVerdict.LegRatioMin)
-            {
-                absolute = FormattableString.Invariant(
-                    $"Las cargas completan menos de {RelayVerdict.LegRatioMin * 100:0}% de la cadena disponible ({legD:0.0} u de {chainD:0.0} u)");
-            }
+                var colony = sim.Colonies[c];
+                var cv = relay.ForColony(colony.Id);
+                if (cv is not RelayTracker.ColonyView v || v.UnloadCount == 0) continue;
 
-            // — encogimiento: caída >20% del tramo acumulado vs la media de las
-            //    5 emisiones PREVIAS (se compara antes de almacenar la actual) —
-            string? shrink = null;
-            if (_carryLegCount >= 5 && relay.CarryLegMean is double leg2)
-            {
-                float f2 = (float)leg2;
-                float mean = 0f;
-                for (int i = 0; i < _recentCarryLegs.Length; i++) mean += _recentCarryLegs[i];
-                mean /= _recentCarryLegs.Length;
-                if (mean > 0f && f2 < mean * (1f - RelayWeakShrink))
-                    shrink = FormattableString.Invariant(
-                        $"Las cargas completan tramos más cortos ({f2:0.0} u vs media {mean:0.0} u)");
-            }
+                string? absolute = null;
+                if (v.DropMean is double dropD && dropD > dropMax)
+                {
+                    absolute = FormattableString.Invariant(
+                        $"Colonia {colony.Id}: las sueltas caen demasiado lejos del nido para este mundo ({dropD:0.0} u > {dropMax:0} u)");
+                }
+                else if (v.CarryLegMean is double legD && v.ChainMean is double chainD
+                         && RelayVerdict.LegRatio((float)legD, (float)chainD) < RelayVerdict.LegRatioMin)
+                {
+                    absolute = FormattableString.Invariant(
+                        $"Colonia {colony.Id}: las cargas completan menos de {RelayVerdict.LegRatioMin * 100:0}% de la cadena disponible ({legD:0.0} u de {chainD:0.0} u)");
+                }
 
-            if (relay.CarryLegMean is double legNow)
-            {
-                _recentCarryLegs[_carryLegCount % _recentCarryLegs.Length] = (float)legNow;
-                _carryLegCount++;
-            }
+                // — encogimiento propio: caída >20% del tramo acumulado de ESTA
+                //    colonia vs la media de sus 5 emisiones PREVIAS —
+                string? shrink = null;
+                if (v.CarryLegMean is double legNow)
+                {
+                    if (!_legHistory.TryGetValue(colony.Id, out var hist))
+                        hist = (new float[RelayWeakHistory], 0);
+                    if (hist.Count >= RelayWeakHistory)
+                    {
+                        float mean = 0f;
+                        for (int i = 0; i < hist.Buf.Length; i++) mean += hist.Buf[i];
+                        mean /= hist.Buf.Length;
+                        float f = (float)legNow;
+                        if (mean > 0f && f < mean * (1f - RelayWeakShrink))
+                            shrink = FormattableString.Invariant(
+                                $"Colonia {colony.Id}: las cargas completan tramos más cortos ({f:0.0} u vs media {mean:0.0} u)");
+                    }
+                    hist.Buf[hist.Count % hist.Buf.Length] = (float)legNow;
+                    hist.Count++;
+                    _legHistory[colony.Id] = hist;
+                }
 
-            var reason = absolute ?? shrink;
-            if (reason != null
-                && (_lastRelayWeakAlert == 0 || tick - _lastRelayWeakAlert >= RelayWeakCadenceTicks))
-            {
-                _lastRelayWeakAlert = tick;
-                output.Add(new Alert("relay-weak", Level.Amber, reason, -1, -1f, -1f, tick));
+                var reason = absolute ?? shrink;
+                if (reason != null
+                    && (!_lastRelayWeak.TryGetValue(colony.Id, out ulong last)
+                        || tick - last >= RelayWeakCadenceTicks))
+                {
+                    _lastRelayWeak[colony.Id] = tick;
+                    output.Add(new Alert("relay-weak:" + colony.Id, Level.Amber, reason,
+                        colony.Id, colony.NestX, colony.NestY, tick));
+                }
             }
         }
 
