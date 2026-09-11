@@ -37,6 +37,7 @@ public sealed class WorldSim
     private readonly List<SimEvent> _events = new();
     private readonly List<SimCommand> _pendingCommands = new(); // F4.0: cola de comandos (aplicados en el punto canónico)
     private readonly List<SaveRequest> _saveRequests = new();   // F4.0: peticiones de guardado del último Step
+    private bool[]? _extinctReported; // F4.2: ColonyExtinct una vez por colonia (lazy: el load reconstruye colonias)
     private uint _nextAntId = 1;
     private uint _nextItemId = 1;
     private readonly int _gridCells;
@@ -267,6 +268,26 @@ public sealed class WorldSim
         }
 
         RespawnItems();
+
+        // — F4.2: extinción por transición de estado (canal B, UNA vez por colonia) —
+        // Sin adultas vivas y sin cría la colonia no puede recuperarse: el nido
+        // permanece (los eventos de spawn lo usan), pero el relevo ha muerto.
+        // (Array perezoso: el camino de carga de checkpoints reconstruye colonias
+        // fuera del constructor y comparte el array por tamaño, no por estado.)
+        if (_extinctReported == null || _extinctReported.Length != _colonies.Count)
+            _extinctReported = new bool[_colonies.Count];
+        for (int c = 0; c < _colonies.Count; c++)
+        {
+            if (_extinctReported[c]) continue;
+            var colony = _colonies[c];
+            if (colony.AdultCountAlive == 0 && colony.Eggs.Count == 0
+                && colony.Larvae.Count == 0 && colony.Pupae.Count == 0)
+            {
+                _extinctReported[c] = true;
+                _events.Add(new SimEvent(SimEventKind.ColonyExtinct, Tick,
+                    colony.Id, 0, colony.NestX, colony.NestY));
+            }
+        }
     }
 
     private void ActAllAnts(Colony colony)

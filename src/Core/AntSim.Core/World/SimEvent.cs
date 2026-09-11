@@ -18,7 +18,12 @@ public enum SimEventKind : byte
     /// <summary>Comando de usuario aplicado (Fase 4): la vista registra la causa,
     /// el .antlog la reproduce (misma semilla + mismos comandos ⇒ mismo mundo).
     /// X/Y = coordenadas del comando; AntId = kind del comando.</summary>
-    CommandExecuted = 11
+    CommandExecuted = 11,
+
+    /// <summary>F4.2: la colonia ColonyId quedó sin adultas NI cría — extinción
+    /// completa (el nido permanece; la tierra no se consume). Se emite UNA vez,
+    /// por transición de estado (no hay evento por hormiga).</summary>
+    ColonyExtinct = 12
 }
 
 /// <summary>Causa de muerte (para telemetría y reproducción).</summary>

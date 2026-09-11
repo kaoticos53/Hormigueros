@@ -12,7 +12,9 @@ namespace AntSim.Core.Telemetry;
 /// </summary>
 public static class SimSnapshot
 {
-    /// <summary>Pose interpolable de una hormiga (por índice de colonia/ant).</summary>
+    /// <summary>Pose interpolable de una hormiga (por índice de colonia/ant).
+    /// F4.2: incluye los datos de inspección (vigor, energía, edad, huella del
+    /// genoma) para la tarjeta de seguimiento del HUD.</summary>
     public readonly struct AntPose
     {
         public readonly uint Id;
@@ -22,10 +24,20 @@ public static class SimSnapshot
         public readonly float Heading;
         public readonly bool HasLoad;
         public readonly bool Alive;
+        // — Inspección (F4.2) —
+        public readonly float Vigor;          // [0,~1.2] modulador físico del individuo
+        public readonly float Energy;         // [0,1] reserva normalizada
+        public readonly float Age;            // s de sim
+        public readonly bool IsImmigrant;     // en prueba de cuarentena
+        public readonly uint GenomeFingerprint; // huella determinista del genoma (primeros pesos + tamaño)
 
-        public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive)
+        public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive,
+            float vigor = 0f, float energy = 0f, float age = 0f, bool isImmigrant = false,
+            uint genomeFingerprint = 0)
         {
             Id = id; ColonyId = colonyId; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive;
+            Vigor = vigor; Energy = energy; Age = age; IsImmigrant = isImmigrant;
+            GenomeFingerprint = genomeFingerprint;
         }
     }
 
@@ -82,7 +94,9 @@ public static class SimSnapshot
             for (int i = 0; i < colony.Adults.Count; i++)
             {
                 var a = colony.Adults[i];
-                ants.Add(new AntPose(a.Id, colony.Id, a.X, a.Y, a.Heading, a.HasLoad, a.Alive));
+                ants.Add(new AntPose(a.Id, colony.Id, a.X, a.Y, a.Heading, a.HasLoad, a.Alive,
+                    a.Vigor, a.Energy, a.Age, a.IsImmigrantTrial,
+                    Fingerprint(a.Genome)));
             }
         }
 
@@ -97,6 +111,29 @@ public static class SimSnapshot
 
         return new Frame(sim.Tick, ants, sim.Items, colonies);
     }
+
+    /// <summary>
+    /// Huella determinista del genoma para la UI (identificar "el mismo cerebro"
+    /// sin serializar pesos): tamaño + primeros 4 pesos mezclados por bits.
+    /// Cero alocación; genoma null ⇒ 0 (sin cerebro aún).
+    /// </summary>
+    private static uint Fingerprint(Evolution.MlpGenome? genome)
+    {
+        if (genome is null) return 0;
+        var sizes = genome.Sizes; // clone — barato: 3-4 ints
+        uint h = 2166136261u;
+        h = (h ^ (uint)sizes.Length) * 16777619u;
+        for (int i = 0; i < sizes.Length; i++)
+            h = (h ^ (uint)sizes[i]) * 16777619u;
+        var w = genome.CopyWeights(); // clone — el contrato no expone el array interno
+        int take = Math.Min(4, w.Length);
+        for (int i = 0; i < take; i++)
+        {
+            uint bits = BitConverter.ToUInt32(BitConverter.GetBytes(w[i]), 0);
+            h = (h ^ bits) * 16777619u;
+        }
+        return h;
+    }
 }
 
 /// <summary>
@@ -110,6 +147,7 @@ public sealed class MetricRecorder
     public const int TicksPerFrame = 30; // SimConstants.FixedDtSeconds = 1/30
 
     private long _pickups, _unloads, _births, _deaths, _eggsLaid, _eclosed, _itemsConsumed, _commands;
+    private readonly Dictionary<int, long[]> _perColony = new(); // F4.2: [pickups,unloads,births,deaths,eggs,eclosed]
     private ulong _windowStartTick = ulong.MaxValue; // ulong.MaxValue = ventana sin abrir
 
     /// <summary>Frame agregado desde el último <c>TakeFrame</c> (ventana cerrada).</summary>
@@ -137,14 +175,15 @@ public sealed class MetricRecorder
 
         for (int i = 0; i < events.Count; i++)
         {
-            switch (events[i].Kind)
+            var ev = events[i];
+            switch (ev.Kind)
             {
-                case SimEventKind.Pickup: _pickups++; break;
-                case SimEventKind.Unload: _unloads++; break;
-                case SimEventKind.AntBorn: _births++; break;
-                case SimEventKind.AntDied: _deaths++; break;
-                case SimEventKind.EggLaid: _eggsLaid++; break;
-                case SimEventKind.Eclosed: _eclosed++; break;
+                case SimEventKind.Pickup: _pickups++; Bump(ev.ColonyId, 0); break;
+                case SimEventKind.Unload: _unloads++; Bump(ev.ColonyId, 1); break;
+                case SimEventKind.AntBorn: _births++; Bump(ev.ColonyId, 2); break;
+                case SimEventKind.AntDied: _deaths++; Bump(ev.ColonyId, 3); break;
+                case SimEventKind.EggLaid: _eggsLaid++; Bump(ev.ColonyId, 4); break;
+                case SimEventKind.Eclosed: _eclosed++; Bump(ev.ColonyId, 5); break;
                 case SimEventKind.ItemConsumed: _itemsConsumed++; break;
                 case SimEventKind.CommandExecuted: _commands++; break;
             }
@@ -167,7 +206,30 @@ public sealed class MetricRecorder
 
         _pickups = _unloads = _births = _deaths = 0;
         _eggsLaid = _eclosed = _itemsConsumed = _commands = 0;
+        foreach (var kv in _perColony) Array.Clear(kv.Value, 0, kv.Value.Length);
         _windowStartTick = end;
         return frame;
+    }
+
+    /// <summary>Ventana por colonia (F4.2): contadores de la ventana abierta para
+    /// la tarjeta del HUD. Orden canónico por id de colonia ascendente.</summary>
+    public IReadOnlyList<(int ColonyId, long Pickups, long Unloads, long Births, long Deaths, long Eggs, long Eclosed)> ColonyWindows()
+    {
+        var list = new List<(int, long, long, long, long, long, long)>();
+        foreach (var kv in _perColony)
+            list.Add((kv.Key, kv.Value[0], kv.Value[1], kv.Value[2], kv.Value[3], kv.Value[4], kv.Value[5]));
+        list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+        return list;
+    }
+
+    private void Bump(int colonyId, int idx)
+    {
+        if (colonyId < 0) return; // eventos sin colonia (spawns regulares, comandos)
+        if (!_perColony.TryGetValue(colonyId, out var arr))
+        {
+            arr = new long[6];
+            _perColony[colonyId] = arr;
+        }
+        arr[idx]++;
     }
 }

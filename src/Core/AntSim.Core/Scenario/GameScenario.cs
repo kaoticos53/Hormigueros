@@ -102,10 +102,16 @@ public static class GameScenario
             {
                 var a = frame.Ants[i];
                 if (i > 0) sb.Append(',');
+                // [id, colony, x, y, heading, load, alive, vigor, energy, age,
+                //  immigrant, genomeFingerprint] — F4.2: +5 campos de inspección
                 sb.Append('[').Append(a.Id).Append(',').Append(a.ColonyId)
                   .Append(',').Append(F(a.X)).Append(',').Append(F(a.Y))
                   .Append(',').Append(F(a.Heading)).Append(',')
-                  .Append(a.HasLoad ? "1" : "0").Append(a.Alive ? ",1]" : ",0]");
+                  .Append(a.HasLoad ? "1" : "0").Append(a.Alive ? ",1," : ",0,")
+                  .Append(F(a.Vigor)).Append(',').Append(F(a.Energy)).Append(',')
+                  .Append(F(a.Age)).Append(',')
+                  .Append(a.IsImmigrant ? "1," : "0,")
+                  .Append(a.GenomeFingerprint).Append(']');
             }
             sb.Append("],\"items\":[");
             for (int i = 0; i < frame.Items.Count; i++)
@@ -181,6 +187,47 @@ public static class GameScenario
               .Append(",\"unloadAvg\":").Append(relay.UnloadDistanceMean is double um ? F((float)um) : "null")
               .Append(",\"carryLeg\":").Append(relay.CarryLegMean is double cl ? F((float)cl) : "null")
               .Append('}');
+
+            // F4.2: desglose por colonia — el semáforo de cada tarjeta.
+            sb.Append(",\"relays\":[");
+            bool firstCol = true;
+            for (int c = 0; c < sim.Colonies.Count; c++)
+            {
+                int cid = sim.Colonies[c].Id;
+                var cv = relay.ForColony(cid);
+                if (!firstCol) sb.Append(',');
+                firstCol = false;
+                if (cv is RelayTracker.ColonyView v)
+                {
+                    sb.Append('{').Append("\"col\":").Append(cid)
+                      .Append(",\"firstUnload\":").Append(v.FirstUnloadTick > 0
+                          ? v.FirstUnloadTick.ToString(CultureInfo.InvariantCulture) : "null")
+                      .Append(",\"unloadAvg\":").Append(v.UnloadMean is double um2 ? F((float)um2) : "null")
+                      .Append(",\"carryLeg\":").Append(v.CarryLegMean is double cl2 ? F((float)cl2) : "null")
+                      .Append(",\"dropAvg\":").Append(v.DropMean is double dm2 ? F((float)dm2) : "null")
+                      .Append(",\"unloads\":").Append(v.UnloadCount)
+                      .Append('}');
+                }
+                else
+                {
+                    sb.Append('{').Append("\"col\":").Append(cid).Append(",\"empty\":true}");
+                }
+            }
+            sb.Append(']');
+
+            // F4.2: métricas de la ventana abierta por colonia (parciales).
+            sb.Append(",\"colmetrics\":[");
+            var cols = metrics.ColonyWindows();
+            for (int i = 0; i < cols.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                var (cid, pk, un, bi, de, eg, ec) = cols[i];
+                sb.Append("[").Append(cid).Append(',').Append(pk).Append(',').Append(un)
+                  .Append(',').Append(bi).Append(',').Append(de).Append(',')
+                  .Append(eg).Append(',').Append(ec).Append(']');
+            }
+            sb.Append(']');
+            firstField = false;
         }
 
         sb.Append('}').AppendLine();

@@ -416,6 +416,148 @@ public sealed class Fase4Tests
         return hashes;
     }
 
+    // — F4.2: ColonyExtinct, inspección por hormiga, relay/métricas por colonia —
+
+    [Fact]
+    public void ColonyExtinct_UnaVezPorTransicionDeEstado()
+    {
+        // Semilla "mala": colonia en frío sin pool muere por diseño (dead zone).
+        // Forzamos la extinción quitando toda entrada: ticks largos sin comida
+        // accesible (TargetItems=0) y presupuesto de vida agotado.
+        var sim = new WorldSim(9, 32, colonyCount: 1)
+        {
+            TargetItems = 0 // sin respawn: la fundación muere y no hay relevo
+        };
+        sim.ClearItems();
+
+        int extinctEvents = 0;
+        ulong? firstExtinctTick = null;
+        for (int i = 0; i < 20000 && extinctEvents == 0; i++)
+        {
+            sim.Step();
+            foreach (var ev in sim.LastEvents)
+            {
+                if (ev.Kind == SimEventKind.ColonyExtinct)
+                {
+                    extinctEvents++;
+                    firstExtinctTick ??= ev.Tick;
+                    Assert.Equal(0, ev.ColonyId);
+                }
+            }
+        }
+
+        // El evento llegó exactamente una vez, y el estado lo confirma.
+        Assert.Equal(1, extinctEvents);
+        Assert.NotNull(firstExtinctTick);
+        var colony = sim.Colonies[0];
+        Assert.Equal(0, colony.AdultCountAlive);
+        Assert.Equal(0, colony.Eggs.Count);
+        Assert.Equal(0, colony.Larvae.Count);
+        Assert.Equal(0, colony.Pupae.Count);
+
+        // Seguir corriendo: no se repite (una vez por colonia).
+        for (int i = 0; i < 500; i++)
+        {
+            sim.Step();
+            foreach (var ev in sim.LastEvents)
+                Assert.NotEqual(SimEventKind.ColonyExtinct, ev.Kind);
+        }
+    }
+
+    [Fact]
+    public void CanalA_InspeccionPorHormiga_CamposCoherentes()
+    {
+        var sim = new WorldSim(42, 96, colonyCount: 1);
+        for (int i = 0; i < 300; i++) sim.Step();
+
+        var frame = AntSim.Core.Telemetry.SimSnapshot.Capture(sim);
+        Assert.True(frame.Ants.Count > 0);
+        foreach (var a in frame.Ants)
+        {
+            Assert.InRange(a.Vigor, 0.5f, 1.3f);       // rango físico del juego
+            Assert.InRange(a.Energy, 0f, 1f);
+            Assert.True(a.Age >= 0f);
+            // Las fundadoras no son inmigrantes y tienen cerebro ⇒ huella != 0.
+            Assert.False(a.IsImmigrant);
+            Assert.NotEqual(0u, a.GenomeFingerprint);
+        }
+
+        // Determinista: misma captura ⇒ mismas huellas.
+        var frame2 = AntSim.Core.Telemetry.SimSnapshot.Capture(sim);
+        for (int i = 0; i < frame.Ants.Count; i++)
+            Assert.Equal(frame.Ants[i].GenomeFingerprint, frame2.Ants[i].GenomeFingerprint);
+    }
+
+    [Fact]
+    public void Stream_EmiteInspeccionRelaysYColmetrics()
+    {
+        string stream = GameScenario.Run(42, ticks: 4000, colonies: 2, grid: 96,
+            frameEvery: 30, seedPoolPath: null, drops: null);
+
+        // Canal A con los 12 campos (vigor, energía, edad, inmigrante, huella).
+        Assert.Matches("\\[1,0,[0-9.]+,[0-9.]+,-?[0-9.]+,[01],[01],[0-9.]+,[0-9.]+,[0-9.]+,[01],[0-9]+\\]", stream);
+
+        // El desglose por colonia está en cada emisión de relay.
+        Assert.Contains("\"relays\":[", stream);
+        Assert.Contains("\"col\":0", stream);
+        Assert.Contains("\"col\":1", stream);
+        Assert.Contains("\"colmetrics\":[", stream);
+    }
+
+    [Fact]
+    public void MetricRecorder_DesglosePorColonia_SumaElTotal()
+    {
+        var sim = new WorldSim(42, 96, colonyCount: 2);
+        var metrics = new MetricRecorder();
+        long totalPickups = 0, colonyPickups = 0;
+
+        for (int i = 0; i < 3000; i++)
+        {
+            sim.Step();
+            metrics.Observe(sim.LastEvents);
+            if (metrics.TakeFrame(sim.Tick) is MetricRecorder.MetricFrame f)
+            {
+                totalPickups += f.Pickups;
+                foreach (var (cid, pk, un, bi, de, eg, ec) in metrics.ColonyWindows())
+                {
+                    colonyPickups += pk;
+                    Assert.True(cid >= 0);
+                    // La suma por colonia nunca excede el total (los comandos no suman aquí).
+                    Assert.True(pk <= f.Pickups && un <= f.Unloads && bi <= f.Births && de <= f.Deaths);
+                }
+            }
+        }
+        Assert.Equal(totalPickups, colonyPickups); // desglose exacto
+    }
+
+    [Fact]
+    public void RelayTracker_DesglosePorColonia_ConsistenteConElTotal()
+    {
+        var sim = new WorldSim(42, 96, colonyCount: 2);
+        var relay = new Scenario.RelayTracker();
+
+        for (int i = 0; i < 24000; i++)
+        {
+            sim.Step();
+            relay.Observe(sim.LastEvents, sim);
+        }
+
+        long perColonyUnloads = 0, perColonyCarryLegs = 0;
+        for (int c = 0; c < sim.Colonies.Count; c++)
+        {
+            var v = relay.ForColony(sim.Colonies[c].Id);
+            if (v is Scenario.RelayTracker.ColonyView cv)
+            {
+                perColonyUnloads += cv.UnloadCount;
+                if (cv.CarryLegMean is double cl) perColonyCarryLegs++;
+            }
+        }
+
+        // El total del tracker es la suma de sus colonias (mismos eventos).
+        Assert.Equal(relay.UnloadCount, perColonyUnloads);
+        Assert.Equal(relay.CarryLegCount, perColonyCarryLegs);
+    }
+
     // — F4.5: tarjetas canónicas del selector (diff contra la UI de Unity) —
 
     [Fact]

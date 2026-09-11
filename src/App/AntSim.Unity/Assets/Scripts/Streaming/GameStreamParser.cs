@@ -24,9 +24,16 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly int ColonyId;
             public readonly float X, Y, Heading;
             public readonly bool HasLoad, Alive;
+            // — Inspección (F4.2) —
+            public readonly float Vigor, Energy, Age;
+            public readonly bool IsImmigrant;
+            public readonly uint GenomeFingerprint;
 
-            public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive)
-            { Id = id; ColonyId = colonyId; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive; }
+            public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive,
+                float vigor = 0f, float energy = 0f, float age = 0f, bool isImmigrant = false, uint genomeFingerprint = 0)
+            { Id = id; ColonyId = colonyId; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive;
+              Vigor = vigor; Energy = energy; Age = age; IsImmigrant = isImmigrant;
+              GenomeFingerprint = genomeFingerprint; }
         }
 
         public readonly struct ItemView
@@ -82,6 +89,32 @@ namespace AntSim.Unity.Scripts.Streaming
             { FirstUnload = firstUnload; DropAvg = dropAvg; UnloadAvg = unloadAvg; CarryLeg = carryLeg; }
         }
 
+        /// <summary>Relevo de UNA colonia (F4.2): el semáforo de su tarjeta.</summary>
+        public readonly struct ColonyRelayView
+        {
+            public readonly int ColonyId;
+            public readonly ulong? FirstUnload;
+            public readonly float? UnloadAvg, CarryLeg, DropAvg;
+            public readonly int Unloads;
+
+            public ColonyRelayView(int colonyId, ulong? firstUnload, float? unloadAvg,
+                float? carryLeg, float? dropAvg, int unloads)
+            { ColonyId = colonyId; FirstUnload = firstUnload; UnloadAvg = unloadAvg;
+              CarryLeg = carryLeg; DropAvg = dropAvg; Unloads = unloads; }
+        }
+
+        /// <summary>Ventana de métricas de UNA colonia (F4.2).</summary>
+        public readonly struct ColonyMetricsView
+        {
+            public readonly int ColonyId;
+            public readonly long Pickups, Unloads, Births, Deaths, Eggs, Eclosed;
+
+            public ColonyMetricsView(int colonyId, long pickups, long unloads,
+                long births, long deaths, long eggs, long eclosed)
+            { ColonyId = colonyId; Pickups = pickups; Unloads = unloads;
+              Births = births; Deaths = deaths; Eggs = eggs; Eclosed = eclosed; }
+        }
+
         /// <summary>Estado visible de un tick: lo que el presenter renderiza.</summary>
         public sealed class TickView
         {
@@ -92,6 +125,8 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly List<EventView> Events = new();
             public MetricsView? Metrics;
             public RelayView? Relay;
+            public readonly List<ColonyRelayView> ColonyRelays = new();
+            public readonly List<ColonyMetricsView> ColonyMetrics = new();
         }
 
         /// <summary>Cabecera del stream (parámetros de la partida).</summary>
@@ -145,13 +180,19 @@ namespace AntSim.Unity.Scripts.Streaming
                 string antsBody = ArrayBody(raw, ai + "\"ants\":[".Length - 1);
                 foreach (string row in SplitTop(antsBody))
                 {
-                    // [id, colony, x, y, heading, load, alive]
+                    // [id, colony, x, y, heading, load, alive, vigor, energy, age,
+                    //  immigrant, genomeFingerprint] — F4.2 (12 campos)
                     string[] f = RowFields(row);
                     if (f.Length < 7) continue;
                     v.Ants.Add(new AntPose(
                         (uint)Reader.NumOf(f[0]), (int)Reader.NumOf(f[1]),
                         (float)Reader.NumOf(f[2]), (float)Reader.NumOf(f[3]), (float)Reader.NumOf(f[4]),
-                        f[5] == "1", f[6] == "1"));
+                        f[5] == "1", f[6] == "1",
+                        f.Length > 9 ? (float)Reader.NumOf(f[7]) : 0f,
+                        f.Length > 9 ? (float)Reader.NumOf(f[8]) : 0f,
+                        f.Length > 9 ? (float)Reader.NumOf(f[9]) : 0f,
+                        f.Length > 10 && f[10] == "1",
+                        f.Length > 11 ? (uint)Reader.NumOf(f[11]) : 0u));
                 }
             }
 
@@ -215,6 +256,39 @@ namespace AntSim.Unity.Scripts.Streaming
                     p.NullNum("dropAvg") is double da ? (float)da : null,
                     p.NullNum("unloadAvg") is double ua ? (float)ua : null,
                     p.NullNum("carryLeg") is double cl ? (float)cl : null);
+            }
+
+            // — F4.2: relays por colonia y métricas de ventana por colonia —
+            int ri2 = raw.IndexOf("\"relays\":[", StringComparison.Ordinal);
+            if (ri2 >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, ri2 + "\"relays\":[".Length - 1)))
+                {
+                    var p = new Reader(row);
+                    int col = (int)p.Num("col");
+                    if (row.Contains("\"empty\":true")) continue;
+                    v.ColonyRelays.Add(new ColonyRelayView(
+                        col,
+                        p.NullNum("firstUnload") is double fu2 ? (ulong)fu2 : null,
+                        p.NullNum("unloadAvg") is double ua2 ? (float)ua2 : null,
+                        p.NullNum("carryLeg") is double cl2 ? (float)cl2 : null,
+                        p.NullNum("dropAvg") is double da2 ? (float)da2 : null,
+                        (int)p.Num("unloads")));
+                }
+            }
+
+            int ci2 = raw.IndexOf("\"colmetrics\":[", StringComparison.Ordinal);
+            if (ci2 >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, ci2 + "\"colmetrics\":[".Length - 1)))
+                {
+                    string[] f = RowFields(row); // [col, pickups, unloads, births, deaths, eggs, eclosed]
+                    if (f.Length < 7) continue;
+                    v.ColonyMetrics.Add(new ColonyMetricsView(
+                        (int)Reader.NumOf(f[0]), (long)Reader.NumOf(f[1]), (long)Reader.NumOf(f[2]),
+                        (long)Reader.NumOf(f[3]), (long)Reader.NumOf(f[4]),
+                        (long)Reader.NumOf(f[5]), (long)Reader.NumOf(f[6])));
+                }
             }
 
             return v;

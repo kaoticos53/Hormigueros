@@ -38,6 +38,58 @@ public sealed class RelayTracker
     // (colonyId, antId) → posición del pickup sin descargar todavía.
     private readonly Dictionary<(int Colony, uint Ant), (float X, float Y)> _openCarries = new();
 
+    // — F4.2: desglose por colonia (la tarjeta del HUD necesita su propio semáforo) —
+    private sealed class ColonyRelay
+    {
+        public ulong FirstUnloadTick;
+        public long UnloadDistanceSum;
+        public int UnloadCount;
+        public long CarryLegSum;
+        public int CarryLegCount;
+        public long DropDistanceSum;
+        public int DropCount;
+
+        public double? UnloadMean => UnloadCount > 0 ? UnloadDistanceSum / (double)UnloadCount : null;
+        public double? CarryLegMean => CarryLegCount > 0 ? CarryLegSum / (double)CarryLegCount : null;
+        public double? DropMean => DropCount > 0 ? DropDistanceSum / (double)DropCount : null;
+    }
+
+    private readonly Dictionary<int, ColonyRelay> _perColony = new();
+
+    private ColonyRelay Colony(int colonyId)
+    {
+        if (!_perColony.TryGetValue(colonyId, out var cr))
+        {
+            cr = new ColonyRelay();
+            _perColony[colonyId] = cr;
+        }
+        return cr;
+    }
+
+    /// <summary>Vista de solo lectura del relevo de una colonia (F4.2). null = sin
+    /// eventos registrados para esa colonia todavía.</summary>
+    public readonly struct ColonyView
+    {
+        public readonly ulong FirstUnloadTick;
+        public readonly double? UnloadMean;
+        public readonly double? CarryLegMean;
+        public readonly double? DropMean;
+        public readonly int UnloadCount;
+
+        public ColonyView(ulong firstUnloadTick, double? unloadMean, double? carryLegMean,
+            double? dropMean, int unloadCount)
+        {
+            FirstUnloadTick = firstUnloadTick; UnloadMean = unloadMean;
+            CarryLegMean = carryLegMean; DropMean = dropMean; UnloadCount = unloadCount;
+        }
+    }
+
+    public ColonyView? ForColony(int colonyId)
+    {
+        if (!_perColony.TryGetValue(colonyId, out var cr)) return null;
+        return new ColonyView(cr.FirstUnloadTick, cr.UnloadMean, cr.CarryLegMean, cr.DropMean, cr.UnloadCount);
+    }
+
     public ulong FirstUnloadTick { get; private set; }
     public ulong LastUnloadTick { get; private set; }
 
@@ -86,16 +138,25 @@ public sealed class RelayTracker
                 var colony = sim.Colonies[ev.ColonyId];
                 float udx = ev.X - colony.NestX;
                 float udy = ev.Y - colony.NestY;
-                UnloadDistanceSum += (long)MathF.Sqrt(udx * udx + udy * udy);
+                long dist = (long)MathF.Sqrt(udx * udx + udy * udy);
+                UnloadDistanceSum += dist;
                 UnloadCount++;
+
+                var cr = Colony(ev.ColonyId); // F4.2: desglose por colonia
+                if (cr.FirstUnloadTick == 0) cr.FirstUnloadTick = ev.Tick;
+                cr.UnloadDistanceSum += dist;
+                cr.UnloadCount++;
 
                 // Eslabón final: del pickup de esta carga a esta descarga.
                 if (_openCarries.Remove((ev.ColonyId, ev.AntId), out var pick))
                 {
                     float cdx = ev.X - pick.X;
                     float cdy = ev.Y - pick.Y;
-                    CarryLegSum += (long)MathF.Sqrt(cdx * cdx + cdy * cdy);
+                    long leg = (long)MathF.Sqrt(cdx * cdx + cdy * cdy);
+                    CarryLegSum += leg;
                     CarryLegCount++;
+                    cr.CarryLegSum += leg;
+                    cr.CarryLegCount++;
                 }
             }
             else if (ev.Kind == SimEventKind.ItemSpawned && ev.ColonyId >= 0
@@ -104,8 +165,13 @@ public sealed class RelayTracker
                 var col = sim.Colonies[ev.ColonyId];
                 float dx = ev.X - col.NestX;
                 float dy = ev.Y - col.NestY;
-                DropDistanceSum += (long)MathF.Sqrt(dx * dx + dy * dy);
+                long ddist = (long)MathF.Sqrt(dx * dx + dy * dy);
+                DropDistanceSum += ddist;
                 DropCount++;
+
+                var cr = Colony(ev.ColonyId); // F4.2
+                cr.DropDistanceSum += ddist;
+                cr.DropCount++;
             }
         }
     }
