@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using AntSim.Core.Evolution;
 using AntSim.Core.Serialization;
@@ -66,6 +67,8 @@ internal static class Program
         int saveTick = 0;             // 0 = guardar al final de la ejecución
         string? antlogPath = null;    // Fase 4: registro de eventos .antlog
         string? loadPath = null;      // Fase 4: cargar checkpoint (modo verify)
+        int frameEvery = 1;           // F4.1: canal A cada N ticks en modo game
+        var drops = new List<(int Tick, float X, float Y)>(); // F4.1: comandos DropFood inyectados
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -77,8 +80,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                    if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify")
-                        return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain' o 'verify'.");
+                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game")
+                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify' o 'game'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -143,6 +146,23 @@ internal static class Program
                 case "--load":
                     loadPath = Next(args, ref i);
                     break;
+                case "--frame-every":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out frameEvery) || frameEvery < 1)
+                        return Fail("--frame-every requiere un entero ≥ 1.");
+                    break;
+                case "--drop":
+                {
+                    // Formato tick:x:y — inyecta un comando DropFood del jugador (F4.0).
+                    string spec = Next(args, ref i);
+                    var parts = spec.Split(':');
+                    if (parts.Length != 3
+                        || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int dropTick)
+                        || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float dx)
+                        || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float dy))
+                        return Fail("--drop requiere tick:x:y (p. ej. --drop 300:350.5:400.25).");
+                    drops.Add((dropTick, dx, dy));
+                    break;
+                }
                 default:
                     return Fail($"Argumento desconocido: {args[i]}");
             }
@@ -159,6 +179,7 @@ internal static class Program
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
+                "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops),
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
