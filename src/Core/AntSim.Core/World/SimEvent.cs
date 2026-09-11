@@ -13,7 +13,12 @@ public enum SimEventKind : byte
     Eclosed = 7,
     ColonyFounded = 8,
     GenomeEnteredElite = 9,
-    GenomeDiscarded = 10
+    GenomeDiscarded = 10,
+
+    /// <summary>Comando de usuario aplicado (Fase 4): la vista registra la causa,
+    /// el .antlog la reproduce (misma semilla + mismos comandos ⇒ mismo mundo).
+    /// X/Y = coordenadas del comando; AntId = kind del comando.</summary>
+    CommandExecuted = 11
 }
 
 /// <summary>Causa de muerte (para telemetría y reproducción).</summary>

@@ -35,6 +35,7 @@ public sealed class WorldSim
     private readonly ulong _seed;
     private DeterministicRandom _worldRng; // mutable: SpawnItem/Forks avanzan el flujo
     private readonly List<SimEvent> _events = new();
+    private readonly List<SimCommand> _pendingCommands = new(); // F4.0: cola de comandos (aplicados en el punto canónico)
     private uint _nextAntId = 1;
     private uint _nextItemId = 1;
     private readonly int _gridCells;
@@ -70,6 +71,10 @@ public sealed class WorldSim
     public IReadOnlyList<Colony> Colonies => _colonies;
     public IReadOnlyList<FoodItem> Items => _items;
     public IReadOnlyList<SimEvent> LastEvents => _events;
+
+    /// <summary>Comandos pendientes de aplicar en el próximo Step (F4.0). La vista
+    /// encola; el sim aplica en el punto canónico y los registra en el Canal B.</summary>
+    public int PendingCommandCount => _pendingCommands.Count;
 
     /// <summary>Semilla original del mundo (los checkpoints la reproducen).</summary>
     public ulong Seed => _seed;
@@ -194,6 +199,14 @@ public sealed class WorldSim
     {
         _events.Clear();
         Tick++;
+
+        // — Punto canónico de los comandos (F4.0): tras avanzar el tick, antes de
+        // que actúe cualquier hormiga. Toda mutación del jugador pasa por aquí;
+        // queda registrada en el Canal B (CommandExecuted) para el .antlog, y así
+        // "misma semilla + mismos comandos ⇒ mismo mundo" es verificable bit a bit.
+        for (int i = 0; i < _pendingCommands.Count; i++)
+            ApplyCommand(_pendingCommands[i]);
+        _pendingCommands.Clear();
 
         foreach (var colony in _colonies)
             ActAllAnts(colony);
@@ -375,6 +388,36 @@ public sealed class WorldSim
                     _events.Add(new SimEvent(SimEventKind.ItemSpawned, Tick, colony.Id, ant.Id, item.X, item.Y));
                 }
                 _events.Add(new SimEvent(SimEventKind.AntDied, Tick, colony.Id, ant.Id, ant.X, ant.Y, cause));
+            }
+        }
+    }
+
+    // — Fase 4 (F4.0): comandos de usuario con tick —
+
+    /// <summary>Encola un comando del jugador: se aplica en el punto canónico del
+    /// próximo <c>Step()</c> (tras avanzar el tick, antes de que actúe cualquier
+    /// hormiga) y se registra en el Canal B con un evento CommandExecuted.</summary>
+    public void EnqueueCommand(in SimCommand command) => _pendingCommands.Add(command);
+
+    /// <summary>Punto canónico de aplicación (inmutable — parte del contrato de
+    /// determinismo): mismo orden de encolado ⇒ mismo mundo bit a bit.</summary>
+    private void ApplyCommand(in SimCommand command)
+    {
+        switch (command.Kind)
+        {
+            case SimCommandKind.DropFood:
+            {
+                var item = new FoodItem
+                {
+                    Id = _nextItemId++,
+                    X = Math.Clamp(command.X, 0f, WorldWidth),
+                    Y = Math.Clamp(command.Y, 0f, WorldHeight),
+                    Amount = SimCommand.DropFoodAmount
+                };
+                _items.Add(item);
+                _events.Add(new SimEvent(SimEventKind.CommandExecuted, Tick, -1,
+                    (uint)command.Kind, item.X, item.Y));
+                break;
             }
         }
     }

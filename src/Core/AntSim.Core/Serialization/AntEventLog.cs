@@ -224,7 +224,7 @@ public static class AntEventLogFile
         {
             ulong tick = r.ReadU64();
             byte kind = r.ReadByte();
-            if (kind > (byte)SimEventKind.GenomeDiscarded)
+            if (kind > (byte)SimEventKind.CommandExecuted)
                 throw new FormatException($"Tipo de evento inválido: {kind}.");
             events.Add(new Entry(
                 tick,
