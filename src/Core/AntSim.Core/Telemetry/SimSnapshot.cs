@@ -117,7 +117,9 @@ public static class SimSnapshot
     /// sin serializar pesos): tamaño + primeros 4 pesos mezclados por bits.
     /// Cero alocación; genoma null ⇒ 0 (sin cerebro aún).
     /// </summary>
-    private static uint Fingerprint(Evolution.MlpGenome? genome)
+    /// <summary>Huella de identidad de un genoma (la expone el canal A como
+    /// "cerebro"): pública para que tests y herramientas comparen linajes.</summary>
+    public static uint Fingerprint(Evolution.MlpGenome? genome)
     {
         if (genome is null) return 0;
         var sizes = genome.Sizes; // clone — barato: 3-4 ints

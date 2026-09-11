@@ -119,12 +119,19 @@ el linaje completo `#id t{aparición}†{muerte}` por cuerpo — con posición
 solo si hay un cuerpo único (con varios no hay "la posición del cerebro").
 Al morir el cuerpo actual, la tarjeta queda en "esperando relevo" hasta que
 aparece el siguiente portador (o "sin cuerpo vivo — esperando relevo" si el
-modo es permanente). `FollowAnt(id)` vuelve al modo hormiga. Nota de mundo
-anclada en test: en los mundos actuales cada nacimiento cruza+y muta
-(`GenomePool.Birth`), así que 1 cerebro = 1 cuerpo; el linaje multi-cuerpo
-existe para modos con reuso de cerebros (p. ej. re-introducción de élite o
-inmigración probada), y el test `Linaje_EnStreamReal_...` obliga a decidir
-conscientemente si eso cambia.
+modo es permanente). `FollowAnt(id)` vuelve al modo hormiga. Nota de mundo anclada en test: con el
+modo POR DEFECTO cada nacimiento cruza+y muta (`GenomePool.Birth`), así que
+1 cerebro = 1 cuerpo. **El modo opcional de REUSO DE CEREBROS
+(`GenomePool.SetCloneFromElite`, opt-in por colonia vía
+`new WorldSim(..., cloneFromElite: true)` / `GameScenario.Run(...,
+cloneFromElite: true)`; el header del stream lleva
+`"cloneFromElite":true`) hace que los nacimientos CLONEN un genoma de la
+élite (mismo torneo determinista que el modo cruce, sin cruce ni mutación)**
+— con élite pequeña, varios cuerpos comparten huella y el linaje existe en
+partida real (test `StreamReal_ConModo_CuerposCompartenCerebro` sobre stream
+genuino). El modo es parte del estado del mundo: serializado en .antsave v2
+(FormatVersion 2 — los checkpoints v1 ya no se cargan) y el determinismo por
+semilla se mantiene dentro de cada modo.
 
 ## 6. Qué NO hace el HUD (reglas duras)
 

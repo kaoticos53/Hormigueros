@@ -29,17 +29,18 @@ public static class GameScenario
 
     public static string Run(ulong seed, int ticks, int colonies = 2, int grid = 256,
         int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
-        IReadOnlyList<(int Tick, float X, float Y)>? drops = null)
+        IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
+        bool cloneFromElite = false)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
 
-        var sim = new WorldSim(seed, grid, colonies);
+        var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite);
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();
 
-        AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath);
+        AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite);
 
         if (seedPoolPath != null)
         {
@@ -73,7 +74,7 @@ public static class GameScenario
     }
 
     private static void AppendHeader(StringBuilder sb, ulong seed, int ticks, int colonies,
-        int grid, int frameEvery, string? seedPoolPath)
+        int grid, int frameEvery, string? seedPoolPath, bool cloneFromElite)
     {
         sb.Append("{\"header\":{")
           .Append("\"mode\":\"game\",\"seed\":").Append(seed)
@@ -83,6 +84,8 @@ public static class GameScenario
           .Append(",\"frameEvery\":").Append(frameEvery);
         if (seedPoolPath != null)
             sb.Append(",\"seedPool\":\"").Append(Escape(seedPoolPath)).Append('"');
+        if (cloneFromElite)
+            sb.Append(",\"cloneFromElite\":true");
         sb.Append("}}").AppendLine();
     }
 

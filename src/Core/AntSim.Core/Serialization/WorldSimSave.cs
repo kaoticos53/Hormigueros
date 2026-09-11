@@ -45,7 +45,9 @@ namespace AntSim.Core.Serialization;
 /// </summary>
 public static class WorldSimSave
 {
-    public const int FormatVersion = 1;
+    /// <summary>v2 (F4.4): añade el flag CloneFromElite por colonia (1 byte al
+    /// final del bloque de colonia). Los checkpoints v1 ya no se cargan.</summary>
+    public const int FormatVersion = 2;
     private static readonly byte[] Magic = { (byte)'A', (byte)'N', (byte)'T', (byte)'S', (byte)'A', (byte)'V', (byte)'E', (byte)'1' };
 
     // Recompensas configurables de WorldSim: son parte del estado (la arena
@@ -70,6 +72,7 @@ public static class WorldSimSave
         using var ms = new MemoryStream();
         var w = new CanonicalWriter(ms);
         ms.Write(Magic, 0, Magic.Length);
+        w.WriteI32(FormatVersion); // v2: presente desde F4.4 (los v1 no lo llevaban)
 
         w.WriteU64(sim.Seed);
         w.WriteU64(sim.Tick);
@@ -121,6 +124,7 @@ public static class WorldSimSave
             w.WriteI32(col.Pool.TrialsExpired);
             WriteRandom(w, DeterministicRandom.FromState(
                 col.Pool.RngState.S0, col.Pool.RngState.S1, col.Pool.RngState.S2, col.Pool.RngState.S3));
+            w.WriteBool(col.Pool.CloneFromElite); // v2 (F4.4): modo reuso de cerebros
 
             WriteLayer(w, col.FoodLayer);
             WriteLayer(w, col.HomeLayer);
@@ -190,6 +194,14 @@ public static class WorldSimSave
         for (int i = 0; i < Magic.Length; i++)
             if (magic[i] != Magic[i])
                 throw new FormatException("Magic inválido: no es un archivo .antsave.");
+
+        // v2 (F4.4): los checkpoints guardan su versión — los v1 (sin el byte de
+        // CloneFromElite por colonia) ya no se cargan: fallar AQUÍ y no después.
+        int version = r.ReadI32();
+        if (version < 2)
+            throw new FormatException($"Checkpoint v{version} obsoleto (se requieren v{FormatVersion}+): regenerar el .antsave.");
+        if (version > FormatVersion)
+            throw new FormatException($"Checkpoint v{version} más nuevo que este build (v{FormatVersion}).");
 
         ulong seed = r.ReadU64();
         ulong tick = r.ReadU64();
@@ -288,6 +300,7 @@ public static class WorldSimSave
             colony.Pool.TrialsDiscarded = r.ReadI32();
             colony.Pool.TrialsExpired = r.ReadI32();
             colony.Pool.RestoreRng(ReadRandom(r));
+            colony.Pool.RestoreCloneFromElite(r.ReadBool()); // v2 (F4.4)
 
             ReadLayerInto(r, colony.FoodLayer);
             ReadLayerInto(r, colony.HomeLayer);

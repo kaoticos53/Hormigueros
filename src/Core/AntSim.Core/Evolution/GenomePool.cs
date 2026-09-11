@@ -28,6 +28,12 @@ public sealed class GenomePool
 
     private readonly List<MlpGenome> _elite = new();
     private readonly List<(MlpGenome Genome, ulong QueuedTick)> _immigrants = new();
+    // Modo REUSO DE CEREBROS — los nacimientos CLONAN un genoma de la élite
+    // (elección determinista con el MISMO torneo que el modo cruce) en vez de
+    // cruzar+mutar. Opt-in por colonia (world design consciente): con élite
+    // pequeña produce varios cuerpos con la MISMA huella de genoma — el linaje
+    // multi-cuerpo que la tarjeta de inspección sigue (contrato HUD §5).
+    private bool _cloneFromElite;
     // No readonly: DeterministicRandom es un struct y mutar una copia defensiva
     // descartaría el avance del flujo (bug corregido en Fase 3).
     private DeterministicRandom _rng;
@@ -68,20 +74,45 @@ public sealed class GenomePool
         }
     }
 
-    public GenomePool(DeterministicRandom rng, int[] sizes, int seedCount = 16)
+    public GenomePool(DeterministicRandom rng, int[] sizes, int seedCount = 16,
+        bool cloneFromElite = false)
     {
         _rng = rng;
         _sizes = (int[])sizes.Clone();
+        _cloneFromElite = cloneFromElite;
         for (int i = 0; i < seedCount; i++)
             TryAdd(MlpGenome.Random(ref _rng, _sizes));
     }
 
+    /// <summary>Modo reuso de cerebros activo (los nacimientos clonan élite).</summary>
+    public bool CloneFromElite => _cloneFromElite;
+
+    /// <summary>Activa/desactiva el modo clonado. Solo afecta a nacimientos
+    /// POSTERIORES: los cerebros ya asignados no cambian (los cuerpos existentes
+    /// conservan su huella — el linaje es histórico, no retroactivo).</summary>
+    public void SetCloneFromElite(bool on) => _cloneFromElite = on;
+
+    /// <summary>Restauración desde checkpoints (.antsave).</summary>
+    internal void RestoreCloneFromElite(bool on) => _cloneFromElite = on;
+
     /// <summary>
     /// Nacimiento: torneo binario entre dos élite → crossover uniforme →
     /// mutación gaussiana. Fitness inicial 0.
+    /// Modo clonado (CloneFromElite): el ganador del MISMO torneo se CLONA sin
+    /// cruzar ni mutar (consumo de RNG: solo las 2 tiradas del torneo). La
+    /// reproducción completa sigue disponible para restaurar el modo; el
+    /// determinismo por semilla se mantiene dentro de cada modo y los
+    /// checkpoints serializan el modo junto al RNG del pool.
     /// </summary>
     public MlpGenome Birth()
     {
+        if (_cloneFromElite && _elite.Count > 0)
+        {
+            var pick = Tournament();
+            var clone = pick.Clone();
+            clone.Fitness = 0.0;
+            return clone;
+        }
         var a = Tournament();
         var b = Tournament();
         var child = MlpGenome.Crossover(a, b, ref _rng);

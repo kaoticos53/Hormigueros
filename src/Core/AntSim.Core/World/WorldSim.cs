@@ -93,7 +93,8 @@ public sealed class WorldSim
     private readonly List<FoodItem> _items = new();
 
     public WorldSim(ulong seed, int gridCells = 256, int colonyCount = 2,
-        IReadOnlyList<SpeciesDescriptor>? species = null)
+        IReadOnlyList<SpeciesDescriptor>? species = null,
+        bool cloneFromElite = false)
     {
         if (gridCells < 16) throw new ArgumentOutOfRangeException(nameof(gridCells));
         if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
@@ -107,7 +108,7 @@ public sealed class WorldSim
         for (int c = 0; c < colonyCount; c++)
         {
             var sp = species != null && c < species.Count ? species[c] : SpeciesDescriptor.LasiusNiger;
-            var colony = CreateColony(c, sp, colonyCount);
+            var colony = CreateColony(c, sp, colonyCount, cloneFromElite);
             _colonies.Add(colony);
         }
 
@@ -116,7 +117,7 @@ public sealed class WorldSim
             SpawnItem();
     }
 
-    private Colony CreateColony(int id, SpeciesDescriptor sp, int colonyCount)
+    private Colony CreateColony(int id, SpeciesDescriptor sp, int colonyCount, bool cloneFromElite = false)
     {
         var colony = new Colony
         {
@@ -133,7 +134,8 @@ public sealed class WorldSim
             StockMax = sp.StockMax,
             QueenEnergy = 1f,
             Rng = _worldRng.Fork(0x9E3779B97F4A7C15UL + (ulong)id * 0xBF58476D1CE4E5B9UL),
-            Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), BrainSizes),
+            Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), BrainSizes,
+                cloneFromElite: cloneFromElite),
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
             HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
             AlarmLayer = new PheromoneLayer(_gridCells, _gridCells),

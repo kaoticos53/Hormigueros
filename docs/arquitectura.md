@@ -330,6 +330,19 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   único ámbar real es tramo corto — degradación genuina, castigada en
   cualquier mundo. Tests: `RelayVerdictTests` + integración grid-256 con
   warm-v2 real.
+- **Reuso de cerebros (modo opcional, F4.4)**: `GenomePool.SetCloneFromElite`
+  — los nacimientos clonan el ganador del torneo de élite (mismo flujo
+  determinista que el modo cruce, sin crossover ni mutación) en vez de
+  reproducirse. Opt-in por colonia (`new WorldSim(…, cloneFromElite: true)`,
+  `GameScenario.Run(…, cloneFromElite: true)`; el header del stream declara
+  `"cloneFromElite":true`). Con élite pequeña, varios cuerpos comparten
+  huella de genoma — el linaje multi-cuerpo de la tarjeta de inspección deja
+  de ser un contrato teórico y existe en partida real. El flag es ESTADO DEL
+  MUNDO: `.antsave` pasa a v2 (FormatVersion 2 — añade 1 byte por colonia;
+  los checkpoints v1 ya no se cargan: la lectura falla explícitamente al
+  validar versión, que ahora se guarda en el archivo). Determinismo
+  verificado por modo (misma semilla ⇒ mundo bit a bit; con/sin modo ⇒
+  mundos distintos), save/load/replay con el flag activo incluido.
 - **F4.2 ✅-parcial (los tres TODOs del contrato HUD cerrados)**:
   `ColonyExtinct` como evento 12 del canal B (UNA vez por colonia, por
   transición de estado sin adultas ni cría; el camino de carga de checkpoints
