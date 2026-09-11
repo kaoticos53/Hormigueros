@@ -1,0 +1,104 @@
+using UnityEngine;
+
+namespace AntSim.Unity.Scripts.Presenter
+{
+    /// <summary>
+    /// Ancla Unity del presenter (F4.1 — esqueleto). Todo el trabajo real vive en
+    /// clases puras (GameStreamParser/GameStreamPresenter): este componente solo
+    /// bombea el stream, muestrea el estado interpolado cada frame y lo dibuja
+    /// con <c>Graphics.DrawMesh</c> (pool implícito, sin GameObject por hormiga).
+    /// Pausa/velocidad escalan el consumo del stream, nunca la física (fija a 30 Hz).
+    /// </summary>
+    public sealed class SimPresenterBehaviour : MonoBehaviour
+    {
+        [Header("Fuente del stream (CLI construido del Core)")]
+        public string CliPath = "build/antsim";
+        public ulong Seed = 42;
+        public int Ticks = 7200;         // 4 min de sim
+        public int Grid = 96;
+        public int Colonies = 2;
+        public int FrameEvery = 1;
+        public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome
+
+        [Header("Render")]
+        public Mesh AntMesh;
+        public Material AntMaterial;
+        public Material CarrierMaterial;
+        public Mesh ItemMesh;
+        public Material ItemMaterial;
+        public float AntScale = 0.6f;
+
+        [Header("Tiempo")]
+        [Range(0f, 16f)] public float Speed = 1f; // 0 = pausa
+
+        private readonly Streaming.GameStreamPresenter _presenter = new();
+        private Streaming.StreamSource? _source;
+        private float _simTime;           // segundos de sim consumidos
+        private const float Dt = 1f / 30f; // tick fijo de la arquitectura
+        private bool _streaming;
+
+        private void Start()
+        {
+            _source = new Streaming.StreamSource(CliPath);
+            _streaming = true;
+            // El stream se bombea en un hilo: el juego no se congela mientras el CLI corre.
+            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try
+                {
+                    _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery, SeedPoolPath,
+                        line => _presenter.Feed(line));
+                }
+                finally
+                {
+                    _streaming = false;
+                }
+            });
+        }
+
+        private void Update()
+        {
+            if (Speed <= 0f) return; // pausa: no consume stream
+            _simTime += Time.deltaTime * Speed;
+
+            // Dibuja el último tick muestreado (la interpolación vive en Sample).
+            var state = _presenter.Sample(Frac());
+            Draw(state);
+        }
+
+        private float Frac()
+        {
+            float t = _simTime / Dt;
+            return t - Mathf.Floor(t);
+        }
+
+        private void Draw(Streaming.RenderState state)
+        {
+            if (AntMesh != null && AntMaterial != null)
+            {
+                foreach (var a in state.Ants)
+                {
+                    var pos = new Vector3(a.X, 0f, a.Y);
+                    var rot = Quaternion.Euler(0f, -a.Heading * Mathf.Rad2Deg, 0f);
+                    var mat = a.HasLoad ? CarrierMaterial : AntMaterial;
+                    if (mat == null) mat = AntMaterial;
+                    var mtx = Matrix4x4.TRS(pos, rot, Vector3.one * AntScale);
+                    Graphics.DrawMesh(AntMesh, mtx, mat, 0);
+                }
+            }
+
+            if (ItemMesh != null && ItemMaterial != null)
+            {
+                foreach (var it in state.Items)
+                {
+                    var pos = new Vector3(it.X, 0f, it.Y);
+                    var mtx = Matrix4x4.TRS(pos, Quaternion.identity,
+                        Vector3.one * (0.4f + 0.06f * it.Amount));
+                    Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, 0);
+                }
+            }
+
+            // Los nidos ( colonies ) los dibuja un marker estático por colonia — v1.
+        }
+    }
+}
