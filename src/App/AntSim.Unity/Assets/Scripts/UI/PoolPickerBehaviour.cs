@@ -44,5 +44,16 @@ namespace AntSim.Unity.Scripts.Presenter
                 if (p.Id == presetId) return p.ReproCommand;
             return "";
         }
+
+        /// <summary>F4.3: siembra el juego desde un preset — devuelve la ruta del
+        /// .antgenome canónico para pasarla al SimPresenterBehaviour.SeedPoolPath
+        /// (extraída del repro canónico, no hardcodeada en la UI).</summary>
+        public string? SeedPoolFor(string presetId)
+        {
+            if (_model == null) return null;
+            foreach (var p in _model.Presets)
+                if (p.Id == presetId) return p.ResolveSeedPoolPath();
+            return null;
+        }
     }
 }

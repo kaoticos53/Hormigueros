@@ -74,9 +74,18 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
 - `SimPresenterBehaviour`: semilla/grid/colonias/ticks/`SeedPoolPath` (p. ej.
   `artifacts/pretrain-warm-v2.antgenome` para ver el relevo pre-entrenado) y
   velocidad 0/1/2/4/16×.
-- `AntInspectorBehaviour`: `SelectAntId` sigue una hormiga por id (o
-  `PickNearest(point)` desde un raycast); `FollowTrackedBrain()` activa el modo
-  linaje: `cerebro #F · N cuerpos · M vivos` con el linaje completo.
+- **Siembra desde el picker (F4.3)**: `PoolPickerBehaviour.SeedPoolFor(id)`
+  devuelve la ruta del `.antgenome` que el propio preset declara en su repro
+  canónico — asígnala a `SeedPoolPath` y la partida arranca con ese pool.
+- **Selección por click (F4.2)**: `AntPickClickHandler` (creado por el
+  bootstrapper) lanza el ray al plano del mundo y llama `PickNearest` — la
+  tarjeta de inspección sigue a la hormiga pinchada.
+- `AntInspectorBehaviour`: `SelectAntId` sigue una hormiga por id;
+  `FollowTrackedBrain()` activa el modo linaje: `cerebro #F · N cuerpos ·
+  M vivos` con el linaje completo.
+- **Verificar desde el HUD (§4)**: `CommandHistoryModel.BuildVerifyCommand(
+  save, antlog)` produce el comando `--mode verify` del CLI (el oráculo es el
+  CLI, la UI solo muestra ✓/✗ según su exit code).
 - `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las
   tarjetas pintan el semáforo del canal D (el Core lo calcula con
   `RelayVerdict`: la UI no evalúa umbrales).

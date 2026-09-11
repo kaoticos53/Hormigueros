@@ -26,6 +26,25 @@ namespace AntSim.Unity.Scripts.Streaming
             public string ReproCommand = "";
             public string Card = "";
 
+            /// <summary>F4.3: ruta del .antgenome lista para `--seed-pool` — extraída
+            /// del propio repro canónico (la UI no hardcodea rutas de pools).</summary>
+            public string? SeedPoolPath { get; private set; }
+
+            /// <summary>Extrae SeedPoolPath del ReproCommand canónico (una vez).</summary>
+            public string? ResolveSeedPoolPath()
+            {
+                if (SeedPoolPath != null) return SeedPoolPath;
+                const string flag = "--seed-pool ";
+                int i = ReproCommand.IndexOf(flag, StringComparison.Ordinal);
+                if (i < 0) return null;
+                int start = i + flag.Length;
+                int end = ReproCommand.IndexOf(' ', start);
+                SeedPoolPath = end < 0
+                    ? ReproCommand[start..].Trim()
+                    : ReproCommand[start..end].Trim();
+                return SeedPoolPath.Length > 0 ? SeedPoolPath : null;
+            }
+
             public bool IsRecommended => GameSeedsTotal != null || GenomeFile == null;
         }
 

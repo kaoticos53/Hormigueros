@@ -78,5 +78,17 @@ namespace AntSim.Unity.Scripts.Streaming
 
         /// <summary>¿Hay partida guardada para el botón «reproducir desde guardado»?</summary>
         public bool CanReplayFromSave => LastSaveTick > 0;
+
+        /// <summary>Comando de verificación del contrato §4: reproduce la partida
+        /// desde el checkpoint y la compara con el log — la UI lanza ESTE comando
+        /// (el oráculo es el CLI, nunca una reimplementación en la UI) y muestra
+        /// ✓ (exit 0) o ✗ (exit ≠ 0) según el resultado.</summary>
+        public string BuildVerifyCommand(string savePath, string? antlogPath = null)
+        {
+            var sb = new StringBuilder("antsim --mode verify --load ").Append(savePath);
+            if (!string.IsNullOrEmpty(antlogPath))
+                sb.Append(" --antlog ").Append(antlogPath);
+            return sb.ToString();
+        }
     }
 }

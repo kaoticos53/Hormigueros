@@ -277,6 +277,39 @@ namespace AntSim.Core.Tests
             => new(new GameStreamParser.AlertView(key, level: 1, colonyId: 0,
                 x: -1f, y: -1f, tick: tick, text: text));
 
+        // ————— puentes de UI: repro de presets y verificación del guardado —————
+
+        [Fact]
+        public void Preset_SeedPoolPath_SeExtraeDelReproCanonico()
+        {
+            // F4.3: la UI siembra el juego con la ruta que el PROPIO preset declara
+            // en su repro — sin hardcodear rutas de pools en la capa de presentación.
+            var p = new PoolPickerModel.Preset
+            {
+                Id = "warm-v2",
+                ReproCommand = "antsim --mode game --seed <N> --seed-pool artifacts/pretrain-warm-v2.antgenome",
+            };
+            Assert.Equal("artifacts/pretrain-warm-v2.antgenome", p.ResolveSeedPoolPath());
+            Assert.Equal("artifacts/pretrain-warm-v2.antgenome", p.ResolveSeedPoolPath()); // estable
+
+            var natural = new PoolPickerModel.Preset { Id = "natural", ReproCommand = "antsim --mode game --seed <N>" };
+            Assert.Null(natural.ResolveSeedPoolPath()); // sin siembra: partida natural
+        }
+
+        [Fact]
+        public void HistorialComandos_ComandoVerify_DesdeElModelo()
+        {
+            // §4: el botón lanza el verify del CLI (el oráculo) — el modelo produce
+            // el comando con checkpoint y log; el resultado ✓/✗ lo da su exit code.
+            var model = new CommandHistoryModel();
+            model.Observe(TickFrom(events: "[11,0,1,0,0,0]")); // SaveGame
+            Assert.True(model.CanReplayFromSave);
+            Assert.Equal("antsim --mode verify --load partida.antsave --antlog partida.antlog",
+                model.BuildVerifyCommand("partida.antsave", "partida.antlog"));
+            Assert.Equal("antsim --mode verify --load partida.antsave",
+                model.BuildVerifyCommand("partida.antsave"));
+        }
+
         [Fact]
         public void StreamSource_ResuelveElExeDeWindows()
         {

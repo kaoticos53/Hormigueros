@@ -124,6 +124,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             hud.Inspector = inspector;
             hud.HistoryText = history;
 
+            // — Click de selección (§5): raycast pantalla→mundo → PickNearest —
+            var pickGo = new GameObject("AntPickClickHandler");
+            var pick = pickGo.AddComponent<EditorTools.AntPickClickHandler>();
+            pick.Presenter = presenter;
+            pick.Inspector = inspector;
+
             EditorSceneManager.MarkSceneDirty(scene);
             Debug.Log("[SceneBootstrapper] Escena creada: guarda (Ctrl+S → Assets/Scenes/Game.unity) y pulsa Play. " +
                       "Publica antes el CLI: dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");
