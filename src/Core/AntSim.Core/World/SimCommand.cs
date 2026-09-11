@@ -14,7 +14,15 @@ namespace AntSim.Core.World;
 public enum SimCommandKind : byte
 {
     /// <summary>Suelta un ítem de comida en (X, Y) — la única palanca económica del jugador.</summary>
-    DropFood = 0
+    DropFood = 0,
+
+    /// <summary>Guarda la partida (slot = <see cref="SimCommand.Slot"/>). Comando de
+    /// OBSERVACIÓN: no muta el estado del mundo (los hashes con y sin él son
+    /// idénticos); queda registrado en el Canal B porque el historial de la
+    /// partida incluye CUÁNDO se guardó. Tras el Step que lo procesa, el sim
+    /// expone la petición en <c>WorldSim.SaveRequests</c> y el presenter escribe
+    /// el .antsave con <c>WorldSimSave.Save</c>.</summary>
+    SaveGame = 1
 }
 
 /// <summary>Comando inmutable con destino. El tick de aplicación lo asigna el sim.</summary>
@@ -28,11 +36,14 @@ public readonly struct SimCommand
     public readonly SimCommandKind Kind;
     public readonly float X;
     public readonly float Y;
+    /// <summary>Slot de guardado para SaveGame (0–255); ignorable en el resto.</summary>
+    public readonly byte Slot;
 
-    public SimCommand(SimCommandKind kind, float x, float y)
+    public SimCommand(SimCommandKind kind, float x, float y, byte slot = 0)
     {
         Kind = kind;
         X = x;
         Y = y;
+        Slot = slot;
     }
 }

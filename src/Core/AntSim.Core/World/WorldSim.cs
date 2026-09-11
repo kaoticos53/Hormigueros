@@ -36,6 +36,7 @@ public sealed class WorldSim
     private DeterministicRandom _worldRng; // mutable: SpawnItem/Forks avanzan el flujo
     private readonly List<SimEvent> _events = new();
     private readonly List<SimCommand> _pendingCommands = new(); // F4.0: cola de comandos (aplicados en el punto canónico)
+    private readonly List<SaveRequest> _saveRequests = new();   // F4.0: peticiones de guardado del último Step
     private uint _nextAntId = 1;
     private uint _nextItemId = 1;
     private readonly int _gridCells;
@@ -75,6 +76,11 @@ public sealed class WorldSim
     /// <summary>Comandos pendientes de aplicar en el próximo Step (F4.0). La vista
     /// encola; el sim aplica en el punto canónico y los registra en el Canal B.</summary>
     public int PendingCommandCount => _pendingCommands.Count;
+
+    /// <summary>Peticiones de guardado generadas por comandos SaveGame en el último
+    /// Step (F4.0). El presenter las consume y escribe con <c>WorldSimSave.Save</c>.
+    /// Se vacía al inicio de cada Step — refleja solo el paso actual.</summary>
+    public IReadOnlyList<SaveRequest> SaveRequests => _saveRequests;
 
     /// <summary>Semilla original del mundo (los checkpoints la reproducen).</summary>
     public ulong Seed => _seed;
@@ -198,6 +204,7 @@ public sealed class WorldSim
     public void Step()
     {
         _events.Clear();
+        _saveRequests.Clear();
         Tick++;
 
         // — Punto canónico de los comandos (F4.0): tras avanzar el tick, antes de
@@ -419,6 +426,15 @@ public sealed class WorldSim
                     (uint)command.Kind, item.X, item.Y));
                 break;
             }
+
+            case SimCommandKind.SaveGame:
+                // Comando de observación: no muta el mundo. Queda en el Canal B
+                // (el historial incluye cuándo se guardó) y expone la petición
+                // para que el presenter escriba el .antsave tras el Step.
+                _events.Add(new SimEvent(SimEventKind.CommandExecuted, Tick, -1,
+                    (uint)command.Kind, command.X, command.Y, command.Slot));
+                _saveRequests.Add(new SaveRequest(command.Slot, Tick));
+                break;
         }
     }
 

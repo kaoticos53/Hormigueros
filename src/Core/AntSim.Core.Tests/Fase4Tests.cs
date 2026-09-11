@@ -273,6 +273,174 @@ public sealed class Fase4Tests
         throw new InvalidOperationException("No se encontró: " + prefix);
     }
 
+    // — F4.0: comando SaveGame y roundtrip guardar → cargar → reproducir —
+
+    private static List<string> RunWithSaves(ulong seed, int grid, int ticks,
+        (int Tick, float X, float Y)[] drops, (int Tick, byte Slot)[] saves,
+        string? savePath, out string? savedAtHash)
+    {
+        var sim = new WorldSim(seed, grid, colonyCount: 1);
+        var hashes = new List<string>();
+        savedAtHash = null;
+        int nextDrop = 0, nextSave = 0;
+
+        for (int i = 0; i < ticks; i++)
+        {
+            while (nextDrop < drops.Length && drops[nextDrop].Tick == i)
+            {
+                sim.EnqueueCommand(new SimCommand(SimCommandKind.DropFood, drops[nextDrop].X, drops[nextDrop].Y));
+                nextDrop++;
+            }
+            while (nextSave < saves.Length && saves[nextSave].Tick == i)
+            {
+                sim.EnqueueCommand(new SimCommand(SimCommandKind.SaveGame, 0f, 0f, saves[nextSave].Slot));
+                nextSave++;
+            }
+
+            sim.Step();
+
+            // El presenter consume las peticiones de guardado tras el Step.
+            foreach (var req in sim.SaveRequests)
+            {
+                if (savePath == null) continue;
+                WorldSimSave.Save(sim, savePath);
+                savedAtHash = sim.HashLine();
+            }
+
+            if (sim.Tick % 256 == 0) hashes.Add(sim.HashLine());
+        }
+        hashes.Add(sim.HashLine());
+        return hashes;
+    }
+
+    [Fact]
+    public void SaveGame_EsObservacion_HashesIdenticosConYSinEl()
+    {
+        var drops = new[] { (300, 350.5f, 400.25f), (700, 500f, 300f) };
+        var a = RunWithSaves(777, 96, 1000, drops, Array.Empty<(int, byte)>(), null, out _);
+        var b = RunWithSaves(777, 96, 1000, drops, new[] { (400, (byte)1), (800, (byte)2) }, null, out _);
+        Assert.Equal(a, b); // guardar no muta el mundo
+    }
+
+    [Fact]
+    public void SaveGame_RegistraEventoConSlot_YExponePeticion()
+    {
+        var sim = new WorldSim(42, 96, colonyCount: 1);
+        for (int i = 0; i < 50; i++) sim.Step();
+
+        sim.EnqueueCommand(new SimCommand(SimCommandKind.SaveGame, 0f, 0f, slot: 3));
+        Assert.Equal(0, sim.SaveRequests.Count); // aún no aplicado
+        sim.Step();
+
+        Assert.Equal(1, sim.SaveRequests.Count);
+        Assert.Equal(3, sim.SaveRequests[0].Slot);
+        Assert.Equal(sim.Tick, sim.SaveRequests[0].Tick);
+
+        bool found = false;
+        foreach (var ev in sim.LastEvents)
+        {
+            if (ev.Kind == SimEventKind.CommandExecuted && ev.AntId == (uint)SimCommandKind.SaveGame)
+            {
+                found = true;
+                Assert.Equal(3, ev.Cause); // el Cause del evento lleva el slot
+            }
+        }
+        Assert.True(found);
+
+        sim.Step();
+        Assert.Equal(0, sim.SaveRequests.Count); // se consume por Step
+    }
+
+    [Fact]
+    public void SaveLoadReplay_Roundtrip_BitABit()
+    {
+        string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "fase4-rt-" + Guid.NewGuid().ToString("N") + ".antsave");
+        try
+        {
+            // Partida original: drops + saves; el guardado del slot 1 cae en el tick 700.
+            var drops = new[] { (300, 350.5f, 400.25f), (700, 500f, 300f) };
+            var saves = new[] { (700, (byte)1) };
+            RunWithSaves(777, 96, 1000, drops, saves, path, out string? savedAtHash);
+            Assert.NotNull(savedAtHash);
+
+            // Carga el checkpoint: el comando encolado en i=700 se aplica en el Step
+            // que lleva Tick a 701 — el checkpoint contiene ese tick exacto.
+            var loaded = WorldSimSave.Load(path);
+            Assert.Equal(701UL, loaded.Tick);
+            Assert.Equal(savedAtHash, loaded.HashLine()); // el save es fiel al momento
+
+            // Reproduce hasta el tick final de la partida original (1000): el drop
+            // de tick 700 ya es pasado del checkpoint — la reproducción no re-inyecta
+            // comandos, solo avanza (el mundo recrea el resto por determinismo).
+            var replayHashes = new List<string>();
+            for (int i = 0; i < 299; i++)
+            {
+                loaded.Step();
+                if (loaded.Tick % 256 == 0) replayHashes.Add(loaded.HashLine());
+            }
+            replayHashes.Add(loaded.HashLine());
+
+            // La referencia: seguir la partida original desde el tick 701 sin comandos nuevos.
+            var reference = ContinueReference(777, 96, 1000, drops, fromTick: 700, tailTicks: 299);
+
+            Assert.Equal(reference.Count, replayHashes.Count);
+            for (int i = 0; i < reference.Count; i++)
+                Assert.Equal(reference[i], replayHashes[i]); // bit a bit
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    /// <summary>Partida completa truncada al tick <paramref name="fromTick"/> + cola:
+    /// la referencia canónica contra la que se compara la reproducción.</summary>
+    private static List<string> ContinueReference(ulong seed, int grid, int totalTicks,
+        (int Tick, float X, float Y)[] drops, int fromTick, int tailTicks)
+    {
+        var sim = new WorldSim(seed, grid, colonyCount: 1);
+        var hashes = new List<string>();
+        int nextDrop = 0;
+        for (int i = 0; i < totalTicks; i++)
+        {
+            while (nextDrop < drops.Length && drops[nextDrop].Tick == i)
+            {
+                sim.EnqueueCommand(new SimCommand(SimCommandKind.DropFood, drops[nextDrop].X, drops[nextDrop].Y));
+                nextDrop++;
+            }
+            sim.Step();
+            if (sim.Tick > (ulong)fromTick && sim.Tick % 256 == 0) hashes.Add(sim.HashLine());
+        }
+        hashes.Add(sim.HashLine());
+        return hashes;
+    }
+
+    // — F4.5: tarjetas canónicas del selector (diff contra la UI de Unity) —
+
+    [Fact]
+    public void PresetCards_Deterministas_YValidas()
+    {
+        string a = PresetScenario.RenderCards();
+        string b = PresetScenario.RenderCards();
+        Assert.Equal(a, b); // función pura de PoolPresets
+
+        // Las cuatro tarjetas con sus centinelas del benchmark.
+        Assert.Contains("warm-v2", a);
+        Assert.Contains("167.9", a);
+        Assert.Contains("80.0", a);
+        Assert.Contains("warm3", a);
+        Assert.Contains("22", a);   // corona de descargas
+        Assert.Contains("0/10", a); // naturalista
+
+        // El JSON es parseable y lleva los campos estructurados clave.
+        string j = PresetScenario.RenderCards(json: true);
+        Assert.StartsWith("{\"mode\":\"presets\",\"presets\":[", j.TrimEnd('\r', '\n'));
+        Assert.EndsWith("]}", j.TrimEnd('\r', '\n'));
+        Assert.Contains("\"genomeFile\":\"artifacts/pretrain-warm-v2.antgenome\"", j);
+        Assert.Contains("\"gameMode\":null", j); // naturalista
+    }
+
     private static List<string> RunWithLog(ulong seed, int grid, int ticks,
         (int Tick, float X, float Y)[] commands, string antlogPath, out List<string> hashes)
     {
