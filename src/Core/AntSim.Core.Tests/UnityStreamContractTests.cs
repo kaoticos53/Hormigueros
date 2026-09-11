@@ -129,6 +129,87 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
+        public void ReplayPorArchivo_ElPresenterRenderizaCadaTick()
+        {
+            // 1. Genera el stream determinista (in-proc, mismo contrato que el CLI)
+            //    y lo vuelca a un archivo — el fixture es la función, no un binario.
+            string stream = GameScenario.Run(42, ticks: 1200, colonies: 2, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+            string path = Path.Combine(Path.GetTempPath(),
+                "antsim-stream-" + Guid.NewGuid().ToString("N") + ".jsonl");
+            try
+            {
+                File.WriteAllText(path, stream);
+
+                // 2. Replay por StreamFile (el camino de la UI sin CLI). El presenter
+                //    es una vista VIVA: se alimenta línea a línea y se renderiza cada
+                //    tick según llega (dos muestras por tick, t=0 y t=0.5).
+                var presenter = new AntSim.Unity.Scripts.Streaming.GameStreamPresenter();
+                var source = new AntSim.Unity.Scripts.Streaming.StreamSource("no-cli-needed");
+
+                const int MaxAdults = 40;
+                var lastPos = new Dictionary<uint, (float X, float Y)>();
+                ulong rendered = 0;
+                ulong lastRenderedTick = 0;
+                bool sawHeader = false, half = false;
+
+                source.StreamFile(path, line =>
+                {
+                    var view = presenter.Feed2(line); // null en header/end, TickView en tick
+                    if (view == null)
+                    {
+                        if (presenter.Header != null) sawHeader = true;
+                        return;
+                    }
+
+                    foreach (float t in new[] { 0f, 0.5f })
+                    {
+                        var state = presenter.Sample(t);
+                        rendered++;
+
+                        Assert.True(state.Ants.Count <= 2 * MaxAdults,
+                            $"demasiadas adultas en tick {state.Tick}: {state.Ants.Count}");
+
+                        foreach (var a in state.Ants)
+                        {
+                            Assert.False(float.IsNaN(a.X) || float.IsNaN(a.Y),
+                                $"pose NaN en tick {state.Tick}");
+                            Assert.InRange(a.X, 0f, 96f * 8f);
+                            Assert.InRange(a.Y, 0f, 96f * 8f);
+
+                            // Coherencia física entre ticks consecutivos (muestra t=0).
+                            if (t == 0f && lastPos.TryGetValue(a.Id, out var prev))
+                            {
+                                float dx = a.X - prev.X, dy = a.Y - prev.Y;
+                                Assert.True(dx * dx + dy * dy < 9f,
+                                    $"salto imposible de la hormiga {a.Id} en tick {state.Tick}");
+                            }
+                            if (t == 0f) lastPos[a.Id] = (a.X, a.Y);
+                        }
+
+                        if (t == 0.5f)
+                        {
+                            Assert.True(state.Tick > lastRenderedTick,
+                                $"el replay retrocedió: {lastRenderedTick} → {state.Tick}");
+                            lastRenderedTick = state.Tick;
+                        }
+                    }
+                });
+
+                Assert.True(sawHeader);
+                Assert.NotNull(presenter.FinalHash);
+                Assert.Equal(1200UL, presenter.FinalTick);
+
+                // Ventana completa renderizada: 2 muestras × 1200 ticks.
+                Assert.Equal(2400UL, rendered);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
         public void Picker_ParseaElJsonCanonical_YSeparaTiers()
         {
             string json = PresetScenario.RenderCards(json: true);

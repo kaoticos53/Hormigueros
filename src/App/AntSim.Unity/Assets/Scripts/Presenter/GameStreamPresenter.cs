@@ -17,14 +17,20 @@ namespace AntSim.Unity.Scripts.Streaming
 
         public GameStreamParser.HeaderView? Header => _parser.Header;
         public string? FinalHash => _parser.FinalHash;
+        public ulong FinalTick => _parser.FinalTick;
 
         /// <summary>Consume una línea del stream (en orden).</summary>
-        public void Feed(string line)
+        public void Feed(string line) => Feed2(line);
+
+        /// <summary>Variante con retorno: devuelve el TickView si la línea trae un tick
+        /// completo (null en cabecera/end) — para consumidores con hooks por tick.</summary>
+        public GameStreamParser.TickView? Feed2(string line)
         {
             var view = _parser.ParseLine(line);
-            if (view == null) return;
+            if (view == null) return null;
             _prev = _curr;
             _curr = view;
+            return view;
         }
 
         /// <summary>
