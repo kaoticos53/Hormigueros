@@ -34,6 +34,8 @@ Core (`AntSim.Core.Tests`, ver abajo) antes de abrir Unity.
 | `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) + linaje de cerebros por huella | ✅ |
 | `Scripts/UI/ColonyCardModel.cs` | tarjeta de colonia: semáforo del canal D, reserva, chips de cría, flujo 1 s, cerebros | ✅ |
 | `Scripts/UI/HudToastsModel.cs` | pila de toasts del canal D: dedupe por clave, expiración en s de sim, tope de pila | ✅ |
+| `Scripts/UI/CommandHistoryModel.cs` | panel de historial de comandos (§4): filas DropFood/SaveGame, total, «reproducir desde guardado» | ✅ |
+| `Scripts/EditorTools/SceneBootstrapper.cs` | comando de menú que construye la escena de juego completa (cámara, suelo, nidos, HUD) | editor |
 | `Scripts/Presenter/SimPresenterBehaviour.cs` | DrawMesh por frame, pausa/velocidad, estado para el raycast de selección | Unity |
 | `Scripts/UI/PoolPickerBehaviour.cs` | alimenta la UI del picker | Unity |
 | `Scripts/UI/AntInspectorBehaviour.cs` | selección (id/click) y pinta la tarjeta de inspección | Unity |
@@ -51,26 +53,35 @@ stream rompe el test antes de romper la UI.
 dotnet test src/Core/AntSim.Core.Tests --filter "FullyQualifiedName~UnityStreamContract"
 ```
 
-## Abrir el proyecto
+## Abrir el proyecto (arranque rápido)
 
-1. Unity 2022.3+ → Open Project → `src/App/AntSim.Unity`.
-2. Publica el CLI (`dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim-cli`)
-   y ajusta `CliPath` en `SimPresenterBehaviour`.
-3. Crea una escena con un plano + los meshes/materials de hormiga/ítem y engancha
-   `SimPresenterBehaviour`. Play: el mundo llega por el stream.
-4. `PoolPickerBehaviour` alimenta el selector; los especialistas muestran su
-   advertencia ⚠ (campo `card` del JSON canónico).
-5. `AntInspectorBehaviour`: asigna un uGUI Text y (opcional) el
-   `SimPresenterBehaviour` — con `SelectAntId` se sigue una hormiga por id, o
-   llama `PickNearest(point)` desde el raycast de la F4.2 para click-seleccionar.
-   El botón de la tarjeta llama `FollowTrackedBrain()` para el modo linaje:
-   rastrea todos los cuerpos del mismo cerebro (misma huella de genoma) y la
-   tarjeta muestra `cerebro #F · N cuerpos · M vivos` con el linaje completo.
-6. **HUD (F4.2)**: `HudLayoutBehaviour` — asigna `Presenter` (el
-   `SimPresenterBehaviour`), una uGUI Text por colonia en `ColonyCardTexts`, y
-   una Text vertical en `ToastsText`. Las tarjetas pintan el semáforo que
-   llega del canal D (el Core lo calcula con `RelayVerdict`: la UI no evalúa
-   umbrales) y los toasts llegan ya derivados con su nivel y ancla de cámara.
+1. Publica el CLI:
+   ```bash
+   dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim
+   ```
+   (en Windows el `StreamSource` resuelve `build/antsim.exe` automáticamente).
+2. Abre Unity (2022.3+, probado con 6000.0) → Open Project → `src/App/AntSim.Unity`.
+3. Menú **AntSim → Crear escena de juego**: construye cámara, suelo, nidos,
+   meshes/materials y el Canvas del HUD completo (tarjetas, toasts, historial,
+   inspección) con todas las referencias asignadas. Guarda la escena (Ctrl+S).
+4. **Play**: el mundo llega por el stream del CLI; HUD en vivo.
+
+Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
+stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
+
+### Ajustes finos
+
+- `SimPresenterBehaviour`: semilla/grid/colonias/ticks/`SeedPoolPath` (p. ej.
+  `artifacts/pretrain-warm-v2.antgenome` para ver el relevo pre-entrenado) y
+  velocidad 0/1/2/4/16×.
+- `AntInspectorBehaviour`: `SelectAntId` sigue una hormiga por id (o
+  `PickNearest(point)` desde un raycast); `FollowTrackedBrain()` activa el modo
+  linaje: `cerebro #F · N cuerpos · M vivos` con el linaje completo.
+- `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las
+  tarjetas pintan el semáforo del canal D (el Core lo calcula con
+  `RelayVerdict`: la UI no evalúa umbrales).
+- `PoolPickerBehaviour` alimenta el selector; los especialistas muestran su
+  advertencia ⚠ (campo `card` del JSON canónico).
 
 ## Fixtures de stream (artifacts/, no trackeados — se regeneran con el repro)
 

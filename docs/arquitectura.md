@@ -362,6 +362,18 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   save → `WorldSimSave.Load` reproduce el hash exacto del momento → 299 ticks
   de reproducción con hash a hash idénticos a la partida original.
   **115/115 tests verdes** (3 nuevos).
+- **F4.2 ✅ (layout del HUD)**: canal D en el stream — `GameScenario` corre
+  `AlertDeriver` y emite `alerts[{k,lvl,col,x,y,t,txt}]` por tick y
+  `light[[col,byte]]` (`RelayVerdict.EvaluateNormalized`) cada 120 ticks: la
+  UI nunca calcula umbrales (§6.4), pinta lo que llega. Modelos puros
+  verificados headless (`HudLayoutTests`): `ColonyCardModel` (tarjeta §2
+  completa), `HudToastsModel` (dedupe/expiración en s de sim/tope) y
+  `CommandHistoryModel` (panel §4: filas DropFood/SaveGame, total, botón
+  «reproducir desde guardado»). `SceneBootstrapper` (editor) construye la
+  escena completa con un comando de menú: cámara, suelo, nidos, meshes y
+  Canvas cableado — la integración visual ya no depende de pasos manuales.
+  `StreamSource` resuelve el sufijo `.exe` en Windows y `ReplayFile` permite
+  reproducir un fixture volcado sin CLI.
 - **F4.5-parcial ✅ (diff del selector)**: `--mode presets [--json]` — emite las
   tarjetas canónicas del selector (texto legible con fuente y comando de
   reproducción, o JSON estructurado por preset con el campo `card` incluido).
