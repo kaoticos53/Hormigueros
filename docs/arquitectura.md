@@ -249,6 +249,37 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 - Diseño de UX aprobado: [`fase4-diseno-ux.md`](fase4-diseno-ux.md) (importar ·
   espectar · intervenir como comandos con tick; huecos del Core a cerrar:
   canal A `SimSnapshot`, canal C `MetricFrame`, sistema de comandos).
+- **F4.0 ✅ (Canales A/C + comandos)**: `SimCommand` (`DropFood` — el ítem del
+  jugador es determinista: amount constante 5 ep, sin RNG; clamp al mundo) con
+  cola `EnqueueCommand` aplicada en el PUNTO CANÓNICO del `Step` (tras avanzar
+  el tick, antes de que actúe cualquier hormiga), registrada en el Canal B como
+  evento `CommandExecuted` (el .antlog y el modo verify la capturan sin tocar
+  su layout). `Telemetry.SimSnapshot` (canal A: poses + vista de colonia, pull
+  por tick) y `MetricRecorder`/`MetricFrame` (canal C: ventanas de 30 ticks =
+  1 s sim, mismo patrón observador que RelayTracker). **97/97 tests verdes**,:
+  incluye los 8 de F4.0 — misma semilla + mismos comandos ⇒ mundo bit a bit
+  (con y sin telemetría adjunta), timing/posición distintos ⇒ mundo distinto,
+  snapshot fiel al mundo sin mutarlo, y .antlog con comandos ⇒ hitos
+  reproducibles byte a byte.
+- **F4.1-parcial ✅ (feed de juego headless)**: `GameScenario` emite un stream
+  JSONL por tick — canal A (poses/items/colonias cada `frameEvery` ticks),
+  canal B (eventos siempre), canal C (`MetricFrame` al cerrar la ventana de
+  1 s), telemetría de relevo cada 120 ticks y línea `end` con hash — función
+  pura de (seed, ticks, comandos, pool). CLI `--mode game` con `--frame-every`,
+  `--drop tick:x:y` (inyección de comandos F4.0) y `--seed-pool` reutilizado.
+  El presenter Unity consume este mismo contrato headless antes de existir.
+  **101/101 tests verdes** (4 nuevos: stream byte a byte, hash idéntico a
+  `WorldScenario` sin comandos, comandos ⇒ mundo distinto, `CommandExecuted`
+  registrado con el ítem cayendo).
+- **F4.5-parcial ✅ (datos del selector de pools)**: `Telemetry.PoolPresets` —
+  los cuatro presets del diseño de UX (naturalista, warm-v2, warm-4, warm3)
+  con las métricas REALES del benchmark de referencia (benchmark-fase3ter.txt:
+  10 semillas × 24 000 ticks) y del modo juego grid 256 (5 semillas), banda,
+  archivo `.antgenome` y procedencia documental por preset, más el comando de
+  reproducción. Test de contrato con valores centinela: si el benchmark se
+  regenera con otro mundo, los tests obligan a actualizar las tarjetas — la UI
+  nunca muestra números que el repo no respalde. **109/109 tests verdes**
+  (8 nuevos).
 - `SimPresenter`: interpolación con retraso de 1 tick, pool, feromonas GPU por tiles.
 - HUD, inspección con traza, alertas, biblioteca de cerebros, checkpoints desde UI.
 - **Exit**: demo jugable 60 fps con 2 colonias; regresión visual con seeds fijas.

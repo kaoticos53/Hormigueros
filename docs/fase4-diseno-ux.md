@@ -42,7 +42,10 @@ pre-entrenamiento propio, o exportado de otra partida).
   *Ninguno (naturalista — arranca en frío)*, *warm-v2 (fiable)*,
   *warm-4 (mapa completo)*, *warm3 (máx. descargas)*, *Archivo propio…*.
   Los presets son `--seed-pool`; los datos de la tarjeta salen de la tabla de
-  referencia, no de marketing.
+  referencia, no de marketing. **Implementado como `Telemetry.PoolPresets`
+  (F4.5-parcial)**: métricas del benchmark + procedencia + comando de
+  reproducción por preset, con tests centinela que ligan los números al
+  benchmark regenerado.
 - **Feedback de por vida**, no de momento: los eventos de genoma del canal B
   (`GenomeEnteredElite` / `GenomeDiscarded`) alimentan una línea "cerebros" en
   la tarjeta de colonia: *12 importados · 7 entraron en élite · 5 descartados*.
