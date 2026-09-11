@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace AntSim.Unity.Scripts.Presenter
@@ -19,6 +20,10 @@ namespace AntSim.Unity.Scripts.Presenter
         public int Colonies = 2;
         public int FrameEvery = 1;
         public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome
+
+        [Header("Replay (debug sin CLI): prioridad sobre StreamGame si no está vacío")]
+        [Tooltip("Ruta de un stream volcado a archivo (p. ej. artifacts/stream-fixture-256.jsonl). Vacío = lanza el CLI.")]
+        public string? ReplayFile;
 
         [Header("Render")]
         public Mesh AntMesh;
@@ -55,8 +60,17 @@ namespace AntSim.Unity.Scripts.Presenter
             {
                 try
                 {
-                    _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery, SeedPoolPath,
-                        line => _presenter.Feed(line));
+                    if (!string.IsNullOrEmpty(ReplayFile))
+                        _source.StreamFile(ReplayFile, line => _presenter.Feed(line));
+                    else
+                        _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery, SeedPoolPath,
+                            line => _presenter.Feed(line));
+                }
+                catch (Exception ex)
+                {
+                    // Sin excepciones cruzando el hilo: el fallo se ve en el log de
+                    // Unity y en el HUD (el mundo simplemente no llega).
+                    UnityEngine.Debug.LogError($"[SimPresenter] stream falló: {ex.Message}");
                 }
                 finally
                 {

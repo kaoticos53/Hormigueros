@@ -28,7 +28,11 @@ namespace AntSim.Unity.Scripts.Presenter
         [Header("Inspector (opcional: reutiliza el AntInspectorBehaviour existente)")]
         public AntInspectorBehaviour? Inspector;
 
+        [Header("Historial de comandos (opcional, contrato HUD §4)")]
+        public UnityEngine.UI.Text? HistoryText;
+
         private readonly Streaming.ColonyCardModel _cards = new();
+        private readonly Streaming.CommandHistoryModel _history = new();
         private Streaming.HudToastsModel? _toasts;
 
         /// <summary>Modelo puro de tarjetas (tests y HUDs alternativos).</summary>
@@ -38,6 +42,9 @@ namespace AntSim.Unity.Scripts.Presenter
         /// deserializados por Unity (el constructor corre antes del deserialize).</summary>
         public Streaming.HudToastsModel Toasts =>
             _toasts ??= new Streaming.HudToastsModel(ToastLifetime, ToastMaxStack);
+
+        /// <summary>Modelo puro del historial de comandos (auditoría §4).</summary>
+        public Streaming.CommandHistoryModel History => _history;
 
         private ulong _lastTick;
 
@@ -56,12 +63,14 @@ namespace AntSim.Unity.Scripts.Presenter
                 _lastTick = view.Tick;
                 _cards.Observe(view);
                 toasts.Observe(view);
+                _history.Observe(view);
                 if (Inspector != null) Inspector.Observe(view);
             }
             toasts.Tick(Time.deltaTime * Mathf.Max(presenter.Speed, 0f));
 
             RenderCards();
             RenderToasts();
+            RenderHistory();
         }
 
         private void RenderCards()
@@ -95,5 +104,12 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Color uGUI del nivel de un toast (0 info · 1 ámbar · 2 verde · 3 rojo).</summary>
         public Color LevelColor(byte level)
             => level < ToastLevelColors.Length ? ToastLevelColors[level] : Color.white;
+
+        private void RenderHistory()
+        {
+            if (HistoryText == null) return;
+            string text = _history.Render();
+            if (HistoryText.text != text) HistoryText.text = text;
+        }
     }
 }

@@ -194,6 +194,54 @@ namespace AntSim.Core.Tests
             }
         }
 
+        // ————— historial de comandos (contrato HUD §4) —————
+
+        [Fact]
+        public void HistorialComandos_RegistraDropFoodYSaveGame()
+        {
+            var model = new CommandHistoryModel();
+            // kind 11 = CommandExecuted; AntId trae el kind del comando (0 DropFood,
+            // 1 SaveGame — contrato del canal B), X/Y las coordenadas.
+            model.Observe(TickFrom(events: "[11,0,0,42,17,0]"));   // DropFood @ (42,17)
+            model.Observe(TickFrom(events: "[11,0,1,0,0,0]", tickIsIrrelevant: false));
+
+            Assert.Equal(2, model.TotalCommands);
+            Assert.True(model.CanReplayFromSave);
+            string panel = model.Render();
+            Assert.Contains("t=1 — DropFood @ (42, 17)", panel);
+            Assert.Contains("SaveGame → slot", panel);
+            Assert.Contains("✓ guardado", panel);
+            Assert.Equal(2, model.Rows.Count);          // la más nueva arriba
+            Assert.Equal(1, model.Rows[0].CommandKind); // SaveGame
+        }
+
+        [Fact]
+        public void HistorialComandos_TopeDeFilas_NoPierdeElTotal()
+        {
+            var model = new CommandHistoryModel();
+            for (ulong t = 1; t <= 250; t++)
+                model.Observe(TickFrom(events: "[11,0,0,1,1,0]", tick: t));
+
+            Assert.Equal(250, model.TotalCommands);       // el acumulado no se recorta
+            Assert.Equal(CommandHistoryModel.MaxRows, model.Rows.Count);
+            Assert.Equal(250UL, model.Rows[0].Tick);      // la más nueva arriba
+        }
+
+        [Fact]
+        public void HistorialComandos_DelStreamReal()
+        {
+            // Partida real con comandos inyectados (--drop del contrato F4.0):
+            // el panel debe registrarlos todos desde el stream.
+            string stream = GameScenario.Run(42, ticks: 300, colonies: 1, grid: 96,
+                frameEvery: 30, seedPoolPath: null,
+                drops: new[] { (100, 384f, 384f), (150, 300f, 300f) });
+            var model = new CommandHistoryModel();
+            foreach (var v in Parse(stream)) model.Observe(v);
+
+            Assert.Equal(2, model.TotalCommands);
+            Assert.Contains("DropFood @ (384, 384)", model.Render());
+        }
+
         [Fact]
         public void Toasts_LaPausaNoLosConsume_SegundosDeSim()
         {
@@ -211,9 +259,10 @@ namespace AntSim.Core.Tests
         // ————— helpers: TickViews sintéticos con el contrato real del parser —————
 
         private static GameStreamParser.TickView TickFrom(
-            string colonies = "", string colmetrics = "", string events = "", string light = "")
+            string colonies = "", string colmetrics = "", string events = "",
+            string light = "", ulong tick = 1, bool tickIsIrrelevant = true)
         {
-            var sb = new System.Text.StringBuilder("{\"tick\":1");
+            var sb = new System.Text.StringBuilder("{\"tick\":").Append(tick);
             if (colonies.Length > 0) sb.Append(",\"colonies\":[").Append(colonies).Append(']');
             if (colmetrics.Length > 0) sb.Append(",\"colmetrics\":[").Append(colmetrics).Append(']');
             if (events.Length > 0) sb.Append(",\"events\":[").Append(events).Append(']');
@@ -227,5 +276,25 @@ namespace AntSim.Core.Tests
         private static HudToastsModel.Toast Toast(string key, string text, ulong tick)
             => new(new GameStreamParser.AlertView(key, level: 1, colonyId: 0,
                 x: -1f, y: -1f, tick: tick, text: text));
+
+        [Fact]
+        public void StreamSource_ResuelveElExeDeWindows()
+        {
+            // El campo CliPath es multiplataforma ("build/antsim"): en Windows con
+            // UseShellExecute=false hay que resolver "antsim.exe" — el Play no
+            // debe fallar en silencio por un sufijo.
+            string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+                "antsim-test-" + System.Guid.NewGuid().ToString("N")[..8]);
+            System.IO.Directory.CreateDirectory(dir);
+            try
+            {
+                string exe = System.IO.Path.Combine(dir, "antsim.exe");
+                System.IO.File.WriteAllText(exe, "");
+                var src = new AntSim.Unity.Scripts.Streaming.StreamSource(
+                    System.IO.Path.Combine(dir, "antsim"));
+                Assert.Equal(exe, src.CliPath);
+            }
+            finally { System.IO.Directory.Delete(dir, recursive: true); }
+        }
     }
 }

@@ -13,7 +13,21 @@ namespace AntSim.Unity.Scripts.Streaming
     {
         private readonly string _cliPath;
 
-        public StreamSource(string cliPath) => _cliPath = cliPath;
+        public StreamSource(string cliPath) => _cliPath = ResolveExecutable(cliPath);
+
+        /// <summary>Resuelve el ejecutable: en Windows añade .exe si falta (el
+        /// campo es "build/antsim" multiplataforma; Process.Start no lo infiere
+        /// con UseShellExecute=false) y da por buena la ruta tal cual si existe.</summary>
+        public static string ResolveExecutable(string path)
+        {
+            if (File.Exists(path)) return path;
+            if (OperatingSystem.IsWindows() && !Path.HasExtension(path))
+            {
+                string withExe = path + ".exe";
+                if (File.Exists(withExe)) return withExe;
+            }
+            return path; // no existe: que Process.Start dé el error claro
+        }
 
         /// <summary>Ejecuta el CLI y bombea cada línea a <paramref name="onLine"/> (bloqueante).</summary>
         public void StreamGame(ulong seed, int ticks, int grid, int colonies, int frameEvery,
@@ -48,6 +62,9 @@ namespace AntSim.Unity.Scripts.Streaming
             foreach (string line in File.ReadLines(path))
                 onLine(line);
         }
+
+        /// <summary>Ruta del CLI ya resuelta (tests y diagnóstico).</summary>
+        public string CliPath => _cliPath;
 
         /// <summary>Descarga las tarjetas del picker (JSON canónico del CLI).</summary>
         public string FetchPresetsJson()
