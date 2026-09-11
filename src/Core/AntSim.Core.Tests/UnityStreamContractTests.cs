@@ -209,6 +209,34 @@ namespace AntSim.Core.Tests
             }
         }
 
+        /// <summary>Hash final fijado del stream canónico (seed 42, grid 96,
+        /// 2 colonias, 7200 ticks): la partida de artifacts/stream-fixture.jsonl.
+        /// Lo comparte scripts/check-stream-fixture.sh (scripts/stream-fixture.
+        /// expected). Si falla, el determinismo del mundo se rompió; un cambio
+        /// INTENCIONAL se actualiza en ambos sitios con --update y en este test.</summary>
+        public const string CanonicalStreamHash =
+            "e94a9a9e70013dfbc741ed23b24b24ebc0f9a744f741110b0fb33209387269ef";
+
+        [Fact]
+        public void FixtureHash_ElStreamCanonicoEsByteAByteEstable()
+        {
+            // La misma partida que el fixture de artifacts y que el check de CI
+            // (scripts/check-stream-fixture.sh): si su hash final cambia, la UI
+            // de Unity y todos los fixtures se desalinean.
+            string stream = GameScenario.Run(42, ticks: 7200, colonies: 2, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+
+            string endLine = stream.Split('\n').Last(l => !string.IsNullOrWhiteSpace(l)).TrimEnd('\r');
+            Assert.StartsWith("{\"end\":true", endLine);
+
+            int i = endLine.IndexOf("\"hash\":\"", StringComparison.Ordinal);
+            Assert.True(i >= 0, "la línea end debe traer hash");
+            i += "\"hash\":\"".Length;
+            string hash = endLine.Substring(i, endLine.IndexOf('"', i) - i);
+
+            Assert.Equal(CanonicalStreamHash, hash);
+        }
+
         [Fact]
         public void Inspector_SigueUnaHormigaRealDelStream()
         {

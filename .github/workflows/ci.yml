@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Test (incluye el pin del hash del stream canónico)
+        run: dotnet test --nologo -v q
+
+      - name: Fixture hash check (regenera el stream canónico y compara)
+        run: bash scripts/check-stream-fixture.sh
