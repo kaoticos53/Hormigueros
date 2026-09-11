@@ -59,7 +59,7 @@ ventana de métricas (1 s). Datos y componentes, en orden de tarjeta:
 
 | Componente | Dato | Regla de presentación |
 |---|---|---|
-| **Semáforo de relevo** | `relays[c].*` del stream (por colonia; el `relay` global queda para compatibilidad) | 🔘 gris: `firstUnload == null` · 🟡 ámbar: descarga pero `carryLeg < 60 u` o `dropAvg > 190 u` · 🟢 verde: `carryLeg ≥ 60 u` y `dropAvg ≤ 190 u` (umbrales del benchmark: warm-v2 sano 167.9/80.0; el límite de regresión de pipeline.sh es drop +10% / leg −20%) |
+| **Semáforo de relevo** | `relays[c].*` del stream (por colonia; el `relay` global queda para compatibilidad) | 🔘 gris: sin datos de relevo · 🟡 ámbar: descarga pero `carryLeg < 60 u` o `dropAvg > 190 × grid/96` · 🟢 verde: resto. **Regla implementada como código en `Core/Scenario/RelayVerdict.cs`** (`Evaluate(leg, drop, grid)`): el drop escala con la distancia de forrajeo del mundo (190 u en el 96 de calibración ⇒ 506.7 en 256), el tramo es invariante — umbrales del benchmark Fase 3ter (warm-v2 sano 167.9/80.0; regresión pipeline.sh: drop +10% / leg −20%) |
 | Adultas | `colonies[c].adults` | "12 / 40" (tope duro del diseño) |
 | Cría | `eggs / larvae / pupae` | tres chips "🥚 4 · 🐛 2 · 🛑 1" |
 | Reserva | `stock` vs `stockMax` | barra horizontal; <20% = rojo (dispara alerta de puesta parada) |
@@ -96,9 +96,19 @@ Clic en una hormiga (dentro de ~0.5 u en coords de mundo): tarjeta flotante con
 los datos del canal A de esa pose (id, colonia, carga, viva). Botón "seguir"
 fija la cámara a su id hasta que `alive == 0` — entonces la tarjeta cierra con
 "murió a los {edad≈(ticks con vida)/30}s de sim" (contado por la UI desde que
-apareció). **Los datos de genoma/vigor/energía NO están en el stream todavía**
-(`TODO(F4.2)`: añadir al canal A en `GameScenario` — decisión de ancho de banda
-pendiente: enriquecer `ants` o emitir solo en "modo inspección").
+apareció). Los datos de genoma/vigor/energía YA están en el stream (ver arriba).
+
+**Implementado en el esqueleto Unity (F4.2)**: `AntInspectorModel` (puro,
+verificado headless en `UnityStreamContractTests`) sigue a la hormiga
+seleccionada a través de los TickViews — serie temporal de los 12 campos,
+muerte capturada del canal B (con causa: vejez/inanición), tarjeta en formato
+fijo con estados sin selección / esperando datos / viva / muerta. Regla
+descubierta por los tests: el canal A NO emite filas de hormigas muertas, así
+que una muerte de hormiga nunca rastreada se conserva como expediente (tick +
+causa, sin datos de posición) — una muerte no se pierde por llegar antes que
+la selección. `AntInspectorBehaviour` es el componente fino: selección por id
+(v1) o por click del raycast (`PickNearest`, usando el estado interpolado del
+presenter) y pinta la tarjeta en el uGUI Text asignado.
 
 ## 6. Qué NO hace el HUD (reglas duras)
 
@@ -133,25 +143,35 @@ Smoke end-to-end del contrato: `--mode game --grid 256 --colonies 2 --ticks
 48000 --seed-pool artifacts/pretrain-warm-v2.antgenome` sobre las 5 semillas
 de referencia, evaluando `relays[0]` final con los umbrales de §2:
 
-| semilla | firstUnload | dropAvg | carryLeg | unloads | semáforo |
-|---|---|---|---|---|---|
-| 42   | 5154 | 182.3 | 64.0  | 1 | 🟢 verde |
-| 7    | 4354 | 131.6 | 49.3  | 3 | 🟡 ámbar (leg < 60) |
-| 99   | 5298 | 190.3 | 85.0  | 1 | 🟡 ámbar (drop > 190) |
-| 1234 | 5876 | 177.0 | 71.0  | 2 | 🟢 verde |
-| 777  | 3745 | 240.0 | 174.0 | 1 | 🟡 ámbar (drop > 190) |
+| semilla | firstUnload | dropAvg | carryLeg | unloads | semáforo (escalado) | regla fija 96² (antes) |
+|---|---|---|---|---|---|---|
+| 42   | 5154 | 182.3 | 64.0  | 1 | 🟢 verde | 🟢 verde |
+| 7    | 4354 | 131.6 | 49.3  | 3 | 🟡 ámbar (leg < 60) | 🟡 ámbar (leg) |
+| 99   | 5298 | 190.3 | 85.0  | 1 | 🟢 verde | 🟡 ámbar (drop) |
+| 1234 | 5876 | 177.0 | 71.0  | 2 | 🟢 verde | 🟢 verde |
+| 777  | 3745 | 240.0 | 174.0 | 1 | 🟢 verde | 🟡 ámbar (drop) |
 
-**Resultado: 2/5 semillas en verde, 0 en gris o rojo.** Las 5 semillas
-arrancan el relevo (firstUnload 3 745–5 876, muy por debajo del fin de
-partida): el pool transfiere de forma consistente. Los amares son de
-salud del tramo, no de arranque: leg corto en la semilla 7, drops largos
-en 99 y 777 (el mundo de 256² produce transportes más largos que los
-umbrales calibrados en el benchmark de 96² — ver TODO de recalibración
-abajo). La colonia competidora sin sembrar queda gris en las 5
-(`relays[1] = {col,empty:true}`), que es exactamente el contraste que el
-selector de pools promete.
+**Resultado con la regla escalada (RelayVerdict, drop máx = 190 × 256/96 ≈
+506.7): 4/5 semillas en verde, 0 en gris o rojo.** Las 5 semillas arrancan
+el relevo (firstUnload 3 745–5 876, muy por debajo del fin de partida): el
+pool transfiere de forma consistente. Con la regla fija de 96² eran 2/5 —
+los drops largos de las semillas 99 (190.3) y 777 (240.0) eran artefactos
+del mundo grande, no degradación del homing (240 u en 256² es proporcional-
+mente MÁS cerca del nido que 167.9 en 96²). El único ámbar real es la
+semilla 7 por tramo corto (49.3 < 60), que la regla invariante castiga en
+cualquier mundo. La colonia competidora sin sembrar queda gris en las 5
+(`relays[1] = {col,empty:true}`), exactamente el contraste que el selector
+promete.
 
-TODO(F4.3): recalibrar los umbrales del semáforo para grid 256 (los
-actuales salen del benchmark en grid 96); candidato natural: verde con
-`carryLeg ≥ 60` y `dropAvg ≤ 240` (el drop escala con la distancia de
-forrajeo, el leg no).
+✅ **TODO(F4.3) CERRADO**: umbrales recalibrados como código en
+`Core/Scenario/RelayVerdict.cs` — `Evaluate(carryLeg, dropAvg, grid)` con
+drop escalado linealmente al grid (190 × grid/96) y tramo invariante ≥ 60 u.
+Tests: `RelayVerdictTests` (centinelas reales de esta tabla) e
+integración `IntegracionCompleta_WarmV2_Grid256_SemaforoVerde` (partida real
+seed 42 / grid 256 / 24 000 ticks ⇒ verde).
+
+Nota de recuento: los "eventos de descarga" de esta tabla se leen de
+`relays[c].unloads` (JSON del stream), NO de un grep naive de `[5,` — ese
+patrón también casa filas de hormigas con id 5 (contaminación: contaba
+hasta 9 en la seed 42 cuando la real es 1, tick 5154, consistente con
+`unloads:1`).

@@ -31,8 +31,10 @@ Core (`AntSim.Core.Tests`, ver abajo) antes de abrir Unity.
 | `Scripts/Streaming/StreamReader.cs` | lanza el CLI / lee archivo y bombea líneas | ✅ |
 | `Scripts/Presenter/GameStreamPresenter.cs` | interpolación con retraso de 1 tick → RenderState | ✅ |
 | `Scripts/UI/PoolPickerModel.cs` | JSON de presets → recomendados/especialistas | ✅ |
-| `Scripts/Presenter/SimPresenterBehaviour.cs` | DrawMesh por frame, pausa/velocidad | Unity |
+| `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) | ✅ |
+| `Scripts/Presenter/SimPresenterBehaviour.cs` | DrawMesh por frame, pausa/velocidad, estado para el raycast de selección | Unity |
 | `Scripts/UI/PoolPickerBehaviour.cs` | alimenta la UI del picker | Unity |
+| `Scripts/UI/AntInspectorBehaviour.cs` | selección (id/click) y pinta la tarjeta de inspección | Unity |
 
 ## Verificación headless (sin abrir Unity)
 
@@ -55,6 +57,31 @@ dotnet test src/Core/AntSim.Core.Tests --filter "FullyQualifiedName~UnityStreamC
    `SimPresenterBehaviour`. Play: el mundo llega por el stream.
 4. `PoolPickerBehaviour` alimenta el selector; los especialistas muestran su
    advertencia ⚠ (campo `card` del JSON canónico).
+5. `AntInspectorBehaviour`: asigna un uGUI Text y (opcional) el
+   `SimPresenterBehaviour` — con `SelectAntId` se sigue una hormiga por id, o
+   llama `PickNearest(point)` desde el raycast de la F4.2 para click-seleccionar.
+
+## Fixtures de stream (artifacts/, no trackeados — se regeneran con el repro)
+
+| Archivo | Mundo | Uso |
+|---|---|---|
+| `stream-fixture.jsonl` | seed 42 · grid 96 · 2 colonias · 7200 ticks · frameEvery 1 | contrato base; su hash final está FIJADO en CI (`scripts/check-stream-fixture.sh`) |
+| `stream-fixture-256.jsonl` | seed 42 · **grid 256** · 2 colonias · **48000 ticks** · frameEvery 30 · **warm-v2 sembrado** | mundo grande con relevo REAL: descarga en tick 5154, semáforo verde (RelayVerdict: carryLeg 64, dropAvg 182.3) en colonia 0 y competidora gris |
+
+Repro del fixture 256 (mismo hash `f28f4132…` en cualquier máquina):
+
+```bash
+dotnet run --project src/Tools/AntSim.Cli -c Debug -- --mode game \
+  --grid 256 --colonies 2 --ticks 48000 --seed 42 \
+  --seed-pool artifacts/pretrain-warm-v2.antgenome --frame-every 30 \
+  > artifacts/stream-fixture-256.jsonl
+```
+
+Nota: con `frameEvery 30` el canal A sale a 1 Hz — para HUD, picker,
+semáforo de relevo e inspector es el formato ideal (~13 MB); para probar
+interpolación suave de movimiento usa `stream-fixture.jsonl` (30 Hz) o
+regenera con `--frame-every 1` (376 MB: los ~170 ítems del 256² dominan
+cada línea). El hash final no depende de frameEvery: misma partida.
 
 ## Próximos hitos
 

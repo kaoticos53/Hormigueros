@@ -301,6 +301,35 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   `Graphics.DrawMesh` y pausa/velocidad; `PoolPickerBehaviour`). La escena,
   feromonas por tiles y HUD rico quedan para el resto de F4.1/F4.2.
   **120/120 tests verdes** (5 nuevos de contrato).
+- **Fixture de mundo grande (F4.1/F4.2)**: `artifacts/stream-fixture-256.jsonl`
+  (no trackeado, repro en el README de Unity) — la partida warm-v2 sembrada de
+  grid 256 / 48000 ticks / 2 colonias con `frameEvery 30`: canal A a 1 Hz y
+  eventos SIEMPRE por tick (garantía always-tick del contrato), así que el
+  relevo completo (la descarga de tick 5154 con semáforo verde colonia 0 /
+  gris colonia 1) es
+  verificable sin el peso de ~170 ítems por línea a 30 Hz (13.5 MB vs 376 MB).
+  Mismo hash final que con frameEvery 1: la cadencia de frames no toca la
+  simulación — util para probar HUD/inspector/semáforo contra datos reales.
+- **CI del contrato del stream**: el hash final de la partida canónica
+  (seed 42, grid 96, 2 colonias, 7200 ticks — la de
+  `artifacts/stream-fixture.jsonl`) está FIJADO en dos sitios que deben
+  mantenerse iguales: el test `FixtureHash_ElStreamCanonicoEsByteAByteEstable`
+  (constante `CanonicalStreamHash`) y `scripts/stream-fixture.expected`, que
+  lee `scripts/check-stream-fixture.sh`. El script regenera el stream con el
+  CLI y falla (exit 1) si el hash difiere — cualquier deriva del mundo sin
+  decisión consciente rompe CI; un cambio intencional se incorpora con
+  `--update` (reescribe solo el archivo de datos, nunca el script en
+  ejecución) más la edición del test. `.github/workflows/ci.yml` corre la
+  suite completa y el script en cada push/PR.
+- **F4.3 ✅ (semáforo de relevo recalibrado)**: `Core/Scenario/RelayVerdict.cs`
+  — la regla del semáforo como código (la UI nunca inventa umbrales):
+  tramo invariante ≥ 60 u (propiedad del portador) y drop máximo escalado
+  linealmente al mundo (190 × grid/96: propiedad de la distancia de
+  forrajeo). Calibrado en 96² (benchmark Fase 3ter), validado en 256² con
+  el smoke de 5 semillas: 4/5 verdes (antes 2/5 con la regla fija), el
+  único ámbar real es tramo corto — degradación genuina, castigada en
+  cualquier mundo. Tests: `RelayVerdictTests` + integración grid-256 con
+  warm-v2 real.
 - **F4.2 ✅-parcial (los tres TODOs del contrato HUD cerrados)**:
   `ColonyExtinct` como evento 12 del canal B (UNA vez por colonia, por
   transición de estado sin adultas ni cría; el camino de carga de checkpoints
