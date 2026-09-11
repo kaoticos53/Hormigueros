@@ -246,6 +246,9 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   42, dos procesos).
 
 ### Fase 4 — Aplicación Unity 2D (primer hito jugable)
+- Diseño de UX aprobado: [`fase4-diseno-ux.md`](fase4-diseno-ux.md) (importar ·
+  espectar · intervenir como comandos con tick; huecos del Core a cerrar:
+  canal A `SimSnapshot`, canal C `MetricFrame`, sistema de comandos).
 - `SimPresenter`: interpolación con retraso de 1 tick, pool, feromonas GPU por tiles.
 - HUD, inspección con traza, alertas, biblioteca de cerebros, checkpoints desde UI.
 - **Exit**: demo jugable 60 fps con 2 colonias; regresión visual con seeds fijas.
