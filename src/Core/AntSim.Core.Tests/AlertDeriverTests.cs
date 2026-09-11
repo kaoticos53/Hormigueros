@@ -303,4 +303,32 @@ public sealed class AlertDeriverTests
         // el benchmark): el hito verde debe haberse derivado del stream real.
         Assert.True(sawGreen, "warm-v2 debería disparar el hito de primera descarga");
     }
+
+    [Fact]
+    public void IntegracionCompleta_WarmV2_Grid256_SemaforoVerde()
+    {
+        // TODO F4.3 cerrado: en el mundo grande (grid 256, partida de juego real)
+        // el semáforo de la colonia sembrada es VERDE con la regla escalada
+        // (leg ≥ 60; drop ≤ 190 × grid/96). Centinela de
+        // docs/fase4-hud-contrato.md §8 (seed 42: leg 64, drop 182.3).
+        var (_, seeded) = AntSim.Core.Evolution.AntGenomeFile.ReadFile(
+            TestPaths.RepoPath("artifacts/pretrain-warm-v2.antgenome"), AntSim.Core.Brain.BrainContract.CurrentVersion);
+        var sim = new WorldSim(42, 256, colonyCount: 1);
+        sim.SeedPoolFromGenomes(0, seeded);
+        var relay = new RelayTracker();
+        bool sawUnload = false;
+
+        for (int i = 0; i < 24000 && !sawUnload; i++)
+        {
+            sim.Step();
+            relay.Observe(sim.LastEvents, sim);
+            if (relay.HasUnload) sawUnload = true;
+        }
+
+        Assert.True(sawUnload, "warm-v2 debería descargar en el mundo grande");
+        var col = relay.ForColony(0);
+        Assert.True(col.HasValue, "la colonia sembrada debe tener relevo observado");
+        Assert.Equal(RelayLight.Green, RelayVerdict.Evaluate(
+            (float?)col.Value.CarryLegMean, (float?)col.Value.DropMean, 256));
+    }
 }
