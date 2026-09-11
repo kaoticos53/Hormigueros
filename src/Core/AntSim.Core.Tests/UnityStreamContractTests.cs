@@ -33,7 +33,7 @@ namespace AntSim.Core.Tests
         [Fact]
         public void ScriptsPurosExisten_YNoReferencianUnity()
         {
-            foreach (var rel in new[] { "Streaming/GameStreamParser.cs", "Presenter/GameStreamPresenter.cs", "UI/PoolPickerModel.cs" })
+            foreach (var rel in new[] { "Streaming/GameStreamParser.cs", "Presenter/GameStreamPresenter.cs", "UI/PoolPickerModel.cs", "UI/AntInspectorModel.cs" })
             {
                 string path = Path.Combine(UnityScripts, rel);
                 Assert.True(File.Exists(path), "Falta el script puro: " + rel);
@@ -207,6 +207,151 @@ namespace AntSim.Core.Tests
             {
                 File.Delete(path);
             }
+        }
+
+        [Fact]
+        public void Inspector_SigueUnaHormigaRealDelStream()
+        {
+            string stream = GameScenario.Run(42, ticks: 400, colonies: 1, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            var inspector = new AntSim.Unity.Scripts.Streaming.AntInspectorModel();
+
+            // Selecciona la hormiga 1 ANTES de alimentar: cubre "esperando datos".
+            inspector.Select(1);
+            Assert.Null(inspector.Tracked); // aún sin datos, la tarjeta espera
+
+            foreach (var line in stream.Split('\n'))
+            {
+                var view = parser.ParseLine(line);
+                if (view != null) inspector.Observe(view);
+            }
+
+            var rec = inspector.Tracked;
+            Assert.NotNull(rec);
+            Assert.Equal(400, rec!.Samples.Count); // una muestra por tick de canal A
+
+            // — Los 12 campos del canal A llegan coherentemente —
+            var s0 = rec.Samples[0];
+            Assert.Equal(1u, rec.Id);
+            Assert.Equal(0, rec.ColonyId);
+            Assert.InRange(s0.Vigor, 0.5f, 1.3f);      // rango del fundador (contrato F4.2)
+            Assert.InRange(s0.Energy, 0f, 1f);
+            Assert.False(s0.IsImmigrant);              // las fundadoras no son inmigrantes
+            Assert.NotEqual(0u, s0.GenomeFingerprint); // huella estable y no trivial
+
+            // — Serie temporal: edad monótona, energía no creciente (sin comida garantizada)—
+            for (int i = 1; i < rec.Samples.Count; i++)
+            {
+                Assert.True(rec.Samples[i].Age >= rec.Samples[i - 1].Age, "edad monótona");
+                Assert.True(rec.Samples[i].Energy <= rec.Samples[i - 1].Energy + 1e-4f,
+                    "energía no crece sin comer (semilla 42, sin pickup garantizado)");
+            }
+
+            // — La huella del cerebro es constante para la misma hormiga —
+            Assert.All(rec.Samples, s => Assert.Equal(s0.GenomeFingerprint, s.GenomeFingerprint));
+
+            // — Tarjeta: estados renderizados —
+            string card = inspector.RenderCard();
+            Assert.StartsWith("Hormiga #1", card);
+            Assert.Contains("colonia 0", card);
+            Assert.Contains("cerebro #", card);
+            Assert.Contains("400", card); // rango de historial
+        }
+
+        [Fact]
+        public void Inspector_CapturaLaMuerteDelCanalB()
+        {
+            // Mundo sin comida: las fundadoras mueren (vejez o inanición) — hay
+            // AntDied garantizado para validar la captura del canal B. Con la vida
+            // de fundador actual (BaseLifespan 140 s ⇒ máx ~196 s de vida) hacen
+            // falta >6 000 ticks (30 Hz) para verla.
+            string stream = GameScenario.Run(42, ticks: 6300, colonies: 1, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            var inspector = new AntSim.Unity.Scripts.Streaming.AntInspectorModel();
+
+            // Sigue la hormiga 1 desde el arranque (el camino real del inspector:
+            // el jugador selecciona a una viva y la observa hasta el final).
+            inspector.Select(1);
+            bool anyDeath = false;
+            foreach (var line in stream.Split('\n'))
+            {
+                var view = parser.ParseLine(line);
+                if (view == null) continue;
+                foreach (var ev in view.Events)
+                    if (ev.Kind == 1) anyDeath = true;
+                inspector.Observe(view);
+            }
+
+            Assert.True(anyDeath, "el mundo sin comida debe producir muertes en 6300 ticks");
+            var rec = inspector.Tracked;
+            Assert.NotNull(rec);
+            Assert.NotNull(rec!.DeathTick); // la muerte quedó capturada
+            Assert.True(rec.DeathCause is 0 or 1, "causa válida del Core (vejez=0, inanición=1)");
+
+            string card = inspector.RenderCard();
+            Assert.Contains("muerta (", card);
+            Assert.Contains(rec.DeathCause == 0 ? "vejez" : "inanición", card);
+
+            // Contrato del canal A: la muestra del tick de la muerte marca alive=0
+            // y todas las posteriores también (el mundo sigue emitiendo la fila).
+            Assert.All(rec.Samples.Where(s => s.Tick >= rec.DeathTick!.Value),
+                s => Assert.False(s.Alive, "viva tras la muerte en el tick " + s.Tick));
+            var atDeath = rec.Samples.First(s => s.Tick == rec.DeathTick!.Value);
+            Assert.False(atDeath.Alive);
+
+            // — Caso selección tardía: la muerte de una hormiga NUNCA rastreada
+            //    se conserva como expediente (el canal A no emite muertos) —
+            var inspector2 = new AntSim.Unity.Scripts.Streaming.AntInspectorModel();
+            uint deadUntracked = 0; ulong deathTick = 0;
+            foreach (var line in stream.Split('\n'))
+            {
+                var view = parser.ParseLine(line);
+                if (view == null) continue;
+                if (deadUntracked == 0)
+                    foreach (var ev in view.Events)
+                        if (ev.Kind == 1 && ev.AntId != 1)
+                        { deadUntracked = ev.AntId; deathTick = view.Tick; }
+                inspector2.Observe(view);
+            }
+            Assert.NotEqual(0u, deadUntracked);
+            var stub = inspector2.Records.FirstOrDefault(r => r.Id == deadUntracked);
+            Assert.NotNull(stub);
+            Assert.Equal(deathTick, stub!.DeathTick);
+            Assert.Empty(stub.Samples);
+        }
+
+        [Fact]
+        public void Inspector_EstadosDeTarjeta_YSeleccionesMultiples()
+        {
+            var inspector = new AntSim.Unity.Scripts.Streaming.AntInspectorModel();
+
+            // Sin selección.
+            Assert.Equal("inspección: sin selección", inspector.RenderCard());
+
+            // Seleccionada pero sin datos todavía.
+            inspector.Select(7);
+            Assert.Equal("Hormiga #7 — esperando datos", inspector.RenderCard());
+
+            // Selección con datos, luego clear: el historial se conserva.
+            string stream = GameScenario.Run(42, ticks: 10, colonies: 1, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            foreach (var line in stream.Split('\n'))
+            {
+                var view = parser.ParseLine(line);
+                if (view != null) inspector.Observe(view);
+            }
+            Assert.NotNull(inspector.Tracked);
+            Assert.Equal(10, inspector.Tracked!.Samples.Count);
+
+            inspector.Clear();
+            Assert.Null(inspector.SelectedId);
+            Assert.Equal("inspección: sin selección", inspector.RenderCard());
+            Assert.Single(inspector.Records); // el historial de la #7 no se pierde
         }
 
         [Fact]

@@ -36,6 +36,11 @@ namespace AntSim.Unity.Scripts.Presenter
         private float _simTime;           // segundos de sim consumidos
         private const float Dt = 1f / 30f; // tick fijo de la arquitectura
         private bool _streaming;
+        private Streaming.RenderState? _lastState; // último estado muestreado (p. ej. para el inspector)
+
+        /// <summary>Último estado muestreado (poses del tick en curso) — lo consumen
+        /// p. ej. el raycast de selección de la tarjeta de inspección.</summary>
+        public Streaming.RenderState? CurrentState => _lastState;
 
         private void Start()
         {
@@ -63,6 +68,7 @@ namespace AntSim.Unity.Scripts.Presenter
 
             // Dibuja el último tick muestreado (la interpolación vive en Sample).
             var state = _presenter.Sample(Frac());
+            _lastState = state;
             Draw(state);
         }
 
