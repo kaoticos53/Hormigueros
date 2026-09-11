@@ -143,6 +143,8 @@ public sealed class AlertDeriver
         {
             // — absoluto: los mismos umbrales que el semáforo de la tarjeta.
             //    Prioridad: drop demasiado lejos (señal de mundo) > tramo corto.
+            //    F4.4: el tramo se juzga por RATIO (leg vs cadena disponible) —
+            //    un leg corto con cadena corta es relevo de proximidad completo.
             string? absolute = null;
             if (relay.DropDistanceMean is double dropD
                 && dropD > RelayVerdict.DropMaxFor(sim.GridCells))
@@ -150,10 +152,11 @@ public sealed class AlertDeriver
                 absolute = FormattableString.Invariant(
                     $"Las sueltas caen demasiado lejos del nido para este mundo ({dropD:0.0} u > {RelayVerdict.DropMaxFor(sim.GridCells):0} u)");
             }
-            else if (relay.CarryLegMean is double legD && (float)legD < RelayVerdict.CarryLegMin)
+            else if (relay.CarryLegMean is double legD && relay.ChainMean is double chainD
+                     && RelayVerdict.LegRatio((float)legD, (float)chainD) < RelayVerdict.LegRatioMin)
             {
                 absolute = FormattableString.Invariant(
-                    $"Tramos demasiado cortos para completar el relevo ({legD:0.0} u < {RelayVerdict.CarryLegMin:0} u)");
+                    $"Las cargas completan menos de {RelayVerdict.LegRatioMin * 100:0}% de la cadena disponible ({legD:0.0} u de {chainD:0.0} u)");
             }
 
             // — encogimiento: caída >20% del tramo acumulado vs la media de las

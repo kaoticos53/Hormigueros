@@ -212,6 +212,7 @@ public static class GameScenario
                       .Append(",\"unloadAvg\":").Append(v.UnloadMean is double um2 ? F((float)um2) : "null")
                       .Append(",\"carryLeg\":").Append(v.CarryLegMean is double cl2 ? F((float)cl2) : "null")
                       .Append(",\"dropAvg\":").Append(v.DropMean is double dm2 ? F((float)dm2) : "null")
+                      .Append(",\"chainAvg\":").Append(v.ChainMean is double cm2 ? F((float)cm2) : "null")
                       .Append(",\"unloads\":").Append(v.UnloadCount)
                       .Append('}');
                 }

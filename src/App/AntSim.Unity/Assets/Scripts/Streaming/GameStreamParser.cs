@@ -94,13 +94,13 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             public readonly int ColonyId;
             public readonly ulong? FirstUnload;
-            public readonly float? UnloadAvg, CarryLeg, DropAvg;
+            public readonly float? UnloadAvg, CarryLeg, DropAvg, ChainAvg;
             public readonly int Unloads;
 
             public ColonyRelayView(int colonyId, ulong? firstUnload, float? unloadAvg,
-                float? carryLeg, float? dropAvg, int unloads)
+                float? carryLeg, float? dropAvg, int unloads, float? chainAvg = null)
             { ColonyId = colonyId; FirstUnload = firstUnload; UnloadAvg = unloadAvg;
-              CarryLeg = carryLeg; DropAvg = dropAvg; Unloads = unloads; }
+              CarryLeg = carryLeg; DropAvg = dropAvg; Unloads = unloads; ChainAvg = chainAvg; }
         }
 
         /// <summary>Ventana de métricas de UNA colonia (F4.2).</summary>
@@ -273,7 +273,8 @@ namespace AntSim.Unity.Scripts.Streaming
                         p.NullNum("unloadAvg") is double ua2 ? (float)ua2 : null,
                         p.NullNum("carryLeg") is double cl2 ? (float)cl2 : null,
                         p.NullNum("dropAvg") is double da2 ? (float)da2 : null,
-                        (int)p.Num("unloads")));
+                        (int)p.Num("unloads"),
+                        p.NullNum("chainAvg") is double ca2 ? (float)ca2 : null));
                 }
             }
 

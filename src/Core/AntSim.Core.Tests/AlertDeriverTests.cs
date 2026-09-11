@@ -381,7 +381,12 @@ public sealed class AlertDeriverTests
         Assert.True(sawUnload, "warm-v2 debería descargar en el mundo grande");
         var col = relay.ForColony(0);
         Assert.True(col.HasValue, "la colonia sembrada debe tener relevo observado");
+        // Ambas reglas en la partida real: la absoluta (F4.3) y la normalizada
+        // (F4.4, recomendada — el ratio no castiga la cadena corta completada).
         Assert.Equal(RelayLight.Green, RelayVerdict.Evaluate(
             (float?)col.Value.CarryLegMean, (float?)col.Value.DropMean, 256));
+        Assert.Equal(RelayLight.Green, RelayVerdict.EvaluateNormalized(
+            (float?)col.Value.CarryLegMean, (float?)col.Value.ChainMean,
+            (float?)col.Value.DropMean, 256));
     }
 }

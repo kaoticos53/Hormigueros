@@ -383,6 +383,31 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
+        public void ChainAvg_ElStreamTraeLaCadenaDisponible()
+        {
+            // F4.4: relays[c] lleva chainAvg (pickup→nido − 24 u, media de las
+            // cargas completadas) — el insumo del semáforo normalizado. Hace falta
+            // una descarga real para que relays[c] deje de ser empty:true, así que
+            // la partida va sembrada con warm-v2 hasta la primera descarga
+            // (tick 5154 en seed 42/grid 256; con margen, 5600).
+            string stream = GameScenario.Run(42, ticks: 5600, colonies: 2, grid: 256,
+                frameEvery: 30, seedPoolPath: TestPaths.RepoPath("artifacts/pretrain-warm-v2.antgenome"),
+                drops: null);
+            Assert.Contains("\"chainAvg\":", stream); // presente (null o valor) en relays
+
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            float? chain = null;
+            foreach (var line in stream.Split('\n'))
+            {
+                var v = parser.ParseLine(line);
+                if (v == null) continue;
+                foreach (var r in v.ColonyRelays)
+                    if (r.ChainAvg is float ca) chain = ca;
+            }
+            Assert.NotNull(chain); // con la descarga ya ocurrida, chainAvg es valor
+        }
+
+        [Fact]
         public void Linaje_AgrupaCuerposPorHuellaYSaltaAlMuere()
         {
             // Sintético con el CONTRATO REAL del parser (filas de 12 campos): dos

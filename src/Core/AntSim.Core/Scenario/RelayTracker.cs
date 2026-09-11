@@ -48,10 +48,14 @@ public sealed class RelayTracker
         public int CarryLegCount;
         public long DropDistanceSum;
         public int DropCount;
+        // F4.4: cadena disponible por carga (pickup→nido − radio de descarga).
+        public long ChainSum;
+        public int ChainCount;
 
         public double? UnloadMean => UnloadCount > 0 ? UnloadDistanceSum / (double)UnloadCount : null;
         public double? CarryLegMean => CarryLegCount > 0 ? CarryLegSum / (double)CarryLegCount : null;
         public double? DropMean => DropCount > 0 ? DropDistanceSum / (double)DropCount : null;
+        public double? ChainMean => ChainCount > 0 ? ChainSum / (double)ChainCount : null;
     }
 
     private readonly Dictionary<int, ColonyRelay> _perColony = new();
@@ -75,19 +79,22 @@ public sealed class RelayTracker
         public readonly double? CarryLegMean;
         public readonly double? DropMean;
         public readonly int UnloadCount;
+        public readonly double? ChainMean; // F4.4: cadena disponible media
 
         public ColonyView(ulong firstUnloadTick, double? unloadMean, double? carryLegMean,
-            double? dropMean, int unloadCount)
+            double? dropMean, int unloadCount, double? chainMean = null)
         {
             FirstUnloadTick = firstUnloadTick; UnloadMean = unloadMean;
             CarryLegMean = carryLegMean; DropMean = dropMean; UnloadCount = unloadCount;
+            ChainMean = chainMean;
         }
     }
 
     public ColonyView? ForColony(int colonyId)
     {
         if (!_perColony.TryGetValue(colonyId, out var cr)) return null;
-        return new ColonyView(cr.FirstUnloadTick, cr.UnloadMean, cr.CarryLegMean, cr.DropMean, cr.UnloadCount);
+        return new ColonyView(cr.FirstUnloadTick, cr.UnloadMean, cr.CarryLegMean, cr.DropMean,
+            cr.UnloadCount, cr.ChainMean);
     }
 
     public ulong FirstUnloadTick { get; private set; }
@@ -102,6 +109,10 @@ public sealed class RelayTracker
     public long CarryLegSum { get; private set; }
     public int CarryLegCount { get; private set; }
 
+    /// <summary>Radio de descarga: las sueltas caen a ~24 u del nido (constante
+    /// del mundo) — el tramo restante hasta el nido no es trabajo del portador.</summary>
+    public const long UnloadRadius = 24;
+
     public bool HasUnload => FirstUnloadTick > 0;
 
     public double? DropDistanceMean => DropCount > 0 ? DropDistanceSum / (double)DropCount : null;
@@ -110,6 +121,13 @@ public sealed class RelayTracker
 
     /// <summary>Tramo medio pickup→descarga de las cargas completadas (el eslabón final del relevo).</summary>
     public double? CarryLegMean => CarryLegCount > 0 ? CarryLegSum / (double)CarryLegCount : null;
+
+    /// <summary>F4.4: cadena disponible media (pickup→nido − radio de descarga)
+    /// de las cargas completadas — el techo físico del tramo.</summary>
+    public double? ChainMean => ChainCount > 0 ? ChainSum / (double)ChainCount : null;
+
+    public long ChainSum { get; private set; }
+    public int ChainCount { get; private set; }
 
     /// <summary>Acumula las métricas de una tanda de eventos (un paso del mundo).</summary>
     public void Observe(IReadOnlyList<SimEvent> events, WorldSim sim)
@@ -148,15 +166,27 @@ public sealed class RelayTracker
                 cr.UnloadCount++;
 
                 // Eslabón final: del pickup de esta carga a esta descarga.
+                // F4.4: cadena disponible = (pickup→nido) − radio de descarga —
+                // el techo físico del tramo. Con comida de proximidad el tramo
+                // absoluto es corto por OFERTA, no por torpeza: el ratio
+                // leg/cadena mide el % de la cadena que la cría completa.
                 if (_openCarries.Remove((ev.ColonyId, ev.AntId), out var pick))
                 {
                     float cdx = ev.X - pick.X;
                     float cdy = ev.Y - pick.Y;
                     long leg = (long)MathF.Sqrt(cdx * cdx + cdy * cdy);
+                    float pdx = pick.X - colony.NestX;
+                    float pdy = pick.Y - colony.NestY;
+                    long chain = (long)MathF.Sqrt(pdx * pdx + pdy * pdy) - UnloadRadius;
+                    if (chain < 0) chain = 0;
                     CarryLegSum += leg;
                     CarryLegCount++;
                     cr.CarryLegSum += leg;
                     cr.CarryLegCount++;
+                    ChainSum += chain;
+                    ChainCount++;
+                    cr.ChainSum += chain;
+                    cr.ChainCount++;
                 }
             }
             else if (ev.Kind == SimEventKind.ItemSpawned && ev.ColonyId >= 0
