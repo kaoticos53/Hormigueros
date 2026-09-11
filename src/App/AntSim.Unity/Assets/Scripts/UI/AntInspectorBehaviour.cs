@@ -33,6 +33,10 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Inyecta un TickView observado (p. ej. desde el bombeo del presenter).</summary>
         public void Observe(Streaming.GameStreamParser.TickView view) => _model.Observe(view);
 
+        /// <summary>Botón "seguir cerebro" de la tarjeta (contrato HUD §5): sigue la
+        /// huella del genoma de la hormiga rastreada a través de sus cuerpos.</summary>
+        public bool FollowTrackedBrain() => _model.FollowBrainOfTracked();
+
         private void Update()
         {
             // — Selección por id directa (la vía del click llega con el raycast F4.2) —

@@ -31,7 +31,7 @@ Core (`AntSim.Core.Tests`, ver abajo) antes de abrir Unity.
 | `Scripts/Streaming/StreamReader.cs` | lanza el CLI / lee archivo y bombea líneas | ✅ |
 | `Scripts/Presenter/GameStreamPresenter.cs` | interpolación con retraso de 1 tick → RenderState | ✅ |
 | `Scripts/UI/PoolPickerModel.cs` | JSON de presets → recomendados/especialistas | ✅ |
-| `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) | ✅ |
+| `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) + linaje de cerebros por huella | ✅ |
 | `Scripts/Presenter/SimPresenterBehaviour.cs` | DrawMesh por frame, pausa/velocidad, estado para el raycast de selección | Unity |
 | `Scripts/UI/PoolPickerBehaviour.cs` | alimenta la UI del picker | Unity |
 | `Scripts/UI/AntInspectorBehaviour.cs` | selección (id/click) y pinta la tarjeta de inspección | Unity |

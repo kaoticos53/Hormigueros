@@ -53,6 +53,7 @@ namespace AntSim.Unity.Scripts.Streaming
 
         private readonly Dictionary<uint, AntRecord> _records = new();
         private uint? _selected;
+        private uint? _followBrain; // modo linaje: seguir un CEREBRO entre cuerpos
 
         /// <summary>Id de la hormiga seleccionada (null = nada seleccionado).</summary>
         public uint? SelectedId => _selected;
@@ -68,7 +69,78 @@ namespace AntSim.Unity.Scripts.Streaming
         public void Select(uint antId) => _selected = antId;
 
         /// <summary>Deselecciona (el historial acumulado se conserva).</summary>
-        public void Clear() => _selected = null;
+        public void Clear()
+        {
+            _selected = null;
+            _followBrain = null;
+        }
+
+        // ————— linaje de cerebros (huella del genoma = "el mismo cerebro") —————
+
+        /// <summary>Modo linaje activo: la tarjeta sigue a UN CEREBRO a través de
+        /// los cuerpos que lo portan (null = modo hormiga normal).</summary>
+        public uint? FollowedBrain => _followBrain;
+
+        /// <summary>Huella del cerebro de la hormiga rastreada (null si no hay).
+        /// Es el valor que la UI pasa a <see cref="FollowBrain"/> desde la tarjeta.</summary>
+        public uint? TrackedBrainFingerprint => Tracked?.Last.GenomeFingerprint;
+
+        /// <summary>Sigue a un CEREBRO: a partir de ahora se rastrean TODOS los
+        /// cuerpos que porten esa huella (los que ya tiene y los que aparezcan)
+        /// y la tarjeta muestra el linaje. El cuerpo actual salta automáticamente
+        /// al siguiente cuerpo vivo cuando el actual muere.</summary>
+        public void FollowBrain(uint fingerprint)
+        {
+            _followBrain = fingerprint;
+            _selected = null;
+        }
+
+        /// <summary>Atajo del flujo real de la UI: la hormiga rastreada muere y el
+        /// jugador pulsa "seguir cerebro". False si no hay hormiga rastreada.</summary>
+        public bool FollowBrainOfTracked()
+        {
+            var fp = TrackedBrainFingerprint;
+            if (fp is not uint f || f == 0) return false;
+            FollowBrain(f);
+            return true;
+        }
+
+        /// <summary>Vuelve al modo hormiga siguiendo un cuerpo concreto del cerebro
+        /// seguido (o de otro id). Limpia el modo linaje.</summary>
+        public void FollowAnt(uint antId)
+        {
+            _followBrain = null;
+            _selected = antId;
+        }
+
+        /// <summary>Cuerpos observados del cerebro dado, ordenados por primer
+        /// avistamiento. Solo cuerpos con muestras del canal A (los expedientes
+        /// de muerte sin datos no conocen su huella).</summary>
+        public List<AntRecord> LineageOf(uint fingerprint)
+        {
+            var lineage = new List<AntRecord>();
+            foreach (var r in _records.Values)
+                if (r.Samples.Count > 0 && r.Last.GenomeFingerprint == fingerprint)
+                    lineage.Add(r);
+            lineage.Sort((a, b) => a.Samples[0].Tick.CompareTo(b.Samples[0].Tick));
+            return lineage;
+        }
+
+        /// <summary>Cuerpo ACTUAL del cerebro seguido: el más joven de los vivos
+        /// (la última encarnación). Null si no hay ninguno vivo todavía.</summary>
+        public AntRecord? CurrentBody
+        {
+            get
+            {
+                if (_followBrain is not uint fp) return null;
+                AntRecord? best = null;
+                foreach (var r in LineageOf(fp))
+                    if (r.DeathTick == null && r.Last.Alive
+                        && (best == null || r.Samples[0].Tick > best.Samples[0].Tick))
+                        best = r;
+                return best;
+            }
+        }
 
         /// <summary>
         /// Observa un TickView completo (el de <c>Feed2</c>). Añade la muestra del
@@ -98,21 +170,22 @@ namespace AntSim.Unity.Scripts.Streaming
                 dead.DeathCause = ev.Cause;
             }
 
-            // — Canal A: muestra de la hormiga seleccionada —
-            if (_selected is uint sel)
+            // — Canal A: muestra de la hormiga seleccionada Y de todos los
+            //    cuerpos del cerebro seguido (modo linaje) —
+            foreach (var a in view.Ants)
             {
-                foreach (var a in view.Ants)
+                bool isSel = _selected == a.Id;
+                bool isBrain = _followBrain is uint fb && a.GenomeFingerprint == fb;
+                if (!isSel && !isBrain) continue;
+
+                if (!_records.TryGetValue(a.Id, out var rec))
                 {
-                    if (a.Id != sel) continue;
-                    if (!_records.TryGetValue(sel, out var rec))
-                    {
-                        rec = new AntRecord { Id = a.Id, ColonyId = a.ColonyId };
-                        _records[sel] = rec;
-                    }
-                    rec.Samples.Add(new Sample(view.Tick, a.X, a.Y, a.Heading,
-                        a.HasLoad, a.Alive, a.Vigor, a.Energy, a.Age,
-                        a.IsImmigrant, a.GenomeFingerprint));
+                    rec = new AntRecord { Id = a.Id, ColonyId = a.ColonyId };
+                    _records[a.Id] = rec;
                 }
+                rec.Samples.Add(new Sample(view.Tick, a.X, a.Y, a.Heading,
+                    a.HasLoad, a.Alive, a.Vigor, a.Energy, a.Age,
+                    a.IsImmigrant, a.GenomeFingerprint));
             }
         }
 
@@ -124,12 +197,85 @@ namespace AntSim.Unity.Scripts.Streaming
             _ => "causa " + cause.ToString(CultureInfo.InvariantCulture),
         };
 
+        /// <summary>Tarjeta del modo linaje: UN cerebro, todos sus cuerpos.
+        /// Formato fijo v1, cultura invariante.</summary>
+        private string RenderLineageCard(uint fingerprint)
+        {
+            var sb = new StringBuilder();
+            var lineage = LineageOf(fingerprint);
+
+            sb.Append("cerebro #").Append(fingerprint.ToString(CultureInfo.InvariantCulture));
+
+            if (lineage.Count == 0)
+            {
+                sb.Append("\nesperando cuerpos");
+                return sb.ToString();
+            }
+
+            int alive = 0; AntRecord? current = null;
+            foreach (var r in lineage)
+                if (r.DeathTick == null && r.Last.Alive)
+                {
+                    alive++;
+                    if (current == null || r.Samples[0].Tick > current.Samples[0].Tick)
+                        current = r;
+                }
+
+            sb.Append(" · ").Append(lineage.Count.ToString(CultureInfo.InvariantCulture))
+              .Append(lineage.Count == 1 ? " cuerpo" : " cuerpos")
+              .Append(" · ").Append(alive.ToString(CultureInfo.InvariantCulture))
+              .Append(" vivo" + (alive == 1 ? "" : "s"))
+              .Append('\n');
+
+            // El cerebro es una identidad, no un cuerpo: edad y energía del
+            // cuerpo actual; posición/rumbo SOLO si hay cuerpo único (con varios
+            // no hay "la posición del cerebro").
+            var cur = current;
+            if (cur != null)
+            {
+                sb.Append("cuerpo actual: #").Append(cur.Id)
+                  .Append(" · energía ").Append(cur.Last.Energy.ToString("0.00", CultureInfo.InvariantCulture))
+                  .Append(" · edad ").Append(cur.Last.Age.ToString("0.0", CultureInfo.InvariantCulture)).Append(" s\n");
+                if (lineage.Count == 1)
+                    sb.Append("posición: ")
+                      .Append(cur.Last.X.ToString("0.0", CultureInfo.InvariantCulture)).Append(", ")
+                      .Append(cur.Last.Y.ToString("0.0", CultureInfo.InvariantCulture))
+                      .Append(" · rumbo ").Append(cur.Last.Heading.ToString("0.00", CultureInfo.InvariantCulture))
+                      .Append('\n');
+            }
+            else
+            {
+                sb.Append("sin cuerpo vivo — esperando relevo\n");
+            }
+
+            // Historial del linaje, uno por cuerpo, en orden de aparición.
+            sb.Append("linaje:");
+            foreach (var r in lineage)
+            {
+                sb.Append(" #").Append(r.Id.ToString(CultureInfo.InvariantCulture))
+                  .Append(" t").Append(r.Samples[0].Tick.ToString(CultureInfo.InvariantCulture))
+                  .Append(r.DeathTick is ulong dt
+                      ? "†" + dt.ToString(CultureInfo.InvariantCulture)
+                      : (r.Last.Alive ? " (vivo)" : ""));
+            }
+
+            return sb.ToString();
+        }
+
         /// <summary>
         /// Render de la tarjeta (formato fijo, textos definitivos de la v1,
         /// cultura invariante). Estados: sin selección / esperando datos /
-        /// viva / muerta. El historial muestra el rango de ticks con datos.
+        /// viva / muerta / MODO LINAJE. El historial muestra el rango de ticks
+        /// con datos.
         /// </summary>
         public string RenderCard()
+        {
+            if (_followBrain is uint fb) return RenderLineageCard(fb);
+            return RenderAntCard();
+        }
+
+        /// <summary>Tarjeta del modo hormiga (un cuerpo).</summary>
+        private string RenderAntCard()
         {
             var sb = new StringBuilder();
 

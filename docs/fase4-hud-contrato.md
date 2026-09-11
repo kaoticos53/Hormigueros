@@ -111,6 +111,21 @@ la selección. `AntInspectorBehaviour` es el componente fino: selección por id
 (v1) o por click del raycast (`PickNearest`, usando el estado interpolado del
 presenter) y pinta la tarjeta en el uGUI Text asignado.
 
+**Linaje de cerebros (`FollowBrain`/`FollowBrainOfTracked`)**: la huella del
+genoma es la identidad del CEREBRO; el modo linaje rastrea TODOS los cuerpos
+que la porten (presentes y futuros) y la tarjeta muestra
+`cerebro #F · N cuerpos · M vivos`, el cuerpo actual (#id, energía, edad), y
+el linaje completo `#id t{aparición}†{muerte}` por cuerpo — con posición
+solo si hay un cuerpo único (con varios no hay "la posición del cerebro").
+Al morir el cuerpo actual, la tarjeta queda en "esperando relevo" hasta que
+aparece el siguiente portador (o "sin cuerpo vivo — esperando relevo" si el
+modo es permanente). `FollowAnt(id)` vuelve al modo hormiga. Nota de mundo
+anclada en test: en los mundos actuales cada nacimiento cruza+y muta
+(`GenomePool.Birth`), así que 1 cerebro = 1 cuerpo; el linaje multi-cuerpo
+existe para modos con reuso de cerebros (p. ej. re-introducción de élite o
+inmigración probada), y el test `Linaje_EnStreamReal_...` obliga a decidir
+conscientemente si eso cambia.
+
 ## 6. Qué NO hace el HUD (reglas duras)
 
 1. **Nunca consulta el Core directamente**: el stream es la única fuente (en
@@ -176,3 +191,33 @@ Nota de recuento: los "eventos de descarga" de esta tabla se leen de
 patrón también casa filas de hormigas con id 5 (contaminación: contaba
 hasta 9 en la seed 42 cuando la real es 1, tick 5154, consistente con
 `unloads:1`).
+
+### §8.1 Diagnóstico del ámbar de la seed 7 (trazado de portadores)
+
+Investigación con el dump real (`artifacts/smoke-seeds/warmv2-7.jsonl`):
+pickup/unload emparejados por hormiga + canal A a 1 Hz + anillo de spawn.
+**Veredicto: la colonia es competente; el ámbar es un artefacto del techo
+de la métrica, no una degradación del relevo.**
+
+- **Ni muerte ni hambre ni desvíos.** Los dos portadores (hormigas 31 y 37)
+  son cría joven del pool sembrado (eclosionan ~t=3750, justo tras morir las
+  fundadoras), vigor 0.72/0.96, energía 1.00 en todo el trayecto, ninguna
+  muere durante su carga. Las 3 descargas caen a 24.0 u del nido (radio de
+  descarga) — homing perfecto.
+- **El tramo es corto porque la COMIDA estaba cerca.** Legs reales: 6.7 /
+  93.2 / 49.1 u con pickups a 30.6 / 116.9 / 70.7 u del nido. El tramo está
+  acotado por (distancia del ítem − radio de descarga): con un ítem a 30.6 u
+  el tramo máximo posible es ~6.6 u — la hormiga 37 lo completó entera.
+- **Ratio de tramo completado ≈ 100% en las 3 cargas**: leg/(pickup − 24) =
+  1.02 / 1.00 / 1.05. El relevo no dejó eslabón por completar: no había más
+  eslabón disponible. La seed 7 tuvo solo 12 spawns en 48 000 ticks (hambre
+  extrema de mundo) y los cercanos al nido (28–128 u) son los que se
+  encontraron — cadena corta por oferta, no por torpeza.
+
+TODO(F4.4): métrica de tramo NORMALIZADA — `leg / max(pickup − radio, ε)`
+(el % de la cadena disponible que la cría completa), tanto en el semáforo
+(`RelayVerdict`) como en el umbral absoluto del deriver. El leg absoluto
+(≥ 60 u) solo tiene sentido como medida de RELEVO LARGO; penalizar con él
+un forrajeo de proximidad confunde oferta corta con competencia baja.
+Mientras tanto: el ámbar por leg corto de la §8 se lee como "cadena corta
+observada", no como colonia enferma.

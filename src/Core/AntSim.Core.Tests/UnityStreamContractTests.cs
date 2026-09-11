@@ -383,6 +383,101 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
+        public void Linaje_AgrupaCuerposPorHuellaYSaltaAlMuere()
+        {
+            // Sintético con el CONTRATO REAL del parser (filas de 12 campos): dos
+            // cuerpos (#10, #11) portan la misma huella 777 — el mismo cerebro en
+            // cuerpos sucesivos. Los genomas son únicos por cuerpo en los mundos
+            // actuales (Birth siempre cruza+y muta), así que el caso multi-cuerpo
+            // se construye; el contrato es para modos con reuso de cerebros.
+            string Row(uint id, int tick, float x, bool load, bool alive, uint fp)
+                => $"{{\"tick\":{tick},\"ants\":[[{id},0,{x.ToString(System.Globalization.CultureInfo.InvariantCulture)},100,0.5,{(load ? 1 : 0)},{(alive ? 1 : 0)},0.8,1,{tick / 30}.0,0,{fp}]],\"items\":[],\"colonies\":[],\"events\":[]}}";
+
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            var insp = new AntSim.Unity.Scripts.Streaming.AntInspectorModel();
+            insp.Select(10);
+
+            // Cuerpo #10 vivo t=30..90.
+            foreach (int t in new[] { 30, 60, 90 })
+            {
+                var v = parser.ParseLine(Row(10, t, x: 10f + t, load: true, alive: true, fp: 777));
+                insp.Observe(v!);
+            }
+            Assert.Equal(3, insp.Tracked!.Samples.Count);
+
+            // Muerte del #10 (canal B): el flujo real de la UI es "seguir cerebro"
+            // en/tras la muerte, ANTES de que aparezca el siguiente cuerpo.
+            insp.Observe(parser.ParseLine(
+                "{\"tick\":91,\"ants\":[],\"items\":[],\"colonies\":[],\"events\":[[1,0,10,20,100,1]]}")!);
+            Assert.True(insp.FollowBrainOfTracked());
+            Assert.Equal(777u, insp.FollowedBrain);
+
+            // Aparece el #11 con la MISMA huella: el modo linaje lo rastrea solo.
+            insp.Observe(parser.ParseLine(Row(11, tick: 120, x: 40f, load: false, alive: true, fp: 777))!);
+
+            var lineage = insp.LineageOf(777);
+            Assert.Equal(2, lineage.Count);
+            Assert.Equal(10u, lineage[0].Id); // orden de aparición
+            Assert.Equal(11u, lineage[1].Id);
+
+            string card = insp.RenderCard();
+            Assert.StartsWith("cerebro #777", card);
+            Assert.Contains("2 cuerpos", card);
+            Assert.Contains("1 vivo", card);
+            Assert.Contains("#10 t30†91", card);     // cuerpo muerto con su tick
+            Assert.Contains("#11 t120 (vivo)", card); // cuerpo actual
+
+            // — Salto automático: el cuerpo actual del cerebro es el vivo —
+            var cur = insp.CurrentBody;
+            Assert.NotNull(cur);
+            Assert.Equal(11u, cur!.Id);
+
+            // — El modo hormiga sobre un cuerpo del linaje conserva el expediente —
+            insp.FollowAnt(11);
+            Assert.Null(insp.FollowedBrain);
+            Assert.NotNull(insp.Tracked);
+            Assert.Equal(1, insp.Tracked.Samples.Count);
+        }
+
+        [Fact]
+        public void Linaje_EnStreamReal_CerebrosUnicosPorCuerpo()
+        {
+            // En los mundos actuales cada nacimiento es un genoma nuevo (Birth
+            // siempre cruza y muta): el linaje de un cerebro es un solo cuerpo.
+            // El test ancla ESTA REALIDAD para que un cambio en el mundo que
+            // introduzca reuso de cerebros sea una decisión consciente.
+            string stream = GameScenario.Run(42, ticks: 300, colonies: 2, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            var insp = new AntSim.Unity.Scripts.Streaming.AntInspectorModel();
+
+            foreach (var line in stream.Split('\n'))
+            {
+                var v = parser.ParseLine(line);
+                if (v != null) insp.Observe(v);
+            }
+
+            // Sin selección ni follow, Observe no acumula nada.
+            Assert.Empty(insp.Records);
+
+            // Todos los cuerpos vistos por el canal A, agrupados por huella.
+            var seen = new System.Collections.Generic.Dictionary<uint, System.Collections.Generic.HashSet<uint>>();
+            foreach (var line in stream.Split('\n'))
+            {
+                var v = parser.ParseLine(line);
+                if (v == null) continue;
+                foreach (var a in v.Ants)
+                {
+                    if (!seen.TryGetValue(a.GenomeFingerprint, out var set))
+                        seen[a.GenomeFingerprint] = set = new();
+                    set.Add(a.Id);
+                }
+            }
+            Assert.True(seen.Count > 0);
+            Assert.All(seen.Values, set => Assert.Single(set)); // 1 cerebro = 1 cuerpo
+        }
+
+        [Fact]
         public void Picker_ParseaElJsonCanonical_YSeparaTiers()
         {
             string json = PresetScenario.RenderCards(json: true);
