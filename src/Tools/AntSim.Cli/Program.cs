@@ -69,6 +69,7 @@ internal static class Program
         string? loadPath = null;      // Fase 4: cargar checkpoint (modo verify)
         int frameEvery = 1;           // F4.1: canal A cada N ticks en modo game
         var drops = new List<(int Tick, float X, float Y)>(); // F4.1: comandos DropFood inyectados
+        bool presetsJson = false;   // --mode presets: salida JSON estructurada
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -80,8 +81,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game")
-                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify' o 'game'.");
+                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets")
+                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game' o 'presets'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -150,6 +151,9 @@ internal static class Program
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out frameEvery) || frameEvery < 1)
                         return Fail("--frame-every requiere un entero ≥ 1.");
                     break;
+                case "--json":
+                    presetsJson = true;
+                    break;
                 case "--drop":
                 {
                     // Formato tick:x:y — inyecta un comando DropFood del jugador (F4.0).
@@ -180,6 +184,7 @@ internal static class Program
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
                 "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops),
+                "presets" => PresetScenario.RenderCards(json: presetsJson),
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
@@ -534,6 +539,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--json]");
     }
 }
