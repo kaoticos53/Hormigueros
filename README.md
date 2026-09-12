@@ -18,7 +18,8 @@ y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cier
 [`docs/fase4-diseno-ux.md`](docs/fase4-diseno-ux.md) para el diseño de UX del modo evolución (Fase 4),
 [`docs/fase4-hud-contrato.md`](docs/fase4-hud-contrato.md) para el contrato de datos del HUD (F4.2)
 y [`docs/fase4-resumen.md`](docs/fase4-resumen.md) para el resumen de cierre de la Fase 4
-(junto con [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md): arranque en frío, salud del relevo y jerarquía de pools).
+(junto con [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md): arranque en frío, salud del relevo y jerarquía de pools),
+y [`docs/fase5-plan.md`](docs/fase5-plan.md) para el plan de la Fase 5 (realismo, especies y escala).
 
 ## Requisitos
 

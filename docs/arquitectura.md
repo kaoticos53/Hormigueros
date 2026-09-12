@@ -387,6 +387,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 - **Exit**: demo jugable 60 fps con 2 colonias; regresión visual con seeds fijas.
 
 ### Fase 5 — Realismo, especies y escala
+- Plan de trabajo: [`fase5-plan.md`](fase5-plan.md) (mini-grafo MLP, pulido
+  uGUI, Atta/Eciton, NEAT v2, SoA/ECS — hitos, decisiones abiertas y orden).
 - Atta (soldados por sobrealimentación, hongo) y Eciton (legionaria, ciclos nómadas).
 - Competencia entre colonias y depredadores; NEAT en vivo con inspector de grafos.
 - Refactor SoA/ECS y LOD de feromonas.
