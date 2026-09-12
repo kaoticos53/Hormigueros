@@ -69,6 +69,7 @@ internal static class Program
         string? loadPath = null;      // Fase 4: cargar checkpoint (modo verify)
         int frameEvery = 1;           // F4.1: canal A cada N ticks en modo game
         var drops = new List<(int Tick, float X, float Y)>(); // F4.1: comandos DropFood inyectados
+        int pheroEvery = 0; // F4.5: canal E opt-in (feromonas en el stream)
         bool presetsJson = false;   // --mode presets: salida JSON estructurada
 
         for (int i = 0; i < args.Length; i++)
@@ -154,6 +155,10 @@ internal static class Program
                 case "--json":
                     presetsJson = true;
                     break;
+                case "--phero-every":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out pheroEvery) || pheroEvery < 0)
+                        return Fail("--phero-every requiere un entero ≥ 0 (0 = desactivado).");
+                    break;
                 case "--drop":
                 {
                     // Formato tick:x:y — inyecta un comando DropFood del jugador (F4.0).
@@ -183,7 +188,8 @@ internal static class Program
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
-                "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops),
+                "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
+                    pheroEvery: pheroEvery),
                 "presets" => PresetScenario.RenderCards(json: presetsJson),
                 "genome-info" => importPath == null
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
@@ -543,6 +549,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--json]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--json]");
     }
 }

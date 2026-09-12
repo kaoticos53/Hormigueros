@@ -95,6 +95,12 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
   tarjeta de cuarentena (sha, fitness, genomas, reglas); Confirmar siembra la
   partida vía `SeedPoolPath`, Cancelar no toca nada. `ImportDialogModel`
   (puro) parsea el JSON canónico — testado headless contra el pool real.
+- **Feromonas visibles (F4.5)**: lanza el CLI con `--phero-every 30` y el quad
+  `PheromoneTiles` (lo crea el bootstrapper) pinta el rastro de la colonia 0
+  vía RenderTexture. `PheromoneTileModel` (puro) decodifica el paquete RLE —
+  la emisión es telemetría pura: el hash del mundo no cambia (test).
+- **Salto de cámara por toast (§1)**: tecla J (o Alt+click en la pila) mueve
+  la cámara al ancla (x, y) que el canal D trae en cada alerta.
 - `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las
   tarjetas pintan el semáforo del canal D (el Core lo calcula con
   `RelayVerdict`: la UI no evalúa umbrales).
@@ -125,6 +131,6 @@ cada línea). El hash final no depende de frameEvery: misma partida.
 
 ## Próximos hitos
 
-- **F4.1**: escena real, feromonas por tiles (RenderTexture), regresión visual con semillas fijas.
-- **F4.2**: HUD (tarjetas de colonia + semáforo de relevo del stream), alertas por eventos.
-- **F4.5**: UI del picker uGUI con los dos niveles.
+- **F4.1**: regresión visual con semillas fijas (escena real ya montada por el bootstrapper).
+- **F4.2**: HUD lógico completo (tarjetas, toasts, semáforo, inspector, historial) — falta pulido uGUI por elemento.
+- **F4.5**: UI del picker uGUI con los dos niveles; drag&drop de .antgenome.

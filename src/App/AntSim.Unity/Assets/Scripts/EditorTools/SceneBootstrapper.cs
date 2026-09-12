@@ -74,6 +74,17 @@ namespace AntSim.Unity.Scripts.EditorTools
                     NewMat(c == 0 ? new Color(0.7f, 0.3f, 0.2f) : new Color(0.2f, 0.4f, 0.75f), $"NestMat{c}");
             }
 
+            // — Feromonas (F4.5): quad bajo las hormigas + RenderTexture del canal E —
+            var pheroQuad = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            pheroQuad.name = "PheromoneTiles";
+            pheroQuad.transform.position = new Vector3(128f, 0.02f, 128f);
+            pheroQuad.transform.localScale = new Vector3(26f, 1f, 26f); // plane = 10 u ⇒ 256
+            var pheroMat = NewMat(new Color(0.4f, 0.9f, 0.5f, 0f), "PheromoneMat");
+            pheroMat.SetFloat("_Mode", 2f); // fade (transparente)
+            var phero = pheroQuad.AddComponent<Presenter.PheromoneTileBehaviour>();
+            phero.Presenter = presenter;
+            phero.TargetMaterial = pheroMat;
+
             // — Canvas del HUD —
             var canvasGo = new GameObject("HUD Canvas");
             var canvas = canvasGo.AddComponent<Canvas>();
@@ -139,6 +150,11 @@ namespace AntSim.Unity.Scripts.EditorTools
             drop.Presenter = presenter;
             hud.DropPlan = drop;
             hud.DropPlanText = dropPlanText;
+
+            // — Salto de cámara por toast (contrato §1): ancla (x,y) del canal D —
+            var jumpGo = new GameObject("ToastClickCameraJump");
+            var jump = jumpGo.AddComponent<Presenter.ToastClickCameraJump>();
+            jump.Hud = hud;
 
             // — Diálogo de importación (F4.3): tarjeta de cuarentena del oráculo —
             var importText = NewText(canvasGo.transform, "ImportDialog",

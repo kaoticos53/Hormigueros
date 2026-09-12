@@ -156,6 +156,7 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly List<ColonyMetricsView> ColonyMetrics = new();
             public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
             public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
+            public string? Phero;                                 // canal E (F4.5), base64 RLE
         }
 
         /// <summary>Cabecera del stream (parámetros de la partida).</summary>
@@ -263,6 +264,14 @@ namespace AntSim.Unity.Scripts.Streaming
                         (uint)Reader.NumOf(f[2]), (float)Reader.NumOf(f[3]), (float)Reader.NumOf(f[4]),
                         (byte)Reader.NumOf(f[5])));
                 }
+            }
+
+            int pi = raw.IndexOf("\"phero\":\"", StringComparison.Ordinal);
+            if (pi >= 0)
+            {
+                int start = pi + 9;
+                int end = raw.IndexOf('"', start);
+                if (end > start) v.Phero = raw.Substring(start, end - start);
             }
 
             int mi = raw.IndexOf("\"metrics\":{", StringComparison.Ordinal);

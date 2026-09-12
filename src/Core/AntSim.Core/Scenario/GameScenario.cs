@@ -30,10 +30,11 @@ public static class GameScenario
     public static string Run(ulong seed, int ticks, int colonies = 2, int grid = 256,
         int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
         IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
-        bool cloneFromElite = false)
+        bool cloneFromElite = false, int pheroEvery = 0)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
+        if (pheroEvery < 0) throw new ArgumentOutOfRangeException(nameof(pheroEvery));
 
         var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite);
         var sb = new StringBuilder();
@@ -43,6 +44,17 @@ public static class GameScenario
         var alertsOut = new List<AlertDeriver.Alert>();
 
         AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite);
+        if (pheroEvery > 0)
+            sb.Length -= 3; // "}}\r\n" → cierra en el bucle: añadimos "pheroEvery" y paquetes
+
+        // Canal E (F4.5): feromonas opt-in. Se declara en la cabecera para que
+        // el parser sepa que los ticks pueden traer "phero". La emisión nunca
+        // toca el mundo (telemetría pura) y va en ticks múltiplo de pheroEvery.
+        if (pheroEvery > 0)
+        {
+            sb.Append(",\"pheroEvery\":").Append(pheroEvery);
+            sb.Append("}}").AppendLine();
+        }
 
         if (seedPoolPath != null)
         {
@@ -75,11 +87,62 @@ public static class GameScenario
             alerts.Observe(sim.LastEvents, frame, relay, sim, alertsOut);
 
             AppendTick(sb, sim, metrics, relay, alerts, alertsOut, frame, grid, frameEvery);
+            if (pheroEvery > 0 && sim.Tick % (ulong)pheroEvery == 0)
+                AppendPheromones(sb, sim);
         }
 
         sb.Append("{\"end\":true,\"tick\":").Append(sim.Tick)
           .Append(",\"hash\":\"").Append(sim.HashLine()).Append("\"}").AppendLine();
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Canal E (F4.5): capa FoodTrail de la colonia 0 como paquete binario —
+    /// RLE por filas + base64, dentro del tick JSON como string. Codificación
+    /// canónica: cabecera w,h (u16 LE) + filas no vacías [y (u16 LE) + pares
+    /// (valor, run ≤255)] donde cada fila suma exactamente w celdas. Telemetría
+    /// pura: lee, nunca escribe.
+    /// </summary>
+    private static void AppendPheromones(StringBuilder sb, WorldSim sim)
+    {
+        // HomeLayer en vez de FoodLayer: las fundadoras depositan home siempre
+        // que caminan (el food trail exige llevar carga), así el canal muestra
+        // actividad desde los primeros ticks.
+        var layer = sim.Colonies[0].HomeLayer;
+        int w = layer.Width, h = layer.Height;
+        var payload = new List<byte>(w * h / 4 + 16);
+        // Cabecera: w, h little-endian u16.
+        payload.Add((byte)w); payload.Add((byte)(w >> 8));
+        payload.Add((byte)h); payload.Add((byte)(h >> 8));
+
+        var quant = new byte[w];
+        int y = 0;
+        while (y < h)
+        {
+            bool rowZero = true;
+            for (int x = 0; x < w; x++)
+            {
+                float v = layer[x, y];
+                byte q = v <= 0.004f ? (byte)0 : (byte)Math.Clamp((int)MathF.Round(v * 255f), 1, 255);
+                quant[x] = q;
+                if (q != 0) rowZero = false;
+            }
+            if (rowZero) { y++; continue; }
+
+            payload.Add((byte)(y & 0xFF));
+            payload.Add((byte)((y >> 8) & 0xFF));
+            int cx = 0;
+            while (cx < w)
+            {
+                byte v = quant[cx];
+                int run = 1;
+                while (cx + run < w && run < 255 && quant[cx + run] == v) run++;
+                payload.Add(v); payload.Add((byte)run);
+                cx += run;
+            }
+            y++;
+        }
+        sb.Append(",\"phero\":\"").Append(Convert.ToBase64String(payload.ToArray())).Append('"');
     }
 
     private static void AppendHeader(StringBuilder sb, ulong seed, int ticks, int colonies,
