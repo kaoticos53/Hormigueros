@@ -83,6 +83,16 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private void OnDestroy()
         {
+            // Fuera de Play `Destroy` no se puede llamar (Unity lo reporta como
+            // ERROR en la consola, y la consola es parte del veredicto del Play
+            // pass): al recrear la escena desde el editor este componente se
+            // destruye en modo edición. En Play, el camino normal es `Destroy`.
+            if (!Application.isPlaying)
+            {
+                if (_cpu != null) DestroyImmediate(_cpu);
+                if (_rt != null) { _rt.Release(); DestroyImmediate(_rt); }
+                return;
+            }
             if (_cpu != null) Destroy(_cpu);
             if (_rt != null) _rt.Release();
         }

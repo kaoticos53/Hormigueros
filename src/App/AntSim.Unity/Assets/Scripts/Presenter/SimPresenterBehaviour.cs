@@ -32,6 +32,30 @@ namespace AntSim.Unity.Scripts.Presenter
         [Header("Intervención (F4.4): plan de drops acumulado en partida")]
         [Tooltip("Drops pendientes (tick:x:y) para el relanzamiento con --drop.")]
         public string[] PendingDropArgs = System.Array.Empty<string>();
+
+        /// <summary>
+        /// Args del plan que debe consumir la PRÓXIMA instancia del presenter.
+        ///
+        /// El «reiniciar con plan» (y el confirmar del diálogo de importación)
+        /// recargan la escena para volver a empezar la partida: la instancia del
+        /// componente se destruye, así que un campo de instancia no sobreviviría
+        /// y el CLI arrancaría SIN los drops. El plan viaja aquí —una sola vez—
+        /// y <see cref="Start"/> lo recoge y lo limpia.
+        /// </summary>
+        private static string[] _pendingArgsForNextScene = System.Array.Empty<string>();
+
+        /// <summary>Pool que debe sembrar la PRÓXIMA instancia del presenter.
+        /// Mismo motivo que los args: el confirmar del diálogo de importación
+        /// recarga la escena y un campo de instancia se perdería al recargarla.</summary>
+        private static string? _seedPoolForNextScene;
+
+        /// <summary>Arma los args que consumirá la próxima escena (reinicio/import).</summary>
+        public static void ArmPendingArgsForNextScene(string[] args)
+            => _pendingArgsForNextScene = args ?? System.Array.Empty<string>();
+
+        /// <summary>Arma el pool que sembrará la próxima escena (import F4.3).</summary>
+        public static void ArmSeedPoolForNextScene(string poolPath)
+            => _seedPoolForNextScene = poolPath;
         [Header("Replay (debug sin CLI): prioridad sobre StreamGame si no está vacío")]
         [Tooltip("Ruta de un stream volcado a archivo (p. ej. artifacts/stream-fixture-256.jsonl). Vacío = lanza el CLI.")]
         public string? ReplayFile;
@@ -45,7 +69,31 @@ namespace AntSim.Unity.Scripts.Presenter
         public Material CarrierMaterial = null!;
         public Mesh ItemMesh = null!;
         public Material ItemMaterial = null!;
-        public float AntScale = 0.6f;
+
+        /// <summary>
+        /// LONGITUD de la hormiga en unidades de mundo (no un factor de escala:
+        /// el valor histórico —0.6— no significaba nada visible). 0 = automática
+        /// (<see cref="AntWorldFraction"/> del lado del mundo).
+        ///
+        /// El valor histórico venía de un mundo de ~96 u: en el mundo real de
+        /// 768 u dejaba hormigas de ~1 u de ancho, es decir **sub-píxel** —
+        /// invisibles por pequeñas, no por tapadas. Como la vista no puede
+        /// depender de que alguien ajuste un campo a mano, el default se DERIVA
+        /// del grid.
+        /// </summary>
+        public float AntScale = 0f;
+
+        [Tooltip("Longitud automática de la hormiga como fracción del lado del mundo " +
+                 "(0.018 de 768 u ≈ 14 u ≈ 12 px a 720p con el tablero encuadrado).")]
+        public float AntWorldFraction = 0.018f;
+
+        [Tooltip("Diámetro automático del ítem como fracción del lado del mundo.")]
+        public float ItemWorldFraction = 0.010f;
+
+        /// <summary>Altura sobre el suelo a la que se dibujan hormigas, portadores
+        /// e ítems: por encima del plano de feromonas (y≈0.02) para que la capa
+        /// transparente no los tape y para no hacer z-fighting con el suelo.</summary>
+        public float ActorLift = 0.6f;
 
         [Header("Tiempo")]
         [Range(0f, 16f)] public float Speed = 1f; // 0 = pausa
@@ -74,6 +122,19 @@ namespace AntSim.Unity.Scripts.Presenter
             // imposible sin esta línea; para un simulador-espectáculo también es
             // lo deseable.
             Application.runInBackground = true;
+
+            // Un reinicio de escena (reiniciar-con-plan / importar pool) deja aquí
+            // el plan armado: se recoge y se limpia para que no se aplique dos veces.
+            if (_pendingArgsForNextScene.Length > 0)
+            {
+                PendingDropArgs = _pendingArgsForNextScene;
+                _pendingArgsForNextScene = System.Array.Empty<string>();
+            }
+            if (_seedPoolForNextScene != null)
+            {
+                SeedPoolPath = _seedPoolForNextScene;
+                _seedPoolForNextScene = null;
+            }
 
             // Play-pass: el CLI escribe el JSONL entero de una vez, así que sin
             // buffer el presenter saltaría al último tick al primer frame (nunca
@@ -143,33 +204,61 @@ namespace AntSim.Unity.Scripts.Presenter
             return t - Mathf.Floor(t);
         }
 
+        /// <summary>Lado del mundo en unidades (grid × celdas): la referencia de
+        /// toda la escala visual.</summary>
+        public float WorldSide => Streaming.WorldUnits.WorldSize(Grid);
+
+        /// <summary>Longitud efectiva de la hormiga en unidades (la del campo o la
+        /// automática, derivada del lado del mundo).</summary>
+        public float EffectiveAntScale => AntScale > 0f ? AntScale : WorldSide * AntWorldFraction;
+
+        /// <summary>Escala efectiva del ítem.</summary>
+        public float EffectiveItemScale => WorldSide * ItemWorldFraction;
+
         private void Draw(Streaming.RenderState state)
         {
+            float world = WorldSide;
+            float antS = EffectiveAntScale;
+            float itemS = EffectiveItemScale;
+            float lift = ActorLift > 0f ? ActorLift : world * 0.0008f;
+
             if (AntMesh != null && AntMaterial != null)
             {
+                // Hormiga TUMBADA y alargada en la dirección de avance. El defecto
+                // visible que destapó la sonda de píxeles: la cápsula se dibujaba
+                // vertical (0, -heading, 0), así que el bicho era un poste de ~1 u
+                // —a cualquier zoom, «no se ven hormigas»— y ni siquiera se leía
+                // hacia dónde iba. Ahora: Rx(90) acuesta la cápsula (su eje Y pasa
+                // a apuntar al avance) y la escala es asimétrica — largo, ancho y
+                // grosor derivados del LARGO, con la malla natural (2 u × 1 u).
+                // Las portadoras son algo mayores: el relevo se lee sin HUD.
+                const float carrierBoost = 1.25f;
                 foreach (var a in state.Ants)
                 {
-                    var pos = new Vector3(a.X, 0f, a.Y);
-                    var rot = Quaternion.Euler(0f, -a.Heading * Mathf.Rad2Deg, 0f);
+                    if (!a.Alive) continue;
+                    float len = a.HasLoad ? antS * carrierBoost : antS;
+                    var scale = new Vector3(len * 0.33f, len * 0.5f, len * 0.16f);
+                    var pos = new Vector3(a.X, lift, a.Y);
+                    var rot = Quaternion.Euler(90f, -a.Heading * Mathf.Rad2Deg, 0f);
                     var mat = a.HasLoad ? CarrierMaterial : AntMaterial;
                     if (mat == null) mat = AntMaterial;
-                    var mtx = Matrix4x4.TRS(pos, rot, Vector3.one * AntScale);
+                    var mtx = Matrix4x4.TRS(pos, rot, scale);
                     Graphics.DrawMesh(AntMesh, mtx, mat, 0);
                 }
             }
 
             if (ItemMesh != null && ItemMaterial != null)
             {
+                // Ítem: esfera natural (1 u de diámetro) escalada por el diámetro
+                // querido; el tamaño insinúa la cantidad restante.
                 foreach (var it in state.Items)
                 {
-                    var pos = new Vector3(it.X, 0f, it.Y);
-                    var mtx = Matrix4x4.TRS(pos, Quaternion.identity,
-                        Vector3.one * (0.4f + 0.06f * it.Amount));
+                    var pos = new Vector3(it.X, lift * 0.7f, it.Y);
+                    float s = itemS * (0.55f + 0.03f * it.Amount);
+                    var mtx = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s);
                     Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, 0);
                 }
             }
-
-            // Los nidos ( colonies ) los dibuja un marker estático por colonia — v1.
         }
     }
 }
