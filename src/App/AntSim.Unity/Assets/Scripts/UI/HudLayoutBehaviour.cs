@@ -104,7 +104,8 @@ namespace AntSim.Unity.Scripts.Presenter
             var bars = Streaming.HudElementLayoutModel.StockBars(
                 _cards.Cards.Values
                     .Where(c => c.Colony != null)
-                    .Select(c => (c.ColonyId, c.Colony!.Stock, c.Colony.StockMax))
+                    // Colony es un struct nullable: el ! no lo desenvuelve — .Value sí.
+                    .Select(c => (c.ColonyId, c.Colony!.Value.Stock, c.Colony.Value.StockMax))
                     .ToList());
             foreach (var b in bars)
             {
