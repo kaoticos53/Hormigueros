@@ -26,12 +26,33 @@ antsim --mode game --seed 42 --grid 96 --colonies 2 --ticks 3000 \
 
 Archivos (no trackeados, regenerables con el repro): `artifacts/smoke-e2e-{A,B,baseline}.jsonl`.
 
-**CI**: `scripts/check-replay-command.sh` replaya esta partida en cada push
+**CI**: `scripts/check-replay-command.sh` replaya ambas fases en cada push
 contra el pool del fixture trackeado `tests/fixtures/warm-v2.antgenome`
-(byte a byte el mismo archivo que `artifacts/pretrain-warm-v2.antgenome`) y
-compara con el hash fijado en `scripts/replay-command.expected`. Si el hash
+(byte a byte el mismo archivo que `artifacts/pretrain-warm-v2.antgenome`):
+la fase 3000 contra `scripts/replay-command.expected` (intervención) y la
+fase 6000 contra `scripts/replay-command-6k.expected` (relevo). Si un hash
 cambia, el PR falla — actualizar el pin con `--update` es una decisión
 explícita y revisable.
+
+## Fase extendida (6000 ticks): el relevo entra en la verificación
+
+Misma partida (mismos drops, fixture pool) corrida hasta 6000 ticks — el
+territorio donde el relevo sembrado ya despierta:
+
+| Verificación | Resultado |
+|---|---|
+| **Replay bit a bit** (6000 ticks, mismo binario) | ✅ `87fbc8edb04314d5f0335c747d54af116d8eed9ae4e3e7639d1225e22c776db7` |
+| **Baseline sin drops (6000)** | ✅ difiere: `083d9309…` |
+| **Primera descarga** (evento Unload, colonia 0) | ✅ **t3950** — el relevo sembrado despierta bien dentro de la partida |
+| **Semáforo del canal D** | ✅ gris→ámbar en t5880/6000 (`light [[0,1],[1,0]]`): `RelayVerdict` con dropAvg 191.7 vs umbral 190 (grid 96) — la comida del JUGADOR se descargó lejos y el veredicto lo nota: la intervención es visible también en el semáforo |
+| **relays[0] final** | `firstUnload 3950 · unloads 2 · carryLeg 66 · dropAvg 191.7 · chainAvg 44.5` |
+| **Colonia competidora (sin sembrar)** | gris todo el stream (`light [1,0]` constante) — el contraste del selector |
+
+Contraste con el baseline sin drops (6000): firstUnload t3943, **1 descarga,
+semáforo VERDE** (`[[0,2],[1,0]]`, dropAvg 187.4 < 190). Los drops del
+jugador añadieron comida que se descargó lejos → 2 descargas pero dropAvg
+191.7 → ámbar. El relevo y su semáforo son parte del mundo determinista:
+cambian con la intervención y se reproducen bit a bit con ella.
 
 ## Qué demuestra
 
@@ -43,7 +64,9 @@ El bucle completo del diseño de UX (§2) con los mecanismos reales:
    tick (F4.0/F4.4), se ejecuta en su tick exacto y queda auditado en el
    canal B (`CommandExecuted`).
 3. **Verificar**: la misma línea de comandos reproduce el mundo **bit a bit
-   en cualquier máquina y build** — el hash final `816e280c…` es el certificado.
+   en cualquier máquina y build** — el hash final `816e280c…` es el certificado
+   (y su extensión a 6000 ticks, `87fbc8ed…`, certifica además el relevo:
+   primera descarga t3950 y semáforo del canal D incluidos en el mundo fijado).
 
 Es exactamente el contrato que la UI promete: el botón «reiniciar con plan»
 (`DropFoodClickHandler`) y el «reproducir» del historial

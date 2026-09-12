@@ -1,26 +1,31 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# check-replay-command.sh — CI: la partida CON PLAN DE DROPS del smoke e2e
-# reproduce su hash final fijado.
+# check-replay-command.sh — CI: el bucle de juego completo (sembrar ·
+# intervenir · relevo) reproduce sus hashes finales fijados.
 #
-# Extiende el pin del fixture canónico (check-stream-fixture.sh) al camino de
-# INYECCIÓN DE COMANDOS (F4.0/F4.4): la misma línea de comandos con
-# --seed-pool y tres --drop debe producir SIEMPRE el mismo mundo. Si el hash
-# cambia, algo rompió el determinismo del camino de intervención del jugador
-# (encolado de comandos, aplicación en el punto canónico del Step, o la
+# Dos fases, ambas con el pool del fixture trackeado
+# tests/fixtures/warm-v2.antgenome (los .antgenome de artifacts/ son de
+# ejecución y no viajan con el repo; procedencia en tests/fixtures/README.md):
+#
+#   Fase 3000 (intervención): partida con plan de 3 --drop del smoke e2e —
+#     pin 816e280c… (scripts/replay-command.expected).
+#   Fase 6000 (relevo): misma partida extendida a 6000 ticks — la colonia 0
+#     sembrada completa su primera descarga (t3950, evento Unload) y el
+#     semáforo del canal D pasa a ámbar por RelayVerdict; pin 87fbc8ed…
+#     (scripts/replay-command-6k.expected).
+#
+# Si un hash cambia, algo rompió el determinismo del camino de intervención
+# o del relevo (encolado de comandos, RelayTracker/RelayVerdict, o la
 # simulación en sí). Si el cambio es INTENCIONAL (decisión de diseño del
-# mundo documentada), actualiza el hash fijado con --update y revisa el diff.
+# mundo documentada), actualiza los pines con --update y revisa el diff.
 #
 # Uso:
-#   scripts/check-replay-command.sh              # modo CI: compara con el hash fijado
-#   scripts/check-replay-command.sh --update     # actualiza el hash fijado (cambio intencional)
+#   scripts/check-replay-command.sh              # modo CI: ambas fases
+#   scripts/check-replay-command.sh --update     # actualiza los pines (cambio intencional)
 #   scripts/check-replay-command.sh --hash XXX…  # compara contra otro hash (tests del script)
 #   scripts/check-replay-command.sh --quiet      # solo el veredicto (para logs de CI)
 #
-# Requisitos: dotnet SDK. El pool del fixture vive en
-# tests/fixtures/warm-v2.antgenome (TRACKED — los .antgenome de artifacts/
-# son ejecución y no viajan con el repo; la procedencia del fixture está en
-# tests/fixtures/README.md).
+# Requisitos: dotnet SDK.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -28,21 +33,25 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI_PROJECT="$ROOT/src/Tools/AntSim.Cli"
 POOL="$ROOT/tests/fixtures/warm-v2.antgenome"
 
-# ── Parámetros de la partida del smoke e2e (NO tocar sin decisión consciente) ─
+# ── Parámetros del smoke e2e (NO tocar sin decisión consciente) ───────────────
 SEED=42
-TICKS=3000
 GRID=96
 COLONIES=2
 FRAME_EVERY=30
 DROPS=("--drop" "1500:400:300" "--drop" "1600:500:250" "--drop" "1700:200:450")
+TICKS_SHORT=3000
+TICKS_LONG=6000
 
-# ── Hash esperado: el del smoke e2e (docs/fase4-smoke-e2e.md) ─────────────────
-EXPECTED_FILE="$ROOT/scripts/replay-command.expected"
-if [[ ! -f "$EXPECTED_FILE" ]]; then
-  echo "✗ ERROR: falta $EXPECTED_FILE (el hash fijado del replay con drops)" >&2
-  exit 1
-fi
-EXPECTED_HASH="$(tr -d '[:space:]' < "$EXPECTED_FILE")"
+EXPECTED_SHORT_FILE="$ROOT/scripts/replay-command.expected"
+EXPECTED_LONG_FILE="$ROOT/scripts/replay-command-6k.expected"
+for f in "$EXPECTED_SHORT_FILE" "$EXPECTED_LONG_FILE"; do
+  if [[ ! -f "$f" ]]; then
+    echo "✗ ERROR: falta $f (el hash fijado del replay)" >&2
+    exit 1
+  fi
+done
+EXPECTED_SHORT="$(tr -d '[:space:]' < "$EXPECTED_SHORT_FILE")"
+EXPECTED_LONG="$(tr -d '[:space:]' < "$EXPECTED_LONG_FILE")"
 if [[ ! -f "$POOL" ]]; then
   echo "✗ ERROR: falta $POOL (el pool del fixture, trackeado en git)" >&2
   exit 1
@@ -54,45 +63,74 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --quiet) QUIET=1; shift ;;
     --update) UPDATE=1; shift ;;
-    --hash) EXPECTED_HASH="$2"; shift 2 ;;
-    --help|-h) sed -n '2,32p' "$0"; exit 0 ;;
+    --hash) EXPECTED_SHORT="$2"; EXPECTED_LONG="$2"; shift 2 ;;
+    --help|-h) sed -n '2,34p' "$0"; exit 0 ;;
     *) echo "parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
 
 log() { [[ $QUIET -eq 1 ]] || echo "$@"; }
 
-# ── 1. Ejecutar la partida con el plan de drops ───────────────────────────────
-log "▶ Ejecutando la partida del smoke e2e (seed $SEED, grid $GRID, $TICKS ticks, 3 drops)…"
-STREAM="$(dotnet run --project "$CLI_PROJECT" -c Debug -- --mode game \
-  --seed "$SEED" --ticks "$TICKS" --grid "$GRID" --colonies "$COLONIES" \
-  --frame-every "$FRAME_EVERY" \
-  --seed-pool "$POOL" \
-  "${DROPS[@]}" 2>/dev/null)"
+run_game() {
+  local ticks="$1"
+  dotnet run --project "$CLI_PROJECT" -c Debug -- --mode game \
+    --seed "$SEED" --ticks "$ticks" --grid "$GRID" --colonies "$COLONIES" \
+    --frame-every "$FRAME_EVERY" \
+    --seed-pool "$POOL" \
+    "${DROPS[@]}" 2>/dev/null | tail -n 1 \
+    | sed -n 's/.*"hash":"\([0-9a-f]*\)".*/\1/p'
+}
 
-# ── 2. Extraer el hash final ─────────────────────────────────────────────────
-ACTUAL_HASH="$(printf '%s\n' "$STREAM" | tail -n 1 \
-  | sed -n 's/.*"hash":"\([0-9a-f]*\)".*/\1/p')"
-if [[ -z "$ACTUAL_HASH" ]]; then
-  echo "✗ ERROR: el stream no terminó con hash (línea end ausente o malformada)" >&2
+# ── Fase 1: 3000 ticks (intervención) ─────────────────────────────────────────
+log "▶ Fase 3000 (intervención): partida con 3 drops…"
+ACTUAL_SHORT="$(run_game "$TICKS_SHORT")"
+if [[ -z "$ACTUAL_SHORT" ]]; then
+  echo "✗ ERROR: el stream de 3000 ticks no terminó con hash" >&2
   exit 1
 fi
 
-# ── 3. Comparar ───────────────────────────────────────────────────────────────
-if [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]]; then
-  log "✓ hash del replay con drops intacto: $ACTUAL_HASH"
+# ── Fase 2: 6000 ticks (relevo: first unload + semáforo) ─────────────────────
+log "▶ Fase 6000 (relevo): misma partida extendida — first unload t3950 y semáforo…"
+ACTUAL_LONG="$(run_game "$TICKS_LONG")"
+if [[ -z "$ACTUAL_LONG" ]]; then
+  echo "✗ ERROR: el stream de 6000 ticks no terminó con hash" >&2
+  exit 1
+fi
+
+# ── Comparar ──────────────────────────────────────────────────────────────────
+FAIL=0
+if [[ "$ACTUAL_SHORT" == "$EXPECTED_SHORT" ]]; then
+  log "✓ hash 3000 (intervención) intacto: $ACTUAL_SHORT"
+else
+  FAIL=1
+  if [[ $UPDATE -eq 1 ]]; then
+    printf '%s\n' "$ACTUAL_SHORT" > "$EXPECTED_SHORT_FILE"
+    log "✓ pin 3000 actualizado a $ACTUAL_SHORT (revisa el diff)"
+  else
+    echo "✗ FALLO: el hash del replay con drops (3000) CAMBIÓ" >&2
+    echo "    esperado: $EXPECTED_SHORT" >&2
+    echo "    actual:   $ACTUAL_SHORT" >&2
+  fi
+fi
+
+if [[ "$ACTUAL_LONG" == "$EXPECTED_LONG" ]]; then
+  log "✓ hash 6000 (relevo) intacto: $ACTUAL_LONG"
+else
+  FAIL=1
+  if [[ $UPDATE -eq 1 ]]; then
+    printf '%s\n' "$ACTUAL_LONG" > "$EXPECTED_LONG_FILE"
+    log "✓ pin 6000 actualizado a $ACTUAL_LONG (revisa el diff)"
+  else
+    echo "✗ FALLO: el hash del replay extendido (6000, relevo) CAMBIÓ" >&2
+    echo "    esperado: $EXPECTED_LONG" >&2
+    echo "    actual:   $ACTUAL_LONG" >&2
+  fi
+fi
+
+if [[ $FAIL -eq 0 ]]; then
   exit 0
 fi
 
-if [[ $UPDATE -eq 1 ]]; then
-  printf '%s\n' "$ACTUAL_HASH" > "$EXPECTED_FILE"
-  echo "✓ EXPECTED_HASH actualizado a $ACTUAL_HASH (revisa el diff: cambia el pool, los drops o el mundo)"
-  exit 0
-fi
-
-echo "✗ FALLO: el hash del replay con drops CAMBIÓ — el determinismo de la intervención se rompió" >&2
-echo "    esperado: $EXPECTED_HASH" >&2
-echo "    actual:   $ACTUAL_HASH" >&2
 echo "    Si el cambio es intencional (decisión de diseño documentada), corre" >&2
 echo "    scripts/check-replay-command.sh --update y revisa el diff en el PR." >&2
 exit 1

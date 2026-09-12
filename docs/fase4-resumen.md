@@ -133,6 +133,9 @@ especialistas con su contrapartida ⚠.
 - **Smoke end-to-end del bucle completo** ([`fase4-smoke-e2e.md`](fase4-smoke-e2e.md)):
   sembrar warm-v2 + intervenir con 3 drops + replay bit a bit — hash final
   `816e280c…` idéntico entre builds y ejecuciones; baseline sin drops difiere.
+  La fase extendida a 6000 ticks (`87fbc8ed…`) certifica además el RELEVO:
+  primera descarga t3950 y semáforo del canal D dentro del mundo fijado —
+  y ambos pines se verifican en CI (`check-replay-command.sh`).
 
 ## 4. Qué queda para release
 
