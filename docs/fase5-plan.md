@@ -55,9 +55,16 @@ nombres canónicos y barra con signo; longitud incorrecta rechazada.
 Lo que Fase 4 dejó como v1 de texto (todas las piezas existen, falta
 acabado):
 
-1. **uGUI por elemento** — rects por toast (click exacto; hoy Alt+click por
-   índice), barras de stock reales, botones nativos
-   Confirmar/Cancelar/Reiniciar-con-plan, chip de estado por runway.
+1. **uGUI por elemento** — ✅ HECHO (núcleo): `HudElementLayoutModel` (puro,
+   headless-tested) produce un rect por toast con hit-test exacto
+   (`ToastAt(px)` sustituye al «índice = mouse.y/22»), specs de barra de stock
+   (fracción clampada + umbral 0.20 → color rojo) y specs de botones nativos
+   (Confirmar/Cancelar/Reiniciar-con-plan con su condición de habilitación).
+   `HudLayoutBehaviour` instancia un elemento POR toast (pool por key, sin
+   parpadeos), pinta `fillAmount` por colonia y `BindNativeButtons` conecta
+   los tres botones a las acciones ya verificadas. El bootstrapper crea
+   contenedor/plantilla/barras/botones con referencias asignadas. Pendiente:
+   chip de estado por runway y drag&drop.
 2. **Drag & drop de `.antgenome`** — el diálogo de importación acepta ruta
    de texto; el punto de entrada prometido es soltar el archivo sobre la
    ventana (Unity `Application.openExternalFiles` / editor `DragAndDrop`).

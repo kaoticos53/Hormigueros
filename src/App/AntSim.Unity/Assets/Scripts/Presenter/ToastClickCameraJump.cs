@@ -45,17 +45,38 @@ namespace AntSim.Unity.Scripts.Presenter
                 return;
             }
 
-            // Click con Alt sostenido: se approxima por índice en la pila v1
-            // (la pila es una columna; cada línea es ~22 px). El drag&drop de
-            // rects por toast llega cuando el HUD use elementos uGUI por toast.
+            // F5.1 — click exacto: la posición del ratón (px desde arriba, en el
+            // espacio del contenedor de toasts) se pasa al hit-test del modelo
+            // puro. Alt ya no es necesario si el contenedor per-elemento existe
+            // (cada rect captura su propio click), pero se mantiene como atajo
+            // para la pila v1 de texto.
             if (Input.GetMouseButtonDown(0) && (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)))
             {
                 var toasts = hud.Toasts.Active;
                 if (toasts.Count == 0) return;
-                int idx = Mathf.Clamp((int)(Input.mousePosition.y / 22f), 0, toasts.Count - 1);
-                var t = toasts[idx];
-                if (t.X >= 0f && t.Y >= 0f)
-                    JumpTo(t.X, t.Y);
+                // El contenedor ancla su esquina superior al toast superior:
+                // py = distancia del ratón al borde superior del contenedor.
+                var container = hud.ToastContainer;
+                float py;
+                if (container != null)
+                {
+                    RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                        container, Input.mousePosition, null, out var local);
+                    py = container.rect.height * 0.5f - local.y;
+                }
+                else
+                {
+                    py = Input.mousePosition.y; // fallback v1: aproximación por índice
+                    int idx = Mathf.Clamp((int)(py / 22f), 0, toasts.Count - 1);
+                    var t1 = toasts[idx];
+                    if (t1.X >= 0f && t1.Y >= 0f) JumpTo(t1.X, t1.Y);
+                    return;
+                }
+
+                var elements = AntSim.Unity.Scripts.Streaming.HudElementLayoutModel.ToastElements(toasts);
+                var hit = AntSim.Unity.Scripts.Streaming.HudElementLayoutModel.ToastAt(elements, py);
+                if (hit != null && hit.HasAnchor)
+                    JumpTo(hit.AnchorX, hit.AnchorY);
             }
         }
 

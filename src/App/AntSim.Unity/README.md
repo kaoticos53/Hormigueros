@@ -109,7 +109,16 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
   (canal F) son campos públicos de `SimPresenterBehaviour` — se activan sin
   tocar código; ambos son telemetría pura (hash invariante).
 - **Salto de cámara por toast (§1)**: tecla J (o Alt+click en la pila) mueve
-  la cámara al ancla (x, y) que el canal D trae en cada alerta.
+  la cámara al ancla (x, y) que el canal D trae en cada alerta. **F5.1**: con
+  el contenedor per-elemento, cada toast es un rect clicable — el hit-test
+  exacto vive en `HudElementLayoutModel.ToastAt` (modelo puro, testeado), no
+  en coordenadas de pantalla.
+- **Per-elemento uGUI (F5.1)**: el bootstrapper crea `ToastContainer` (un
+  elemento por toast, pool por key), barras de stock (`Image.fillAmount` por
+  colonia, color rojo bajo el umbral 0.20 del contrato) y botones nativos
+  (Confirmar/Cancelar del import, Reiniciar con plan) — conectados por
+  `BindNativeButtons` a los métodos ya verificados; la semántica sigue en los
+  modelos puros (specs de habilitación testeables headless).
 - `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las
   tarjetas pintan el semáforo del canal D (el Core lo calcula con
   `RelayVerdict`: la UI no evalúa umbrales).

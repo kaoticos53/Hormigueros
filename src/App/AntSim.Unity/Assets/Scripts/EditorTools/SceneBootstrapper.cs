@@ -31,7 +31,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             cam.orthographicSize = 150f;
             cam.nearClipPlane = 0.1f;
             cam.farClipPlane = 500f;
-            cam.clearFlags = CameraClearFlags.SolidCamera;
+            cam.clearFlags = CameraClearFlags.SolidColor; // Unity 6: SolidCamera no existe
             cam.backgroundColor = new Color(0.13f, 0.12f, 0.10f); // tierra
 
             // — Luz (los DrawMesh necesitan iluminación) —
@@ -96,7 +96,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvasGo.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             canvasGo.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-            if (Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+            // Unity 6: FindFirstObjectByType depende del orden de instancias —
+            // deprecado; FindAnyObjectByType es el sustituto canónico.
+            if (Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
             {
                 var es = new GameObject("EventSystem");
                 es.AddComponent<UnityEngine.EventSystems.EventSystem>();
@@ -161,6 +163,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             var jump = jumpGo.AddComponent<Presenter.ToastClickCameraJump>();
             jump.Hud = hud;
 
+            // — F5.1: per-elemento — contenedor de toasts clicables + barras + botones —
+            RectTransform toastContainer = CreateToastContainer(canvasGo.transform, hud);
+            var stockImages = CreateStockBars(canvasGo.transform, hud, cardTexts.Length);
+            var buttons = CreateNativeButtons(canvasGo.transform, hud);
+            hud.BindNativeButtons(buttons[0], buttons[1], buttons[2]);
+
             // — Diálogo de importación (F4.3): tarjeta de cuarentena del oráculo —
             var importText = NewText(canvasGo.transform, "ImportDialog",
                 new Vector2(-14, 380), new Vector2(560, 96),
@@ -175,6 +183,119 @@ namespace AntSim.Unity.Scripts.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             Debug.Log("[SceneBootstrapper] Escena creada: guarda (Ctrl+S → Assets/Scenes/Game.unity) y pulsa Play. " +
                       "Publica antes el CLI: dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");
+        }
+
+        // — F5.1: contenedor + plantilla de toast per-elemento (cada toast es un
+        //   rect clicable con su ancla; el hit-test vive en el modelo puro) —
+        private static RectTransform CreateToastContainer(Transform canvas, Presenter.HudLayoutBehaviour hud)
+        {
+            var containerGo = new GameObject("ToastContainer", typeof(RectTransform));
+            containerGo.transform.SetParent(canvas, false);
+            var c = (RectTransform)containerGo.transform;
+            c.anchorMin = c.anchorMax = new Vector2(1f, 1f);
+            c.pivot = new Vector2(1f, 1f);
+            c.anchoredPosition = new Vector2(-14f, -14f);
+            c.sizeDelta = new Vector2(560f, 200f);
+
+            // Plantilla: Image de fondo (clicable) + Text — se instancia por toast.
+            var tmplGo = new GameObject("ToastTemplate", typeof(RectTransform));
+            tmplGo.transform.SetParent(c, false);
+            var t = (RectTransform)tmplGo.transform;
+            t.sizeDelta = new Vector2(560f, HudLayoutModel.ToastHeight);
+            var bg = tmplGo.AddComponent<UnityEngine.UI.Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.55f);
+            var txtGo = new GameObject("Text", typeof(RectTransform));
+            txtGo.transform.SetParent(t, false);
+            var trt = (RectTransform)txtGo.transform;
+            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+            trt.offsetMin = new Vector2(8f, 2f); trt.offsetMax = new Vector2(-8f, -2f);
+            var text = txtGo.AddComponent<UnityEngine.UI.Text>();
+            text.alignment = TextAnchor.MiddleLeft;
+            text.fontSize = 14;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (text.font == null) text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            tmplGo.SetActive(false);
+
+            hud.ToastContainer = c;
+            hud.ToastTemplate = t;
+            return c;
+        }
+
+        // — F5.1: barras de stock — un fondo + una Image con fillAmount por colonia —
+        private static UnityEngine.UI.Image?[] CreateStockBars(Transform canvas,
+            Presenter.HudLayoutBehaviour hud, int colonies)
+        {
+            var imgs = new UnityEngine.UI.Image?[colonies];
+            for (int i = 0; i < colonies; i++)
+            {
+                var barGo = new GameObject($"StockBar_{i}", typeof(RectTransform));
+                barGo.transform.SetParent(canvas, false);
+                var rt = (RectTransform)barGo.transform;
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                rt.anchoredPosition = new Vector2(14f, -140f - i * 118f);
+                rt.sizeDelta = new Vector2(300f, 10f);
+
+                var back = barGo.AddComponent<UnityEngine.UI.Image>();
+                back.color = new Color(0f, 0f, 0f, 0.4f);
+
+                var fillGo = new GameObject("Fill", typeof(RectTransform));
+                fillGo.transform.SetParent(barGo.transform, false);
+                var frt = (RectTransform)fillGo.transform;
+                frt.anchorMin = Vector2.zero; frt.anchorMax = Vector2.one;
+                frt.offsetMin = new Vector2(1f, 1f); frt.offsetMax = new Vector2(-1f, -1f);
+                var fill = fillGo.AddComponent<UnityEngine.UI.Image>();
+                fill.fillAmount = 0f;
+                // El color lo pinta RenderStockBars según el modelo puro.
+                imgs[i] = fill;
+            }
+            hud.StockBars = imgs;
+            return imgs;
+        }
+
+        // — F5.1: botones nativos (Confirmar/Cancelar del import + Reiniciar con plan) —
+        private static UnityEngine.UI.Button?[] CreateNativeButtons(Transform canvas, Presenter.HudLayoutBehaviour hud)
+        {
+            UnityEngine.UI.Button Make(string name, string label, Vector2 anchor, Vector2 pos, Vector2 size)
+            {
+                var go = new GameObject(name, typeof(RectTransform));
+                go.transform.SetParent(canvas, false);
+                var rt = (RectTransform)go.transform;
+                rt.anchorMin = rt.anchorMax = anchor;
+                rt.pivot = anchor;
+                rt.anchoredPosition = pos;
+                rt.sizeDelta = size;
+                var img = go.AddComponent<UnityEngine.UI.Image>();
+                img.color = new Color(0.18f, 0.18f, 0.16f, 0.95f);
+                var btn = go.AddComponent<UnityEngine.UI.Button>();
+                var txtGo = new GameObject("Label", typeof(RectTransform));
+                txtGo.transform.SetParent(rt, false);
+                var trt = (RectTransform)txtGo.transform;
+                trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+                trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+                var text = txtGo.AddComponent<UnityEngine.UI.Text>();
+                text.text = label;
+                text.alignment = TextAnchor.MiddleCenter;
+                text.fontSize = 14;
+                text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (text.font == null) text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                return btn;
+            }
+
+            // Confirmar/Cancelar junto al diálogo de importación; Reiniciar junto al plan.
+            var confirm = Make("ImportConfirmBtn", "Confirmar",
+                new Vector2(1f, 1f), new Vector2(-594f, -380f), new Vector2(120f, 30f));
+            var cancel = Make("ImportCancelBtn", "Cancelar",
+                new Vector2(1f, 1f), new Vector2(-468f, -380f), new Vector2(120f, 30f));
+            var restart = Make("RestartWithPlanBtn", "Reiniciar con plan",
+                new Vector2(0f, 0f), new Vector2(448f, 14f), new Vector2(170f, 30f));
+            return new UnityEngine.UI.Button?[] { confirm, cancel, restart };
+        }
+
+        private static class HudLayoutModel
+        {
+            public const float ToastHeight = Streaming.HudElementLayoutModel.ToastHeight;
         }
 
         /// <summary>Texto uGUI con las convenciones v1 (sin fuente custom).</summary>
@@ -206,6 +327,10 @@ namespace AntSim.Unity.Scripts.EditorTools
         private static Material NewMat(Color c, string name)
         {
             var m = new Material(Shader.Find("Standard")) { name = name, color = c };
+            // La carpeta destino debe existir: en un proyecto recién abierto
+            // Assets/Materials no existe y CreateAsset falla (visto en el Play pass).
+            if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+                AssetDatabase.CreateFolder("Assets", "Materials");
             AssetDatabase.CreateAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
