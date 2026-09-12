@@ -33,3 +33,14 @@ TestResults/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Restos de una invocación de Unity apuntada a la RAÍZ del repo (el proyecto
+# real vive en src/App/AntSim.Unity/). Las anclas con "/" inicial son SOLO de la
+# raíz: sin ellas, un "Packages/" sin anclar también ignoraría
+# src/App/AntSim.Unity/Packages/ — que SÍ se trackea (manifest y lock).
+/Library/
+/Logs/
+/UserSettings/
+/Assets/
+/Packages/
+/ProjectSettings/
