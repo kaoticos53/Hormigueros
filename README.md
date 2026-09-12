@@ -40,7 +40,7 @@ El bucle completo del jugador funciona y está verificado de extremo a extremo:
   intervenir (DropFood click-to-place, plan de 5 drops por partida, relanzar con
   el plan determinista).
 - **Escena Unity ensamblada con un comando de menú** (`SceneBootstrapper`), modelos
-  puros compilados en la suite headless y `221/221` tests verdes.
+  puros compilados en la suite headless y `228/228` tests verdes.
 - Detalles: [`docs/fase4-resumen.md`](docs/fase4-resumen.md) · smoke e2e:
   [`docs/fase4-smoke-e2e.md`](docs/fase4-smoke-e2e.md) · checklist del Play pass
   en el editor: [`docs/fase4-play-pass.md`](docs/fase4-play-pass.md).
@@ -124,6 +124,48 @@ bash scripts/pipeline.sh                         # defaults: pop 24, 10 gens/eta
 bash scripts/pipeline.sh --gens 60 --band-max 350  # réplica del pool de referencia con banda extendida
 bash scripts/pipeline.sh --pop 6 --gens 2 --seeds "42 7"  # humo rápido (~45 s)
 bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" --seeds "42 7"  # regresión del relevo (exit ≠ 0 si falla)
+```
+
+## CI (`.github/workflows/ci.yml`)
+
+| Check | Qué protege |
+|---|---|
+| `dotnet test` | la suite headless (228/228), incluido el pin del hash del stream canónico |
+| `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
+| `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
+| `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
+| `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor |
+
+El job `unity-compile` está **dormido** hasta que existan la variable de
+repositorio `UNITY_CI = true` y el secreto `UNITY_LICENSE` (o `UNITY_SERIAL`):
+descargar Unity en cada push es caro y necesita licencia. El script sí corre en
+local — encuentra el editor del Hub por la versión fijada en
+`ProjectSettings/ProjectVersion.txt` (`--selftest` verifica su analizador, y
+`--log FICHERO` analiza un log ya generado).
+
+El **Play pass** en el editor —lo único que valida los MonoBehaviours EN VIVO—
+también está cableado: `scripts/playpass-live.sh` conduce el editor abierto
+(recompila, configura el presenter, entra en Play, muestrea cada segundo hasta el
+último tick y para) y verifica el mundo (aparición, escala, movimiento), las
+tarjetas y el semáforo de relevo por colonia, el dedupe de toasts del canal D y
+la consola sin `stream falló` — los bloques 3 y 5 del checklist. Después entra en
+Play otra vez para el **bloque 4** y dispara las cuatro acciones de interacción
+(seleccionar, `D`/click/`Z`, reiniciar con plan, `J`/Alt+click) por los puntos de
+entrada sin dispositivo de los handlers: `Input` no es inyectable desde el CLI,
+pero el raycast sale de la cámara real, el plan es el real y el ancla es la que
+el Core puso en la alerta. Desde la pasada de pulido (F5.1) verifica también el
+**aspecto** midiendo PÍXELES: el tablero tiene que leerse como tierra (en partida
+y al abrir la escena) y tienen que verse hormigas, más ningún texto del HUD fuera
+de su panel. Ese bloque existe porque el defecto que reportó el jugador («el
+terreno es blanco y no se ven hormigas») pasaba en verde **todas** las muestras de
+estado. Falla con el primer invariante roto. No es un job de CI porque necesita un
+editor interactivo con licencia; se corre a mano:
+
+```bash
+bash scripts/playpass-live.sh            # bloques 3, 4, 5 y aspecto, en vivo
+bash scripts/playpass-live.sh --no-block4     # solo 3, 5 y aspecto (más rápido)
+bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
+bash scripts/playpass-live.sh --selftest # los analizadores, sin editor
 ```
 
 ## Garantía de determinismo

@@ -8,7 +8,7 @@ lo que queda para release. Los detalles de cada paso están en
 [`fase4-hud-contrato.md`](fase4-hud-contrato.md) (contrato dato a dato) y
 [`arquitectura.md`](arquitectura.md) (registro cronológico).
 
-**Estado: 221/221 tests verdes · hash canónico fijado en CI · los tres
+**Estado: 228/228 tests verdes · hash canónico fijado en CI · los tres
 pilares de jugador cerrados end-to-end.**
 
 ## 1. Las decisiones de arquitectura (y por qué)

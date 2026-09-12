@@ -4,7 +4,7 @@ Realismo, especies y escala — la fase que convierte el simulador verificado
 en un mundo con contenido. Este documento es el PLAN de trabajo (no el
 registro de lo hecho): hitos, decisiones abiertas y criterios de cierre.
 Estado del que parte: Fase 4 cerrada
-([`fase4-resumen.md`](fase4-resumen.md)) — 221/221 tests, contratos de HUD
+([`fase4-resumen.md`](fase4-resumen.md)) — 228/228 tests, contratos de HUD
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
 
@@ -70,11 +70,46 @@ acabado):
    ventana (Unity `Application.openExternalFiles` / editor `DragAndDrop`).
 3. **Gráficas por tarjeta** — series 1 Hz ya viajan en el canal C
    (`MetricFrame`); falta el mini-gráfico de stock/descargas por colonia.
-4. **Iconos, rich text y tipografía** — el render v1 es texto plano con
-   glifos emoji; fuente propia y sprites para hormiga/carga/huevo.
-5. **Feromonas por colonia** — el canal E hoy emite HomeTrail de la colonia
+4. **Iconos, rich text y tipografía** — ✅ PARCIAL: el render v1 era texto
+   plano con glifos emoji que la fuente por defecto de uGUI **no tiene** y
+   pintaba como cajas (🥚 🐛 🛑 🟢 🔘 · 🐝); ahora los niveles son glifos de
+   forma (○ ◐ ● ■ ·) y el título de la tarjeta va en negrita por rich text.
+   Queda: fuente propia y sprites para hormiga/carga/huevo.
+5. **Aspecto del mundo y entrada del HUD** — ✅ HECHO (pasada de pulido,
+   2026-09-12):
+   - **El tablero se lee como tierra**: el quad de feromonas llevaba el
+     material por DEFECTO del primitivo (blanco y opaco) y tapaba el suelo y
+     las hormigas — era el defecto que veía el jugador («el terreno es blanco
+     y no se ven hormigas»). Material transparente propio + textura 1×1
+     transparente de reposo (unlit-transparente SIN textura también es blanco
+     opaco: por eso la escena se veía blanca sin darle a Play).
+   - **Las hormigas se ven**: la cápsula se dibujaba VERTICAL (un poste de ~1 u
+     de ancho, sub-píxel a cualquier zoom) y con una «escala» de 0,6 sin
+     relación con el tamaño en pantalla. Ahora van tumbadas (Rx 90°),
+     alargadas en la dirección de avance y con longitud DERIVADA del lado del
+     mundo (0,018 × 768 u ≈ 14 u), con las portadoras un 25% mayores para que
+     el relevo se lea sin abrir el HUD.
+   - **Materiales unlit y medibles**: el color que se ve es el elegido (no
+     depende del ambiente del editor) y la sonda de píxeles puede afirmar
+     «hay hormigas» con tolerancias razonables. Mesa oscura bajo el tablero,
+     marco claro, nido en dos piezas (montículo + disco de colonia).
+   - **HUD en paneles**: barra de estado arriba (tick, reloj y resumen por
+     colonia), tarjetas con barra de reserva dentro y título en negrita,
+     historial y plan de drops apilados a la izquierda, inspector a la
+     derecha, pistas de teclado centradas, y el diálogo de importación como
+     modal CENTRADO con velo, campo de ruta y tres botones (Inspeccionar /
+     Confirmar / Cancelar). Antes los botones del modal se pintaban siempre,
+     flotando sobre el mundo, y no había ni forma de abrir el diálogo ni de
+     darle la ruta del `.antgenome`: el pilar de importación era inalcanzable.
+   - **Puertas de aspecto en el Play pass**: `ProbeVisualSample` mide píxeles
+     (tablero terroso, hormigas visibles) y `ProbeSceneInspect` cuenta los
+     textos que no caben en su panel; `playpass-live.sh` falla si el tablero
+     no es terroso, si no se ve ninguna hormiga o si el HUD desborda. Todas
+     las muestras de ESTADO estaban en verde mientras el mundo se veía blanco:
+     el pass no podía fallar por algo que no medía.
+6. **Feromonas por colonia** — el canal E hoy emite HomeTrail de la colonia
    0; selector de capa (Home/Food/Alarm) y de colonia, con paleta por capa.
-6. **Audio y accesibilidad** — sonidos de evento (unload, eclosión, alerta)
+7. **Audio y accesibilidad** — sonidos de evento (unload, eclosión, alerta)
    y escala de UI; sin diseño urgente, es lo único sin contrato previo.
 
 **Criterio de cierre**: una partida de 10 min contra el fixture 256 jugable

@@ -29,6 +29,7 @@ Core (`AntSim.Core.Tests`, ver abajo) antes de abrir Unity.
 |---|---|---|
 | `Scripts/Streaming/GameStreamParser.cs` | JSONL → TickView (poses, items, colonias, eventos, métricas, relevo) | ✅ |
 | `Scripts/Streaming/StreamReader.cs` | lanza el CLI / lee archivo y bombea líneas | ✅ |
+| `Scripts/Streaming/WorldPlaneRay.cs` | rayo → plano del mundo (el mapeo del click), compartido por los dos handlers | ✅ |
 | `Scripts/Presenter/GameStreamPresenter.cs` | reproducción con buffer (`AdvanceTo`, drenado de presentados) + interpolación con retraso de 1 tick → RenderState | ✅ |
 | `Scripts/UI/PoolPickerModel.cs` | JSON de presets → recomendados/especialistas | ✅ |
 | `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) + linaje de cerebros por huella | ✅ |
@@ -53,6 +54,85 @@ stream rompe el test antes de romper la UI.
 dotnet test src/Core/AntSim.Core.Tests --filter "FullyQualifiedName~UnityStreamContract"
 ```
 
+### Entradas sin dispositivo (por qué los handlers exponen métodos)
+
+`Input` lee el dispositivo real y NO es inyectable desde el CLI, así que las
+acciones del jugador tenían que probarlas una persona. Los tres handlers
+descompensan eso: la acción vive en un método público sin dispositivo
+(`PickAtScreen`, `TogglePlaceMode`/`PlaceAtScreen`/`UndoLastDrop`,
+`JumpToNewestAnchored`/`JumpToToastAtContainerY`) y `Update()` solo la cablea a
+`Input`. El Play pass dispara esos métodos con la cámara y el estado
+REALES —el raycast es el de verdad, el plan es el de verdad— y comprueba el
+resultado; lo único que queda fuera es la entrega de la tecla por el motor.
+La geometría del click es pura (`WorldPlaneRay`) y por eso sí tiene tests
+headless, incluidos los dos casos degenerados que no deben seleccionar nada.
+
+## Compilación: contexto nullable y `Assets/csc.rsp`
+
+Los scripts puros se compilan **dos veces**: dentro de Unity (`Assembly-CSharp`)
+y en la suite headless (`AntSim.Core.Tests`, arriba). Para que ambas vean el
+MISMO código con la MISMA postura frente a nulos, el proyecto Unity trae un
+único archivo:
+
+```
+Assets/csc.rsp   →   -nullable:enable
+```
+
+**Por qué existe.** Los dos `.csproj` headless declaran
+`<Nullable>enable</Nullable>` (`AntSim.Core.csproj`, `AntSim.Core.Tests.csproj`),
+pero el ensamblado predefinido de Unity **no trae contexto nullable**: cada
+anotación `string?` / `Mesh?` de la capa de vista producía **CS8632** («nullable
+annotation outside a `#nullable` context») — 204 avisos en la última medición. El
+código ya estaba escrito *para* nulos (usa `?`, `??` y guardas), así que faltaba
+activar el contexto, no reescribirlo.
+
+**Por qué `-nullable:enable` y no `annotations`.** `enable` activa anotaciones **y
+avisos**; `annotations` habría dejado las anotaciones silenciando los avisos. Se
+eligió `enable` para que el editor compile igual que el headless: mismos archivos,
+misma postura, mismos diagnósticos. Con posturas distintas, un `null` inseguro
+pasaría en Unity y rompería la suite (o al revés), que es justo lo que el espejo
+headless existe para evitar.
+
+**`csc.rsp` no admite comentarios.** Unity pasa cada token del archivo a `csc` tal
+cual: una línea `#` de comentario se convierte en argumento inválido (`CS2007:
+Unrecognized option`, `CS2001: Source file … could not be found`) y **rompe la
+compilación**. El archivo tiene una sola línea a propósito; la justificación vive
+aquí.
+
+**Estado con el contexto activado** (editor 6000.6.0f1):
+
+| Aviso | Antes | Después |
+|---|---|---|
+| CS8632 (anotación sin contexto) | 204 | **0** |
+| `error CS` | 0 | **0** |
+| CS8618 (campo no inicializado) | 0 | **0** |
+| CS8602 / CS0414 | 6 | 5 (preexistentes; solo 1 lo ve el headless) |
+
+Al activar los avisos salieron **5 CS8618** en `SimPresenterBehaviour` — los
+campos de render (`AntMesh`, `AntMaterial`, `CarrierMaterial`, `ItemMesh`,
+`ItemMaterial`) que asigna la escena/bootstrapper, de modo que el compilador no ve
+su inicialización. Se resolvieron con `null!`: neutro en comportamiento (el
+inicializador solo corre en la construcción, los valores serializados lo
+sobrescriben y `Draw` ya los guarda con `!= null`); marcarlos `?` habría propagado
+CS8602 a cada uso.
+
+Los 5 avisos restantes son **preexistentes**: 4× CS8602 (`ImportDialogModel`,
+`DropFoodClickHandler` y dos en `HudLayoutBehaviour`) y 1× CS0414 en
+`SimPresenterBehaviour` (`_streaming` se escribe y nunca se lee). No son CS8632;
+arreglarlos exige razonar cada desreferencia, así que quedan como deuda menor.
+El recuento lo imprime `scripts/check-unity-compile.sh` en cada pasada, así que
+la tabla se puede contrastar con la medida en vez de creerla.
+
+Ojo con el recuento: **solo el de `ImportDialogModel` lo ve el headless** (es un
+script puro, de los que el csproj compila con `Link="UnityPure/…"`). Los otros 5
+viven en MonoBehaviours que la suite headless **no compila**, así que solo salen
+en el editor — la misma asimetría que hace que un `error CS` de la capa de vista
+pueda pasar el `dotnet build` y reventar al abrir Unity.
+
+**Los hashes no se tocan.** Las anotaciones son metadatos de compilación: no
+cambian el IL, así que el mundo, los tres pins de CI y los fixtures siguen
+idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
+
 ## Abrir el proyecto (arranque rápido)
 
 1. Publica el CLI:
@@ -68,6 +148,40 @@ dotnet test src/Core/AntSim.Core.Tests --filter "FullyQualifiedName~UnityStreamC
 
 Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
 stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
+
+## Aspecto del mundo y del HUD (F5.1)
+
+Lo que se ve y por qué, en una tabla — el resto de decisiones están comentadas en
+`SceneBootstrapper`:
+
+| Pieza | Decisión | Motivo |
+|---|---|---|
+| Materiales del mundo | **Unlit** (Color/Texture) | El color que se ve es el elegido y no depende del ambiente del editor; además la sonda de píxeles puede afirmar «se ven hormigas» con tolerancias razonables. Un material unlit **sin textura pinta blanco opaco**: de ahí que el quad de feromonas nazca con una textura 1×1 transparente. |
+| Suelo | Tierra clara + rejilla cada world/24 | Referencia de escala: un mundo de 768 u no da ninguna pista de tamaño. |
+| Mesa | Plano oscuro 2,6× el mundo | La vista es ancha y el tablero cuadrado: sin ella el 38% de la pantalla era vacío negro. |
+| Cámara | Ortográfica, `orthoSize = world·0.52` | Encuadra la altura con 4% de margen y deja la mesa llenar los lados. |
+| Hormigas | Cápsula tumbada (Rx 90°), largo = 0,018 × mundo, ancho 0,33 × largo | De pie y a escala 0,6 eran postes sub-píxel: «no se ven hormigas». Las portadoras van un 25% mayores (el relevo se lee sin HUD). |
+| Ítems | Esfera natural × 0,010 × mundo | El diámetro dice la cantidad restante. |
+| Nidos | Montículo + disco del color de la colonia | El mismo acento que usa la tarjeta. |
+| Feromonas | Quad transparente a y=0,3, por debajo de los actores | El canal E solo le cambia la RenderTexture. |
+| HUD | Paneles con acento, barra de estado, tarjetas 440×176, modal centrado | Todo el texto vive sobre panel (antes el mundo se comía el texto) y ningún `Text` desborda su caja. |
+
+**Trampas ya encontradas** (no repetirlas):
+
+- Un `Text` de uGUI con la fuente por defecto **no tiene emoji**: los glifos 🥚
+  🐛 🛑 🟢 salían como cajas. Los niveles son ahora glifos de forma (○ ◐ ● ■ ·).
+- `Panel()` con `anchorMin.y == anchorMax.y` pierde el `sizeDelta`: hay que dar
+  las dos esquinas del rect o la barra de estado queda con altura 0 (y su texto
+  con altura NEGATIVA — lo destapó la inspección de escena).
+- `material.color` en un shader sin `_Color` (Unlit/Texture, Unlit/Transparent)
+  **escribe un error** en la consola de Unity; se consulta `HasProperty("_Color")`.
+- El Game view en modo **Play Focused** pausa el juego cuando pierde el foco: con
+  el pass corriendo desde la terminal, el mundo se congela (tick clavado, sin
+  error). `playpass-live.sh` lo detecta y lo reanuda.
+
+Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
+juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La
+escena se guarda y se registra en build settings sola.
 
 ### Ajustes finos
 
