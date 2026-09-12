@@ -75,6 +75,40 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
+        public void Modal_SeAbreSinGenoma_YNoConfirmaNada()
+        {
+            // F5.1: abrir el modal sin haber inspeccionado nada. Es la regla que la
+            // UI consulta para enseñar el panel (antes los botones del modal se
+            // pintaban SIEMPRE, flotando sobre el mundo, y el diálogo no tenía
+            // manera de abrirse: no había dónde escribir la ruta).
+            var model = new ImportDialogModel();
+            Assert.False(model.ModalVisible);            // arranca cerrado
+
+            model.Open();
+            Assert.True(model.ModalVisible);
+            Assert.Equal(ImportDialogModel.Phase.Reviewing, model.CurrentPhase);
+            Assert.Contains("Inspeccionar", model.RenderDialog());  // guía del paso que falta
+            Assert.Null(model.Confirm());                // sin tarjeta no hay nada que confirmar
+
+            model.Close();
+            Assert.False(model.ModalVisible);
+            Assert.Null(model.RenderDialog());
+
+            // Inspeccionar y reabrir: la cuarentena se enseña.
+            var info = GenomeImportInfo.Inspect(
+                TestPaths.RepoPath(PoolPath), BrainContract.CurrentVersion);
+            model.Inspect(PoolPath, info.ToJson());
+            model.Open();
+            Assert.Contains("cuarentena", model.RenderDialog());
+
+            // Cerrar DESCARTA la revisión (cancelar es 0 riesgo, contrato §2.1):
+            // reabrir vuelve a pedir la ruta en vez de arrastrar una tarjeta vieja.
+            model.Close();
+            model.Open();
+            Assert.Contains("Inspeccionar", model.RenderDialog());
+        }
+
+        [Fact]
         public void Parser_RechazaRespuestasRotas()
         {
             var model = new ImportDialogModel();

@@ -103,6 +103,9 @@ namespace AntSim.Core.Tests
             Assert.NotNull(card);
             Assert.Contains("colonia 0", card);
             Assert.Contains("/40", card);                    // tope duro de adultas
+            // F5.1: la línea de la ventana cabe en la tarjeta (440 px a fs 14).
+            foreach (var line in card.Split('\n'))
+                Assert.True(line.Length <= 60, "línea demasiado larga para la tarjeta: " + line);
             Assert.Contains("reserva [", card);              // barra
             Assert.Contains("cerebros:", card);              // línea permanente
             // El semáforo llega del canal D (aquí gris: sin relevo en 5200 ticks).
@@ -124,7 +127,10 @@ namespace AntSim.Core.Tests
             Assert.Contains("¡RESERVA BAJA!", card);
             Assert.Contains("−3 mue", card);                 // muertes de la ventana
             Assert.Contains("cerebros: 2 élite · 1 descartados", card);
-            Assert.Contains("🥚 4 · 🐛 2 · 🛑 1", card);      // chips de cría
+            Assert.Contains("huevos 4", card);              // cría en texto (F5.1: sin emoji)
+            Assert.Contains("larvas 2", card);
+            Assert.Contains("pupas 1", card);
+            Assert.Contains("<b>colonia 0", card);          // título con jerarquía (rich text)
         }
 
         [Fact]
@@ -134,16 +140,37 @@ namespace AntSim.Core.Tests
             // sin datos ⇒ gris. Ninguna aritmética de umbrales en la UI.
             var model = new ColonyCardModel();
             model.Observe(TickFrom(colonies: Colony0, light: "[0,2]"));
-            Assert.Contains("🟢", model.Render(0));
+            Assert.Contains(ColonyCardModel.LightGlyph(2), model.Render(0));
             model.Observe(TickFrom(light: "[0,1]"));
-            Assert.Contains("🟡", model.Render(0));
+            Assert.Contains(ColonyCardModel.LightGlyph(1), model.Render(0));
             var fresh = new ColonyCardModel();
             fresh.Observe(TickFrom(colonies: Colony0));
-            Assert.Contains("🔘", fresh.Render(0));
+            Assert.Contains(ColonyCardModel.LightGlyph(0), fresh.Render(0));
         }
 
         private const string Colony0 =
             "{\"id\":0,\"nest\":[128,128],\"adults\":10,\"eggs\":0,\"larvae\":0,\"pupae\":0,\"stock\":50,\"stockMax\":100,\"elite\":0}";
+
+        [Fact]
+        public void BarraDeEstado_ResumeTickVelocidadYColonias()
+        {
+            // F5.1: el renglón superior sale del modelo puro (tick + reloj de
+            // reproducción + semáforo/adultas/reserva por colonia). Antes la barra
+            // no existía y la UI no tenía dónde decir en qué tick iba la partida.
+            var model = new ColonyCardModel();
+            Assert.Null(model.StatusLine(1, 1f));               // aún sin canal A
+
+            model.Observe(TickFrom(colonies: Colony0, light: "[0,2]"));
+            string line = model.StatusLine(3950, 3f)!;
+            Assert.Contains("tick 3950", line);
+            Assert.Contains("v×3", line);
+            Assert.Contains("colonia", line);
+            Assert.Contains(ColonyCardModel.LightGlyph(2), line);
+            Assert.Contains("50%", line);                       // reserva 50/100
+
+            // En pausa el reloj lo dice con palabras (no «v×0», que parece un error).
+            Assert.Contains("EN PAUSA", model.StatusLine(3950, 0f));
+        }
 
         // ————— toasts —————
 
@@ -183,13 +210,16 @@ namespace AntSim.Core.Tests
                 Assert.InRange(t.Level, 0, 3);
                 Assert.False(string.IsNullOrEmpty(t.Text));
             }
-            // Y las líneas renderizadas llevan el tag de colonia cuando aplica
-            // (StartsWith, no regex: los glifos emoji son pares sustitutos).
+            // Y las líneas renderizadas llevan el tag de colonia cuando aplica,
+            // con el glifo de nivel por delante (F5.1: glifos de FORMA — ◐ ● ■ · —
+            // porque la fuente por defecto de uGUI no tiene emoji y salían cajas).
+            var glyphs = new[] { HudToastsModel.Glyph(0), HudToastsModel.Glyph(1),
+                HudToastsModel.Glyph(2), HudToastsModel.Glyph(3) };
             foreach (var line in toasts.RenderLines())
             {
-                Assert.True(
-                    line.StartsWith("·") || line.StartsWith("🟡") ||
-                    line.StartsWith("🟢") || line.StartsWith("🔴"),
+                bool hasGlyph = line.StartsWith("·");
+                foreach (var g in glyphs) if (line.StartsWith(g)) hasGlyph = true;
+                Assert.True(hasGlyph,
                     "la línea debe empezar por su glifo de nivel: " + line);
             }
         }

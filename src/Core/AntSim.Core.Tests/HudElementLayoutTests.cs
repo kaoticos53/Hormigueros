@@ -107,11 +107,17 @@ namespace AntSim.Core.Tests
             var ok = HudElementLayoutModel.ImportButtons(confirmEnabled: true);
             var no = HudElementLayoutModel.ImportButtons(confirmEnabled: false);
 
-            Assert.Equal(2, ok.Count);
+            // F5.1: Inspeccionar (abre la cuarentena) + Confirmar + Cancelar.
+            Assert.Equal(3, ok.Count);
             var confirm = ok.Single(b => b.Action == HudElementLayoutModel.ButtonAction.ImportConfirm);
             Assert.True(confirm.Enabled);
             var cancel = ok.Single(b => b.Action == HudElementLayoutModel.ButtonAction.ImportCancel);
             Assert.True(cancel.Enabled);
+            // Inspeccionar siempre disponible: es el paso que FALTA antes de poder
+            // confirmar nada (sin él, el modal no tenía forma de alimentarse).
+            var inspect = ok.Single(b => b.Action == HudElementLayoutModel.ButtonAction.ImportInspect);
+            Assert.True(inspect.Enabled);
+            Assert.True(no.Single(b => b.Action == HudElementLayoutModel.ButtonAction.ImportInspect).Enabled);
 
             Assert.False(no.Single(b => b.Action == HudElementLayoutModel.ButtonAction.ImportConfirm).Enabled);
         }

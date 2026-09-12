@@ -103,6 +103,7 @@ namespace AntSim.Unity.Scripts.Streaming
 
         public enum ButtonAction
         {
+            ImportInspect,    // ImportDialogBehaviour.Inspect (F5.1: abre la cuarentena)
             ImportConfirm,    // ImportDialogBehaviour.Confirm
             ImportCancel,     // ImportDialogBehaviour.Cancel
             RestartWithPlan,  // DropFoodClickHandler.RestartWithPlan
@@ -123,13 +124,15 @@ namespace AntSim.Unity.Scripts.Streaming
         }
 
         /// <summary>
-        /// Botones del diálogo de importación (contrato §2.1): Confirmar solo si
-        /// hay tarjeta OK revisada; Cancelar siempre disponible. La UI nunca
-        /// decide la semántica — las acciones son los métodos públicos que ya
-        /// existían y que el flujo headless verificado usa.
+        /// Botones del diálogo de importación (contrato §2.1): Inspeccionar abre
+        /// la cuarentena del .antgenome tecleado; Confirmar solo si hay tarjeta OK
+        /// revisada; Cancelar siempre disponible. La UI nunca decide la semántica
+        /// — las acciones son los métodos públicos que ya existían y que el flujo
+        /// headless verificado usa.
         /// </summary>
         public static List<ButtonSpec> ImportButtons(bool confirmEnabled) => new()
         {
+            new ButtonSpec("ImportInspectBtn", "Inspeccionar", ButtonAction.ImportInspect, true),
             new ButtonSpec("ImportConfirmBtn", "Confirmar", ButtonAction.ImportConfirm, confirmEnabled),
             new ButtonSpec("ImportCancelBtn", "Cancelar", ButtonAction.ImportCancel, true),
         };

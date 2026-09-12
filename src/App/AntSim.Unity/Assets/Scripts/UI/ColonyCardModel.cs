@@ -34,6 +34,34 @@ namespace AntSim.Unity.Scripts.Streaming
 
         public IReadOnlyDictionary<int, Card> Cards => _cards;
 
+        /// <summary>
+        /// Línea de estado (F5.1) — el renglón de la barra superior: tick, reloj de
+        /// reproducción y un resumen por colonia (semáforo + adultas + reserva).
+        /// Vive aquí, y no en la vista, porque es derivable del modelo puro: la UI
+        /// pinta y los tests headless comprueban. null mientras no haya canal A.
+        /// </summary>
+        public string? StatusLine(ulong tick, float speed)
+        {
+            if (_cards.Count == 0) return null;
+            var sb = new StringBuilder();
+            sb.Append("tick ").Append(tick)
+              .Append("   ·   ").Append(Paused(speed))
+              .Append("   ·   ").Append(_cards.Count).Append(_cards.Count == 1 ? " colonia" : " colonias");
+            for (int id = 0; id < _cards.Count; id++)
+            {
+                if (!_cards.TryGetValue(id, out var card)) continue;
+                if (card.Colony is not GameStreamParser.ColonyView c) continue;
+                float frac = c.StockMax > 0 ? c.Stock / c.StockMax : 0f;
+                sb.Append("      colonia ").Append(id).Append(' ').Append(LightGlyph(card.Light))
+                  .Append("  ").Append(c.Adults).Append("ad")
+                  .Append("  ").Append((frac * 100f).ToString("0", CultureInfo.InvariantCulture)).Append("%");
+            }
+            return sb.ToString();
+        }
+
+        private static string Paused(float speed)
+            => speed <= 0f ? "EN PAUSA" : "v×" + speed.ToString("0.##", CultureInfo.InvariantCulture);
+
         /// <summary>Consume un tick completo: actualiza todas las tarjetas.</summary>
         public void Observe(GameStreamParser.TickView v)
         {
@@ -75,13 +103,19 @@ namespace AntSim.Unity.Scripts.Streaming
                 return null;
 
             var sb = new StringBuilder();
-            sb.Append("colonia ").Append(c.Id).Append(" · ").Append(LightGlyph(card.Light)).AppendLine();
+            // F5.1: el título va en negrita (rich text del HUD) para que la tarjeta
+            // tenga jerarquía — antes las cinco líneas pesaban igual y el bloque se
+            // leía como un muro de texto.
+            sb.Append("<b>colonia ").Append(c.Id).Append("  ").Append(LightGlyph(card.Light))
+              .Append("</b>").AppendLine();
 
             // Adultas con tope duro del diseño + cría en chips.
+            // F5.1: sin emoji — la fuente por defecto de uGUI (LegacyRuntime) no
+            // tiene glifos de emoji y los pintaba como cajas vacías.
             sb.Append("adultas ").Append(c.Adults).Append('/').Append(AdultsHardCap)
-              .Append("  · 🥚 ").Append(c.Eggs)
-              .Append(" · 🐛 ").Append(c.Larvae)
-              .Append(" · 🛑 ").Append(c.Pupae).AppendLine();
+              .Append("   huevos ").Append(c.Eggs)
+              .Append("  ·  larvas ").Append(c.Larvae)
+              .Append("  ·  pupas ").Append(c.Pupae).AppendLine();
 
             // Reserva: barra de 10 celdas; <20% = rojo (marcador «! RESERVA BAJA»).
             float frac = c.StockMax > 0 ? c.Stock / c.StockMax : 0f;
@@ -96,14 +130,17 @@ namespace AntSim.Unity.Scripts.Streaming
             // Flujo de la última ventana de 1 s (canal C por colonia).
             if (card.Window is GameStreamParser.ColonyMetricsView w)
             {
-                sb.Append("1s: +").Append(w.Pickups).Append(" rec · +").Append(w.Unloads)
-                  .Append(" desc · +").Append(w.Births).Append(" nac · −")
-                  .Append(w.Deaths).Append(" mue · +").Append(w.Eggs).Append(" huevos")
-                  .Append(" · 🐝").Append(w.Eclosed).AppendLine();
+                // F5.1: se quitó el prefijo «1s:» y los «+» pegados a cada número
+                // (se lee igual y la línea cabe sin partirse en una tarjeta de
+                // 440 px; el ancho de la tarjeta sale de ESTA línea).
+                sb.Append("1s  ").Append(w.Pickups).Append(" rec  ").Append(w.Unloads)
+                  .Append(" desc  ").Append(w.Births).Append(" nac  −")
+                  .Append(w.Deaths).Append(" mue  ").Append(w.Eggs).Append(" huevos")
+                  .Append("  ").Append(w.Eclosed).Append(" eclos").AppendLine();
             }
             else
             {
-                sb.Append("1s: —").AppendLine();
+                sb.Append("1s  —").AppendLine();
             }
 
             // Cerebros: línea permanente (no toast), contadores acumulados por la UI.
@@ -112,11 +149,14 @@ namespace AntSim.Unity.Scripts.Streaming
             return sb.ToString();
         }
 
+        /// <summary>Semáforo de relevo como GLIFO de forma (no emoji):
+        /// círculo hueco = sin datos · medio = ámbar · lleno = verde. La fuente
+        /// por defecto de uGUI dibuja estos; los emoji salían como cajas.</summary>
         internal static string LightGlyph(byte light) => light switch
         {
-            1 => "🟡", // ámbar
-            2 => "🟢", // verde
-            _ => "🔘", // gris: sin datos de relevo
+            1 => "◐", // ámbar
+            2 => "●", // verde
+            _ => "○", // gris: sin datos de relevo
         };
 
         private static string F1(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);

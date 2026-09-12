@@ -99,11 +99,14 @@ namespace AntSim.Unity.Scripts.Streaming
             }
         }
 
+        /// <summary>Glifo de NIVEL por forma (F5.1): sin emoji — la fuente por
+        /// defecto de uGUI no los tiene y salían cajas. El color lo pone el HUD
+        /// (<c>ToastLevelColors</c>), el glifo solo refuerza la jerarquía.</summary>
         internal static string Glyph(byte lvl) => lvl switch
         {
-            1 => "🟡", // ámbar
-            2 => "🟢", // verde
-            3 => "🔴", // rojo
+            1 => "◐", // ámbar
+            2 => "●", // verde
+            3 => "■", // rojo
             _ => "·",  // info
         };
     }

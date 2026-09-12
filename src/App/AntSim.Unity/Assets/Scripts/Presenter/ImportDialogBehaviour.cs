@@ -20,14 +20,40 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Ruta del CLI (la misma del presenter).")]
         public string CliPath = "build/antsim";
 
-        [Tooltip("Ruta .antgenome propuesta por el jugador (v1: campo de texto).")]
+        [Tooltip("Ruta .antgenome propuesta por el jugador (la escribe el campo del modal).")]
         public string GenomePath = "";
+
+        [Tooltip("Tecla que abre/cierra el modal de importación (F5.1). Sin esto el " +
+                 "modal no tenía entrada: era UI inalcanzable.")]
+        public KeyCode OpenKey = KeyCode.I;
 
         /// <summary>Modelo puro del diálogo (tests y HUDs alternativos).</summary>
         public readonly Streaming.ImportDialogModel Model = new();
 
         /// <summary>Texto a renderizar en el HUD (tarjeta + reglas o error).</summary>
         public string? DialogText { get; private set; }
+
+        /// <summary>Abre/cierra el modal (F5.1). La visibilidad real la pinta el
+        /// HUD desde <see cref="Streaming.ImportDialogModel.ModalVisible"/>.</summary>
+        public void ToggleOpen()
+        {
+            if (Model.ModalVisible) Close(); else Open();
+        }
+
+        /// <summary>Muestra el modal con el campo de ruta listo para escribir.</summary>
+        public void Open()
+        {
+            Model.Open();
+            DialogText = null;
+            OnDialogChanged?.Invoke(Model.RenderDialog() ?? "");
+        }
+
+        /// <summary>Cierra el modal sin confirmar (0 riesgo, contrato §2.1).</summary>
+        public void Close()
+        {
+            Model.Cancel();
+            DialogText = null;
+        }
 
         /// <summary>Inspecciona la ruta propuesta vía el oráculo. Bloqueante
         /// (proceso corto); el flujo del diálogo es igual de simple.</summary>
@@ -72,6 +98,10 @@ namespace AntSim.Unity.Scripts.Presenter
             string? path = Model.Confirm();
             if (path == null || Presenter == null) return;
             Presenter.SeedPoolPath = path;
+            // La escena se recarga para arrancar la partida sembrada: el pool tiene
+            // que viajar a la PRÓXIMA instancia del presenter (esta se destruye), o
+            // el botón aceptaría el genoma y arrancaría una partida sin sembrar.
+            SimPresenterBehaviour.ArmSeedPoolForNextScene(path);
             UnityEngine.SceneManagement.SceneManager.LoadScene(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
@@ -81,10 +111,14 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private void Update()
         {
+            // F5.1: entrada de teclado del modal. Si el jugador está escribiendo
+            // la ruta en el campo, no se secuestra la tecla (el campo tiene el foco
+            // y `I` debe poder teclearse dentro de una ruta).
+            if (Input.GetKeyDown(OpenKey) && !FieldFocused)
+                ToggleOpen();
+
             // El texto del HUD se refresca aquí (mismo patrón que HudLayout).
-            string? t = Model.CurrentPhase == Streaming.ImportDialogModel.Phase.Reviewing
-                ? Model.RenderDialog()
-                : DialogText;
+            string? t = Model.ModalVisible ? Model.RenderDialog() : DialogText;
             if (t != null && t != _lastText)
             {
                 _lastText = t;
@@ -93,6 +127,17 @@ namespace AntSim.Unity.Scripts.Presenter
         }
 
         private string? _lastText;
+
+        /// <summary>¿El foco está en un campo de texto (el jugador está tecleando)?</summary>
+        private static bool FieldFocused
+        {
+            get
+            {
+                var es = UnityEngine.EventSystems.EventSystem.current;
+                return es != null && es.currentSelectedGameObject != null
+                    && es.currentSelectedGameObject.GetComponent<UnityEngine.UI.InputField>() != null;
+            }
+        }
 
         /// <summary>Hook para la UI (el bootstrapper conecta un setter de Text).</summary>
         public event System.Action<string>? OnDialogChanged;

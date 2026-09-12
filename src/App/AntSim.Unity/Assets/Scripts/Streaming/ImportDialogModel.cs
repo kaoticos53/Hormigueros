@@ -47,6 +47,27 @@ namespace AntSim.Unity.Scripts.Streaming
         public string? Error { get; private set; }
         public string? SourcePath { get; private set; }
 
+        /// <summary>
+        /// ¿Se ve el modal (velo + panel)? F5.1: el diálogo dejó de ser un texto
+        /// suelto para ser un modal con botones dentro, así que su visibilidad es
+        /// una REGLA del modelo —la UI la consulta, no la inventa— y por tanto
+        /// entra en la suite headless. Antes de F5.1 los botones Confirmar y
+        /// Cancelar se pintaban siempre, flotando sobre el mundo.
+        /// </summary>
+        public bool ModalVisible => CurrentPhase != Phase.Closed;
+
+        /// <summary>Abrir el diálogo sin genoma inspeccionado todavía (F5.1):
+        /// muestra el modal con el campo de ruta vacío, a la espera de que el
+        /// jugador teclee/pégue la ruta y pulse Inspeccionar.</summary>
+        public void Open()
+        {
+            if (CurrentPhase == Phase.Confirmed) return; // ya sembrado: no reabrir
+            CurrentPhase = Phase.Reviewing;
+        }
+
+        /// <summary>Cerrar sin confirmar (mismo efecto que Cancelar).</summary>
+        public void Close() => Cancel();
+
         /// <summary>Abrir el diálogo: inspecciona la ruta vía el JSON canónico
         /// que produce el oráculo. Devuelve el texto de tarjeta a mostrar o
         /// null si la inspección falló (ver <see cref="Error"/>).</summary>
@@ -94,8 +115,14 @@ namespace AntSim.Unity.Scripts.Streaming
         public string? RenderDialog()
         {
             var c = Card;
-            if (c == null) return null;
-            return c.CardText + "\n" + c.QuarantineNote;
+            if (c != null) return c.CardText + "\n" + c.QuarantineNote;
+            // Modal abierto sin tarjeta todavía (F5.1): explica el paso que falta
+            // en vez de dejar el panel vacío. Cerrado sigue devolviendo null —el
+            // estado «cerrado» no tiene texto— para no romper el contrato previo.
+            if (!ModalVisible) return null;
+            return "Escribe la ruta de un archivo .antgenome (relativa al repo o " +
+                   "absoluta) y pulsa Inspeccionar.\n" +
+                   "Ejemplo: artifacts/pretrain-warm-v2.antgenome";
         }
 
         // — Parser JSON mínimo (mismo estilo que GameStreamParser: sin deps) —
