@@ -43,15 +43,17 @@ namespace AntSim.Unity.Scripts.Streaming
 
         /// <summary>
         /// Registra una marca de drop en el tick indicado. Valida contra el
-        /// mundo: dentro del grid y en el futuro (no se puede intervenir en el
-        /// pasado — la causalidad de F4.0 es tick-cmd ⇒ efecto).
+        /// mundo — <paramref name="worldSize"/> va en UNIDADES (grid ×
+        /// <see cref="Streaming.WorldUnits.PerCell"/>), no en celdas, porque es el
+        /// espacio en el que viajan x/y y el que espera el CLI (<c>--drop tick:x:y</c>)
+        /// — y exige tick futuro (la causalidad de F4.0 es tick-cmd ⇒ efecto).
         /// Devuelve el motivo del rechazo o null si se aceptó.
         /// </summary>
-        public string? TryPlace(ulong tick, float x, float y, float grid)
+        public string? TryPlace(ulong tick, float x, float y, float worldSize)
         {
             if (_marks.Count >= MaxDrops)
                 return $"cuota agotada ({MaxDrops} drops por partida)";
-            if (x < 0f || y < 0f || x >= grid || y >= grid)
+            if (x < 0f || y < 0f || x >= worldSize || y >= worldSize)
                 return "fuera del mundo";
             if (tick <= CurrentTick)
                 return "el drop debe ser futuro";

@@ -18,19 +18,21 @@ namespace AntSim.Core.Tests
         {
             var plan = new DropFoodPlanModel();
             plan.ObserveTick(100);
+            // El límite va en UNIDADES (grid×8), no en celdas: grid 96 ⇒ 768 u.
+            float world = WorldUnits.WorldSize(96);
 
             // Fuera del mundo: rechazado con motivo.
-            Assert.NotNull(plan.TryPlace(700, x: -1f, y: 50f, grid: 96));
-            Assert.NotNull(plan.TryPlace(700, x: 50f, y: 96f, grid: 96));
+            Assert.NotNull(plan.TryPlace(700, x: -1f, y: 50f, worldSize: world));
+            Assert.NotNull(plan.TryPlace(700, x: 50f, y: world, worldSize: world));
 
             // Pasado/presente: la causalidad F4.0 exige tick futuro.
-            Assert.NotNull(plan.TryPlace(100, 50f, 50f, 96));
+            Assert.NotNull(plan.TryPlace(100, 50f, 50f, world));
             Assert.Empty(plan.Marks);
 
             // Cuota: MaxDrops aceptados, el siguiente rechazado.
             for (int i = 0; i < DropFoodPlanModel.MaxDrops; i++)
-                Assert.Null(plan.TryPlace(700 + (ulong)i, 30f + i, 40f, 96));
-            Assert.NotNull(plan.TryPlace(9999, 50f, 50f, 96));
+                Assert.Null(plan.TryPlace(700 + (ulong)i, 30f + i, 40f, world));
+            Assert.NotNull(plan.TryPlace(9999, 50f, 50f, world));
             Assert.Equal(DropFoodPlanModel.MaxDrops, plan.Marks.Count);
         }
 
@@ -39,8 +41,9 @@ namespace AntSim.Core.Tests
         {
             var plan = new DropFoodPlanModel();
             plan.ObserveTick(50);
-            Assert.Null(plan.TryPlace(650, 10f, 20f, 96));
-            Assert.Null(plan.TryPlace(660, 15f, 25f, 96));
+            float world = WorldUnits.WorldSize(96);
+            Assert.Null(plan.TryPlace(650, 10f, 20f, world));
+            Assert.Null(plan.TryPlace(660, 15f, 25f, world));
             Assert.Equal(2, plan.Marks.Count);
 
             Assert.True(plan.Undo());
@@ -48,7 +51,7 @@ namespace AntSim.Core.Tests
             Assert.True(plan.Undo());
             Assert.False(plan.Undo()); // ya vacío
 
-            Assert.Null(plan.TryPlace(650, 10f, 20f, 96));
+            Assert.Null(plan.TryPlace(650, 10f, 20f, world));
             plan.Clear();
             Assert.Empty(plan.Marks);
         }
@@ -58,8 +61,9 @@ namespace AntSim.Core.Tests
         {
             var plan = new DropFoodPlanModel();
             plan.ObserveTick(0);
-            Assert.Null(plan.TryPlace(300, 200.5123f, 240.2499f, 256));
-            Assert.Null(plan.TryPlace(450, 12f, 13f, 256));
+            float world = WorldUnits.WorldSize(256); // 2048 u
+            Assert.Null(plan.TryPlace(300, 200.5123f, 240.2499f, world));
+            Assert.Null(plan.TryPlace(450, 12f, 13f, world));
 
             var args = plan.BuildCliArgs();
             Assert.Equal(4, args.Count);

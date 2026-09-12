@@ -63,15 +63,18 @@ namespace AntSim.Unity.Scripts.Presenter
             Vector3 hit = ray.origin + ray.direction * t;
 
             ulong tick = Plan.CurrentTick + DropHorizon;
-            LastError = Plan.TryPlace(tick, hit.x, hit.z, Grid());
+            // El límite va en UNIDADES de mundo (grid × WorldUnits.PerCell): el
+            // raycast entrega unidades y el CLI las espera así (--drop tick:x:y).
+            LastError = Plan.TryPlace(tick, hit.x, hit.z,
+                Streaming.WorldUnits.WorldSize(GridCells()));
             if (LastError == null)
                 Debug.Log($"[DropFood] marcado t{tick} @ ({hit.x:0}, {hit.z:0})");
         }
 
-        private float Grid()
+        /// <summary>Celdas del grid: de la cabecera del stream (parser) o, en su
+        /// defecto, del campo del componente.</summary>
+        private int GridCells()
         {
-            // El grid vive en la cabecera del stream (parser); el presenter lo
-            // expone vía Header. Fallback defensivo al campo del componente.
             return Presenter.Presenter.Header?.Grid ?? Presenter.Grid;
         }
 

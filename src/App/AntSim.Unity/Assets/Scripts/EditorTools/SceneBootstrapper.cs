@@ -21,16 +21,23 @@ namespace AntSim.Unity.Scripts.EditorTools
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // — Cámara: vista cenital del mundo (grid 256 por defecto) —
+            // Grid del mundo en CELDAS. Ojo: el Core simula en UNIDADES y su lado
+            // es grid × WorldUnits.PerCell (SimConstants.CellSizeUnits = 8), no
+            // `grid` — dimensionar la escena con `grid` dejaba el mundo 8× fuera de
+            // cámara (bug detectado en el Play pass con el presente vivo).
+            const int GridCells = 96;
+            float world = Streaming.WorldUnits.WorldSize(GridCells); // 768 u para grid 96
+
+            // — Cámara: vista cenital que cubre el mundo ENTERO —
             var camGo = new GameObject("Main Camera");
             camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>();
-            camGo.transform.position = new Vector3(128f, 160f, 128f);
+            camGo.transform.position = new Vector3(world * 0.5f, world * 0.1f, world * 0.5f);
             camGo.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             cam.orthographic = true;
-            cam.orthographicSize = 150f;
+            cam.orthographicSize = world * 0.55f; // mundo completo + margen
             cam.nearClipPlane = 0.1f;
-            cam.farClipPlane = 500f;
+            cam.farClipPlane = world * 2f;
             cam.clearFlags = CameraClearFlags.SolidColor; // Unity 6: SolidCamera no existe
             cam.backgroundColor = new Color(0.13f, 0.12f, 0.10f); // tierra
 
@@ -43,8 +50,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             // — Suelo —
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             floor.name = "Floor";
-            floor.transform.position = new Vector3(128f, 0f, 128f);
-            floor.transform.localScale = new Vector3(26f, 1f, 26f); // plane = 10 u ⇒ 256
+            floor.transform.position = new Vector3(world * 0.5f, 0f, world * 0.5f);
+            floor.transform.localScale = new Vector3(world / 10f, 1f, world / 10f); // plane = 10 u
             var floorRend = floor.GetComponent<Renderer>();
             floorRend.sharedMaterial = NewMat(new Color(0.35f, 0.30f, 0.22f), "FloorMat");
 
@@ -52,9 +59,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             var presenterGo = new GameObject("SimPresenter");
             var presenter = presenterGo.AddComponent<Presenter.SimPresenterBehaviour>();
             presenter.CliPath = "build/antsim";
-            presenter.Grid = 256;
+            // Defaults alineados con el checklist del Play pass (96², 4 min de
+            // sim, canal A a 30 Hz): primera descarga ≈t3950 y el semáforo pasa
+            // a ámbar/verde dentro de la sesión. Para el fixture grande (256²,
+            // relevo real) ajustar Grid/Ticks a mano o usar ReplayFile.
+            presenter.Grid = GridCells;
             presenter.Colonies = 2;
-            presenter.Ticks = 48000;
+            presenter.Ticks = 7200;
             presenter.FrameEvery = 1;
             presenter.AntMesh = PrimitiveMesh(PrimitiveType.Capsule, 0.25f, "AntMesh");
             presenter.ItemMesh = PrimitiveMesh(PrimitiveType.Sphere, 0.6f, "ItemMesh");
@@ -68,13 +79,17 @@ namespace AntSim.Unity.Scripts.EditorTools
             // se activa desde el inspector (InspectId + ActivEvery) o por click.
 
             // — Marcadores de nido (posiciones del mundo; el HUD ancla a las tarjetas) —
+            // Misma fórmula que WorldSim: NestX = world·(id+1)/(colonies+1),
+            // NestY = world·0.5 — en UNIDADES de mundo, así que los marcadores
+            // coinciden con los nidos reales del stream (256/384 y 512/384 en grid 96).
+            float nestR = world * 0.03f; // marcador proporcional al mundo
             for (int c = 0; c < 2; c++)
             {
                 var nest = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 nest.name = $"Nest_{c}";
-                float nx = c == 0 ? 64f : 192f;
-                nest.transform.position = new Vector3(nx, 0.5f, 128f);
-                nest.transform.localScale = new Vector3(3f, 0.5f, 3f);
+                float nx = world * (c + 1) / 3f;
+                nest.transform.position = new Vector3(nx, 0.5f, world * 0.5f);
+                nest.transform.localScale = new Vector3(nestR, 0.5f, nestR);
                 nest.GetComponent<Renderer>().sharedMaterial =
                     NewMat(c == 0 ? new Color(0.7f, 0.3f, 0.2f) : new Color(0.2f, 0.4f, 0.75f), $"NestMat{c}");
             }
@@ -82,8 +97,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             // — Feromonas (F4.5): quad bajo las hormigas + RenderTexture del canal E —
             var pheroQuad = GameObject.CreatePrimitive(PrimitiveType.Plane);
             pheroQuad.name = "PheromoneTiles";
-            pheroQuad.transform.position = new Vector3(128f, 0.02f, 128f);
-            pheroQuad.transform.localScale = new Vector3(26f, 1f, 26f); // plane = 10 u ⇒ 256
+            pheroQuad.transform.position = new Vector3(world * 0.5f, 0.02f, world * 0.5f);
+            pheroQuad.transform.localScale = new Vector3(world / 10f, 1f, world / 10f); // plane = 10 u
             var pheroMat = NewMat(new Color(0.4f, 0.9f, 0.5f, 0f), "PheromoneMat");
             pheroMat.SetFloat("_Mode", 2f); // fade (transparente)
             var phero = pheroQuad.AddComponent<Presenter.PheromoneTileBehaviour>();
