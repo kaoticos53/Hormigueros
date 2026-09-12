@@ -30,11 +30,22 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Horizonte de marcado: drops a t+600 (20 s de sim) por defecto.</summary>
         public ulong DropHorizon = 600;
 
+        [Tooltip("Tecla de deshacer el último drop marcado (contrato §4: «Z deshace»).")]
+        public KeyCode UndoKey = KeyCode.Z;
+
         private void Update()
         {
             if (Input.GetKeyDown(ToggleKey))
             {
                 PlaceMode = !PlaceMode;
+                LastError = null;
+            }
+            if (Input.GetKeyDown(UndoKey))
+            {
+                // Deshace el último drop del plan (contrato §4). Fuera del modo
+                // marcar también funciona: el plan sobrevive a PlaceMode.
+                if (Plan.Undo())
+                    Debug.Log("[DropFood] último drop deshecho");
                 LastError = null;
             }
             if (Presenter == null) return;
