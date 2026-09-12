@@ -13,27 +13,42 @@ Core por el stream; toda decisión de mundo deja huella en el hash; el
 determinismo (semilla + comandos ⇒ mundo) es inviolable. Cada hito de abajo
 lleva su test de hash invariante cuando toca telemetría, como en F4.
 
-## 1. El contenido que ya prometió la inspección (F5.0 — barato y vendible)
+## 1. El contenido que ya prometió la inspección (F5.0 — barato y vendible) — ✅ IMPLEMENTADO
 
 **Mini-grafo MLP en la tarjeta de inspección** (aplazado explícitamente en
 Fase 4, diseño UX §2.2). El cerebro es pequeño y estable — 19 sensores → 8
 ocultas → 6 decisiones (`BrainSizes = {19, 8, 6}`), MLP feed-forward — así
 que el grafo cabe y es legible:
 
-- **Core (F5.0a)**: el canal A de inspección gana las ACTIVACIONES del tick
-  (19+8+6 floats cuantizados a byte, ~33 bytes por hormiga inspeccionada).
-  Opt-in como el canal E: solo la hormiga seleccionada emite (`inspect-id`
-  en cabecera o comando de stream). Telemetría pura: hash invariante.
-- **UI (F5.0b)**: grafo estático de 33 nodos con aristas coloreadas por peso
-  (positivo/negativo, grosor = |peso|) y brillo de nodo por activación del
-  tick. En v1 texto-art ASCII como los demás renders headless; uGUI/Texture
-  después. El jugador literalmente ve al cerebro decidir.
+- **Core (F5.0a) — HECHO**: nuevo **canal F** opt-in en el stream de juego:
+  `--activ-every N --inspect <antId>` emite en cada tick múltiplo de N las
+  activaciones del MLP de la hormiga inspeccionada como paquete base64 dentro
+  del tick JSON (`"activ":""` formato `[total u16 LE][s8 × total]`, v = byte/128).
+  `MlpBrain` registra las activaciones por Evaluate (sin evaluación extra,
+  sin asignaciones por tick); la emisión re-construye sensores y re-evalúa —
+  determinista, telemetría pura, **hash invariante** (test). Hormiga muerta o
+  ausente ⇒ paquete vacío (la vista lo distingue por `alive` del canal A).
+  Bono: fix estructural del cierre de línea del stream — el canal E (F4.5)
+  añadía su paquete tras la llave de cierre y el JSONL quedaba inválido
+  (los ticks con feromonas iban pegados al tick siguiente); ahora `Run`
+  cierra cada objeto de tick tras los canales opt-in. Pins de CI intactos.
+- **UI (F5.0b) — HECHO (v1 texto-art)**: `MlpAsciiGraph` en Core y
+  `ActivationViewModel` (modelo puro de Unity, compilado headless) decodifican
+  el paquete y renderizan el grafo por capas con nombres canónicos del
+  contrato (sensores `FoodTrailCenter`…, salidas `Steer`…, `Interact`) y
+  barra con signo por nodo. Aristas coloreadas por peso y uGUI/Texture: v2.
 - **Contraste con decisiones validadas**: la tarjeta ya muestra la decisión
   tomada; el grafo muestra el POR QUÉ (qué sensor dominó).
 
 **Criterio de cierre**: con warm-v2 sembrado, el grafo de una fundadora
 muestra el canal de feromona-home dominando la decisión de volver al nido —
 verificable headless contra las activaciones reales.
+
+**Validación (10 tests nuevos, `ActivationCanalFTests`)**: hash invariante con
+y sin canal; cada línea JSONL válida de principio a fin; paquete de 33 nodos
+decodifica en rango; stream byte a bit determinista; hormiga ausente ⇒ paquete
+vacío; `activ-every` sin `--inspect` rechazado por el CLI; render ASCII con
+nombres canónicos y barra con signo; longitud incorrecta rechazada.
 
 ## 2. Pulido post-release de la capa Unity (F5.1 — deuda de presentación)
 

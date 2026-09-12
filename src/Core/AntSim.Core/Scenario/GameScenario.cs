@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Text;
 using AntSim.Core.Serialization;
 using AntSim.Core.Evolution;
+using AntSim.Core.Brain;
+using AntSim.Core.Contracts;
 using AntSim.Core.Telemetry;
 using AntSim.Core.World;
 
@@ -30,11 +32,13 @@ public static class GameScenario
     public static string Run(ulong seed, int ticks, int colonies = 2, int grid = 256,
         int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
         IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
-        bool cloneFromElite = false, int pheroEvery = 0)
+        bool cloneFromElite = false, int pheroEvery = 0,
+        uint inspectId = 0, int activEvery = 0)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
         if (pheroEvery < 0) throw new ArgumentOutOfRangeException(nameof(pheroEvery));
+        if (activEvery < 0) throw new ArgumentOutOfRangeException(nameof(activEvery));
 
         var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite);
         var sb = new StringBuilder();
@@ -44,17 +48,32 @@ public static class GameScenario
         var alertsOut = new List<AlertDeriver.Alert>();
 
         AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite);
-        if (pheroEvery > 0)
-            sb.Length -= 3; // "}}\r\n" → cierra en el bucle: añadimos "pheroEvery" y paquetes
+        if (pheroEvery > 0 || activEvery > 0)
+            sb.Length -= 3; // "}}\r\n" → cierra en el bucle: añadimos canales opt-in
 
         // Canal E (F4.5): feromonas opt-in. Se declara en la cabecera para que
         // el parser sepa que los ticks pueden traer "phero". La emisión nunca
         // toca el mundo (telemetría pura) y va en ticks múltiplo de pheroEvery.
         if (pheroEvery > 0)
-        {
             sb.Append(",\"pheroEvery\":").Append(pheroEvery);
-            sb.Append("}}").AppendLine();
+
+        // Canal F (F5.0): activaciones del cerebro de UNA hormiga inspeccionada,
+        // opt-in como el E. La hormiga se elige por Id (el mismo que viaja en el
+        // canal A); la emisión re-evalúa el cerebro con sensores re-construidos —
+        // determinista y sin tocar el mundo.
+        if (activEvery > 0)
+        {
+            if (inspectId == 0)
+                throw new ArgumentException("activEvery > 0 requiere un inspectId ≠ 0.");
+            sb.Append(",\"activEvery\":").Append(activEvery)
+              .Append(",\"inspectId\":").Append(inspectId);
         }
+
+        if (pheroEvery > 0 || activEvery > 0)
+            // F5.0 fix: AppendHeader terminó en "}}\r\n"; Length-=3 deja UNA llave
+            // (la del objeto exterior). Antes se re-añadían DOS → llave extra (JSON
+            // inválido en la cabecera con canales opt-in).
+            sb.Append('}').AppendLine();
 
         if (seedPoolPath != null)
         {
@@ -87,8 +106,14 @@ public static class GameScenario
             alerts.Observe(sim.LastEvents, frame, relay, sim, alertsOut);
 
             AppendTick(sb, sim, metrics, relay, alerts, alertsOut, frame, grid, frameEvery);
+            // Canales opt-in: se añaden DENTRO del objeto del tick (AppendTick deja
+            // la llave abierta); la línea cierra aquí. F5.0 fix: antes el canal E
+            // se añadía tras la llave de cierre y el JSONL quedaba pegado.
             if (pheroEvery > 0 && sim.Tick % (ulong)pheroEvery == 0)
                 AppendPheromones(sb, sim);
+            if (activEvery > 0 && sim.Tick % (ulong)activEvery == 0)
+                AppendActivations(sb, sim, inspectId);
+            sb.Append('}').AppendLine(); // cierra el objeto del tick
         }
 
         sb.Append("{\"end\":true,\"tick\":").Append(sim.Tick)
@@ -143,6 +168,49 @@ public static class GameScenario
             y++;
         }
         sb.Append(",\"phero\":\"").Append(Convert.ToBase64String(payload.ToArray())).Append('"');
+    }
+
+    /// <summary>
+    /// Canal F (F5.0): activaciones del MLP de la hormiga inspeccionada, cuantizadas
+    /// a bytes (s8: v·128, saturado) + base64, dentro del tick JSON. Formato:
+    /// [total u16 LE][activación s8 × total]. La emisión re-construye los sensores
+    /// y re-evalúa el cerebro: determinista y sin tocar el mundo (hash invariante —
+    /// verificado en tests). Hormiga muerta/ausente o cerebro no-MLP ⇒ paquete
+    /// vacío (la vista lo interpreta con "alive" del canal A).
+    /// </summary>
+    private static void AppendActivations(StringBuilder sb, WorldSim sim, uint inspectId)
+    {
+        Ant? target = null;
+        for (int c = 0; c < sim.Colonies.Count && target == null; c++)
+        {
+            var colony = sim.Colonies[c];
+            for (int i = 0; i < colony.Adults.Count; i++)
+            {
+                if (colony.Adults[i].Id == inspectId) { target = colony.Adults[i]; break; }
+            }
+        }
+
+        sb.Append(",\"activ\":\"");
+        if (target is { Alive: true } ant && ant.Brain is MlpBrain mlp)
+        {
+            var sensors = AntSenses.Build(sim.Colonies[ant.ColonyId], ant, sim.Items, sim.WorldWidth, sim.WorldHeight);
+            var decision = AntDecision.Neutral();
+            mlp.Evaluate(in sensors, ref decision);
+
+            int total = mlp.ActivationTotal;
+            var payload = new byte[2 + total];
+            payload[0] = (byte)total;
+            payload[1] = (byte)(total >> 8);
+            Span<float> act = stackalloc float[total];
+            mlp.SnapshotActivations(act);
+            for (int i = 0; i < total; i++)
+            {
+                int q = (int)MathF.Round(act[i] * 128f);
+                payload[2 + i] = (byte)Math.Clamp(q, -128, 127);
+            }
+            sb.Append(Convert.ToBase64String(payload));
+        }
+        sb.Append('"');
     }
 
     private static void AppendHeader(StringBuilder sb, ulong seed, int ticks, int colonies,
@@ -355,7 +423,7 @@ public static class GameScenario
             firstField = false;
         }
 
-        sb.Append('}').AppendLine();
+        // El objeto del tick lo cierra Run() (línea 113), tras los canales opt-in.
     }
 
     /// <summary>Float en formato canónico (punto, sin cultura, redondeo corto).</summary>

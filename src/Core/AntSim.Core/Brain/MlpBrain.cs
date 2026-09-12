@@ -24,6 +24,8 @@ public sealed class MlpBrain : IBrain
     private readonly ActivationId[] _outputActivations;
     private readonly float[] _a;
     private readonly float[] _b;
+    private readonly float[] _activations; // F5.0: registro por Evaluate (orden canónico)
+    private readonly int[] _layerOffsetActivation; // offset de cada capa en _activations
     private readonly int _inputCount;
     private readonly int _outputCount;
 
@@ -58,6 +60,15 @@ public sealed class MlpBrain : IBrain
             offset += _sizes[l] * (_sizes[l - 1] + 1);
         }
 
+        // F5.0: offsets del registro de activaciones (capa 0 = 0).
+        _layerOffsetActivation = new int[_sizes.Length];
+        int actOffset = 0;
+        for (int l = 1; l < _sizes.Length; l++)
+        {
+            _layerOffsetActivation[l] = actOffset;
+            actOffset += _sizes[l];
+        }
+
         if (outputActivations is null)
         {
             // Convención del contrato v1: canal 0 (steer) en [−1,1]; el resto en [0,1].
@@ -73,6 +84,7 @@ public sealed class MlpBrain : IBrain
         foreach (int n in _sizes) maxLayer = Math.Max(maxLayer, n);
         _a = new float[maxLayer];
         _b = new float[maxLayer];
+        _activations = new float[ActivationTotal];
     }
 
     public BrainKind Kind => BrainKind.Mlp;
@@ -97,6 +109,7 @@ public sealed class MlpBrain : IBrain
         float[] next = _b;
 
         sensors.CopyTo(cur);
+        Buffer.BlockCopy(cur, 0, _activations, 0, _inputCount * sizeof(float));
 
         for (int l = 1; l < _sizes.Length; l++)
         {
@@ -117,6 +130,9 @@ public sealed class MlpBrain : IBrain
                     : Activations.Apply(_hiddenActivation, acc);
             }
 
+            // F5.0: registro de la capa recién computada (canal F de inspección).
+            Buffer.BlockCopy(next, 0, _activations, _layerOffsetActivation[l], curCount * sizeof(float));
+
             (cur, next) = (next, cur);
         }
 
@@ -126,8 +142,28 @@ public sealed class MlpBrain : IBrain
         decision.DepositHome = _outputCount > 3 ? cur[3] : 0f;
         decision.DepositAlarm = _outputCount > 4 ? cur[4] : 0f;
         decision.Interact = _outputCount > 5 ? cur[5] : 0f;
+    }    /// <summary>Copia los pesos (útil para huellas y serialización .antgenome).</summary>
+    public float[] CopyWeights() => (float[])_weights.Clone();
+
+    /// <summary>Total de nodos del MLP (entradas + ocultas + salidas) — longitud
+    /// del snapshot de activaciones del canal F.</summary>
+    public int ActivationTotal
+    {
+        get { int t = 0; for (int l = 0; l < _sizes.Length; l++) t += _sizes[l]; return t; }
     }
 
-    /// <summary>Copia los pesos (útil para huellas y serialización .antgenome).</summary>
-    public float[] CopyWeights() => (float[])_weights.Clone();
+    /// <summary>
+    /// F5.0 (canal F): copia las activaciones del ÚLTIMO <see cref="Evaluate"/>
+    /// al buffer <paramref name="target"/>, en el orden canónico del .antgenome
+    /// (todas las entradas, luego cada capa oculta, luego las salidas). No
+    /// evalúa nada: lee el registro que Evaluate dejó en <c>_activations</c>.
+    /// Lanza si el buffer no alcanza para <see cref="ActivationTotal"/> floats.
+    /// </summary>
+    public void SnapshotActivations(Span<float> target)
+    {
+        int total = ActivationTotal;
+        if (target.Length < total)
+            throw new ArgumentException($"El buffer tiene {target.Length}; se esperaban {total}.", nameof(target));
+        for (int i = 0; i < total; i++) target[i] = _activations[i];
+    }
 }

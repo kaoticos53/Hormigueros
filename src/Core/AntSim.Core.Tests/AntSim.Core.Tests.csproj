@@ -32,6 +32,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/DropFoodPlanModel.cs" Link="UnityPure/DropFoodPlanModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ImportDialogModel.cs" Link="UnityPure/ImportDialogModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneTileModel.cs" Link="UnityPure/PheromoneTileModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ActivationViewModel.cs" Link="UnityPure/ActivationViewModel.cs" />
   </ItemGroup>
 
 </Project>

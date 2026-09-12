@@ -157,6 +157,7 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
             public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
             public string? Phero;                                 // canal E (F4.5), base64 RLE
+            public string? Activ;                                 // canal F (F5.0), base64 s8
         }
 
         /// <summary>Cabecera del stream (parámetros de la partida).</summary>
@@ -164,6 +165,9 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             public ulong Seed;
             public int Ticks, Colonies, Grid, FrameEvery;
+            public int PheroEvery;   // canal E (F4.5); 0 = desactivado
+            public int ActivEvery;   // canal F (F5.0); 0 = desactivado
+            public ulong InspectId;  // hormiga del canal F; 0 = sin inspección
         }
 
         public HeaderView? Header { get; private set; }
@@ -189,6 +193,9 @@ namespace AntSim.Unity.Scripts.Streaming
                     Colonies = (int)p.Num("colonies"),
                     Grid = (int)p.Num("grid"),
                     FrameEvery = (int)p.Num("frameEvery"),
+                    PheroEvery = raw.Contains("\"pheroEvery\"") ? (int)p.Num("pheroEvery") : 0,
+                    ActivEvery = raw.Contains("\"activEvery\"") ? (int)p.Num("activEvery") : 0,
+                    InspectId = raw.Contains("\"inspectId\"") ? (ulong)p.Num("inspectId") : 0ul,
                 };
                 return null;
             }
@@ -272,6 +279,15 @@ namespace AntSim.Unity.Scripts.Streaming
                 int start = pi + 9;
                 int end = raw.IndexOf('"', start);
                 if (end > start) v.Phero = raw.Substring(start, end - start);
+            }
+
+            // — Canal F (F5.0): activaciones base64 del cerebro inspeccionado —
+            int aci = raw.IndexOf("\"activ\":\"", StringComparison.Ordinal);
+            if (aci >= 0)
+            {
+                int start = aci + 9;
+                int end = raw.IndexOf('"', start);
+                if (end > start) v.Activ = raw.Substring(start, end - start);
             }
 
             int mi = raw.IndexOf("\"metrics\":{", StringComparison.Ordinal);
