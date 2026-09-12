@@ -35,6 +35,10 @@ namespace AntSim.Unity.Scripts.Presenter
         public Presenter.DropFoodClickHandler? DropPlan;
         public UnityEngine.UI.Text? DropPlanText;
 
+        [Header("Diálogo de importación (F4.3): handler + Text del diálogo")]
+        public Presenter.ImportDialogBehaviour? ImportDialog;
+        public UnityEngine.UI.Text? ImportDialogText;
+
         private readonly Streaming.ColonyCardModel _cards = new();
         private readonly Streaming.CommandHistoryModel _history = new();
         private Streaming.HudToastsModel? _toasts;
@@ -76,6 +80,7 @@ namespace AntSim.Unity.Scripts.Presenter
             RenderToasts();
             RenderHistory();
             RenderDropPlan();
+            RenderImportDialog();
         }
 
         private void RenderCards()
@@ -127,6 +132,14 @@ namespace AntSim.Unity.Scripts.Presenter
                 : summary;
             if (err != null) text += $"\n✗ {err}";
             if (DropPlanText.text != text) DropPlanText.text = text;
+        }
+
+        private void RenderImportDialog()
+        {
+            if (ImportDialogText == null || ImportDialog == null) return;
+            string? text = ImportDialog.DialogText;
+            if (text == null) return;
+            if (ImportDialogText.text != text) ImportDialogText.text = text;
         }
     }
 }

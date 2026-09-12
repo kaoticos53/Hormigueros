@@ -140,6 +140,17 @@ namespace AntSim.Unity.Scripts.EditorTools
             hud.DropPlan = drop;
             hud.DropPlanText = dropPlanText;
 
+            // — Diálogo de importación (F4.3): tarjeta de cuarentena del oráculo —
+            var importText = NewText(canvasGo.transform, "ImportDialog",
+                new Vector2(-14, 380), new Vector2(560, 96),
+                TextAnchor.UpperRight, 13);
+            var importGo = new GameObject("ImportDialog");
+            var import = importGo.AddComponent<Presenter.ImportDialogBehaviour>();
+            import.Presenter = presenter;
+            import.CliPath = presenter.CliPath;
+            hud.ImportDialog = import;
+            hud.ImportDialogText = importText;
+
             EditorSceneManager.MarkSceneDirty(scene);
             Debug.Log("[SceneBootstrapper] Escena creada: guarda (Ctrl+S → Assets/Scenes/Game.unity) y pulsa Play. " +
                       "Publica antes el CLI: dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");

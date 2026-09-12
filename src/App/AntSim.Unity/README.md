@@ -90,6 +90,11 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
   click registra un drop futuro en `DropFoodPlanModel` (cuota 5/partida,
   causalidad validada) y «reiniciar con plan» relanza la misma partida con
   `--drop tick:x:y` vía el CLI. El resumen vive junto al historial.
+- **Importar con cuarentena (F4.3)**: `ImportDialogBehaviour` acepta una ruta
+  `.antgenome`, consulta el oráculo (`--mode genome-info`) y muestra la
+  tarjeta de cuarentena (sha, fitness, genomas, reglas); Confirmar siembra la
+  partida vía `SeedPoolPath`, Cancelar no toca nada. `ImportDialogModel`
+  (puro) parsea el JSON canónico — testado headless contra el pool real.
 - `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las
   tarjetas pintan el semáforo del canal D (el Core lo calcula con
   `RelayVerdict`: la UI no evalúa umbrales).

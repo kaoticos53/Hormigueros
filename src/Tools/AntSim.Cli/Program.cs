@@ -81,8 +81,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets")
-                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game' o 'presets'.");
+                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets" && mode != "genome-info")
+                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game', 'presets' o 'genome-info'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -185,6 +185,10 @@ internal static class Program
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
                 "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops),
                 "presets" => PresetScenario.RenderCards(json: presetsJson),
+                "genome-info" => importPath == null
+                    ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
+                    : GenomeImportInfo.Inspect(importPath,
+                        AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld),
                 _ => Microcosm.Run(seed, ticks, grid)
             };

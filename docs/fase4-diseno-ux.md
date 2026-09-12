@@ -31,7 +31,15 @@ pre-entrenamiento propio, o exportado de otra partida).
 - **Arrastrar-y-soltar** de un `.antgenome` sobre la ventana = punto único de
   entrada. El Core ya tiene `WorldSim.ImportGenomesFromFile` (cuarentena,
   ventana 120 s, umbral p50/p25+novedad) — la UX lo expone sin parámetros.
-- **Diálogo de cuarentena** (pre-vista, 0 riesgo): al soltar, el HUD muestra
+- **Diálogo de cuarentena** (pre-vista, 0 riesgo): **implementado (F4.3)**.
+  El oráculo es `GenomeImportInfo.Inspect` en Core, expuesto como
+  `antsim --mode genome-info --import f.antgenome` (JSON canónico: metadatos,
+  SHA-256, fitness, nº de genomas y la regla de cuarentena textual); el
+  esqueleto Unity lo parsea con `ImportDialogModel` (puro, testado headless)
+  y `ImportDialogBehaviour` (fino) ejecuta el flujo inspección → tarjeta →
+  confirmar (asigna `SeedPoolPath` y relanza sembrado) / cancelar (no toca
+  nada). Falta solo el drag&drop nativo del editor (v1 usa ruta de texto).
+  Al soltar, el HUD muestra
   *antes* de confirmar: nº de genomas, tamaño/red, hash SHA-256 del archivo,
   fitness si el archivo lo lleva (los pools pre-entrenados lo llevan; los
   exportados en vivo re-evalúan), y una proyección honesta: *"ocuparán las
