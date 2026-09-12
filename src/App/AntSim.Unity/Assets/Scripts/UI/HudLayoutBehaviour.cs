@@ -31,6 +31,10 @@ namespace AntSim.Unity.Scripts.Presenter
         [Header("Historial de comandos (opcional, contrato HUD §4)")]
         public UnityEngine.UI.Text? HistoryText;
 
+        [Header("Plan de intervención (F4.4): handler de drops + Text de resumen")]
+        public Presenter.DropFoodClickHandler? DropPlan;
+        public UnityEngine.UI.Text? DropPlanText;
+
         private readonly Streaming.ColonyCardModel _cards = new();
         private readonly Streaming.CommandHistoryModel _history = new();
         private Streaming.HudToastsModel? _toasts;
@@ -71,6 +75,7 @@ namespace AntSim.Unity.Scripts.Presenter
             RenderCards();
             RenderToasts();
             RenderHistory();
+            RenderDropPlan();
         }
 
         private void RenderCards()
@@ -110,6 +115,18 @@ namespace AntSim.Unity.Scripts.Presenter
             if (HistoryText == null) return;
             string text = _history.Render();
             if (HistoryText.text != text) HistoryText.text = text;
+        }
+
+        private void RenderDropPlan()
+        {
+            if (DropPlanText == null || DropPlan == null) return;
+            string summary = DropPlan.Plan.RenderSummary();
+            string? err = DropPlan.LastError;
+            string text = DropPlan.PlaceMode
+                ? $"[DROP] {summary} — click para marcar (D para salir)"
+                : summary;
+            if (err != null) text += $"\n✗ {err}";
+            if (DropPlanText.text != text) DropPlanText.text = text;
         }
     }
 }

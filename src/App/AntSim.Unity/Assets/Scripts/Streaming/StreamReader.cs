@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 
@@ -29,9 +30,11 @@ namespace AntSim.Unity.Scripts.Streaming
             return path; // no existe: que Process.Start dé el error claro
         }
 
-        /// <summary>Ejecuta el CLI y bombea cada línea a <paramref name="onLine"/> (bloqueante).</summary>
+        /// <summary>Ejecuta el CLI y bombea cada línea a <paramref name="onLine"/> (bloqueante).
+        /// <paramref name="extraArgs"/> transporta el plan de intervención (F4.4):
+        /// pares --drop tick:x:y ya validados por DropFoodPlanModel.</summary>
         public void StreamGame(ulong seed, int ticks, int grid, int colonies, int frameEvery,
-            string? seedPoolPath, Action<string> onLine)
+            string? seedPoolPath, Action<string> onLine, IReadOnlyList<string>? extraArgs = null)
         {
             var psi = new ProcessStartInfo
             {
@@ -48,6 +51,11 @@ namespace AntSim.Unity.Scripts.Streaming
             psi.ArgumentList.Add("--frame-every"); psi.ArgumentList.Add(frameEvery.ToString());
             if (seedPoolPath != null)
             { psi.ArgumentList.Add("--seed-pool"); psi.ArgumentList.Add(seedPoolPath); }
+            if (extraArgs != null)
+            {
+                foreach (string a in extraArgs)
+                    psi.ArgumentList.Add(a);
+            }
 
             using var proc = Process.Start(psi)!;
             string? line;

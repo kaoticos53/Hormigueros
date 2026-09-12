@@ -130,6 +130,16 @@ namespace AntSim.Unity.Scripts.EditorTools
             pick.Presenter = presenter;
             pick.Inspector = inspector;
 
+            // — Plan de intervención (F4.4): click-to-place de DropFood + resumen —
+            var dropPlanText = NewText(canvasGo.transform, "DropPlan",
+                new Vector2(14, 158), new Vector2(420, 46),
+                TextAnchor.LowerLeft, 13);
+            var dropGo = new GameObject("DropFoodClickHandler");
+            var drop = dropGo.AddComponent<Presenter.DropFoodClickHandler>();
+            drop.Presenter = presenter;
+            hud.DropPlan = drop;
+            hud.DropPlanText = dropPlanText;
+
             EditorSceneManager.MarkSceneDirty(scene);
             Debug.Log("[SceneBootstrapper] Escena creada: guarda (Ctrl+S → Assets/Scenes/Game.unity) y pulsa Play. " +
                       "Publica antes el CLI: dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");

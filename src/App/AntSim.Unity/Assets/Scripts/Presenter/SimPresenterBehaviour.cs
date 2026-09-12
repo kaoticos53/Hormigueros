@@ -21,6 +21,9 @@ namespace AntSim.Unity.Scripts.Presenter
         public int FrameEvery = 1;
         public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome
 
+        [Header("Intervención (F4.4): plan de drops acumulado en partida")]
+        [Tooltip("Drops pendientes (tick:x:y) para el relanzamiento con --drop.")]
+        public string[] PendingDropArgs = System.Array.Empty<string>();
         [Header("Replay (debug sin CLI): prioridad sobre StreamGame si no está vacío")]
         [Tooltip("Ruta de un stream volcado a archivo (p. ej. artifacts/stream-fixture-256.jsonl). Vacío = lanza el CLI.")]
         public string? ReplayFile;
@@ -64,7 +67,7 @@ namespace AntSim.Unity.Scripts.Presenter
                         _source.StreamFile(ReplayFile, line => _presenter.Feed(line));
                     else
                         _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery, SeedPoolPath,
-                            line => _presenter.Feed(line));
+                            line => _presenter.Feed(line), PendingDropArgs);
                 }
                 catch (Exception ex)
                 {

@@ -29,6 +29,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/ColonyCardModel.cs" Link="UnityPure/ColonyCardModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/HudToastsModel.cs" Link="UnityPure/HudToastsModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/CommandHistoryModel.cs" Link="UnityPure/CommandHistoryModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/DropFoodPlanModel.cs" Link="UnityPure/DropFoodPlanModel.cs" />
   </ItemGroup>
 
 </Project>

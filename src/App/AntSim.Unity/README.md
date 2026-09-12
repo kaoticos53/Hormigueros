@@ -86,6 +86,10 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
 - **Verificar desde el HUD (§4)**: `CommandHistoryModel.BuildVerifyCommand(
   save, antlog)` produce el comando `--mode verify` del CLI (el oráculo es el
   CLI, la UI solo muestra ✓/✗ según su exit code).
+- **Intervenir con DropFood (F4.4)**: tecla D activa el modo marcar; cada
+  click registra un drop futuro en `DropFoodPlanModel` (cuota 5/partida,
+  causalidad validada) y «reiniciar con plan» relanza la misma partida con
+  `--drop tick:x:y` vía el CLI. El resumen vive junto al historial.
 - `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las
   tarjetas pintan el semáforo del canal D (el Core lo calcula con
   `RelayVerdict`: la UI no evalúa umbrales).

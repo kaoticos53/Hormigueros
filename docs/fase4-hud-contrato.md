@@ -94,6 +94,13 @@ El panel es también la auditoría de determinismo: botón "reproducir desde
 guardado" (lanza el modo verify del CLI con el `.antsave` + `.antlog` de la
 partida) y muestra ✓/✗ del resultado.
 
+**Intervenir — click-to-place de DropFood (F4.4, implementado)**: la tecla D
+activa el modo marcar; cada click registra `(tick futuro, x, y)` en el plan
+(`DropFoodPlanModel` puro, cuota 5/partida, validación de mundo y causalidad —
+nunca en el pasado). «Reiniciar con plan» relanza la MISMA partida sembrada
+con `--drop tick:x:y` vía el CLI (oráculo de inyección, F4.0); el resumen
+`drops: n/5 · t… (x,y)` vive bajo el historial.
+
 ## 5. Inspección de hormiga (canal A + seguimiento)
 
 **Implementado (F4.2)**: cada fila `ants` del canal A lleva 12 campos —
