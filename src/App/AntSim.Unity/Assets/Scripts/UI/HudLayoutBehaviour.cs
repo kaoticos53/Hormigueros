@@ -65,8 +65,6 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Modelo puro del historial de comandos (auditoría §4).</summary>
         public Streaming.CommandHistoryModel History => _history;
 
-        private ulong _lastTick;
-
         private void Update()
         {
             var presenter = Presenter;
@@ -74,12 +72,14 @@ namespace AntSim.Unity.Scripts.Presenter
             var p = presenter.Presenter;   // expuesto abajo en SimPresenterBehaviour
             if (p == null) return;
 
-            // Reparto UNA vez por tick nuevo (los toasts envejecen con sim, no con frame).
-            var view = p.CurrentTick;
+            // Reparto: drena TODOS los ticks PRESENTADOS desde el frame anterior (uno
+            // por tick de simulación, en orden). A velocidad alta un frame presenta
+            // varios ticks, así que drenarlos todos —y no leer solo el último— es lo
+            // que garantiza no perder una alerta cadenciada del canal D (cada alerta
+            // existe solo en su tick). Los toasts envejecen con sim, no con frame.
             var toasts = Toasts;
-            if (view != null && view.Tick != _lastTick)
+            while (p.TryDequeuePresented(out var view) && view != null)
             {
-                _lastTick = view.Tick;
                 _cards.Observe(view);
                 toasts.Observe(view);
                 _history.Observe(view);

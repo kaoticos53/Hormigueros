@@ -75,6 +75,12 @@ namespace AntSim.Unity.Scripts.Presenter
             // lo deseable.
             Application.runInBackground = true;
 
+            // Play-pass: el CLI escribe el JSONL entero de una vez, así que sin
+            // buffer el presenter saltaría al último tick al primer frame (nunca
+            // se verían ni la partida ni las alertas del canal D). Con el buffer,
+            // Update avanza la reproducción al ritmo de simulación.
+            _presenter.Buffered = true;
+
             // Play-pass: el cwd del editor es la carpeta del proyecto, no la del
             // repo — las rutas relativas (build/antsim, artifacts/…) se resuelven
             // contra el repo root derivado de Application.dataPath.
@@ -117,10 +123,15 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private void Update()
         {
-            if (Speed <= 0f) return; // pausa: no consume stream
-            _simTime += Time.deltaTime * Speed;
+            // Pausa (Speed 0): congela el reloj de simulación, pero SIGUE dibujando
+            // — si no, pausar dejaba la pantalla sin mundo.
+            if (Speed > 0f) _simTime += Time.deltaTime * Speed;
 
-            // Dibuja el último tick muestreado (la interpolación vive en Sample).
+            // Reproducción: el tick k+1 es el "actual" para interpolar desde k con
+            // fracción frac(simTime/Dt) (retraso de 1 tick de la arquitectura).
+            _presenter.AdvanceTo((ulong)(_simTime / Dt) + 1);
+
+            // Dibuja el tick muestreado (la interpolación vive en Sample).
             var state = _presenter.Sample(Frac());
             _lastState = state;
             Draw(state);

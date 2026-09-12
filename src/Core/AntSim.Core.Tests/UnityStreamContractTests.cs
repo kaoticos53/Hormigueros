@@ -209,6 +209,75 @@ namespace AntSim.Core.Tests
             }
         }
 
+        [Fact]
+        public void Presenter_Buffered_ReproduceEnOrdenSinSaltos()
+        {
+            // F4.1b (Play pass): el CLI escribe el JSONL ENTERO de golpe. Sin
+            // buffer, el presenter saltaba al último tick al primer frame y la
+            // vista nunca mostraba la partida. Con buffer, el stream se encola y
+            // el cursor avanza a petición, tick a tick y en orden.
+            string stream = GameScenario.Run(42, ticks: 600, colonies: 2, grid: 96,
+                frameEvery: 1, seedPoolPath: null, drops: null);
+
+            var presenter = new AntSim.Unity.Scripts.Streaming.GameStreamPresenter { Buffered = true };
+            foreach (var line in stream.Split('\n')) presenter.Feed(line);
+
+            // Nada presentado aún: el stream llegó entero y el cursor sigue en 0.
+            Assert.Null(presenter.CurrentTick);
+            Assert.Equal(600, presenter.BufferedTicks);
+
+            var ticks = new List<ulong>();
+            for (ulong target = 1; target <= 600; target++)
+            {
+                presenter.AdvanceTo(target);
+                while (presenter.TryDequeuePresented(out var v) && v != null)
+                    ticks.Add(v.Tick);
+            }
+
+            Assert.Equal(600, ticks.Count);
+            for (int i = 0; i < ticks.Count; i++)
+                Assert.Equal((ulong)(i + 1), ticks[i]);   // 1..600, sin saltos ni repeticiones
+            Assert.Equal(0, presenter.BufferedTicks);
+            Assert.Equal(600UL, presenter.CurrentTick!.Tick);
+        }
+
+        [Fact]
+        public void Presenter_Buffered_NoPierdeNingunaAlertaDelCanalD()
+        {
+            // El canal D solo emite la alerta en SU tick. Si un frame presenta
+            // varios ticks (velocidad alta) y el HUD leyera solo el último, la
+            // alerta se perdería. El drenado de presentados debe entregarlas TODAS,
+            // exactamente una vez.
+            string stream = GameScenario.Run(42, ticks: 7200, colonies: 2, grid: 96,
+                frameEvery: 30, seedPoolPath: null, drops: null);
+
+            var expected = new List<string>();
+            var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+            foreach (var line in stream.Split('\n'))
+            {
+                var v = parser.ParseLine(line.Trim());
+                if (v == null) continue;
+                foreach (var a in v.Alerts) expected.Add(a.Key + "@" + a.Tick);
+            }
+            Assert.NotEmpty(expected);   // la partida canónica emite alertas
+
+            var presenter = new AntSim.Unity.Scripts.Streaming.GameStreamPresenter { Buffered = true };
+            foreach (var line in stream.Split('\n')) presenter.Feed(line);
+
+            var got = new List<string>();
+            // Render a 60 fps con sim a 30 Hz × velocidad 2 ⇒ 3 ticks por frame.
+            for (ulong target = 1; target <= 7200; target += 3)
+            {
+                presenter.AdvanceTo(target);
+                while (presenter.TryDequeuePresented(out var v) && v != null)
+                    foreach (var a in v.Alerts) got.Add(a.Key + "@" + a.Tick);
+            }
+            while (presenter.TryDequeuePresented(out var v) && v != null)
+                foreach (var a in v.Alerts) got.Add(a.Key + "@" + a.Tick);
+
+            Assert.Equal(expected, got);
+        }
+
         /// <summary>Hash final fijado del stream canónico (seed 42, grid 96,
         /// 2 colonias, 7200 ticks): la partida de artifacts/stream-fixture.jsonl.
         /// Lo comparte scripts/check-stream-fixture.sh (scripts/stream-fixture.
