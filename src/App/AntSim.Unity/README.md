@@ -104,6 +104,10 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
   cerebro de la hormiga inspeccionada (base64 s8). `ActivationViewModel`
   (puro) decodifica y renderiza el grafo por capas con los nombres canónicos
   del contrato — el jugador ve al cerebro decidir; hash del mundo invariante.
+  **Desde el inspector**: `PheroEvery` (canal E; el bootstrapper lo deja en 30
+  para que el quad de feromonas salga vivo) y `ActivEvery` + `InspectId`
+  (canal F) son campos públicos de `SimPresenterBehaviour` — se activan sin
+  tocar código; ambos son telemetría pura (hash invariante).
 - **Salto de cámara por toast (§1)**: tecla J (o Alt+click en la pila) mueve
   la cámara al ancla (x, y) que el canal D trae en cada alerta.
 - `HudLayoutBehaviour`: tarjetas/toasts/historial se reparten del stream; las

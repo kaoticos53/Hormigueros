@@ -21,6 +21,14 @@ namespace AntSim.Unity.Scripts.Presenter
         public int FrameEvery = 1;
         public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome
 
+        [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
+        [Tooltip("Canal E (F4.5): feromonas de la colonia 0 cada N ticks. 0 = desactivado.")]
+        public int PheroEvery = 0;
+        [Tooltip("Canal F (F5.0): activaciones del MLP cada N ticks. 0 = desactivado (requiere InspectId > 0).")]
+        public int ActivEvery = 0;
+        [Tooltip("Canal F: id de la hormiga inspeccionada (el mismo que viaja en el canal A). 0 = sin inspección.")]
+        public uint InspectId = 0;
+
         [Header("Intervención (F4.4): plan de drops acumulado en partida")]
         [Tooltip("Drops pendientes (tick:x:y) para el relanzamiento con --drop.")]
         public string[] PendingDropArgs = System.Array.Empty<string>();
@@ -67,7 +75,8 @@ namespace AntSim.Unity.Scripts.Presenter
                         _source.StreamFile(ReplayFile, line => _presenter.Feed(line));
                     else
                         _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery, SeedPoolPath,
-                            line => _presenter.Feed(line), PendingDropArgs);
+                            line => _presenter.Feed(line), PendingDropArgs,
+                            PheroEvery, ActivEvery, InspectId);
                 }
                 catch (Exception ex)
                 {

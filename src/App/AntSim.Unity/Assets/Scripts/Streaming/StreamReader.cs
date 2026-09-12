@@ -32,9 +32,12 @@ namespace AntSim.Unity.Scripts.Streaming
 
         /// <summary>Ejecuta el CLI y bombea cada línea a <paramref name="onLine"/> (bloqueante).
         /// <paramref name="extraArgs"/> transporta el plan de intervención (F4.4):
-        /// pares --drop tick:x:y ya validados por DropFoodPlanModel.</summary>
+        /// pares --drop tick:x:y ya validados por DropFoodPlanModel.
+        /// Canales opt-in (F4.5/F5.0): pheroEvery (canal E), activEvery + inspectId
+        /// (canal F) — telemetría pura, el hash del mundo no cambia.</summary>
         public void StreamGame(ulong seed, int ticks, int grid, int colonies, int frameEvery,
-            string? seedPoolPath, Action<string> onLine, IReadOnlyList<string>? extraArgs = null)
+            string? seedPoolPath, Action<string> onLine, IReadOnlyList<string>? extraArgs = null,
+            int pheroEvery = 0, int activEvery = 0, uint inspectId = 0)
         {
             var psi = new ProcessStartInfo
             {
@@ -51,6 +54,14 @@ namespace AntSim.Unity.Scripts.Streaming
             psi.ArgumentList.Add("--frame-every"); psi.ArgumentList.Add(frameEvery.ToString());
             if (seedPoolPath != null)
             { psi.ArgumentList.Add("--seed-pool"); psi.ArgumentList.Add(seedPoolPath); }
+            if (pheroEvery > 0)
+            { psi.ArgumentList.Add("--phero-every"); psi.ArgumentList.Add(pheroEvery.ToString()); }
+            if (activEvery > 0)
+            {
+                psi.ArgumentList.Add("--activ-every"); psi.ArgumentList.Add(activEvery.ToString());
+                if (inspectId > 0)
+                { psi.ArgumentList.Add("--inspect"); psi.ArgumentList.Add(inspectId.ToString()); }
+            }
             if (extraArgs != null)
             {
                 foreach (string a in extraArgs)

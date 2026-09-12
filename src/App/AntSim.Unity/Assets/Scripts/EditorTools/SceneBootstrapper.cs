@@ -61,6 +61,11 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.AntMaterial = NewMat(new Color(0.55f, 0.35f, 0.15f), "AntMat");
             presenter.CarrierMaterial = NewMat(new Color(0.95f, 0.75f, 0.2f), "CarrierMat");
             presenter.ItemMaterial = NewMat(new Color(0.3f, 0.75f, 0.35f), "ItemMat");
+            // Canal E activo por defecto en la escena: el quad de feromonas ya
+            // existe — sin este campo el canal quedaría apagado y el quad vacío.
+            presenter.PheroEvery = 30;
+            // Canal F (F5.0) apagado por defecto: requiere elegir hormiga;
+            // se activa desde el inspector (InspectId + ActivEvery) o por click.
 
             // — Marcadores de nido (posiciones del mundo; el HUD ancla a las tarjetas) —
             for (int c = 0; c < 2; c++)
