@@ -24,3 +24,70 @@ jobs:
 
       - name: Replay hash check (partida con plan de drops del smoke e2e)
         run: bash scripts/check-replay-command.sh
+
+      - name: Selftest del analizador de compilación de Unity (sin editor)
+        run: bash scripts/check-unity-compile.sh --selftest
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Compilación del proyecto Unity. POR QUÉ no basta con `test`: la suite
+  # headless solo compila los scripts PUROS que el csproj enlaza con
+  # Link="UnityPure/…"; los MonoBehaviours (SimPresenterBehaviour,
+  # HudLayoutBehaviour, SceneBootstrapper, …) NO se compilan ahí. Un `error CS`
+  # en la capa de vista pasa `dotnet test` y solo revienta al abrir Unity — ya
+  # pasó dos veces (`ColonyView?` con `!`, `CameraClearFlags.SolidCamera`).
+  # Este job los compila en batch y falla con el primer error.
+  #
+  # DORMIDO por defecto (`UNITY_CI`): descargar Unity en cada push es caro y
+  # necesita licencia. Para activarlo:
+  #   1. Variable de repositorio  UNITY_CI = true
+  #   2. Secreto de repositorio   UNITY_LICENSE (contenido del .ulf)  — o bien
+  #                               UNITY_SERIAL para activación por serie
+  # El script (`scripts/check-unity-compile.sh`) es independiente: en local
+  # encuentra el editor del Hub por la versión fijada en ProjectVersion.txt.
+  # ───────────────────────────────────────────────────────────────────────────
+  unity-compile:
+    if: vars.UNITY_CI == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar el Unity CLI
+        run: |
+          curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh \
+            | UNITY_CLI_CHANNEL=beta bash
+          # El instalador deja el binario fuera del PATH de esta shell: se
+          # localiza y se publica en GITHUB_PATH para los pasos siguientes.
+          CLI="$(command -v unity || true)"
+          if [[ -z "$CLI" ]]; then
+            CLI="$(find "$HOME" /usr/local/bin -maxdepth 4 -type f -name unity \
+                   -perm -u+x 2>/dev/null | head -n 1)"
+          fi
+          if [[ -z "$CLI" ]]; then
+            echo "::error::no se encontró el binario 'unity' tras instalarlo"; exit 1
+          fi
+          echo "unity => $CLI"
+          echo "$(dirname "$CLI")" >> "$GITHUB_PATH"
+
+      - name: Instalar la versión de Unity fijada por el proyecto
+        run: |
+          VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
+            src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
+          echo "Instalando Unity $VERSION"
+          unity install "$VERSION"
+
+      - name: Activar la licencia
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        run: |
+          if [[ -n "$UNITY_SERIAL" ]]; then
+            unity license activate --serial "$UNITY_SERIAL"
+          elif [[ -n "$UNITY_LICENSE" ]]; then
+            printf '%s' "$UNITY_LICENSE" > "$RUNNER_TEMP/Unity_lic.ulf"
+            unity license activate --file "$RUNNER_TEMP/Unity_lic.ulf"
+          else
+            echo "::error::define UNITY_SERIAL o UNITY_LICENSE (ver el comentario del job)"; exit 1
+          fi
+
+      - name: Compilar el proyecto Unity en batch (falla con cualquier error CS)
+        run: bash scripts/check-unity-compile.sh
