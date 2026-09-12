@@ -37,11 +37,14 @@ namespace AntSim.Unity.Scripts.Presenter
         public string? ReplayFile;
 
         [Header("Render")]
-        public Mesh AntMesh;
-        public Material AntMaterial;
-        public Material CarrierMaterial;
-        public Mesh ItemMesh;
-        public Material ItemMaterial;
+        // Asignados por la ESCENA (bootstrapper) o por el inspector, no en código:
+        // `null!` silencia CS8618 sin volverlos nullable — el Draw ya los guarda
+        // con `!= null`, y marcarlos `?` propagaría CS8602 a cada uso.
+        public Mesh AntMesh = null!;
+        public Material AntMaterial = null!;
+        public Material CarrierMaterial = null!;
+        public Mesh ItemMesh = null!;
+        public Material ItemMaterial = null!;
         public float AntScale = 0.6f;
 
         [Header("Tiempo")]
