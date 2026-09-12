@@ -127,6 +127,9 @@ especialistas con su contrapartida ⚠.
 - **Integración Unity↔Core sin Unity**: los 190 tests incluyen la
   reconstrucción fiel del stream real (poses/items/eventos/métricas/relevo/
   alertas/feromonas) por los modelos puros.
+- **Smoke end-to-end del bucle completo** ([`fase4-smoke-e2e.md`](fase4-smoke-e2e.md)):
+  sembrar warm-v2 + intervenir con 3 drops + replay bit a bit — hash final
+  `816e280c…` idéntico entre builds y ejecuciones; baseline sin drops difiere.
 
 ## 4. Qué queda para release
 
