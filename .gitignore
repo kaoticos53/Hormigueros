@@ -23,6 +23,7 @@ TestResults/
 *.antsave
 *.antlog
 *.antgenome
+!tests/fixtures/*.antgenome
 *.antmetrics
 *.anttrace
 

@@ -21,3 +21,6 @@ jobs:
 
       - name: Fixture hash check (regenera el stream canónico y compara)
         run: bash scripts/check-stream-fixture.sh
+
+      - name: Replay hash check (partida con plan de drops del smoke e2e)
+        run: bash scripts/check-replay-command.sh

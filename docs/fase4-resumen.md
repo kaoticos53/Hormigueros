@@ -59,7 +59,10 @@ sostiene con tres capas de verificación:
    fallan explícitamente).
 2. **Pin de hash en CI** (dos capas): `scripts/check-stream-fixture.sh`
    regenera la partida canónica (seed 42 · 96² · 7200 ticks) y compara el
-   hash final; un test lo repite dentro de la suite.
+   hash final; un test lo repite dentro de la suite. La inyección de
+   comandos tiene su propio pin: `scripts/check-replay-command.sh` replaya
+   el smoke e2e (warm-v2 + 3 drops) contra `tests/fixtures/warm-v2.antgenome`
+   (trackeado — los .antgenome de artifacts/ son de ejecución).
 3. **Telemetría pura verificada**: cada canal añadido (D, E, inspección de
    12 campos) llegó con un test que prueba que el hash del mundo NO cambia.
 

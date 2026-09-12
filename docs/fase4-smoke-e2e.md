@@ -26,6 +26,13 @@ antsim --mode game --seed 42 --grid 96 --colonies 2 --ticks 3000 \
 
 Archivos (no trackeados, regenerables con el repro): `artifacts/smoke-e2e-{A,B,baseline}.jsonl`.
 
+**CI**: `scripts/check-replay-command.sh` replaya esta partida en cada push
+contra el pool del fixture trackeado `tests/fixtures/warm-v2.antgenome`
+(byte a byte el mismo archivo que `artifacts/pretrain-warm-v2.antgenome`) y
+compara con el hash fijado en `scripts/replay-command.expected`. Si el hash
+cambia, el PR falla — actualizar el pin con `--update` es una decisión
+explícita y revisable.
+
 ## Qué demuestra
 
 El bucle completo del diseño de UX (§2) con los mecanismos reales:
