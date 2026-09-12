@@ -5,14 +5,12 @@ Simulación en tiempo real de hormigueros realistas con **neuroevolución contin
 recursos, múltiples especies y render Unity 2D → 3D. Núcleo .NET **headless y
 determinista** desacoplado del motor gráfico.
 
-Estado actual: **Fases 0–3bis completadas** (núcleo determinista + mundo + neuroevolución:
-pool élite, fitness al morir, cuarentena de inmigrantes, formato `.antgenome` y
-**pre-entrenamiento headless** sobre una arena realista — colonia completa con cría,
-comida a ≥ 200 u con el spawn del mundo, sin rastro plantado — con transferencia
-validada al mundo real vía `--seed-pool`) y **Fase 4 (persistencia) implementada**:
-checkpoints `.antsave` reproducibles bit a bit, registro de eventos `.antlog` con
-hitos de hash cada 1024 ticks y modo `verify` de contraste. Ver
-[`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo,
+Estado actual: **Fases 0–4 completadas** (núcleo determinista + mundo + neuroevolución
++ pre-entrenamiento headless con transferencia validada + **modo evolución jugable**:
+stream JSONL de 5 canales hacia la vista, escena Unity bootstrapeada con HUD —
+tarjetas de colonia con semáforo de relevo, toasts, inspector con linaje de cerebros —,
+importación con cuarentena, intervención `--drop` determinista y replay bit a bit).
+Ver [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo,
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados
 y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cierre,
 [`docs/fase4-diseno-ux.md`](docs/fase4-diseno-ux.md) para el diseño de UX del modo evolución (Fase 4),
@@ -20,6 +18,34 @@ y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cier
 y [`docs/fase4-resumen.md`](docs/fase4-resumen.md) para el resumen de cierre de la Fase 4
 (junto con [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md): arranque en frío, salud del relevo y jerarquía de pools),
 y [`docs/fase5-plan.md`](docs/fase5-plan.md) para el plan de la Fase 5 (realismo, especies y escala).
+
+## Notas de versión
+
+### v0.4.0 — Fase 4: modo evolución jugable
+
+El bucle completo del jugador funciona y está verificado de extremo a extremo:
+**elegir pool → ver en vivo → inspeccionar hormiga → intervenir → verificar ✓**.
+
+- **Determinismo como producto**: comandos sellados por tick (F4.0); misma semilla
+  + mismos comandos ⇒ mundo idéntico bit a bit, probado en CI con tres pins de
+  hash (stream canónico, replay con plan de drops a 3000 ticks, fase de relevo
+  a 6000 ticks con primera descarga en t3950).
+- **Stream de 5 canales** (A poses · B eventos · C métricas · D alertas derivadas
+  por el Core · E feromonas opt-in): todo lo visible es verificable headless.
+- **HUD completo** (contrato §0–§8): tarjetas de colonia con semáforo de relevo
+  escalado por grid (`RelayVerdict`), toasts con rate-limit, inspector de hormiga
+  con **linaje de cerebros**, historial de comandos y verificación vía CLI.
+- **Tres pilares de jugador**: importar (picker de pools + diálogo de cuarentena
+  `genome-info`), espectar (semáforo, toasts, salto de cámara al ancla de alerta),
+  intervenir (DropFood click-to-place, plan de 5 drops por partida, relanzar con
+  el plan determinista).
+- **Escena Unity ensamblada con un comando de menú** (`SceneBootstrapper`), modelos
+  puros compilados en la suite headless y `190/190` tests verdes.
+- Detalles: [`docs/fase4-resumen.md`](docs/fase4-resumen.md) · smoke e2e:
+  [`docs/fase4-smoke-e2e.md`](docs/fase4-smoke-e2e.md).
+
+Ver [`docs/fase5-plan.md`](docs/fase5-plan.md) para lo que sigue (mini-grafo MLP,
+pulido uGUI, especies Atta/Eciton y escala).
 
 ## Requisitos
 
