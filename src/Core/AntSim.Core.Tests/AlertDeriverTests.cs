@@ -18,6 +18,18 @@ public static class TestPaths
             dir = dir.Parent!;
         return System.IO.Path.Combine(dir!.FullName, rel);
     }
+
+    /// <summary>
+    /// Pool de referencia para los tests que necesitan LEER un .antgenome. Apunta
+    /// al fixture TRACKEADO, nunca al artefacto de ejecución que usa el CLI: los
+    /// `artifacts/*.antgenome` están gitignoreados, así que en un clon limpio (y en
+    /// CI) no existen y estos tests fallaban con FileNotFoundException. El fixture
+    /// es byte a byte idéntico — sha256 be409786… (ver tests/fixtures/README.md).
+    /// </summary>
+    public const string WarmV2Pool = "tests/fixtures/warm-v2.antgenome";
+
+    /// <summary>Ruta ABSOLUTA del pool de referencia trackeado.</summary>
+    public static string WarmV2PoolPath() => RepoPath(WarmV2Pool);
 }
 
 /// <summary>
@@ -372,7 +384,7 @@ public sealed class AlertDeriverTests
         // La cadena completa de la UI: partidas sembrada con warm-v2 → deriver
         // → hito verde. Sin pool el mundo en frío no descarga (baseline).
         var (_, seeded) = AntSim.Core.Evolution.AntGenomeFile.ReadFile(
-            TestPaths.RepoPath("artifacts/pretrain-warm-v2.antgenome"), AntSim.Core.Brain.BrainContract.CurrentVersion);
+            TestPaths.WarmV2PoolPath(), AntSim.Core.Brain.BrainContract.CurrentVersion);
         var sim = new WorldSim(42, 96, colonyCount: 1);
         sim.SeedPoolFromGenomes(0, seeded);
         var relay = new RelayTracker();
@@ -405,7 +417,7 @@ public sealed class AlertDeriverTests
         // (leg ≥ 60; drop ≤ 190 × grid/96). Centinela de
         // docs/fase4-hud-contrato.md §8 (seed 42: leg 64, drop 182.3).
         var (_, seeded) = AntSim.Core.Evolution.AntGenomeFile.ReadFile(
-            TestPaths.RepoPath("artifacts/pretrain-warm-v2.antgenome"), AntSim.Core.Brain.BrainContract.CurrentVersion);
+            TestPaths.WarmV2PoolPath(), AntSim.Core.Brain.BrainContract.CurrentVersion);
         var sim = new WorldSim(42, 256, colonyCount: 1);
         sim.SeedPoolFromGenomes(0, seeded);
         var relay = new RelayTracker();

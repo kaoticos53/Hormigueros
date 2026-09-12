@@ -460,7 +460,7 @@ namespace AntSim.Core.Tests
             // la partida va sembrada con warm-v2 hasta la primera descarga
             // (tick 5154 en seed 42/grid 256; con margen, 5600).
             string stream = GameScenario.Run(42, ticks: 5600, colonies: 2, grid: 256,
-                frameEvery: 30, seedPoolPath: TestPaths.RepoPath("artifacts/pretrain-warm-v2.antgenome"),
+                frameEvery: 30, seedPoolPath: TestPaths.WarmV2PoolPath(),
                 drops: null);
             Assert.Contains("\"chainAvg\":", stream); // presente (null o valor) en relays
 

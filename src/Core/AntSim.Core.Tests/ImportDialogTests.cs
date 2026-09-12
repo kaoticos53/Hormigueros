@@ -14,7 +14,9 @@ namespace AntSim.Core.Tests
     /// </summary>
     public sealed class ImportDialogTests
     {
-        private const string PoolPath = "artifacts/pretrain-warm-v2.antgenome";
+        // Fixture TRACKEADO, no el artefacto de ejecución: en un clon limpio
+        // artifacts/pretrain-warm-v2.antgenome no existe (ver TestPaths.WarmV2Pool).
+        private const string PoolPath = TestPaths.WarmV2Pool;
 
         [Fact]
         public void Oraculo_InspeccionaPoolReal()
@@ -23,7 +25,7 @@ namespace AntSim.Core.Tests
                 TestPaths.RepoPath(PoolPath), BrainContract.CurrentVersion);
 
             Assert.True(info.Ok);
-            Assert.Equal("pretrain-warm-v2.antgenome", info.FileName);
+            Assert.Equal("warm-v2.antgenome", info.FileName);
             Assert.Equal(24, info.GenomeCount);
             Assert.Equal(64, info.Sha256.Length);
             Assert.False(string.IsNullOrEmpty(info.Card));
