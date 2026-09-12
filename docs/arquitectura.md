@@ -248,6 +248,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 ### Fase 4 — Aplicación Unity 2D (primer hito jugable)
 - **Resumen de cierre (Fase 4 completa)**: [`fase4-resumen.md`](fase4-resumen.md)
   — decisiones de arquitectura, estado del contrato §0–§8 y pendientes para release.
+- **Play pass del editor (preparación + checklist)**: [`fase4-play-pass.md`](fase4-play-pass.md)
+  — auditoría de APIs Unity 6000 y verificación visual de la escena en un comando.
 - Contrato de datos del HUD (F4.2): [`fase4-hud-contrato.md`](fase4-hud-contrato.md)
   — mapeo canal B/C → alertas, tarjeta de colonia (semáforo de relevo con los
   umbrales del benchmark), estado global, historial de comandos, inspección

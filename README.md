@@ -42,7 +42,8 @@ El bucle completo del jugador funciona y está verificado de extremo a extremo:
 - **Escena Unity ensamblada con un comando de menú** (`SceneBootstrapper`), modelos
   puros compilados en la suite headless y `190/190` tests verdes.
 - Detalles: [`docs/fase4-resumen.md`](docs/fase4-resumen.md) · smoke e2e:
-  [`docs/fase4-smoke-e2e.md`](docs/fase4-smoke-e2e.md).
+  [`docs/fase4-smoke-e2e.md`](docs/fase4-smoke-e2e.md) · checklist del Play pass
+  en el editor: [`docs/fase4-play-pass.md`](docs/fase4-play-pass.md).
 
 Ver [`docs/fase5-plan.md`](docs/fase5-plan.md) para lo que sigue (mini-grafo MLP,
 pulido uGUI, especies Atta/Eciton y escala).
