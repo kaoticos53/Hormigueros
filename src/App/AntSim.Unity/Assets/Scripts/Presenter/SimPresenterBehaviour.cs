@@ -64,6 +64,14 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private void Start()
         {
+            // Play-pass: sin esto el bucle del jugador se CONGELA al perder el foco
+            // el editor (Application.runInBackground = false por defecto): el
+            // Update deja de correr a los ~2 frames y ni el mundo ni el HUD
+            // avanzan. Un pass automático (el CLI guiando el editor sin foco) es
+            // imposible sin esta línea; para un simulador-espectáculo también es
+            // lo deseable.
+            Application.runInBackground = true;
+
             // Play-pass: el cwd del editor es la carpeta del proyecto, no la del
             // repo — las rutas relativas (build/antsim, artifacts/…) se resuelven
             // contra el repo root derivado de Application.dataPath.
