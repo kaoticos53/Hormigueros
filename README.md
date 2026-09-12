@@ -15,9 +15,10 @@ hitos de hash cada 1024 ticks y modo `verify` de contraste. Ver
 [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo,
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados
 y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cierre,
-[`docs/fase4-diseno-ux.md`](docs/fase4-diseno-ux.md) para el diseño de UX del modo evolución (Fase 4)
-y [`docs/fase4-hud-contrato.md`](docs/fase4-hud-contrato.md) para el contrato de datos del HUD (F4.2)
-de la Fase 3ter (arranque en frío, salud del relevo y jerarquía de pools).
+[`docs/fase4-diseno-ux.md`](docs/fase4-diseno-ux.md) para el diseño de UX del modo evolución (Fase 4),
+[`docs/fase4-hud-contrato.md`](docs/fase4-hud-contrato.md) para el contrato de datos del HUD (F4.2)
+y [`docs/fase4-resumen.md`](docs/fase4-resumen.md) para el resumen de cierre de la Fase 4
+(junto con [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md): arranque en frío, salud del relevo y jerarquía de pools).
 
 ## Requisitos
 

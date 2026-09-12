@@ -246,6 +246,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   42, dos procesos).
 
 ### Fase 4 — Aplicación Unity 2D (primer hito jugable)
+- **Resumen de cierre (Fase 4 completa)**: [`fase4-resumen.md`](fase4-resumen.md)
+  — decisiones de arquitectura, estado del contrato §0–§8 y pendientes para release.
 - Contrato de datos del HUD (F4.2): [`fase4-hud-contrato.md`](fase4-hud-contrato.md)
   — mapeo canal B/C → alertas, tarjeta de colonia (semáforo de relevo con los
   umbrales del benchmark), estado global, historial de comandos, inspección
