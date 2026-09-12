@@ -22,7 +22,11 @@ namespace AntSim.Unity.Scripts.Streaming
         public static string ResolveExecutable(string path)
         {
             if (File.Exists(path)) return path;
-            if (OperatingSystem.IsWindows() && !Path.HasExtension(path))
+            // C# 9 / perfil de Unity: OperatingSystem.IsWindows() es .NET 5+;
+            // RuntimeInformation es portable (.NET Standard 2.0 + Unity).
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                    System.Runtime.InteropServices.OSPlatform.Windows)
+                && !Path.HasExtension(path))
             {
                 string withExe = path + ".exe";
                 if (File.Exists(withExe)) return withExe;

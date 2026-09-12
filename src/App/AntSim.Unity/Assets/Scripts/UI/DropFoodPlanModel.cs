@@ -78,8 +78,11 @@ namespace AntSim.Unity.Scripts.Streaming
             foreach (var m in _marks)
             {
                 args.Add("--drop");
-                args.Add(string.Create(CultureInfo.InvariantCulture,
-                    $"{m.Tick}:{Round(m.X)}:{Round(m.Y)}"));
+                // C# 9 (Unity): string.Create(IFormatProvider, …) es .NET 6+;
+                // formateo invariante explícito equivalente.
+                args.Add(m.Tick.ToString(CultureInfo.InvariantCulture) + ":"
+                    + Round(m.X).ToString("0.##", CultureInfo.InvariantCulture) + ":"
+                    + Round(m.Y).ToString("0.##", CultureInfo.InvariantCulture));
             }
             return args;
         }
@@ -89,9 +92,13 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             if (_marks.Count == 0) return "drops: 0/" + MaxDrops;
             var sb = new StringBuilder();
-            sb.Append(CultureInfo.InvariantCulture, $"drops: {_marks.Count}/{MaxDrops}");
+            sb.Append("drops: ").Append(_marks.Count).Append('/').Append(MaxDrops);
             foreach (var m in _marks)
-                sb.Append(CultureInfo.InvariantCulture, $" · t{m.Tick} ({Round(m.X):0},{Round(m.Y):0})");
+            {
+                sb.Append(" · t").Append(m.Tick.ToString(CultureInfo.InvariantCulture))
+                  .Append(" (").Append(Round(m.X).ToString("0", CultureInfo.InvariantCulture))
+                  .Append(',').Append(Round(m.Y).ToString("0", CultureInfo.InvariantCulture)).Append(')');
+            }
             return sb.ToString();
         }
 
