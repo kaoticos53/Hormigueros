@@ -26,19 +26,54 @@ namespace AntSim.Unity.Scripts.EditorTools
         {
             if (Presenter == null || Inspector == null) return;
             if (!Input.GetMouseButtonDown(0)) return;
+            PickAtScreen(Input.mousePosition);
+        }
 
-            Ray ray = Camera.main != null
-                ? Camera.main.ScreenPointToRay(Input.mousePosition)
-                : new Ray(new Vector3(0, 100, 0), Vector3.down);
-            if (ray.direction.y == 0f) return;
+        // ── Entrada sin dispositivo (F5.2) ──────────────────────────────────
+        // `Input` no es inyectable desde el CLI, pero estas acciones sí: el
+        // pass en vivo puede seleccionar una hormiga con el MISMO camino que el
+        // click (rayo real de la cámara → raycast al plano → PickNearest sobre
+        // el estado interpolado del presenter). El contrato de selección queda
+        // así verificado sin un humano delante del ratón.
 
-            float t = (WorldPlaneY - ray.origin.y) / ray.direction.y;
-            if (t < 0f) return;
-            Vector3 hit = ray.origin + ray.direction * t;
+        /// <summary>Selecciona la hormiga bajo un punto de PANTALLA (el camino
+        /// del click). Devuelve el id seleccionado (0 = nada).</summary>
+        public uint PickAtScreen(Vector2 screenPoint)
+        {
+            if (!ScreenRay(screenPoint, out float hx, out float hz)) return 0;
+            return PickAtWorld(new Vector3(hx, WorldPlaneY, hz));
+        }
 
-            uint id = Inspector.PickNearest(hit);
+        /// <summary>Selecciona la hormiga más cercana a un punto del mundo.
+        /// Devuelve el id seleccionado (0 = ninguna dentro del radio).</summary>
+        public uint PickAtWorld(Vector3 worldPoint)
+        {
+            if (Inspector == null) return 0;
+            uint id = Inspector.PickNearest(worldPoint);
             if (id != 0)
-                Debug.Log($"[AntPick] seleccionada hormiga #{id} @ ({hit.x:0}, {hit.z:0})");
+                Debug.Log($"[AntPick] seleccionada hormiga #{id} @ ({worldPoint.x:0}, {worldPoint.z:0})");
+            return id;
+        }
+
+        /// <summary>Rayo de la cámara por un punto de pantalla hasta el plano del mundo.</summary>
+        private bool ScreenRay(Vector2 screenPoint, out float hitX, out float hitZ)
+        {
+            var cam = Camera.main;
+            Vector3 origin, direction;
+            if (cam != null)
+            {
+                var ray = cam.ScreenPointToRay(screenPoint);
+                origin = ray.origin;
+                direction = ray.direction;
+            }
+            else
+            {
+                origin = new Vector3(0f, 100f, 0f);
+                direction = Vector3.down;
+            }
+            return Streaming.WorldPlaneRay.TryHit(
+                origin.x, origin.y, origin.z, direction.x, direction.y, direction.z,
+                WorldPlaneY, out hitX, out hitZ);
         }
     }
 }
