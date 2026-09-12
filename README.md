@@ -40,7 +40,7 @@ El bucle completo del jugador funciona y está verificado de extremo a extremo:
   intervenir (DropFood click-to-place, plan de 5 drops por partida, relanzar con
   el plan determinista).
 - **Escena Unity ensamblada con un comando de menú** (`SceneBootstrapper`), modelos
-  puros compilados en la suite headless y `190/190` tests verdes.
+  puros compilados en la suite headless y `221/221` tests verdes.
 - Detalles: [`docs/fase4-resumen.md`](docs/fase4-resumen.md) · smoke e2e:
   [`docs/fase4-smoke-e2e.md`](docs/fase4-smoke-e2e.md) · checklist del Play pass
   en el editor: [`docs/fase4-play-pass.md`](docs/fase4-play-pass.md).

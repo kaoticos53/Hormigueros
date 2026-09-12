@@ -29,7 +29,7 @@ Core (`AntSim.Core.Tests`, ver abajo) antes de abrir Unity.
 |---|---|---|
 | `Scripts/Streaming/GameStreamParser.cs` | JSONL → TickView (poses, items, colonias, eventos, métricas, relevo) | ✅ |
 | `Scripts/Streaming/StreamReader.cs` | lanza el CLI / lee archivo y bombea líneas | ✅ |
-| `Scripts/Presenter/GameStreamPresenter.cs` | interpolación con retraso de 1 tick → RenderState | ✅ |
+| `Scripts/Presenter/GameStreamPresenter.cs` | reproducción con buffer (`AdvanceTo`, drenado de presentados) + interpolación con retraso de 1 tick → RenderState | ✅ |
 | `Scripts/UI/PoolPickerModel.cs` | JSON de presets → recomendados/especialistas | ✅ |
 | `Scripts/UI/AntInspectorModel.cs` | tarjeta de inspección (12 campos canal A, muerte del canal B) + linaje de cerebros por huella | ✅ |
 | `Scripts/UI/ColonyCardModel.cs` | tarjeta de colonia: semáforo del canal D, reserva, chips de cría, flujo 1 s, cerebros | ✅ |

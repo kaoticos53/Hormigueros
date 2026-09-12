@@ -295,7 +295,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   pool alternativo sugerido.
 - **F4.1 ✅-parcial (esqueleto Unity, verificable headless)**: `src/App/AntSim.Unity`
   — scripts PUROS sin UnityEngine (`GameStreamParser` JSONL → TickView,
-  `GameStreamPresenter` interpolación con retraso de 1 tick,
+  `GameStreamPresenter` reproducción con buffer (el stream del CLI llega entero
+  de golpe) e interpolación con retraso de 1 tick,
   `PoolPickerModel` con los dos niveles del selector) que se COMPILAN en la
   suite del Core (`AntSim.Core.Tests` los incluye vía `<Compile Include>` y
   `UnityStreamContractTests` verifica el parser y el picker contra la salida

@@ -4,7 +4,7 @@ Realismo, especies y escala — la fase que convierte el simulador verificado
 en un mundo con contenido. Este documento es el PLAN de trabajo (no el
 registro de lo hecho): hitos, decisiones abiertas y criterios de cierre.
 Estado del que parte: Fase 4 cerrada
-([`fase4-resumen.md`](fase4-resumen.md)) — 190/190 tests, contratos de HUD
+([`fase4-resumen.md`](fase4-resumen.md)) — 221/221 tests, contratos de HUD
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
 

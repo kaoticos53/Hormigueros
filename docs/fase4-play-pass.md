@@ -5,13 +5,13 @@ escena con el bootstrapper y ver la partida en vivo. Este documento congela el
 estado de compatibilidad de los scripts con **Unity 6000** (migración real,
 verificada con compilación en batch y ejecución headless del bootstrapper) y el
 checklist de verificación visual en un comando de menú. Todo el código implicado
-está ya verificado headless (208/208 tests); aquí solo falta el ojo humano.
+está ya verificado headless (221/221 tests); aquí solo falta el ojo humano.
 
 ## 1. Estado de la cadena antes de abrir Unity (verificado hoy)
 
 | Pieza | Estado |
 |---|---|
-| Suite headless | 208/208 verdes (216 en el árbol de trabajo: +8 del resolutor de rutas aún sin commitear) |
+| Suite headless | 221/221 verdes |
 | Pins de CI | fixture canónico ✅ · replay 3000 (drops) ✅ · replay 6000 (relevo) ✅ |
 | CLI publicado en `build/antsim` | vigente, con el canal F (`--activ-every`, `--inspect` en `--help` y en el stream) |
 | Proyecto Unity | migrado a `6000.6.0f1`: compila limpio en el editor, sin Safe Mode |
@@ -97,9 +97,13 @@ relevo real es **256²**, donde la primera descarga llega más tarde — hay que
    - [x] HUD: las 2 tarjetas de colonia actualizan reserva/cría; el semáforo
          de relevo arranca gris y pasa a ámbar/verde al llegar la primera descarga
          (≈t3950 en 96² semilla 42; ≈t5154 en 256² — ver la tabla de timing).
-   - [ ] Toasts del canal D aparecen con dedupe (no se repiten cada tick).
-         — requiere una partida con alertas EN VIVO: en las corridas del pass la
-         colonia no emitió alertas (`Events=0`) y los toasts ya habían expirado.
+   - [x] Toasts del canal D aparecen con dedupe (no se repiten cada tick).
+         Verificado EN VIVO tras el defecto 3 (el buffer de reproducción): con
+         warm-v2 a velocidad 3, en t≈3990 la pila muestra `first-unload` (lvl 2,
+         verde) y `ToastContainer` tiene **1** elemento `Toast_first-unload` que
+         persiste y NO se apila por tick; más tarde entran `Toast_laying:0` y
+         `Toast_laying:1` (3 elementos, uno por clave). En los 7200 ticks el HUD
+         pintó **3 claves** en total: ni una repetición por tick.
    - [x] Consola de Unity sin `stream falló` — `build/antsim` se resuelve contra
          el repo root aunque el cwd del editor sea la carpeta del proyecto.
 4. **Interacción** (todas por Input legacy) — ⏳ pendiente humano: la `Input`
@@ -142,12 +146,12 @@ del editor. Resultado por bloque:
 |---|---|
 | 1 compilar | ✅ 0 errores (solo avisos CS8632 preexistentes del perfil sin `#nullable`) |
 | 2 crear escena | ✅ jerarquía completa y cableado F5.1 verificados con `get_serialized_fields` |
-| 3 stream vivo | ✅ `finalTick 7200`, hash `e94a9a9e…`, 44 hormigas / 24 ítems, tarjetas con reserva/cría, sin `stream falló` |
+| 3 stream vivo | ✅ reproducción EN ORDEN (`curTick` avanza 37→…→7200, ya no salta al final), hash `e94a9a9e…`, 44 hormigas / 24 ítems, tarjetas con reserva/cría, semáforo 🟢 en la colonia 0 tras `first-unload`, toasts del canal D con dedupe (3 claves), sin `stream falló` |
 | 4 interacción | ⏳ no verificable sin inyectar input |
 | 5 pool sembrado | ✅ `first-unload 3943`; tarjeta 0 🟢 vs tarjeta 1 🔘 |
 | 6 replay / 7 canal F | ⏳ opcionales, no ejecutados |
 
-### Dos defectos reales que el pass destapó (corregidos)
+### Tres defectos reales que el pass destapó (corregidos)
 
 1. **Escala del mundo (8×).** El Core simula en UNIDADES: `WorldWidth = grid ×
    SimConstants.CellSizeUnits` (8 u/celda ⇒ 768 u para grid 96) y emite los nidos
@@ -163,6 +167,19 @@ del editor. Resultado por bloque:
    mundo ni el HUD avanzan, y el sim terminaba sin pintar nada. Es lo que hacía
    que el pass automático fuera imposible (y lo que ocultó el defecto 1). Se
    activa en el `Start` del presenter.
+3. **La reproducción saltaba al último tick (sin buffer).** El CLI construye el
+   JSONL ENTERO en memoria y lo escribe de golpe; `StreamSource` bombea las
+   líneas a toda velocidad y `GameStreamPresenter` solo guardaba el ÚLTIMO par de
+   ticks. Resultado: al primer frame `CurrentTick` ya era el tick 7200 y la vista
+   mostraba el estado FINAL — nunca se veía la partida, ni el semáforo pasar a
+   verde, ni una alerta del canal D (cada alerta existe solo en su tick). De ahí
+   que en las corridas anteriores la colonia saliera siempre «sin alertas».
+   Corregido con **reproducción con buffer**: `Feed2` encola, `AdvanceTo` avanza
+   el cursor al ritmo de simulación y los ticks presentados se drenan ordenados
+   (`TryDequeuePresented`), de modo que un frame a velocidad alta que presenta
+   varios ticks no pierde ninguna alerta. Verificado con dos tests headless
+   (`Presenter_Buffered_…`: orden 1..600 sin saltos, y alertas del canal D
+   idénticas a las del stream) y en vivo (ver bloque 3).
 
 ### Cómo reproducir el pass automático
 
@@ -175,6 +192,13 @@ unity command editor_play
 unity command run_script --file probe.cs --entry Probe.Run   # leer estado real
 unity command editor_stop
 ```
+
+Para ver un toast en vivo hay que **frenar la reproducción** (no basta con
+arrancar Play): el stream llega entero en un instante, así que con el buffer se
+avanza el cursor con la velocidad del presenter. Se fija `Speed = 3` por
+reflexión, se entra en Play y se muestrea el modelo con `run_script` cada
+segundo; la alerta `first-unload` (t≈3943) aparece sobre el segundo real ~47 y
+permanece 6 s de sim.
 
 Dos trampas del CLI, aprendidas en este pass: (a) el intérprete `eval` NO
 referencia `Assembly-CSharp`, así que para leer tipos del proyecto hay que usar
