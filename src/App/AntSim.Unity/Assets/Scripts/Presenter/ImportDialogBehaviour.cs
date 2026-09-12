@@ -38,7 +38,12 @@ namespace AntSim.Unity.Scripts.Presenter
                 DialogText = "✗ indica la ruta de un .antgenome";
                 return;
             }
-            var source = new Streaming.StreamSource(CliPath);
+            // Play-pass: misma resolución de rutas que el presenter — el CLI
+            // relativo al repo root y el .antgenome también (cwd del editor ≠ repo).
+            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromProjectPath(
+                UnityEngine.Application.dataPath);
+            var source = new Streaming.StreamSource(CliPath, repoRoot);
+            string importPath = Streaming.RepoPathResolver.Resolve(GenomePath, baseDir: null, repoRoot);
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = source.CliPath,
@@ -47,7 +52,7 @@ namespace AntSim.Unity.Scripts.Presenter
                 CreateNoWindow = true,
             };
             psi.ArgumentList.Add("--mode"); psi.ArgumentList.Add("genome-info");
-            psi.ArgumentList.Add("--import"); psi.ArgumentList.Add(GenomePath);
+            psi.ArgumentList.Add("--import"); psi.ArgumentList.Add(importPath);
 
             string json;
             using (var proc = System.Diagnostics.Process.Start(psi)!)

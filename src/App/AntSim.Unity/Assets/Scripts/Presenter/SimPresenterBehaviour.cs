@@ -19,7 +19,7 @@ namespace AntSim.Unity.Scripts.Presenter
         public int Grid = 96;
         public int Colonies = 2;
         public int FrameEvery = 1;
-        public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome
+        public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome (relativa al repo root)
 
         [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
         [Tooltip("Canal E (F4.5): feromonas de la colonia 0 cada N ticks. 0 = desactivado.")]
@@ -64,7 +64,14 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private void Start()
         {
-            _source = new Streaming.StreamSource(CliPath);
+            // Play-pass: el cwd del editor es la carpeta del proyecto, no la del
+            // repo — las rutas relativas (build/antsim, artifacts/…) se resuelven
+            // contra el repo root derivado de Application.dataPath.
+            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromProjectPath(Application.dataPath);
+            string seedPool = SeedPoolPath != null && repoRoot != null
+                ? Streaming.RepoPathResolver.Resolve(SeedPoolPath, baseDir: null, repoRoot)
+                : SeedPoolPath ?? "";
+            _source = new Streaming.StreamSource(CliPath, repoRoot);
             _streaming = true;
             // El stream se bombea en un hilo: el juego no se congela mientras el CLI corre.
             System.Threading.ThreadPool.QueueUserWorkItem(_ =>
@@ -72,9 +79,15 @@ namespace AntSim.Unity.Scripts.Presenter
                 try
                 {
                     if (!string.IsNullOrEmpty(ReplayFile))
-                        _source.StreamFile(ReplayFile, line => _presenter.Feed(line));
+                    {
+                        string replay = repoRoot != null
+                            ? Streaming.RepoPathResolver.Resolve(ReplayFile, baseDir: null, repoRoot)
+                            : ReplayFile;
+                        _source.StreamFile(replay, line => _presenter.Feed(line));
+                    }
                     else
-                        _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery, SeedPoolPath,
+                        _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery,
+                            seedPool.Length > 0 ? seedPool : null,
                             line => _presenter.Feed(line), PendingDropArgs,
                             PheroEvery, ActivEvery, InspectId);
                 }

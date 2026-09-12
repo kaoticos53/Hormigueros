@@ -14,25 +14,13 @@ namespace AntSim.Unity.Scripts.Streaming
     {
         private readonly string _cliPath;
 
-        public StreamSource(string cliPath) => _cliPath = ResolveExecutable(cliPath);
-
-        /// <summary>Resuelve el ejecutable: en Windows añade .exe si falta (el
-        /// campo es "build/antsim" multiplataforma; Process.Start no lo infiere
-        /// con UseShellExecute=false) y da por buena la ruta tal cual si existe.</summary>
-        public static string ResolveExecutable(string path)
-        {
-            if (File.Exists(path)) return path;
-            // C# 9 / perfil de Unity: OperatingSystem.IsWindows() es .NET 5+;
-            // RuntimeInformation es portable (.NET Standard 2.0 + Unity).
-            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
-                    System.Runtime.InteropServices.OSPlatform.Windows)
-                && !Path.HasExtension(path))
-            {
-                string withExe = path + ".exe";
-                if (File.Exists(withExe)) return withExe;
-            }
-            return path; // no existe: que Process.Start dé el error claro
-        }
+        /// <param name="cliPath">Ruta del CLI: absoluta, relativa al cwd o
+        /// relativa al repo root (p. ej. "build/antsim").</param>
+        /// <param name="repoRoot">Ancla del repo root para rutas relativas
+        /// (Play-pass: el cwd del editor es la carpeta del proyecto, no la del
+        /// repo). null = comportamiento de siempre (solo cwd).</param>
+        public StreamSource(string cliPath, string? repoRoot = null)
+            => _cliPath = RepoPathResolver.ResolveExecutable(cliPath, baseDir: null, repoRoot);
 
         /// <summary>Ejecuta el CLI y bombea cada línea a <paramref name="onLine"/> (bloqueante).
         /// <paramref name="extraArgs"/> transporta el plan de intervención (F4.4):
