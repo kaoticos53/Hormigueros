@@ -149,6 +149,27 @@ idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
 Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
 stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
 
+## La ruta del proyecto está guardada (`-projectPath`)
+
+Unity **no falla** si le das un directorio que no es un proyecto: le crea el
+esqueleto (`Packages/`, `ProjectSettings/`, `Assets/`, `Library/`, `Logs/`,
+`UserSettings/`) sin preguntar. Una invocación apuntada a la **raíz del repo**
+dejó ahí un proyecto fantasma de 191 MB que hubo que borrar a mano.
+
+Peor en `-batchmode`: el log sale **limpio** (no había scripts que compilar), así
+que el veredicto se leía como «compila sin errores» — un falso verde.
+
+Por eso los scripts que entregan la ruta a Unity (`scripts/check-unity-compile.sh`
+y `scripts/playpass-live.sh`) la validan antes con **`scripts/lib/unity-project.sh`**,
+que rechaza (a) la raíz del repo, (b) directorios que no son proyectos Unity y
+(c) proyectos Unity de OTRO juego: el de este repo declara `com.unity.pipeline`,
+el paquete con el que se conduce el editor, y un proyecto nuevo solo trae
+`com.unity.modules.*`. La librería se puede probar sin editor ni Unity:
+
+```bash
+bash scripts/lib/unity-project.sh --selftest   # 6 casos; también corre en CI
+```
+
 ## Aspecto del mundo y del HUD (F5.1)
 
 Lo que se ve y por qué, en una tabla — el resto de decisiones están comentadas en

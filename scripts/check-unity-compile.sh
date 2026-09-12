@@ -21,10 +21,16 @@
 #   scripts/check-unity-compile.sh --selftest      # verifica el analizador (sin Unity)
 #   scripts/check-unity-compile.sh --unity RUTA --project RUTA --quiet
 #
+# El PROYECTO (--project) pasa antes por la guarda scripts/lib/unity-project.sh:
+# Unity crea el esqueleto de un proyecto en cualquier directorio que le des, así
+# que una ruta equivocada (la RAÍZ del repo) dejaría un proyecto fantasma y, en
+# batchmode, un log limpio que parecería un ÉXITO.
+#
 # Editor: se resuelve por (1) --unity, (2) $UNITY_PATH, (3) $UNITY_EDITOR,
 # (4) el Unity Hub la versión FIJADA en ProjectSettings/ProjectVersion.txt y si
 # no, cualquier otra instalada. Códigos de salida: 0 ok · 1 errores de
-# compilación · 2 uso · 3 editor no encontrado · 4 el editor no arrancó (licencia).
+# compilación · 2 uso o proyecto inválido · 3 editor no encontrado · 4 el editor
+# no arrancó (licencia) · 5 la instancia batch no llegó a compilar.
 #
 # Requisitos: un editor Unity con licencia. En CI se instala y activa antes de
 # llamar a este script (ver .github/workflows/ci.yml, job `unity-compile`).
@@ -34,6 +40,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT/src/App/AntSim.Unity"
 UNITY=""
+
+# La guarda de -projectPath se comparte con playpass-live.sh (y es la que impide
+# que Unity convierta en proyecto el directorio que le demos por error).
+# shellcheck source=lib/unity-project.sh
+source "$ROOT/scripts/lib/unity-project.sh"
 LOG=""
 ANALYZE_ONLY=0
 QUIET=0
@@ -190,10 +201,19 @@ to_native() {
 
 # ── Compilación (si no se pidió solo analizar un log) ────────────────────────
 TMP_LOG=""
-cleanup() { [[ -n "$TMP_LOG" && -f "$TMP_LOG" ]] && rm -f "$TMP_LOG"; }
+# `return 0` explícito: con `trap … EXIT`, el estado del script pasa a ser el del
+# último comando del trap, así que un `[[ ]]` que sale 1 CLASIFICA mal todos los
+# códigos de salida de arriba (2 uso · 3 sin editor · 4 licencia).
+cleanup() { [[ -n "$TMP_LOG" && -f "$TMP_LOG" ]] && rm -f "$TMP_LOG"; return 0; }
 trap cleanup EXIT
 
 if [[ $ANALYZE_ONLY -eq 0 ]]; then
+  # Antes de gastar un arranque del editor: la ruta tiene que ser el proyecto del
+  # juego. Una invocación con la RAÍZ del repo como proyecto dejó allí un
+  # proyecto fantasma de 191 MB (Unity crea el esqueleto sin preguntar) y en
+  # batchmode el resultado parecía un ÉXITO: log limpio, cero errores CS.
+  PROJECT="$(require_unity_project "$PROJECT")" || exit 2
+
   if ! UNITY="$(find_editor)"; then
     echo "✗ editor de Unity no encontrado (usa --unity, \$UNITY_PATH o instala el Hub)" >&2
     exit 3

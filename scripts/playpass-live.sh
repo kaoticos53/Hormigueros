@@ -67,6 +67,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT/src/App/AntSim.Unity"
 PROBE_DIR="$ROOT/scripts/unity"
 
+# Guarda de -projectPath compartida con check-unity-compile.sh (ver el motivo en
+# scripts/lib/unity-project.sh).
+# shellcheck source=lib/unity-project.sh
+source "$ROOT/scripts/lib/unity-project.sh"
+
 SAMPLES=""
 ANALYZE_ONLY=0
 SELFTEST=0
@@ -606,6 +611,13 @@ if [[ $ANALYZE_ONLY -eq 1 ]]; then
   if analyze_samples "$SAMPLES" "$STREAM_FILE"; then exit 0; fi
   exit 1
 fi
+
+# ── Ruta del proyecto ────────────────────────────────────────────────────────
+# Los modos de solo-análisis ya salieron arriba (no tocan el editor), así que
+# aquí solo llega quien va a conducirlo: la ruta tiene que ser el proyecto del
+# juego. Con la RAÍZ del repo, Unity convertiría el repo en un proyecto fantasma
+# (el accidente que borró 191 MB a mano: scripts/lib/unity-project.sh).
+PROJECT="$(require_unity_project "$PROJECT")" || exit 2
 
 # ── Resolución del Unity CLI ─────────────────────────────────────────────────
 find_unity_cli() {

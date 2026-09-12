@@ -28,6 +28,9 @@ jobs:
       - name: Selftest del analizador de compilación de Unity (sin editor)
         run: bash scripts/check-unity-compile.sh --selftest
 
+      - name: Selftest de la guarda de -projectPath (sin editor)
+        run: bash scripts/lib/unity-project.sh --selftest
+
   # ───────────────────────────────────────────────────────────────────────────
   # Compilación del proyecto Unity. POR QUÉ no basta con `test`: la suite
   # headless solo compila los scripts PUROS que el csproj enlaza con
