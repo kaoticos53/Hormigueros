@@ -27,8 +27,10 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
-a bit. Fijado en CI con **3 pines de hash** (fixture canónico, replay con
-drops a 3000 y 6000 ticks) más el pin del stream; 293/293 tests.
+a bit. Fijado en CI con **CUATRO pines de hash**, verificados los cuatro
+en una pasada el 2026-09-13 tras el cierre de F5.2a: stream canónico,
+replay con drops a 3000 y 6000 ticks, y la partida Atta canónica
+(`check-atta-command.sh`); 298/298 tests.
 
 **Pre-entrenamiento con transferencia validada** — cadena de 8+ pools
 (frío → warm-starts encadenados → híbrido de dos bandas), benchmark de
@@ -96,7 +98,8 @@ HECHAS:
   con `leafCuts`/`fungusFed` y bloque `cutters` por colonia;
   `GameStreamParser` consume `cuts`/`fungus` (fix de `ArrayBody`, que
   truncaba cada colonia en su array `nest` anidado).
-- ✅ **F5.2a.4 — pin Atta canónico en CI** (`854dcad`): cuarto pin de
+- ✅ **F5.2a.4 — pin Atta canónico en CI — HECHO** (`854dcad`; los 4 pines
+  verificados en una pasada el 2026-09-13, todos verdes): cuarto pin de
   regresión (`check-atta-command.sh`) sobre la partida de la cortadora —
   el primero cuyo mundo DEPENDE de los campos nuevos.
 - ✅ **F5.2a.5 — humo visual del multi-visor**: tarjeta de vista con la
