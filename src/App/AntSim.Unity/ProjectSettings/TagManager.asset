@@ -13,11 +13,10 @@ TagManager:
   - UI
   - 
   - 
-  - 
-  - 
-  - 
-  - 
-  - 
+  - Sim0
+  - Sim1
+  - Sim2
+  - Sim3
   - 
   - 
   - 
@@ -43,4 +42,3 @@ TagManager:
     locked: 0
   m_RenderingLayers:
   - Default
-  m_MigratedRenderPipelines: []
