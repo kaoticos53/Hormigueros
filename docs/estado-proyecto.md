@@ -123,9 +123,14 @@ renderizado de hojas en el tablero Unity queda anotada en el doc de Atta
 ## Lo que queda (en orden de dependencia)
 
 1. **F5.2b — Eciton + depredadores** (SIGUIENTE — F5.2a cerrado, ver
-   [`fase5-2a-atta.md`](fase5-2a-atta.md) §6bis): alarma ofensiva (reusar la capa
-   Alarm), objetivos móviles, combate en canal B. Criterio de fase: una
-   partida de invasión Eciton vs colonia Atta sembrada.
+   [`fase5-2a-atta.md`](fase5-2a-atta.md) §6bis):
+   **DISEÑO CERRADO** ([`fase5-2b-eciton.md`](fase5-2b-eciton.md)) — Eciton
+   como especie que ROBA stock ajeno (no agente libre): combate en el paso
+   de hormiga (`ContactRadius`/`StrikeDamage`/`StealPerStrike`), botín como
+   carga con el `Unload` existente, canal 14 reconvertido con gating por
+   especie, Alarm reusada como rastro de incursión, eventos 17–19 en canal
+   B, `.antsave` v4. 5 rodajas; el agente libre sin colonia queda como
+   posible F5.2d.
 3. **F5.2c — NEAT / `.antgenome` v2**: genes estructurales
    (nodos/conexiones por innovation), inspector de grafos generalizado,
    re-innovación determinista al importar. El hito más caro; red de

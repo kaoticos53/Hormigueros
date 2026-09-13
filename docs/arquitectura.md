@@ -396,6 +396,11 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   [`fase5-2a-atta.md`](fase5-2a-atta.md) — ítems compuestos (`CutsLeft`),
   segunda reserva (`Colony.Fungus`) con digestión que alimenta el inflow
   existente, genoma portable (el corte ES `Interact`).
+- Eciton (legionaria): diseño de incursiones y combate en
+  [`fase5-2b-eciton.md`](fase5-2b-eciton.md) — especie que ROBA stock ajeno
+  (combate en `Act` con constantes por especie, botín como carga con el
+  `Unload` de siempre, detección por canal 14 reconvertido, Alarm como
+  rastro de incursión, eventos 17–19 en canal B), genoma portable.
 - Competencia entre colonias y depredadores; NEAT en vivo con inspector de grafos.
 - Refactor SoA/ECS y LOD de feromonas.
 - **Exit**: 3 especies diferenciadas; N colonias estables a 60 fps.
