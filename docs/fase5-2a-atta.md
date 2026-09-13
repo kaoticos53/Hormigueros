@@ -139,6 +139,28 @@ parseando — los fixtures actuales no se regeneran por esto.
   (genomas Lasius en cuerpo Atta — el cerebro es portable) y la evolución
   en vivo ajusta. Anotado como F5.2a-bis si la transferencia falla.
 
+### 4.1 SONDA DE TRANSFERENCIA — VALIDADA (2026-09-13)
+
+Warm-v2 (entrenado en cuerpo Lasius) sembrado en la colonia 0, cuerpo y
+mundo variados, 12 000 ticks, seed 42, colonia 1 Lasius sin sembrar como
+control de entorno (sonda borrada tras su uso; resultado registrado aquí):
+
+| mundo | pickups | unloads | cortes | fitness medio |
+|---|---|---|---|---|
+| Lasius sin hojas (control) | 21 | 11 | 0 | **13,15** |
+| Atta sin hojas (transfer pura) | 19 | 12 | 0 | 10,70 |
+| Atta hojas 100 % | 19 | 11 | 17 | 7,53 |
+| Lasius hojas 100 % | 22 | 13 | 20 | 9,62 |
+
+**Veredicto: portable.** El pool warm-v2 en cuerpo Atta descarga lo mismo
+o más que en su cuerpo de entrenamiento (12 vs 11 unloads) — las constantes
+de especie (VMax, sensores, vida) no rompen la política. Con hojas, ambas
+especies cortan de inmediato (17–20 cortes, cero entrenamiento): el corte
+= `Interact` funciona con cerebros existentes. El fitness medio cae con
+hojas (fragmentos más pequeños ⇒ menos ep por viaje) — es el precio
+esperado, no un defecto de transferencia. F5.2a-bis (currículo Atta) queda
+postergado: la evolución en vivo partiendo de warm-v2 es suficiente.
+
 ## 5. Rodajas de implementación (cada una con su test)
 
 1. **F5.2a.1 — Ítems compuestos** — ✅ HECHO (2026-09-13): `FoodItem.CutsLeft/
