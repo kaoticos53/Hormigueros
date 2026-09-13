@@ -155,7 +155,8 @@ public sealed class MetricRecorder
     public const int TicksPerFrame = 30; // SimConstants.FixedDtSeconds = 1/30
 
     private long _pickups, _unloads, _births, _deaths, _eggsLaid, _eclosed, _itemsConsumed, _commands;
-    private readonly Dictionary<int, long[]> _perColony = new(); // F4.2: [pickups,unloads,births,deaths,eggs,eclosed]
+    private long _leafCuts, _fungusFed, _fungusDigested; // F5.2a.3
+    private readonly Dictionary<int, long[]> _perColony = new(); // F4.2: [pickups,unloads,births,deaths,eggs,eclosed] · F5.2a.3: [6]=leafCuts, [7]=fungusFed
     private ulong _windowStartTick = ulong.MaxValue; // ulong.MaxValue = ventana sin abrir
 
     /// <summary>Frame agregado desde el último <c>TakeFrame</c> (ventana cerrada).</summary>
@@ -164,14 +165,18 @@ public sealed class MetricRecorder
         public readonly ulong TickStart;
         public readonly ulong TickEnd;
         public readonly long Pickups, Unloads, Births, Deaths, EggsLaid, Eclosed, ItemsConsumed, Commands;
+        // F5.2a.3: contadores de la cadena de la cortadora.
+        public readonly long LeafCuts, FungusFed, FungusDigested;
 
         public MetricFrame(ulong tickStart, ulong tickEnd,
             long pickups, long unloads, long births, long deaths,
-            long eggsLaid, long eclosed, long itemsConsumed, long commands)
+            long eggsLaid, long eclosed, long itemsConsumed, long commands,
+            long leafCuts = 0, long fungusFed = 0, long fungusDigested = 0)
         {
             TickStart = tickStart; TickEnd = tickEnd;
             Pickups = pickups; Unloads = unloads; Births = births; Deaths = deaths;
             EggsLaid = eggsLaid; Eclosed = eclosed; ItemsConsumed = itemsConsumed; Commands = commands;
+            LeafCuts = leafCuts; FungusFed = fungusFed; FungusDigested = fungusDigested;
         }
     }
 
@@ -194,6 +199,9 @@ public sealed class MetricRecorder
                 case SimEventKind.Eclosed: _eclosed++; Bump(ev.ColonyId, 5); break;
                 case SimEventKind.ItemConsumed: _itemsConsumed++; break;
                 case SimEventKind.CommandExecuted: _commands++; break;
+                case SimEventKind.LeafCut: _leafCuts++; Bump(ev.ColonyId, 6); break;
+                case SimEventKind.FungusFed: _fungusFed++; Bump(ev.ColonyId, 7); break;
+                case SimEventKind.FungusDigested: _fungusDigested++; break;
             }
         }
     }
@@ -210,10 +218,12 @@ public sealed class MetricRecorder
         if (end < _windowStartTick + TicksPerFrame) return null;
 
         var frame = new MetricFrame(_windowStartTick, end,
-            _pickups, _unloads, _births, _deaths, _eggsLaid, _eclosed, _itemsConsumed, _commands);
+            _pickups, _unloads, _births, _deaths, _eggsLaid, _eclosed, _itemsConsumed, _commands,
+            _leafCuts, _fungusFed, _fungusDigested);
 
         _pickups = _unloads = _births = _deaths = 0;
         _eggsLaid = _eclosed = _itemsConsumed = _commands = 0;
+        _leafCuts = _fungusFed = _fungusDigested = 0;
         foreach (var kv in _perColony) Array.Clear(kv.Value, 0, kv.Value.Length);
         _windowStartTick = end;
         return frame;
@@ -230,12 +240,24 @@ public sealed class MetricRecorder
         return list;
     }
 
+    /// <summary>Ventana por colonia F5.2a.3: cortes y FungusFed de la ventana
+    /// abierta (la tarjeta Atta muestra «3 cortes / 2 al hongo»). Orden
+    /// canónico por id de colonia ascendente.</summary>
+    public IReadOnlyList<(int ColonyId, long LeafCuts, long FungusFed)> CutterWindows()
+    {
+        var list = new List<(int, long, long)>();
+        foreach (var kv in _perColony)
+            list.Add((kv.Key, kv.Value[6], kv.Value[7]));
+        list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+        return list;
+    }
+
     private void Bump(int colonyId, int idx)
     {
         if (colonyId < 0) return; // eventos sin colonia (spawns regulares, comandos)
         if (!_perColony.TryGetValue(colonyId, out var arr))
         {
-            arr = new long[6];
+            arr = new long[8]; // F5.2a.3: + leafCuts, fungusFed
             _perColony[colonyId] = arr;
         }
         arr[idx]++;

@@ -425,6 +425,8 @@ public static class GameScenario
               .Append(",\"eggs\":").Append(f.EggsLaid)
               .Append(",\"eclosed\":").Append(f.Eclosed)
               .Append(",\"consumed\":").Append(f.ItemsConsumed)
+              .Append(",\"leafCuts\":").Append(f.LeafCuts)
+              .Append(",\"fungusFed\":").Append(f.FungusFed)
               .Append(",\"commands\":").Append(f.Commands)
               .Append('}');
             firstField = false;
@@ -481,6 +483,23 @@ public static class GameScenario
                   .Append(eg).Append(',').Append(ec).Append(']');
             }
             sb.Append(']');
+
+            // F5.2a.3: cadena de la cortadora por colonia — [col, leafCuts, fungusFed]
+            // solo si hubo actividad (ausencia = sin cortes este tick, tolerante).
+            var cutters = metrics.CutterWindows();
+            bool anyCut = false;
+            var cutSb = new System.Text.StringBuilder();
+            foreach (var (ccid, cuts, fed) in cutters)
+            {
+                if (cuts == 0 && fed == 0) continue;
+                if (anyCut) cutSb.Append(',');
+                cutSb.Append('[').Append(ccid).Append(',').Append(cuts).Append(',').Append(fed).Append(']');
+                anyCut = true;
+            }
+            if (anyCut)
+            {
+                sb.Append(",\"cutters\":[").Append(cutSb).Append(']');
+            }
             firstField = false;
         }
 
