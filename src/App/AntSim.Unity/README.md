@@ -226,6 +226,15 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
 - El Game view en modo **Play Focused** pausa el juego cuando pierde el foco: con
   el pass corriendo desde la terminal, el mundo se congela (tick clavado, sin
   error). `playpass-live.sh` lo detecta y lo reanuda.
+- El editor **añade paquetes al `Packages/manifest.json` por su cuenta** (pasó
+  con `com.unity.ai.assistant` —pre-release— y `com.unity.ai.inference`, con sus
+  90 líneas transitivas en `packages-lock.json`): abrir una sesión con funciones
+  de IA activadas basta. El juego no los usa — ni un `using` de sus assemblies —
+  y el manifest se mantiene con lo mínimo (`pipeline`, `ugui` y los módulos que
+  el juego toca). Si tras una sesión de Unity el `status` muestra esos dos
+  ficheros modificados, la decisión por defecto es `git checkout --` y dejarlos
+  fuera: si algún día el juego los necesita (p. ej. un modelo ONNX en el
+  inspector), se añaden a PROPÓSITO, en su propio commit y con justificación.
 
 Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
 juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La
