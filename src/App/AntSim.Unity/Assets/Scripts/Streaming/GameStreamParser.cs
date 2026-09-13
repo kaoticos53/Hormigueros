@@ -40,9 +40,14 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             public readonly uint Id;
             public readonly float X, Y, Amount;
+            // F5.2a.3: hojas (ausencia/0 = ítem simple — default tolerante).
+            public readonly int CutsLeft, CutsInitial;
+            public bool IsLeaf => CutsLeft > 0;
 
-            public ItemView(uint id, float x, float y, float amount)
-            { Id = id; X = x; Y = y; Amount = amount; }
+            public ItemView(uint id, float x, float y, float amount,
+                int cutsLeft = 0, int cutsInitial = 0)
+            { Id = id; X = x; Y = y; Amount = amount;
+              CutsLeft = cutsLeft; CutsInitial = cutsInitial; }
         }
 
         public readonly struct ColonyView
@@ -50,11 +55,15 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly int Id;
             public readonly float NestX, NestY, Stock, StockMax;
             public readonly int Adults, Eggs, Larvae, Pupae, Elite;
+            // F5.2a.3: hongo (0/0 = especie sin hongo — default tolerante).
+            public readonly float Fungus, FungusMax;
 
             public ColonyView(int id, float nestX, float nestY, float stock, float stockMax,
-                int adults, int eggs, int larvae, int pupae, int elite)
+                int adults, int eggs, int larvae, int pupae, int elite,
+                float fungus = 0f, float fungusMax = 0f)
             { Id = id; NestX = nestX; NestY = nestY; Stock = stock; StockMax = stockMax;
-              Adults = adults; Eggs = eggs; Larvae = larvae; Pupae = pupae; Elite = elite; }
+              Adults = adults; Eggs = eggs; Larvae = larvae; Pupae = pupae; Elite = elite;
+              Fungus = fungus; FungusMax = fungusMax; }
         }
 
         public readonly struct EventView
@@ -73,11 +82,15 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             public readonly ulong T0, T1;
             public readonly long Pickups, Unloads, Births, Deaths, Eggs, Eclosed, Consumed, Commands;
+            // F5.2a.3: cadena de la cortadora (ausencia = 0 — default tolerante).
+            public readonly long LeafCuts, FungusFed;
 
             public MetricsView(ulong t0, ulong t1, long pickups, long unloads, long births,
-                long deaths, long eggs, long eclosed, long consumed, long commands)
+                long deaths, long eggs, long eclosed, long consumed, long commands,
+                long leafCuts = 0, long fungusFed = 0)
             { T0 = t0; T1 = t1; Pickups = pickups; Unloads = unloads; Births = births;
-              Deaths = deaths; Eggs = eggs; Eclosed = eclosed; Consumed = consumed; Commands = commands; }
+              Deaths = deaths; Eggs = eggs; Eclosed = eclosed; Consumed = consumed; Commands = commands;
+              LeafCuts = leafCuts; FungusFed = fungusFed; }
         }
 
         public readonly struct RelayView
@@ -131,6 +144,17 @@ namespace AntSim.Unity.Scripts.Streaming
         }
 
         /// <summary>Ventana de métricas de UNA colonia (F4.2).</summary>
+        /// <summary>F5.2a.3: cadena de la cortadora de UNA colonia en la ventana
+        /// (cuts/fungusFed). Solo aparece si hubo actividad este tick.</summary>
+        public readonly struct CutterView
+        {
+            public readonly int ColonyId;
+            public readonly long LeafCuts, FungusFed;
+
+            public CutterView(int colonyId, long leafCuts, long fungusFed)
+            { ColonyId = colonyId; LeafCuts = leafCuts; FungusFed = fungusFed; }
+        }
+
         public readonly struct ColonyMetricsView
         {
             public readonly int ColonyId;
@@ -171,6 +195,7 @@ namespace AntSim.Unity.Scripts.Streaming
             public RelayView? Relay;
             public readonly List<ColonyRelayView> ColonyRelays = new();
             public readonly List<ColonyMetricsView> ColonyMetrics = new();
+            public readonly List<CutterView> Cutters = new(); // F5.2a.3
             public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
             public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
             public string? Phero;                                 // canal E (F4.5), base64 RLE
@@ -258,10 +283,13 @@ namespace AntSim.Unity.Scripts.Streaming
             {
                 foreach (string row in SplitTop(ArrayBody(raw, ii + "\"items\":[".Length - 1)))
                 {
-                    string[] f = RowFields(row); // [id, x, y, amount]
+                    string[] f = RowFields(row); // [id, x, y, amount(, cutsLeft, cutsInitial)]
                     if (f.Length < 4) continue;
+                    // F5.2a.3: hojas traen 6 elementos; los simples quedan en 4.
                     v.Items.Add(new ItemView((uint)Reader.NumOf(f[0]),
-                        (float)Reader.NumOf(f[1]), (float)Reader.NumOf(f[2]), (float)Reader.NumOf(f[3])));
+                        (float)Reader.NumOf(f[1]), (float)Reader.NumOf(f[2]), (float)Reader.NumOf(f[3]),
+                        f.Length >= 6 ? (int)Reader.NumOf(f[4]) : 0,
+                        f.Length >= 6 ? (int)Reader.NumOf(f[5]) : 0));
                 }
             }
 
@@ -276,7 +304,8 @@ namespace AntSim.Unity.Scripts.Streaming
                         (float)p.Num("nestX"), (float)p.Num("nestY"),
                         (float)p.Num("stock"), (float)p.Num("stockMax"),
                         (int)p.Num("adults"), (int)p.Num("eggs"),
-                        (int)p.Num("larvae"), (int)p.Num("pupae"), (int)p.Num("elite")));
+                        (int)p.Num("larvae"), (int)p.Num("pupae"), (int)p.Num("elite"),
+                        (float)p.Num("fungus"), (float)p.Num("fungusMax")));
                 }
             }
 
@@ -334,7 +363,8 @@ namespace AntSim.Unity.Scripts.Streaming
                     (ulong)p.Num("t0"), (ulong)p.Num("t1"),
                     (long)p.Num("pickups"), (long)p.Num("unloads"), (long)p.Num("births"),
                     (long)p.Num("deaths"), (long)p.Num("eggs"), (long)p.Num("eclosed"),
-                    (long)p.Num("consumed"), (long)p.Num("commands"));
+                    (long)p.Num("consumed"), (long)p.Num("commands"),
+                    (long)p.Num("leafCuts"), (long)p.Num("fungusFed"));
             }
 
             int ri = raw.IndexOf("\"relay\":{", StringComparison.Ordinal);
@@ -365,6 +395,20 @@ namespace AntSim.Unity.Scripts.Streaming
                         p.NullNum("dropAvg") is double da2 ? (float)da2 : null,
                         (int)p.Num("unloads"),
                         p.NullNum("chainAvg") is double ca2 ? (float)ca2 : null));
+                }
+            }
+
+            // F5.2a.3: cadena de la cortadora por colonia [col, leafCuts, fungusFed]
+            // (bloque AUSENTE cuando no hubo actividad — tolerante).
+            int cui = raw.IndexOf("\"cutters\":[", StringComparison.Ordinal);
+            if (cui >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, cui + "\"cutters\":[".Length - 1)))
+                {
+                    string[] f = RowFields(row);
+                    if (f.Length < 3) continue;
+                    v.Cutters.Add(new CutterView((int)Reader.NumOf(f[0]),
+                        (long)Reader.NumOf(f[1]), (long)Reader.NumOf(f[2])));
                 }
             }
 
@@ -416,12 +460,20 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>Cuerpo de un array JSON que empieza en <paramref name="openBracket"/>.</summary>
         private static string ArrayBody(string s, int openBracket)
         {
-            int depth = 0, i = openBracket, start = openBracket + 1;
+            // F5.2a.3: también cuenta LLAVES — los objetos de colonia contienen
+            // arrays anidados ("nest":[x,y]) y un cierre por el PRIMER ] partía
+            // la fila en el nido, perdiendo los campos posteriores (fungus).
+            int depth = 0, brace = 0, i = openBracket, start = openBracket + 1;
             for (; i < s.Length; i++)
             {
                 char c = s[i];
-                if (c == '[') depth++;
-                else if (c == ']') { depth--; if (depth == 0) return s.Substring(start, i - start); }
+                if (c == '{') brace++;
+                else if (c == '}') brace--;
+                else if (brace == 0)
+                {
+                    if (c == '[') depth++;
+                    else if (c == ']') { depth--; if (depth == 0) return s.Substring(start, i - start); }
+                }
             }
             return "";
         }
