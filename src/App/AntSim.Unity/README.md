@@ -170,6 +170,21 @@ el paquete con el que se conduce el editor, y un proyecto nuevo solo trae
 bash scripts/lib/unity-project.sh --selftest   # 6 casos; también corre en CI
 ```
 
+Para las **sesiones a mano** está `scripts/unity-cli.sh`: pone la misma guarda
+delante del CLI y rellena el `--project-path`, así que no hay forma de apuntar
+al sitio equivocado ni de olvidarlo. Es el `UCMD()` de los pases, a mano:
+
+```bash
+bash scripts/unity-cli.sh editor_status              # JSON del estado del editor
+bash scripts/unity-cli.sh run_script --file sonda.cs # ejecuta una sonda
+bash scripts/unity-cli.sh --text console             # salida humana (sin --format)
+bash scripts/unity-cli.sh --verbose console          # y enseña lo que ejecuta
+```
+
+El binario lo resuelve el mismo código que los pases (`scripts/lib/unity-cli.sh`:
+`$UNITY_CLI` → `unity` en el PATH → instalaciones del Hub), de modo que no hay dos
+ideas de dónde está el editor.
+
 ## Aspecto del mundo y del HUD (F5.1)
 
 Lo que se ve y por qué, en una tabla — el resto de decisiones están comentadas en

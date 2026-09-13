@@ -620,24 +620,11 @@ fi
 PROJECT="$(require_unity_project "$PROJECT")" || exit 2
 
 # ── Resolución del Unity CLI ─────────────────────────────────────────────────
-find_unity_cli() {
-  if [[ -n "${UNITY_CLI:-}" ]]; then printf '%s\n' "$UNITY_CLI"; return 0; fi
-  if command -v unity >/dev/null 2>&1; then command -v unity; return 0; fi
-  local b
-  for b in "${LOCALAPPDATA:-}" "$HOME"; do
-    [[ -n "$b" ]] || continue
-    case "$b" in *\\*) command -v cygpath >/dev/null 2>&1 && b="$(cygpath -u "$b" 2>/dev/null || printf '%s' "$b")" ;; esac
-    for c in "$b/Unity/bin/unity.exe" "$b/Unity/bin/unity"; do
-      [[ -f "$c" ]] && { printf '%s\n' "$c"; return 0; }
-    done
-  done
-  return 1
-}
-
-# El CLI de Unity espera rutas de Windows con barras normales (`E:/…`).
-winpath() {
-  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
-}
+# Encontrar el binario (`find_unity_cli`) y convertir rutas (`winpath`) viven en
+# la librería compartida: el envoltorio scripts/unity-cli.sh usa EXACTAMENTE las
+# mismas funciones, para que no haya dos ideas de dónde está el editor.
+# shellcheck source=lib/unity-cli.sh
+source "$ROOT/scripts/lib/unity-cli.sh"
 
 if ! UNITY_CLI_BIN="$(find_unity_cli)"; then
   echo "✗ no encuentro el Unity CLI (usa \$UNITY_CLI o instálalo con el Hub)" >&2

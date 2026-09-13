@@ -28,8 +28,11 @@ jobs:
       - name: Selftest del analizador de compilación de Unity (sin editor)
         run: bash scripts/check-unity-compile.sh --selftest
 
-      - name: Selftest de la guarda de -projectPath (sin editor)
-        run: bash scripts/lib/unity-project.sh --selftest
+      - name: Selftest de las guardas del Unity CLI (sin editor)
+        run: |
+          bash scripts/lib/unity-project.sh --selftest
+          bash scripts/lib/unity-cli.sh --selftest
+          bash scripts/unity-cli.sh --selftest
 
   # ───────────────────────────────────────────────────────────────────────────
   # Compilación del proyecto Unity. POR QUÉ no basta con `test`: la suite
