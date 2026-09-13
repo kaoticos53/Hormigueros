@@ -392,7 +392,10 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 ### Fase 5 — Realismo, especies y escala
 - Plan de trabajo: [`fase5-plan.md`](fase5-plan.md) (mini-grafo MLP, pulido
   uGUI, Atta/Eciton, NEAT v2, SoA/ECS — hitos, decisiones abiertas y orden).
-- Atta (soldados por sobrealimentación, hongo) y Eciton (legionaria, ciclos nómadas).
+- Atta (cortadora): diseño de la cadena cortar→transportar→hongo en
+  [`fase5-2a-atta.md`](fase5-2a-atta.md) — ítems compuestos (`CutsLeft`),
+  segunda reserva (`Colony.Fungus`) con digestión que alimenta el inflow
+  existente, genoma portable (el corte ES `Interact`).
 - Competencia entre colonias y depredadores; NEAT en vivo con inspector de grafos.
 - Refactor SoA/ECS y LOD de feromonas.
 - **Exit**: 3 especies diferenciadas; N colonias estables a 60 fps.

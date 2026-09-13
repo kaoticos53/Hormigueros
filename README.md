@@ -18,6 +18,7 @@ y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cier
 y [`docs/fase4-resumen.md`](docs/fase4-resumen.md) para el resumen de cierre de la Fase 4
 (junto con [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md): arranque en frío, salud del relevo y jerarquía de pools),
 y [`docs/fase5-plan.md`](docs/fase5-plan.md) para el plan de la Fase 5 (realismo, especies y escala).
+Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.md).
 
 ## Notas de versión
 
