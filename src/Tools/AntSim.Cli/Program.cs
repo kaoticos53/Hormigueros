@@ -54,6 +54,7 @@ internal static class Program
         int ticks = 1200;
         int grid = 96;
         float leafFraction = 0f; // F5.2a.1
+        List<SpeciesDescriptor>? species = null; // F5.2a.2/4
         int colonies = 2;
         int pop = 16;
         int generations = 0; // 0 = usa el tope de cada etapa (30/60/80/100)
@@ -106,6 +107,25 @@ internal static class Program
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out colonies) || colonies < 1)
                         return Fail("--colonies requiere un entero ≥ 1.");
                     break;
+                case "--species":
+                {
+                    // Lista coma-separada, una por colonia (prefijo de nombre):
+                    // atta, lasius, eciton. F5.2a.4.
+                    var parts = Next(args, ref i).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length == 0) return Fail("--species requiere al menos una especie.");
+                    var list = new List<SpeciesDescriptor>();
+                    foreach (var part in parts)
+                    {
+                        SpeciesDescriptor? sp = SpeciesDescriptor.Atta.Name.StartsWith(part, StringComparison.OrdinalIgnoreCase) ? SpeciesDescriptor.Atta
+                            : SpeciesDescriptor.LasiusNiger.Name.StartsWith(part, StringComparison.OrdinalIgnoreCase) ? SpeciesDescriptor.LasiusNiger
+                            : SpeciesDescriptor.Eciton.Name.StartsWith(part, StringComparison.OrdinalIgnoreCase) ? SpeciesDescriptor.Eciton
+                            : null;
+                        if (sp == null) return Fail($"--species: especie desconocida '{part}' (atta | lasius | eciton).");
+                        list.Add(sp);
+                    }
+                    species = list;
+                    break;
+                }
                 case "--leaf-fraction":
                     if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out leafFraction)
                         || leafFraction < 0f || leafFraction > 1f)
@@ -231,7 +251,7 @@ internal static class Program
                 "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
                     pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery,
                     pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null,
-                    leafFraction: leafFraction),
+                    leafFraction: leafFraction, species: species),
                 "presets" => PresetScenario.RenderCards(json: presetsJson),
                 "genome-info" => importPath == null
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
@@ -603,6 +623,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json]");
     }
 }

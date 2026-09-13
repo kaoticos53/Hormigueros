@@ -31,6 +31,7 @@ namespace AntSim.Core.Serialization;
 ///     stock f32 · stockMax f32 · queenEnergy f32 ·
 ///     inflowEma f32 · inflowAccum f32 · consumeEma f32 ·
 ///     eggAccumulator f32 · cannibalAccumulator f32 · insertCounter i32 ·
+///     fungus f32 · fungusMax f32 ·
 ///     rng (s0..s3 u64) ·
 ///     élite: count u32 · {nLayers u32 · sizes u16· · weights f32· · fitness f64}·
 ///     inmigrantes: count u32 · {mismo layout + queuedTick u64}·
@@ -111,6 +112,7 @@ public static class WorldSimSave
             w.WriteF32(col.NestY);
             w.WriteF32(col.Stock);
             w.WriteF32(col.StockMax);
+            w.WriteF32(col.Fungus); // F5.2a.2 (v3)
             w.WriteF32(col.QueenEnergy);
             w.WriteF32(col.InflowEma);
             w.WriteF32(col.InflowAccum);
@@ -266,6 +268,7 @@ public static class WorldSimSave
             float nestY = r.ReadF32();
             float stock = r.ReadF32();
             float stockMax = r.ReadF32();
+            float fungus = r.ReadF32(); // F5.2a.2 (v3)
             float queenEnergy = r.ReadF32();
             float inflowEma = r.ReadF32();
             float inflowAccum = r.ReadF32();
@@ -278,6 +281,7 @@ public static class WorldSimSave
             var colony = sim.AddColonyForLoad(id, speciesName, nestX, nestY, stockMax, colonyRng);
             colony.Stock = stock;
             colony.StockMax = stockMax;
+            colony.Fungus = fungus;
             colony.QueenEnergy = queenEnergy;
             colony.InflowEma = inflowEma;
             colony.InflowAccum = inflowAccum;

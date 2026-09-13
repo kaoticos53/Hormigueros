@@ -54,7 +54,8 @@ public static class GameScenario
         bool cloneFromElite = false, int pheroEvery = 0,
         uint inspectId = 0, int activEvery = 0,
         IReadOnlyList<PheroRequest>? pheroLayers = null,
-        float leafFraction = 0f)
+        float leafFraction = 0f,
+        IReadOnlyList<SpeciesDescriptor>? species = null)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
@@ -84,7 +85,8 @@ public static class GameScenario
             }
         }
 
-        var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite,
+        var sim = new WorldSim(seed, grid, colonies, species: species,
+            cloneFromElite: cloneFromElite,
             leafFraction: leafFraction); // F5.2a.1: 0 = mundo clásico sin hojas
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
@@ -382,6 +384,8 @@ public static class GameScenario
                   .Append(",\"stock\":").Append(F(c.Stock))
                   .Append(",\"stockMax\":").Append(F(c.StockMax))
                   .Append(",\"elite\":").Append(c.EliteCount)
+                  .Append(",\"fungus\":").Append(F(c.Fungus))
+                  .Append(",\"fungusMax\":").Append(F(c.FungusMax))
                   .Append('}');
             }
             sb.Append(']');
