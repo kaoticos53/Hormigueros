@@ -53,6 +53,7 @@ internal static class Program
         ulong seed = 12345UL;
         int ticks = 1200;
         int grid = 96;
+        float leafFraction = 0f; // F5.2a.1
         int colonies = 2;
         int pop = 16;
         int generations = 0; // 0 = usa el tope de cada etapa (30/60/80/100)
@@ -104,6 +105,11 @@ internal static class Program
                 case "--colonies":
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out colonies) || colonies < 1)
                         return Fail("--colonies requiere un entero ≥ 1.");
+                    break;
+                case "--leaf-fraction":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out leafFraction)
+                        || leafFraction < 0f || leafFraction > 1f)
+                        return Fail("--leaf-fraction requiere un float en [0,1].");
                     break;
                 case "--pop":
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out pop) || pop < 2)
@@ -220,11 +226,12 @@ internal static class Program
 
             string output = mode switch
             {
-                "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
+                "world" => WorldScenario.Run(seed, ticks, colonies, grid, leafFraction, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
                 "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
                     pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery,
-                    pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null),
+                    pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null,
+                    leafFraction: leafFraction),
                 "presets" => PresetScenario.RenderCards(json: presetsJson),
                 "genome-info" => importPath == null
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
@@ -596,6 +603,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json]");
     }
 }
