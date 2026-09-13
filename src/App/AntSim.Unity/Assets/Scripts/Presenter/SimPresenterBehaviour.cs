@@ -254,6 +254,7 @@ namespace AntSim.Unity.Scripts.Presenter
                 // grosor derivados del LARGO, con la malla natural (2 u × 1 u).
                 // Las portadoras son algo mayores: el relevo se lee sin HUD.
                 const float carrierBoost = 1.25f;
+                int layer = RenderLayer > 0 ? RenderLayer : 0;
                 foreach (var a in state.Ants)
                 {
                     if (!a.Alive) continue;
@@ -264,7 +265,7 @@ namespace AntSim.Unity.Scripts.Presenter
                     var mat = a.HasLoad ? CarrierMaterial : AntMaterial;
                     if (mat == null) mat = AntMaterial;
                     var mtx = Matrix4x4.TRS(pos, rot, scale);
-                    Graphics.DrawMesh(AntMesh, mtx, mat, 0);
+                    Graphics.DrawMesh(AntMesh, mtx, mat, layer);
                 }
             }
 
@@ -277,7 +278,7 @@ namespace AntSim.Unity.Scripts.Presenter
                     var pos = new Vector3(it.X, lift * 0.7f, it.Y);
                     float s = itemS * (0.55f + 0.03f * it.Amount);
                     var mtx = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s);
-                    Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, 0);
+                    Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, RenderLayer > 0 ? RenderLayer : 0);
                 }
             }
         }
