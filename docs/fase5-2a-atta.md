@@ -196,6 +196,27 @@ postergado: la evolución en vivo partiendo de warm-v2 es suficiente.
 
 ## 6. Criterio de cierre
 
+### 6.1 Sonda del bucle biológico — SUPERADA (2026-09-13, sonda borrada)
+
+La colonia 0 (Atta, warm-v2 sembrado) en un mundo de hojas al 100 %
+(Lasius sin sembrar como control), 12 000 ticks, seed 42:
+
+| métrica | valor |
+|---|---|
+| cortes / descargas | 17 / 11 (primer unload **t5303**) |
+| FungusFed | 11 (primero **t5303**) · ticks con digestión **6698** |
+| hongo máx / final | 13.22 / 12.61 de 60 ep |
+| puesta / eclosiones / nacimientos | 12 / **8** / 0 |
+| primera eclosión | **t1266** — la colonia ya eclosiona ANTES del primer FungusFed: la reserva fundadora sostiene la primera ola y el hongo toma el relevo |
+| adultas vivas al final | 11/18 · stock final 0.00 |
+
+**Cadena completa: SÍ** — cortar → transportar → FungusFed → digestión →
+eco más allá de la fundadora. Matices honestos: la primera eclosión (t1266)
+la sostiene aún la reserva inicial (el hongo empieza a alimentar en t5303);
+las 8 eclosiones y el stock final a 0.00 muestran una economía Justa pero
+tensa — el balance fino (LeafEfficiency, DigestionRate) se calibrará con
+tests de balance como dice el plan, no a mano.
+
 Una partida `game` de 2 colonias (`--species atta,lasius`, la Atta sembrada
 con un pool de la cadena, `--leaf-fraction 0.35`):
 
