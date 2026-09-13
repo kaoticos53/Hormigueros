@@ -337,6 +337,11 @@ public sealed class WorldSim
         ant.Y = Math.Clamp(ant.Y + MathF.Sin(ant.Heading) * v * dt, 0f, WorldHeight);
         ant.Energy = Math.Max(0f, ant.Energy - sp.CostMove * v * dt / ant.EnergyCapacity);
 
+        // — F5.2b.1: combate de incursión (después del movimiento, con la pose
+        //    final del tick — la condición es GEOMÉTRICA y determinista: sin
+        //    RNG nuevo, el orden de iteración por antId es el que es) —
+        TryStrike(colony, ant);
+
         // — Depósitos de feromona (con gating químico por capa) —
         float deposited = 0f;
         if (ant.HasLoad && decision.DepositFood > 0f)
@@ -363,6 +368,8 @@ public sealed class WorldSim
 
         // — Interacción (gating físico) —
         ant.InteractCooldown = Math.Max(0f, ant.InteractCooldown - dt);
+        // F5.2b.1: el golpe de combate TAMBIÉN vive en el cooldown de
+        // interacción (misma ventana de 0.5 s que pickup/unload).
         if (DecisionValidator.WantsInteraction(in decision) && ant.InteractCooldown <= 0f)
         {
             if (!ant.HasLoad)
@@ -427,6 +434,14 @@ public sealed class WorldSim
                         colony.RecordInflow(ant.LoadValue);
                     }
                     colony.InflowAccum += ant.LoadValue;
+                    // F5.2b.1: botín de incursión — el ROBO ya ocurrió en el
+                    // Strike; aquí solo se registra su llegada (telemetría).
+                    if (ant.LoadIsLoot)
+                    {
+                        _events.Add(new SimEvent(SimEventKind.RaidInflow, Tick, colony.Id, ant.Id, colony.NestX, colony.NestY));
+                        ant.LoadIsLoot = false;
+                        ant.LootFromColony = 0;
+                    }
                     ant.HasLoad = false;
                     ant.LoadValue = 0f;
                     ant.InteractCooldown = 0.5f;
@@ -434,6 +449,76 @@ public sealed class WorldSim
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// F5.2b.1 — golpe de incursión: la hormiga `attacker` (si su especie es
+    /// beligerante y no va en cooldown) golpea a la hormiga enemiga más
+    /// cercana dentro de ContactRadius. Determinista: sin RNG, la presa es la
+    /// de antId MENOR en empate a distancia (orden de iteración como fuente
+    /// de azar, mismo criterio que el resto del mundo).
+    /// </summary>
+    private void TryStrike(Colony attackerColony, Ant attacker)
+    {
+        SpeciesDescriptor sp = attackerColony.Species;
+        if (sp.ContactRadius <= 0f || attacker.InteractCooldown > 0f || attacker.HasLoad)
+            return; // especie pacífica · en cooldown · cargando (el botín no combina)
+
+        Ant? prey = null;
+        float bestD2 = sp.ContactRadius * sp.ContactRadius;
+        for (int c = 0; c < _colonies.Count; c++)
+        {
+            var victimColony = _colonies[c];
+            if (victimColony.Id == attackerColony.Id) continue;
+            for (int i = 0; i < victimColony.Adults.Count; i++)
+            {
+                var victim = victimColony.Adults[i];
+                if (!victim.Alive) continue;
+                float dx = victim.X - attacker.X;
+                float dy = victim.Y - attacker.Y;
+                float d2 = dx * dx + dy * dy;
+                // antId menor gana los empates (d2 estrictamente menor reemplaza):
+                if (d2 < bestD2 || (d2 <= bestD2 + 1e-9f && d2 <= sp.ContactRadius * sp.ContactRadius && prey != null && victim.Id < prey.Id))
+                {
+                    if (d2 <= bestD2 + 1e-9f && prey != null && victim.Id >= prey.Id) continue;
+                    bestD2 = d2;
+                    prey = victim;
+                }
+            }
+        }
+        if (prey == null) return;
+
+        var preyColony = _colonies[prey.ColonyId];
+
+        // Daño: StrikeDamage en ep de CAPACIDAD de la presa (la energía está
+        // normalizada [0,1] por su capacidad — el golpe la baja proporcional).
+        float damage = sp.StrikeDamage / Math.Max(prey.EnergyCapacity, 1e-4f);
+        prey.Energy = Math.Max(0f, prey.Energy - damage);
+        if (prey.Energy <= 0f)
+            prey.DiedInCombat = true; // la causa se lee en ApplyDeaths del paso de la presa
+
+        // Robo: ep que el atacante TRANSPORTA como botín (clamp al stock real
+        // de la víctima-colonia: no se roba lo que no hay).
+        float robido = Math.Min(sp.StealPerStrike, preyColony.Stock);
+        preyColony.Stock -= robido;
+        if (robido > 0f)
+        {
+            attacker.HasLoad = true;
+            attacker.LoadValue = robido;
+            attacker.LoadIsLoot = true;
+            attacker.LootFromColony = preyColony.Id;
+            _events.Add(new SimEvent(SimEventKind.StockRobbed, Tick, preyColony.Id, 0,
+                preyColony.NestX, preyColony.NestY, (byte)Math.Min(255, (int)MathF.Round(robido * 100f))));
+        }
+
+        // Alarma ofensiva en la PRESA: su colmena siente el golpe (τ½ 1 s —
+        // se disipa en ~3 s). Inyección del MUNDO, no decisión de la hormiga.
+        preyColony.AlarmLayer.Deposit(Cell(prey.X), Cell(prey.Y), 0.8f);
+
+        attacker.InteractCooldown = 0.5f;
+        attacker.Fitness += RewardPickup * 0.5f; // golpear orienta la evolución (mitad de un pickup)
+        _events.Add(new SimEvent(SimEventKind.Strike, Tick, attackerColony.Id, attacker.Id, attacker.X, attacker.Y,
+            (byte)Math.Min(255, prey.Id)));
     }
 
     private void ApplyDeaths(Colony colony)
@@ -447,7 +532,11 @@ public sealed class WorldSim
             if (ant.Age >= ant.Lifespan || ant.Energy <= 0f)
             {
                 ant.Alive = false;
-                byte cause = ant.Age >= ant.Lifespan ? (byte)DeathCause.Age : (byte)DeathCause.Starvation;
+                // F5.2b.1: la energía la pudo agotar el COMBATE (golpes de una
+                // incursión), no el metabolismo — causa telemétrica distinta.
+                byte cause = ant.Age >= ant.Lifespan ? (byte)DeathCause.Age
+                           : ant.DiedInCombat ? (byte)DeathCause.Combat
+                           : (byte)DeathCause.Starvation;
 
                 // Fase 2: el fitness de por vida alimenta el acervo (o evalúa
                 // al inmigrante en cuarentena).

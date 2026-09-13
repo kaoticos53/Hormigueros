@@ -39,14 +39,34 @@ public enum SimEventKind : byte
 
     /// <summary>F5.2a.2: la digestión convirtió hongo → stock en la colonia
     /// ColonyId (cada tick con digestión; agregable en canal C).</summary>
-    FungusDigested = 16
+    FungusDigested = 16,
+
+    /// <summary>F5.2b.1: la hormiga AntId de la colonia ColonyId (ATACANTE)
+    /// golpeó a la presa Cause=id de la víctima en X/Y. El mundo inyectó
+    /// alarma en la capa de la presa y el golpe robó ep como carga.
+    /// Agregable en canal C (bloque raids).</summary>
+    Strike = 17,
+
+    /// <summary>F5.2b.1: la colonia ColonyId (saqueadora) descargó botín de
+    /// incursión en SU nido — equivale a Unload para el relevo (el evento
+    /// Unload se emite aparte, con el botín como carga). X/Y = nido.</summary>
+    RaidInflow = 18,
+
+    /// <summary>F5.2b.1: la colonia ColonyId (SAQUEADA) perdió stock. AntId = 0;
+    /// X/Y = su nido; Cause = ep robados × 100 (centésimas, sin float).
+    /// Telemetría de tarjeta: NO toca el hash ni el estado del saqueador.</summary>
+    StockRobbed = 19
 }
 
 /// <summary>Causa de muerte (para telemetría y reproducción).</summary>
 public enum DeathCause : byte
 {
     Age = 0,
-    Starvation = 1
+    Starvation = 1,
+
+    /// <summary>F5.2b.1: la energía llegó a 0 por golpes de una Eciton
+    /// (el mundo la mató, no el metabolismo).</summary>
+    Combat = 2
 }
 
 public readonly struct SimEvent

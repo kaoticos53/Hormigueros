@@ -49,7 +49,7 @@ public static class WorldSimSave
 {
     /// <summary>v2 (F4.4): añade el flag CloneFromElite por colonia (1 byte al
     /// final del bloque de colonia). Los checkpoints v1 ya no se cargan.</summary>
-    public const int FormatVersion = 3;
+    public const int FormatVersion = 4;
     private static readonly byte[] Magic = { (byte)'A', (byte)'N', (byte)'T', (byte)'S', (byte)'A', (byte)'V', (byte)'E', (byte)'1' };
 
     // Recompensas configurables de WorldSim: son parte del estado (la arena
@@ -152,6 +152,9 @@ public static class WorldSimSave
                 w.WriteF32(a.SensorScale);
                 w.WriteBool(a.HasLoad);
                 w.WriteF32(a.LoadValue);
+                w.WriteBool(a.LoadIsLoot);   // v4 (F5.2b.1): botín de incursión
+                w.WriteU32((uint)a.LootFromColony);
+                w.WriteBool(a.DiedInCombat); // v4: causa de muerte por combate
                 w.WriteBool(a.Alive);
                 w.WriteF32(a.InteractCooldown);
                 w.WriteF64(a.Fitness);
@@ -335,6 +338,9 @@ public static class WorldSimSave
                     SensorScale = r.ReadF32(),
                     HasLoad = r.ReadBool(),
                     LoadValue = r.ReadF32(),
+                    LoadIsLoot = r.ReadBool(),   // v4 (F5.2b.1)
+                    LootFromColony = (int)r.ReadU32(),
+                    DiedInCombat = r.ReadBool(),
                     Alive = r.ReadBool(),
                     InteractCooldown = r.ReadF32(),
                     Fitness = r.ReadF64(),

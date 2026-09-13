@@ -65,6 +65,11 @@ public sealed class SpeciesDescriptor
     public float DigestionRate;   // ep/s a hongo LLENO (proporcional al llenado)
     public float LeafEfficiency;  // ep de hongo por ep de hoja descargada
 
+    // — F5.2b.1: combate de incursión (solo Eciton; 0 = la especie no pelea) —
+    public float ContactRadius;   // u: distancia de golpe (0 = especie pacífica)
+    public float StrikeDamage;    // ep de CAPACIDAD de la presa por golpe
+    public float StealPerStrike;  // ep que el atacante roba y transporta
+
     // — Constantes predefinidas (tabla de la especificación) —
     public static readonly SpeciesDescriptor LasiusNiger = new() { Name = "Lasius niger" };
 
@@ -109,6 +114,8 @@ public sealed class SpeciesDescriptor
         KFull = 1.6f, KMin = 0.6f,
         EggTime = 5f, LarvaTimeMax = 18f, PupaTime = 8f,
         DeathRate = 1f / 60f, EggCost = 0.4f, BaseLifespan = 180f,
-        StockMax = 80f, TSafe = 30f, TOoph = 20f, TCann = 12f, TCrit = 6f
+        StockMax = 80f, TSafe = 30f, TOoph = 20f, TCann = 12f, TCrit = 6f,
+        // — F5.2b.1: la legionaria golpea y roba (única especie beligerante) —
+        ContactRadius = 6f, StrikeDamage = 0.35f, StealPerStrike = 0.30f
     };
 }
