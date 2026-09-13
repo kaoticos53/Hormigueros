@@ -284,14 +284,14 @@ namespace AntSim.Core.Tests
         /// expected). Si falla, el determinismo del mundo se rompió; un cambio
         /// INTENCIONAL se actualiza en ambos sitios con --update y en este test.</summary>
         public const string CanonicalStreamHash =
-            "e94a9a9e70013dfbc741ed23b24b24ebc0f9a744f741110b0fb33209387269ef";
+            "698c2fee7fbe2b5393e9b49ee45d0fa398e9f32fb4b74264b521059eb246a755";
 
         [Fact]
         public void FixtureHash_ElStreamCanonicoEsByteAByteEstable()
         {
-            // La misma partida que el fixture de artifacts y que el check de CI
-            // (scripts/check-stream-fixture.sh): si su hash final cambia, la UI
-            // de Unity y todos los fixtures se desalinean.
+            // Vida útil (F5.1): BaseLifespan 90→240 s cambia el mundo (las
+            // fundadoras ya no mueren antes de su segundo viaje) y con él los
+            // hashes. Intencional y documentado: pines y fixture al día.
             string stream = GameScenario.Run(42, ticks: 7200, colonies: 2, grid: 96,
                 frameEvery: 1, seedPoolPath: null, drops: null);
 
@@ -361,10 +361,10 @@ namespace AntSim.Core.Tests
         public void Inspector_CapturaLaMuerteDelCanalB()
         {
             // Mundo sin comida: las fundadoras mueren (vejez o inanición) — hay
-            // AntDied garantizado para validar la captura del canal B. Con la vida
-            // de fundador actual (BaseLifespan 140 s ⇒ máx ~196 s de vida) hacen
-            // falta >6 000 ticks (30 Hz) para verla.
-            string stream = GameScenario.Run(42, ticks: 6300, colonies: 1, grid: 96,
+            // AntDied garantizado para validar la captura del canal B. Sin comida
+            // mueren de INANICIÓN (Energy≤0), que llega mucho antes que la vejez
+            // (BaseLifespan 240 s ⇒ ~5800 ticks de vida como máximo): 6300 basta.
+            string stream = GameScenario.Run(42, ticks: 9000, colonies: 1, grid: 96,
                 frameEvery: 1, seedPoolPath: null, drops: null);
 
             var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
@@ -383,7 +383,7 @@ namespace AntSim.Core.Tests
                 inspector.Observe(view);
             }
 
-            Assert.True(anyDeath, "el mundo sin comida debe producir muertes en 6300 ticks");
+            Assert.True(anyDeath, "el mundo sin comida debe producir muertes en 9000 ticks");
             var rec = inspector.Tracked;
             Assert.NotNull(rec);
             Assert.NotNull(rec!.DeathTick); // la muerte quedó capturada

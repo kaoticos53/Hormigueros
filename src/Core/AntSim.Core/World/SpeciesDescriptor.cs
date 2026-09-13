@@ -38,7 +38,13 @@ public sealed class SpeciesDescriptor
     public float PupaTime = 12f;           // s pupa → adulta
     public float DeathRate = 1f / 90f;     // λ_death s⁻¹ (término de reposición)
     public float EggCost = 0.5f;           // ε_egg: ep por huevo (se descuenta del stock)
-    public float BaseLifespan = 90f;       // s (modulada por vigor)
+    // Fase 5.1 (vida útil): 90 s daba 1-2 ciclos completos por fundadora — el
+    // jugador veía morir de viejas hormigas que apenas habían hecho UN viaje
+    // (viaje medio 200-350 u a VMax 2.7 ≈ 75-130 s de pickup + vuelta). Con
+    // 240 s una fundadora vive ~190-285 s: 2-4 viajes completos con margen y
+    // la vejez deja de ser la muerte dominante del arranque. La modulación por
+    // vigor (×0.7-1.3) y el escalonado de fundadores no cambian.
+    public float BaseLifespan = 240f;      // s (modulada por vigor)
 
     /// <summary>
     /// Tasa ideal de alimentación larval (b_ideal): la suficiente para que una
@@ -79,7 +85,7 @@ public sealed class SpeciesDescriptor
         AdultUpkeep = 0.035f,
         KFull = 2.8f, KMin = 1.0f,
         EggTime = 10f, LarvaTimeMax = 35f, PupaTime = 16f,
-        DeathRate = 1f / 140f, EggCost = 0.7f, BaseLifespan = 140f,
+        DeathRate = 1f / 140f, EggCost = 0.7f, BaseLifespan = 300f,
         StockMax = 120f, TSafe = 50f, TOoph = 30f, TCann = 18f, TCrit = 10f
     };
 
@@ -93,7 +99,7 @@ public sealed class SpeciesDescriptor
         AdultUpkeep = 0.045f,
         KFull = 1.6f, KMin = 0.6f,
         EggTime = 5f, LarvaTimeMax = 18f, PupaTime = 8f,
-        DeathRate = 1f / 60f, EggCost = 0.4f, BaseLifespan = 60f,
+        DeathRate = 1f / 60f, EggCost = 0.4f, BaseLifespan = 180f,
         StockMax = 80f, TSafe = 30f, TOoph = 20f, TCann = 12f, TCrit = 6f
     };
 }
