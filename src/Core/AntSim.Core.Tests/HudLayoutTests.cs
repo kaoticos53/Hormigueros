@@ -148,6 +148,73 @@ namespace AntSim.Core.Tests
             Assert.Contains(ColonyCardModel.LightGlyph(0), fresh.Render(0));
         }
 
+        // ————— F5.1bis: tarjeta compacta del multi-visor —————
+
+        [Fact]
+        public void TarjetaCompacta_EsperaStream_SinDatos()
+        {
+            var model = new ColonyCardModel();
+            string text = model.RenderCompact();
+            Assert.Contains("esperando", text); // nunca vacío: la vista se ve viva
+        }
+
+        [Fact]
+        public void TarjetaCompacta_UnaLineaPorColonia_SemaforoYReserva()
+        {
+            // Sintético con el contrato REAL del parser: dos colonias, semáforo
+            // verde en la 0, reserva baja en la 1 — compacto = 1 línea por colonia.
+            var model = new ColonyCardModel();
+            model.Observe(TickFrom(
+                colonies: "{\"id\":0,\"nest\":[128,128],\"adults\":12,\"eggs\":1,\"larvae\":0,\"pupae\":0,\"stock\":70,\"stockMax\":100,\"elite\":0}," +
+                          "{\"id\":1,\"nest\":[256,128],\"adults\":8,\"eggs\":0,\"larvae\":1,\"pupae\":0,\"stock\":15,\"stockMax\":100,\"elite\":0}",
+                light: "[0,2],[1,1]",
+                colmetrics: "[0,3,1,0,0,0,0],[1,1,0,0,2,0,0]"));
+
+            string text = model.RenderCompact();
+            var lines = text.Split('\n');
+            Assert.Equal(2, lines.Length); // UNA línea por colonia (no tarjetas de 5)
+            // Colonia 0: semáforo verde, adultas, reserva OK, flujo de la ventana.
+            Assert.Contains("colonia 0", lines[0]);
+            Assert.Contains(ColonyCardModel.LightGlyph(2), lines[0]);
+            Assert.Contains("12h", lines[0]);
+            Assert.Contains("70%", lines[0]);
+            Assert.Contains("3rec/1desc", lines[0]);
+            Assert.DoesNotContain("¡BAJA!", lines[0]);
+            // Colonia 1: ámbar y reserva baja marcada.
+            Assert.Contains("colonia 1", lines[1]);
+            Assert.Contains(ColonyCardModel.LightGlyph(1), lines[1]);
+            Assert.Contains("¡BAJA!", lines[1]);
+            // Líneas cortas: caben en media pantalla (el viewport del multi-visor).
+            Assert.All(lines, l => Assert.True(l.Length <= 55, "línea larga para el viewport: " + l));
+        }
+
+        [Fact]
+        public void TarjetaCompacta_SemaforoSinCanalA_AunSeVe()
+        {
+            // El canal D (light) puede llegar antes que un frame del canal A:
+            // la línea de esa colonia existe y muestra el glifo, con «—».
+            var model = new ColonyCardModel();
+            model.Observe(TickFrom(light: "[0,2]"));
+            string text = model.RenderCompact();
+            Assert.Contains("colonia 0", text);
+            Assert.Contains(ColonyCardModel.LightGlyph(2), text);
+            Assert.Contains("—", text);
+        }
+
+        [Fact]
+        public void TarjetaCompacta_DelStreamReal_2Colonias()
+        {
+            string stream = GameScenario.Run(42, ticks: 3600, colonies: 2, grid: 96,
+                frameEvery: 30, seedPoolPath: null, drops: null);
+            var model = new ColonyCardModel();
+            foreach (var v in Parse(stream)) model.Observe(v);
+
+            string text = model.RenderCompact();
+            Assert.Contains("colonia 0", text);
+            Assert.Contains("colonia 1", text);
+            Assert.All(text.Split('\n'), l => Assert.True(l.Length <= 55, l));
+        }
+
         private const string Colony0 =
             "{\"id\":0,\"nest\":[128,128],\"adults\":10,\"eggs\":0,\"larvae\":0,\"pupae\":0,\"stock\":50,\"stockMax\":100,\"elite\":0}";
 
