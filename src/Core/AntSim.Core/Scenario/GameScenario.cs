@@ -53,7 +53,8 @@ public static class GameScenario
         IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
         bool cloneFromElite = false, int pheroEvery = 0,
         uint inspectId = 0, int activEvery = 0,
-        IReadOnlyList<PheroRequest>? pheroLayers = null)
+        IReadOnlyList<PheroRequest>? pheroLayers = null,
+        float leafFraction = 0f)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
@@ -83,7 +84,8 @@ public static class GameScenario
             }
         }
 
-        var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite);
+        var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite,
+            leafFraction: leafFraction); // F5.2a.1: 0 = mundo clásico sin hojas
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();
@@ -359,7 +361,12 @@ public static class GameScenario
                 var it = frame.Items[i];
                 if (i > 0) sb.Append(',');
                 sb.Append('[').Append(it.Id).Append(',').Append(F(it.X))
-                  .Append(',').Append(F(it.Y)).Append(',').Append(F(it.Amount)).Append(']');
+                  .Append(',').Append(F(it.Y)).Append(',').Append(F(it.Amount));
+                // F5.2a.1: las hojas llevan un 5º elemento [cutsLeft, cutsInitial];
+                // los ítems simples quedan en 4 (ausencia = simple, default tolerante).
+                if (it.IsLeaf)
+                    sb.Append(',').Append(it.CutsLeft).Append(',').Append(it.CutsInitial);
+                sb.Append(']');
             }
             sb.Append("],\"colonies\":[");
             for (int i = 0; i < frame.Colonies.Count; i++)

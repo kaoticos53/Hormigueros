@@ -141,11 +141,16 @@ parseando — los fixtures actuales no se regeneran por esto.
 
 ## 5. Rodajas de implementación (cada una con su test)
 
-1. **F5.2a.1 — Ítems compuestos**: `FoodItem.CutsLeft`, pickup→corte en
-   `Act`, eventos, `LeafFraction` en spawn, hash. Tests: corte reduce sin
-   eliminar; último corte elimina + `ItemConsumed`; fragmento correcto;
-   hash invariante con `LeafFraction = 0` (comparación literal contra un
-   mundo actual); determinismo (misma semilla ⇒ mismos cortes).
+1. **F5.2a.1 — Ítems compuestos** — ✅ HECHO (2026-09-13): `FoodItem.CutsLeft/
+   CutsInitial`, corte en el pickup de `Act`, `LeafFraction` en spawn (por
+   constructor — el spawn inicial nace ANTES que el inicializador de objeto),
+   eventos `LeafCut=13`/`LeafDepleted=14`, hash SOLO con hojas (mundos sin
+   hojas producen los mismos bytes — pines de CI intactos), `.antsave` v3
+   (cuts ×2 por ítem), canal A con `[id,x,y,amount,cutsLeft,cutsInitial]` en
+   hojas y 4 elementos en simples (tolerante), CLI `--leaf-fraction` (modes
+   `world`/`game`). 10 tests (`CompoundItemTests`); 286/286 suite + 3 pines
+   de CI verificados. Humo real sembrado (warm-v2, seed 42, 6000 ticks,
+   hojas 100 %): 14 cortes → 3 descargas, 9 hojas mordidas.
 2. **F5.2a.2 — Hongo**: `Colony.Fungus`, descarga por especie, digestión en
    `ColonyController`, eventos, `.antsave` v2, hash. Tests: Lasius sin
    hongo = camino actual (hash invariante); Atta: hongo sube con descargas,

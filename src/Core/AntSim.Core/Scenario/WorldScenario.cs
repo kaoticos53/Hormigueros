@@ -22,6 +22,7 @@ public static class WorldScenario
     /// grabar/partir y luego verificar con --mode verify.
     /// </summary>
     public static string Run(ulong seed, int ticks, int colonies = 2, int grid = 256,
+        float leafFraction = 0f,
         string? antlogPath = null, string? savePath = null, int saveTick = 0)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
@@ -33,7 +34,7 @@ public static class WorldScenario
           .Append(" grid ").Append(grid)
           .AppendLine();
 
-        var sim = new WorldSim(seed, grid, colonies);
+        var sim = new WorldSim(seed, grid, colonies, leafFraction: leafFraction); // F5.2a.1
         long totalEvents = 0;
         var relay = new RelayTracker(); // salud del relevo: 1ª descarga + sueltas
         using AntEventLog? antlog = antlogPath != null ? new AntEventLog(sim) : null;

@@ -12,7 +12,8 @@ using AntSim.Core.World;
 namespace AntSim.Core.Serialization;
 
 /// <summary>
-/// Checkpoint .antsave v1 (Fase 4 — persistencia): estado COMPLETO del mundo
+/// Checkpoint .antsave v3 (F5.2a.1 — ítems compuestos): como v2 con CutsLeft/
+/// CutsInitial por ítem. Los v2 ya no se cargan (el patrón v1→v2 ya probado).
 /// en un límite de tick. "Se guarda la CAUSA, no los efectos": RNGs por su
 /// estado exacto, acumuladores ocultos (EWMA, puesta, canibalismo), nutrición
 /// larvaria, genomas de la élite y de cada adulta, grids de feromona celda a
@@ -24,7 +25,7 @@ namespace AntSim.Core.Serialization;
 ///   magic "ANTSAVE1" (8) · SHA-256 al final (32) del cuerpo:
 ///   seed u64 · tick u64 · gridCells i32 · targetItems i32 · recompensas f32 ×5 ·
 ///   rng del mundo (s0..s3 u64) · nextAntId u32 · nextItemId u32 ·
-///   items: count u32 · {id u32, x f32, y f32, amount f32}·
+///   items: count u32 · {id u32, x f32, y f32, amount f32, cuts i32 ×2}·
 ///   por colonia:
 ///     id i32 · nombre de especie (str) · nestX f32 · nestY f32 ·
 ///     stock f32 · stockMax f32 · queenEnergy f32 ·
@@ -47,7 +48,7 @@ public static class WorldSimSave
 {
     /// <summary>v2 (F4.4): añade el flag CloneFromElite por colonia (1 byte al
     /// final del bloque de colonia). Los checkpoints v1 ya no se cargan.</summary>
-    public const int FormatVersion = 2;
+    public const int FormatVersion = 3;
     private static readonly byte[] Magic = { (byte)'A', (byte)'N', (byte)'T', (byte)'S', (byte)'A', (byte)'V', (byte)'E', (byte)'1' };
 
     // Recompensas configurables de WorldSim: son parte del estado (la arena
@@ -95,6 +96,8 @@ public static class WorldSimSave
             w.WriteF32(it.X);
             w.WriteF32(it.Y);
             w.WriteF32(it.Amount);
+            w.WriteI32(it.CutsLeft); // F5.2a.1 (v3)
+            w.WriteI32(it.CutsInitial);
         }
 
         // — Colonias —
@@ -242,7 +245,9 @@ public static class WorldSimSave
                 Id = r.ReadU32(),
                 X = r.ReadF32(),
                 Y = r.ReadF32(),
-                Amount = r.ReadF32()
+            Amount = r.ReadF32(),
+            CutsLeft = r.ReadI32(),
+            CutsInitial = r.ReadI32()
             };
             if (!FloatUtil.IsFinite(item.X) || !FloatUtil.IsFinite(item.Y) || !FloatUtil.IsFinite(item.Amount))
                 throw new FormatException("Ítem no finito (archivo corrupto).");
