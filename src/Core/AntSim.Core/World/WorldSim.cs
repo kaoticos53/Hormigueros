@@ -62,6 +62,12 @@ public sealed class WorldSim
     /// tamaño de mundo (24 → 171 ítems en 256²).</summary>
     public int TargetItems { get; set; } = TargetItemsDefault;
 
+    /// <summary>F5.2a.1: fracción [0,1] de ítems nuevos que nacen como HOJAS
+    /// (ítems compuestos con CutsLeft 3–5). 0 = mundo clásico, byte a byte
+    /// el de siempre (ni siquiera consume RNG: el hash de los pines de CI
+    /// no se mueve). La hoja vale 8–14 ep con fragmento ≈ 2.7–3.5 ep.</summary>
+    public float LeafFraction { get; set; } = 0f;
+
     private int DensityScaledTargetItems => (int)MathF.Round(
         TargetItemsDefault * (WorldWidth * WorldHeight) / (96f * SimConstants.CellSizeUnits * 96f * SimConstants.CellSizeUnits));
 
@@ -94,7 +100,8 @@ public sealed class WorldSim
 
     public WorldSim(ulong seed, int gridCells = 256, int colonyCount = 2,
         IReadOnlyList<SpeciesDescriptor>? species = null,
-        bool cloneFromElite = false)
+        bool cloneFromElite = false,
+        float leafFraction = 0f)
     {
         if (gridCells < 16) throw new ArgumentOutOfRangeException(nameof(gridCells));
         if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
@@ -104,6 +111,9 @@ public sealed class WorldSim
         WorldWidth = gridCells * SimConstants.CellSizeUnits;
         WorldHeight = gridCells * SimConstants.CellSizeUnits;
         _worldRng = new DeterministicRandom(seed);
+        // F5.2a.1: ANTES del spawn inicial — el constructor ya crea ítems y
+        // necesitan la regla hoja/simple decidida en construcción.
+        LeafFraction = leafFraction;
 
         for (int c = 0; c < colonyCount; c++)
         {
@@ -356,12 +366,38 @@ public sealed class WorldSim
                 var item = NearestItemWithin(ant.X, ant.Y, PickupRadius);
                 if (item != null)
                 {
-                    ant.HasLoad = true;
-                    ant.LoadValue = item.Amount;
-                    ant.Fitness += RewardPickup;
-                    _items.Remove(item);
-                    ant.InteractCooldown = 0.5f;
-                    _events.Add(new SimEvent(SimEventKind.Pickup, Tick, colony.Id, ant.Id, ant.X, ant.Y));
+                    // F5.2a.1: hoja = ítem compuesto. El pickup corta UN fragmento
+                    // (Amount/CutsLeft) y la hoja sobrevive con un corte menos; el
+                    // ítem simple se lleva entero como siempre.
+                    if (item.IsLeaf)
+                    {
+                        float fragment = item.Amount / item.CutsLeft;
+                        ant.HasLoad = true;
+                        ant.LoadValue = fragment;
+                        ant.Fitness += RewardPickup;
+                        item.CutsLeft--;
+                        item.Amount -= fragment;
+                        ant.InteractCooldown = 0.5f;
+                        _events.Add(new SimEvent(SimEventKind.Pickup, Tick, colony.Id, ant.Id, ant.X, ant.Y));
+                        _events.Add(new SimEvent(SimEventKind.LeafCut, Tick, colony.Id, ant.Id, item.X, item.Y));
+                        if (item.CutsLeft == 0)
+                        {
+                            // Último corte: la hoja desaparece (lo que queda es
+                            // restos no aprovechables) y el mundo registra consumo.
+                            _items.Remove(item);
+                            _events.Add(new SimEvent(SimEventKind.ItemConsumed, Tick, colony.Id, ant.Id, item.X, item.Y));
+                            _events.Add(new SimEvent(SimEventKind.LeafDepleted, Tick, colony.Id, ant.Id, item.X, item.Y));
+                        }
+                    }
+                    else
+                    {
+                        ant.HasLoad = true;
+                        ant.LoadValue = item.Amount;
+                        ant.Fitness += RewardPickup;
+                        _items.Remove(item);
+                        ant.InteractCooldown = 0.5f;
+                        _events.Add(new SimEvent(SimEventKind.Pickup, Tick, colony.Id, ant.Id, ant.X, ant.Y));
+                    }
                 }
             }
             else
@@ -495,12 +531,29 @@ public sealed class WorldSim
             }
             if (!ok) continue;
 
+            // F5.2a.1: ¿hoja o ítem simple? La tirada SOLO se consume con
+            // LeafFraction > 0 — con 0 el flujo de RNG es el de siempre.
+            bool isLeaf = LeafFraction > 0f && _worldRng.NextDouble01() < LeafFraction;
+            float amount;
+            int cuts = 0;
+            if (isLeaf)
+            {
+                cuts = 3 + (int)(_worldRng.NextDouble01() * 3f); // 3..5
+                amount = 8f + (float)_worldRng.NextDouble01() * 6f; // 8..14 ep
+            }
+            else
+            {
+                amount = 4f + (float)_worldRng.NextDouble01() * 2f;
+            }
+
             var item = new FoodItem
             {
                 Id = _nextItemId++,
                 X = x,
                 Y = y,
-                Amount = 4f + (float)_worldRng.NextDouble01() * 2f
+                Amount = amount,
+                CutsLeft = cuts,
+                CutsInitial = cuts
             };
             _items.Add(item);
             _events.Add(new SimEvent(SimEventKind.ItemSpawned, Tick, -1, 0, x, y));
@@ -555,6 +608,14 @@ public sealed class WorldSim
             var it = _items[i];
             h.AppendUInt32(it.Id);
             h.AppendFloat(it.X); h.AppendFloat(it.Y); h.AppendFloat(it.Amount);
+            // F5.2a.1: SOLO las hojas aportan cortes al hash — un mundo sin
+            // hojas (CutsLeft = 0 en todos los ítems) produce EXACTAMENTE los
+            // mismos bytes que el build anterior y los pines de CI no se mueven.
+            if (it.IsLeaf)
+            {
+                h.AppendInt32(it.CutsLeft);
+                h.AppendInt32(it.CutsInitial);
+            }
         }
 
         for (int c = 0; c < _colonies.Count; c++)

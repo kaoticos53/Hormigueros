@@ -23,7 +23,15 @@ public enum SimEventKind : byte
     /// <summary>F4.2: la colonia ColonyId quedó sin adultas NI cría — extinción
     /// completa (el nido permanece; la tierra no se consume). Se emite UNA vez,
     /// por transición de estado (no hay evento por hormiga).</summary>
-    ColonyExtinct = 12
+    ColonyExtinct = 12,
+
+    /// <summary>F5.2a.1: la hormiga AntId cortó un fragmento de la hoja en X/Y
+    /// (la hoja pierde un corte; el Pickup del fragmento se emite aparte).</summary>
+    LeafCut = 13,
+
+    /// <summary>F5.2a.1: la hoja en X/Y agotó su último corte y desaparece
+    /// (acompaña al ItemConsumed del mundo).</summary>
+    LeafDepleted = 14
 }
 
 /// <summary>Causa de muerte (para telemetría y reproducción).</summary>
