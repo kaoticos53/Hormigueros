@@ -144,6 +144,17 @@ idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
 3. Menú **AntSim → Crear escena de juego**: construye cámara, suelo, nidos,
    meshes/materials y el Canvas del HUD completo (tarjetas, toasts, historial,
    inspección) con todas las referencias asignadas. Guarda la escena (Ctrl+S).
+   El mismo paso se puede correr **en batch, sin abrir el editor**, para
+   comprobar que la escena se construye sin excepciones (es lo que valida los
+   cambios del montaje cuando no hay sesión abierta — y lo que usó la revisión
+   de la gráfica de reserva):
+   ```bash
+   Unity.exe -batchmode -nographics -quit -projectPath <proyecto> \
+     -executeMethod AntSim.Unity.Scripts.EditorTools.SceneBootstrapper.CreateGameScene \
+     -logFile <log>
+   ```
+   El `.unity` resultante se puede inspeccionar como texto (objetos, `ColonyId`,
+   `m_SizeDelta`), así que una regresión de layout también se detecta sin ojos.
 4. **Play**: el mundo llega por el stream del CLI; HUD en vivo.
 
 Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
@@ -200,7 +211,8 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
 | Ítems | Esfera natural × 0,010 × mundo | El diámetro dice la cantidad restante. |
 | Nidos | Montículo + disco del color de la colonia | El mismo acento que usa la tarjeta. |
 | Feromonas | Quad transparente a y=0,3, por debajo de los actores | El canal E solo le cambia la RenderTexture. |
-| HUD | Paneles con acento, barra de estado, tarjetas 440×176, modal centrado | Todo el texto vive sobre panel (antes el mundo se comía el texto) y ningún `Text` desborda su caja. |
+| HUD | Paneles con acento, barra de estado, tarjetas 440×204, modal centrado | Todo el texto vive sobre panel (antes el mundo se comía el texto) y ningún `Text` desborda su caja. La tarjeta creció 28 px para la gráfica de reserva. |
+| Gráfica de reserva (F5.1) | `RawImage` con textura generada por `ColonySparklineModel` (puro) | Serie de 1 muestra/s (30 ticks, el ritmo del canal C) con ventana de 90 s: una gráfica de 10 minutos en 400 px no dice nada. Se dibuja con **área** (relleno + borde) y se tiñe en rojo por debajo del 20%, el mismo umbral que la barra. |
 
 **Trampas ya encontradas** (no repetirlas):
 

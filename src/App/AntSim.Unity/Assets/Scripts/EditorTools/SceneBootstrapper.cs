@@ -180,6 +180,10 @@ namespace AntSim.Unity.Scripts.EditorTools
             var phero = pheroQuad.AddComponent<Presenter.PheromoneTileBehaviour>();
             phero.Presenter = presenter;
             phero.TargetMaterial = pheroMat;
+            // F5.1: la capa por defecto es la que el canal E clásico ya emitía
+            // (home de la colonia 0), así que el aspecto no cambia al abrir la
+            // escena; F y G recorren las demás. Con el canal múltiple
+            // (--phero-layers) el HUD puede enseñar cualquier colonia y tipo.
 
             // — Canvas del HUD —
             var canvasGo = new GameObject("HUD Canvas");
@@ -216,13 +220,17 @@ namespace AntSim.Unity.Scripts.EditorTools
             for (int c = 0; c < 2; c++)
             {
                 var accent = c == 0 ? AccentColony0 : AccentColony1;
+                // 204 de alto (antes 176) y 216 de paso: los 28 px nuevos son la
+                // banda de la GRÁFICA de reserva (F5.1), que no cabía al lado de
+                // la barra. Sin crecer la tarjeta, el gráfico habría obligado a
+                // encoger el texto y el pass de aspecto cuenta el desborde.
                 var panel = Panel(canvasGo.transform, $"ColonyCard_{c}",
-                    new Vector2(16, -72 - c * 188), new Vector2(440, 176), accent);
+                    new Vector2(16, -72 - c * 216), new Vector2(440, 204), accent);
                 cardPanels[c] = panel;
                 cardTexts[c] = PanelText(panel, "Body", 14, Ink);
                 var cardBodyRt = cardTexts[c].rectTransform;
-                // 34 px de inset inferior: la barra de reserva vive ahí.
-                cardBodyRt.offsetMin = new Vector2(cardBodyRt.offsetMin.x, 34f);
+                // 62 px de inset inferior: barra de reserva (14–26) y gráfica (32–58).
+                cardBodyRt.offsetMin = new Vector2(cardBodyRt.offsetMin.x, 62f);
             }
 
             // — Barra de estado (arriba, ancho completo) —
@@ -276,6 +284,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // Sin emoji (la fuente LegacyRuntime de uGUI no los tiene: salían
             // cajas vacías, uno de los motivos del aspecto pobre del HUD).
             hints.text = "click: inspeccionar hormiga   ·   D: marcar drops (Z deshace)   ·   " +
+                         "F: capa de feromonas (home/food/alarm)   ·   G: colonia   ·   " +
                          "I: importar pool   ·   J: ir a la alerta   ·   Espacio: pausa";
 
             // — HUD layout: reparte el stream a todo —
@@ -380,6 +389,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // — F5.1: per-elemento — contenedor de toasts clicables + barras + botones —
             RectTransform toastContainer = CreateToastContainer(canvasGo.transform, hud);
             var stockImages = CreateStockBars(cardPanels, hud, cardTexts.Length);
+            CreateSparklines(cardPanels, presenter, cardTexts.Length);
             var buttons = CreateNativeButtons(modalRt, dropPanel, hud);
             hud.BindNativeButtons(buttons[0], buttons[1], buttons[2], buttons[3]);
             hud.BindImportPathField(pathField);
@@ -469,6 +479,42 @@ namespace AntSim.Unity.Scripts.EditorTools
         // — F5.1: barras de stock — un fondo + una Image con fillAmount por colonia.
         //   F5.1: van DENTRO de la tarjeta de su colonia, como calibre en la base
         //   del panel (antes flotaban sueltas sobre el mundo, alineadas «a ojo»).
+        /// <summary>
+        /// Gráfica de reserva por tarjeta (F5.1). Es un RawImage con una textura
+        /// GENERADA por el modelo puro (`ColonySparklineModel`), no un Sprite: la
+        /// serie se reescribe a 1 Hz y generar el sprite cada segundo sería tirar
+        /// memoria. El componente se refresca solo desde el presenter, así que el
+        /// HUD no tiene que conocer la gráfica.
+        /// </summary>
+        private static void CreateSparklines(RectTransform[] cardPanels,
+            Presenter.SimPresenterBehaviour presenter, int colonies)
+        {
+            for (int i = 0; i < colonies; i++)
+            {
+                var go = new GameObject($"Sparkline_{i}", typeof(RectTransform));
+                go.transform.SetParent(cardPanels[i], false);
+                var rt = (RectTransform)go.transform;
+                rt.anchorMin = new Vector2(0f, 0f);
+                rt.anchorMax = new Vector2(1f, 0f);
+                rt.pivot = new Vector2(0f, 0f);
+                rt.offsetMin = new Vector2(20f, 32f);
+                rt.offsetMax = new Vector2(-14f, 58f);
+
+                var img = go.AddComponent<UnityEngine.UI.RawImage>();
+                img.raycastTarget = false;
+                img.color = Color.white;
+
+                var spark = go.AddComponent<Presenter.ColonySparklineBehaviour>();
+                spark.Presenter = presenter;
+                spark.ColonyId = i;
+                spark.Target = img;
+                // 1 px por unidad de UI (406 de ancho en la tarjeta) y 90 muestras
+                // ⇒ el modelo reparte la ventana por todo el ancho.
+                spark.Width = 406;
+                spark.Height = 26;
+            }
+        }
+
         private static UnityEngine.UI.Image?[] CreateStockBars(RectTransform[] cardPanels,
             Presenter.HudLayoutBehaviour hud, int colonies)
         {

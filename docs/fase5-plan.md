@@ -68,8 +68,16 @@ acabado):
 2. **Drag & drop de `.antgenome`** — el diálogo de importación acepta ruta
    de texto; el punto de entrada prometido es soltar el archivo sobre la
    ventana (Unity `Application.openExternalFiles` / editor `DragAndDrop`).
-3. **Gráficas por tarjeta** — series 1 Hz ya viajan en el canal C
-   (`MetricFrame`); falta el mini-gráfico de stock/descargas por colonia.
+3. **Gráficas por tarjeta** — ✅ HECHO (reserva, 2026-09-12):
+   `ColonySparklineModel` (puro) guarda una muestra por SEGUNDO de simulación
+   (30 ticks, el mismo ritmo que la ventana del canal C) con ventana de 90 s, y
+   genera la textura RGBA de un gráfico de área; `ColonySparklineBehaviour` la
+   sube a un `RawImage` de la tarjeta y la tiñe con el umbral del contrato
+   (rojo < 20%, el mismo de la barra). La tarjeta creció a 204 px para que la
+   banda no le robe sitio al texto. 11 tests headless (anillo, muestreo 1 Hz,
+   reparto de columnas, umbral y una integración contra el stream real).
+   Queda: la serie de DESCARGAS por ventana (hoy se grafica la reserva, que es
+   la que explica la decisión) si el jugador la pide.
 4. **Iconos, rich text y tipografía** — ✅ PARCIAL: el render v1 era texto
    plano con glifos emoji que la fuente por defecto de uGUI **no tiene** y
    pintaba como cajas (🥚 🐛 🛑 🟢 🔘 · 🐝); ahora los niveles son glifos de
