@@ -67,6 +67,24 @@ namespace AntSim.Unity.Scripts.EditorTools
                 });
         }
 
+        /// <summary>Criterio de cierre de §2bis (F5.1bis): las CUATRO vistas con
+        /// la cadena completa de pools (warm-v2 · hybrid · warm-4 · warm3 —
+        /// una semilla distinta por vista) reproduciendo streams volcados.
+        /// Ejecutable en batch: <c>-executeMethod …CreateMultiSimSmokeScene4</c>.
+        /// Es el montaje del criterio: 4 mundos paralelos, 4 semáforos
+        /// independientes, velocidad ≥2× verificable por la sonda.</summary>
+        public static void CreateMultiSimSmokeScene4()
+        {
+            CreateMultiSimScene(views: 4, baseSeed: 42, pools: new string?[] { null, null, null, null },
+                replayFiles: new[]
+                {
+                    "artifacts/multiview-v0.jsonl",
+                    "artifacts/multiview-v1.jsonl",
+                    "artifacts/multiview-v2.jsonl",
+                    "artifacts/multiview-v3.jsonl",
+                });
+        }
+
         /// <summary>Monta la escena de N vistas. `pools` null = autodetección
         /// desde artifacts/ (una por vista, en orden; las vistas sobrantes sin
         /// pool). Lanza excepción con mensaje claro si N no está en 1..4.</summary>
