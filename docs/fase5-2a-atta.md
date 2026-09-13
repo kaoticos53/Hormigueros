@@ -190,9 +190,21 @@ postergado: la evolución en vivo partiendo de warm-v2 es suficiente.
 4. **F5.2a.4 — CLI y escenarios**: `--leaf-fraction`, `--species`,
    presets por especie, nuevos pines de hash para la partida Atta canónica
    (fixture nuevo, no sustituye a los 3 existentes).
-5. **F5.2a.5 — Humo visual**: partida Atta vs Lasius en el multi-visor;
-   sonda: la tarjeta Atta muestra su barra de hongo y el canal B trae
-   `LeafCut` — criterio de cierre abajo.
+5. **F5.2a.5 — Humo visual — HECHO (2026-09-13)**: la partida Atta canónica
+   volcada a `artifacts/multiview-atta.jsonl` (el MISMO comando del pin CI
+   5.2a.4: seed 42, hojas 100 %, atta+lasius, warm-v2 en colonia 0) y
+   reproducida en el multi-visor (`CreateMultiSimSmokeSceneAtta`, 1 vista).
+   La tarjeta de vista ganó la cadena de la cortadora: modelo puro
+   (`ColonyCardModel`) que acumula las ventanas de 1 s de cutters (canal C),
+   línea `hongo [#.........]` para colonias con `FungusMax > 0` y línea
+   `cortes N · M al hongo` solo con actividad acumulada; `ViewCardBehaviour`
+   añade la BARRA ocre del hongo por colonia (regla `FungusSegments` del
+   modelo puro, misma granularidad de 10 que la reserva). Verificado en
+   vivo: probe batch `MultiViewSmokeProbe.RunSmokeAtta` (salida 0 solo si
+   TODAS las aserciones pasan) — tarjeta de la colonia 0 con hongo 0.1 de
+   fill y «cortes 3 · 1 al hongo», colonia 1 Lasius sin hongo ni cortes,
+   **CRITERIO CUMPLIDO (0 fallos)**. Test headless del mismo criterio:
+   `AttaViewCardTests` contra el stream real (298/298 suite).
 
 ## 6. Criterio de cierre
 
@@ -225,9 +237,28 @@ con un pool de la cadena, `--leaf-fraction 0.35`):
 2. la colonia Atta alcanza semáforo de relevo verde con la cadena completa
    visible: `LeafCut` → portador → `Unload` + `FungusFed` → digestión →
    cría nueva (eclosión post-hongo);
-3. la tarjeta Atta muestra hongo; la Lasius, no;
+3. la tarjeta Atta muestra hongo; la Lasius, no — **VERIFICADO (5.2a.5,
+   2026-09-13)**: vista única del multi-visor con el stream canónico
+   reproducido; tarjeta de la colonia 0 con línea `hongo [#.........]` y
+   «cortes 3 · 1 al hongo», barra ocre con fill > 0, Lasius limpia; el
+   probe batch sale 0 solo con las 8 aserciones en verde;
 4. suite completa verde (≥ 285 tests) y docs actualizadas
    (`arquitectura.md`, `especificaciones.md`, este doc a «HECHO»).
+
+## 6bis. Estado de las rodajas — F5.2a CERRADO (2026-09-13)
+
+| rodaja | estado |
+|---|---|
+| 5.2a.1 ítems compuestos | ✅ HECHO (`0f8d60c`, `bd9dbe8`) |
+| 5.2a.2 hongo | ✅ HECHO (`a340e34`, `a255611`; `--species` adelantado) |
+| 5.2a.3 contratos A/C + parser Unity | ✅ HECHO (`d491f6b`, `9f053d5`) |
+| 5.2a.4 CLI + pin Atta canónico | ✅ HECHO (`854dcad`; sonda de cierre `b14631a`) |
+| 5.2a.5 humo visual multi-visor | ✅ HECHO (este cambio — criterio verificado en vivo y headless) |
+
+Deuda menor heredada del cierre (no bloquea): Unity aún no RENDERIZA las
+hojas en el tablero (los ítems compuestos se pintan como esferas simples)
+y la evolución en vivo partiendo de warm-v2 afinará el balance fino de
+`LeafEfficiency`/`DigestionRate`, como contempla el plan.
 
 ## 7. Decisiones tomadas (y por qué, estilo plan §5)
 

@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-13 · HEAD: `a255611` (F5.2a.2 — hongo hecho) ·
-suite: 293/293 · tag: `v0.4.0` (cierre de Fase 4)*
+*Actualizado: 2026-09-13 · HEAD: F5.2a cerrado (hongo → contratos → pin CI → humo visual) ·
+suite: 298/298 · tag: `v0.4.0` (cierre de Fase 4)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -75,7 +75,7 @@ y `.antsave` v3, `--species atta,lasius` en el CLI. Humo real (7200 ticks,
 hojas 100 %, warm-v2): 12 cortes → 3 descargas → 3 FungusFed → 1898 ticks
 de digestión; la Lasius compite sin hongo. 293/293 suite, pines intactos.
 
-## Dónde estamos: dentro de F5.2a (Atta)
+## Dónde estamos: F5.2a cerrado — la siguiente es F5.2b (Eciton)
 
 El diseño de la cadena cortar→transportar→hongo está CERRADO
 ([`fase5-2a-atta.md`](fase5-2a-atta.md)) y las DOS primeras rodajas están
@@ -92,26 +92,35 @@ HECHAS:
   `FungusFed`/`FungusDigested`, fungus en canal A y `.antsave` v3. 7 tests
   nuevos; humo real con la cadena completa visible (corte → descarga →
   FungusFed → digestión).
+- ✅ **F5.2a.3 — contratos + parser Unity** (`d491f6b`, `9f053d5`): canal C
+  con `leafCuts`/`fungusFed` y bloque `cutters` por colonia;
+  `GameStreamParser` consume `cuts`/`fungus` (fix de `ArrayBody`, que
+  truncaba cada colonia en su array `nest` anidado).
+- ✅ **F5.2a.4 — pin Atta canónico en CI** (`854dcad`): cuarto pin de
+  regresión (`check-atta-command.sh`) sobre la partida de la cortadora —
+  el primero cuyo mundo DEPENDE de los campos nuevos.
+- ✅ **F5.2a.5 — humo visual del multi-visor**: tarjeta de vista con la
+  cadena de la cortadora — modelo puro que acumula las ventanas de
+  cutters (canal C), línea `hongo [#.........]` solo para colonias con
+  hongo, línea de cortes solo con actividad, y BARRA ocre del hongo por
+  colonia en `ViewCardBehaviour`. Criterio verificado dos veces: en vivo
+  (`MultiViewSmokeProbe.RunSmokeAtta`, batch, 8 aserciones, salida 0) y
+  headless (`AttaViewCardTests` contra el stream canónico).
+
 - ✅ **Sonda de transferencia** (§4.1): el genoma es portable entre
   especies — validado empíricamente, no solo por diseño.
+- ✅ **Sonda del bucle biológico** (§6.1): eclosiones sostenidas por el
+  hongo tras agotar la reserva fundadora (8 eclosiones, 6 698 ticks de
+  digestión) — la cadena cortar→transportar→hongo→cría cierra.
 
-Faltan: el humo de contratos A/B/C en Unity (5.2a.3), el pin de hash de la
-partida Atta canónica (5.2a.4 — `--species` ya se adelantó en 5.2a.2) y el
-humo visual en el multi-visor (5.2a.5).
+**F5.2a CERRADO.** Lo que sigue es F5.2b (Eciton) — la deuda menor de
+renderizado de hojas en el tablero Unity queda anotada en el doc de Atta
+(§6bis).
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.2a — Atta** (en curso, 2 de 5 rodajas):
-   - ✅ 5.2a.1 ítems compuestos · ✅ 5.2a.2 hongo (con `--species`
-     adelantado).
-   - 5.2a.3 contratos restantes: cortes y fungus-fed en canal C, parser
-     puro de Unity (GameStreamParser) consumiendo cuts/fungus.
-   - 5.2a.4 pin de hash de la partida Atta canónica (fixture nuevo; los
-     3 pines actuales no se tocan).
-   - 5.2a.5 humo visual en el multi-visor. Criterio de cierre: Atta
-     sembrada muestra la cadena completa (`LeafCut` → portador →
-     `FungusFed` → digestión → eclosión).
-2. **F5.2b — Eciton + depredadores**: alarma ofensiva (reusar la capa
+1. **F5.2b — Eciton + depredadores** (SIGUIENTE — F5.2a cerrado, ver
+   [`fase5-2a-atta.md`](fase5-2a-atta.md) §6bis): alarma ofensiva (reusar la capa
    Alarm), objetivos móviles, combate en canal B. Criterio de fase: una
    partida de invasión Eciton vs colonia Atta sembrada.
 3. **F5.2c — NEAT / `.antgenome` v2**: genes estructurales
@@ -123,9 +132,10 @@ humo visual en el multi-visor (5.2a.5).
    feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
 5. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
-   (hormiga/carga/huevo), serie de descargas en la gráfica. Se añade:
-   render de hojas con mordiscos en el presenter (el canal A ya emite
-   los cortes; Unity aún no los consume).
+   (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
+   hojas con mordiscos en el presenter (el canal A ya emite `cuts` y la
+   tarjeta ya lee el hongo/cortes; el tablero aún pinta las hojas como
+   esferas simples).
 6. **Fase 6 — 2D → 3D**: explícitamente fuera de Fase 5; el adaptador
    cambia, los contratos no.
 
