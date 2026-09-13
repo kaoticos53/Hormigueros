@@ -8,7 +8,7 @@ lo que queda para release. Los detalles de cada paso están en
 [`fase4-hud-contrato.md`](fase4-hud-contrato.md) (contrato dato a dato) y
 [`arquitectura.md`](arquitectura.md) (registro cronológico).
 
-**Estado: 228/228 tests verdes · hash canónico fijado en CI · los tres
+**Estado: 262/262 tests verdes · hash canónico fijado en CI · los tres
 pilares de jugador cerrados end-to-end.**
 
 ## 1. Las decisiones de arquitectura (y por qué)
@@ -127,7 +127,7 @@ especialistas con su contrapartida ⚠.
 - **Smoke 5 semillas** (§8): 4/5 verdes con el semáforo escalado; las 5
   arrancan relevo (firstUnload 3745–5876) — la transferencia del pool es
   consistente y visible en el HUD.
-- **Integración Unity↔Core sin Unity**: los 190 tests incluyen la
+- **Integración Unity↔Core sin Unity**: los 262 tests incluyen la
   reconstrucción fiel del stream real (poses/items/eventos/métricas/relevo/
   alertas/feromonas) por los modelos puros.
 - **Smoke end-to-end del bucle completo** ([`fase4-smoke-e2e.md`](fase4-smoke-e2e.md)):

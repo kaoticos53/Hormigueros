@@ -4,7 +4,7 @@ Realismo, especies y escala — la fase que convierte el simulador verificado
 en un mundo con contenido. Este documento es el PLAN de trabajo (no el
 registro de lo hecho): hitos, decisiones abiertas y criterios de cierre.
 Estado del que parte: Fase 4 cerrada
-([`fase4-resumen.md`](fase4-resumen.md)) — 228/228 tests, contratos de HUD
+([`fase4-resumen.md`](fase4-resumen.md)) — 262/262 tests, contratos de HUD
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
 
@@ -190,7 +190,7 @@ grafo NEAT del mejor cortador visible.
 
 | Riesgo | Estado tras Fase 4 |
 |---|---|
-| Determinismo roto | mitigado: 3 pines de hash en CI (fixture, replay 3000, replay 6000) + suite 190 |
+| Determinismo roto | mitigado: 3 pines de hash en CI (fixture, replay 3000, replay 6000) + suite 262 |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | abierto: RLE funciona para render; el LOD de difusión es trabajo F5.3 |
