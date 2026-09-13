@@ -210,7 +210,7 @@ Rechazo de v3: patrón establecido.
 | rodaja | estado |
 |---|---|
 | 5.2b.1 cuerpo del combate | ✅ HECHO (2026-09-13 — 305/305, 4 pines intactos) |
-| 5.2b.2 sensor canal 14 | 🔲 — sonda de transferencia ya VALIDADA (§8ter) |
+| 5.2b.2 sensor canal 12 | ✅ HECHO (2026-09-13 — 310/310, 4 pines intactos, sonda §8quater) |
 | 5.2b.3 contratos (canal C raids + parser Unity) | 🔲 |
 | 5.2b.4 demografía y balance | 🔲 |
 | 5.2b.5 pin + humo visual | 🔲 |
@@ -255,6 +255,37 @@ registrado aquí):
 **Veredicto: portable, con balance pendiente** — se autoriza F5.2b.2 (el
 sensor dirigirá la incursión y multiplicará los strikes efectivos) y la
 calibración económica queda anotada como el trabajo REAL de F5.2b.4.
+
+### 8quater. SONDA DEL SENSOR DIRIGIDO — RESULTADO HONESTO (2026-09-13)
+
+El sensor (F5.2b.2) pobló el canal 12 correctamente (verificado con
+`EnemySensorTests`: magnitud exacta 1−dist/visión, pared intacta en los
+canales laterales, gating por especie y por multi-colonia). La misma
+sonda de transferencia (warm-v2 en cuerpo Eciton, seed 42, 12 000 ticks)
+corrida CON sensor: **strikes=18, robos=1, RaidInflow=1**.
+
+Comparación contra §8ter (B, sin sensor, MISMA seed y pool): strikes
+2 → 18 (×9) pero robos 1 → 1. Lectura:
+
+1. **El sensor multiplica el CONTACTO** (18 strikes vs 2): el canal 12
+   poblado dispara la salida Interact del genoma importado — la política
+   reacciona a la nueva entrada aunque nadie la entrenara para ella.
+2. **NO multiplica el robo (1 → 1)**: casi todos los strikes caen sobre
+   presas cuya colonia ya está en stock 0 (la víctima es pobre) o fuera
+   de la ventana de interacción. Golpear sin robar es hostigar: el
+   cuello de botella NO es sensorial sino ECONÓMICO — `StealPerStrike`
+   0.30 sobre un stock que la víctima no repone, y `StrikeDamage` 0.35
+   que no mata (0 muertes de combate en 12 000 ticks).
+3. La sonda cruzada (§8ter B vs §8quater) compara mundos cuyo hash DIFIERE
+   por diseño (el sensor cambia decisiones ⇒ mundo distinto): la semilla
+   igual solo garantiza el mismo PUNTO de partida.
+
+**Veredicto: el sensor funciona; el robo ya no es su problema.** El
+trabajo de F5.2b.4 se redefine: calibrar `StealPerStrike`/`StrikeDamage`
+Y la reposición del stock víctima (o el botín alimentando mejor) para que
+golpear pague. F5.2b.3 (contratos Unity) no depende de esto y sigue.
+
+Sonda borrada tras su uso (patrón del repo); resultados registrados aquí.
 
 ## 9. Criterio de cierre
 
