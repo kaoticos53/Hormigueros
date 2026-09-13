@@ -287,6 +287,36 @@ golpear pague. F5.2b.3 (contratos Unity) no depende de esto y sigue.
 
 Sonda borrada tras su uso (patrón del repo); resultados registrados aquí.
 
+### 8quinquies. LÍNEA BASE MULTI-SEMILLA (2026-09-13, sonda borrada)
+
+El protocolo de §8quater extendido a 5 semillas (warm-v2 en cuerpo
+Eciton, sensor + combate, 12 000 ticks) — la línea base que F5.2b.4
+debe mejorar:
+
+| seed | strikes | robidos | RaidInflow | muertes combate | c0 | c1 |
+|---|---|---|---|---|---|---|
+| 42 | 18 | 0.30 ep | 1 | 1 | muere t8781 | viva (4) |
+| 77 | 5 | 0.30 ep | 1 | 0 | muere t9121 | viva (4) |
+| 1234 | 7 | 0.60 ep | 2 | 0 | muere t9072 | **muere t11763** |
+| 777 | 0 | 0 ep | 0 | 0 | muere t8691 | viva (2) |
+| 2024 | 0 | 0 ep | 0 | 0 | muere t9655 | viva (1) |
+| **total** | **30** | **1.20 ep** | **4** | **1** | **5/5 extinta** | 1/5 extinta |
+
+**Lectura de línea base:**
+
+1. **La Economía mata a la atacante ANTES que el rival**: c0 extinta
+   5/5 (~t8700–9700, hambre — solo 1 muerte de combate en total). El
+   botín cobrado en 5 semillas es 1.2 ep frente a un upkeep de
+   0.045 ep/s · 9500 s ≈ 428 ep necesarios: el robo cubre ~0.3 %.
+2. **Varianza de contacto alta**: strikes 0–18 según semilla. Con nidos
+   a ~128 u y visión 90, la detectabilidad depende de dónde caen las
+   rutas de forrajeo: dos semillas NO alcanzan contacto alguno.
+3. **El objetivo de F5.2b.4 queda cuantificado**: para que la invasión
+   sea juego (y no suicidio), el robo debe pasar de ~0.24 ep/semilla a
+   del orden del upkeep de la atacante (×1000), vía robo por golpe mayor
+   + stock víctima que se reponga (la víctima forrajeará y el saqueo
+   será sostenible), o botín que no compita con el forrajeo propio.
+
 ## 9. Criterio de cierre
 
 Una partida `--species lasius,eciton` (2 colonias, seed fijo, 7200 ticks):
