@@ -5,7 +5,7 @@ escena con el bootstrapper y ver la partida en vivo. Este documento congela el
 estado de compatibilidad de los scripts con **Unity 6000** (migración real,
 verificada con compilación en batch y ejecución headless del bootstrapper) y el
 checklist de verificación visual en un comando de menú. Todo el código implicado
-está ya verificado headless (262/262 tests) y los bloques 1–5 los corre un solo
+está ya verificado headless (276/276 tests) y los bloques 1–5 los corre un solo
 comando contra el editor vivo (`scripts/playpass-live.sh`); lo que queda para el
 ojo humano es la estética y el juicio de jugabilidad, no el contrato.
 
@@ -13,7 +13,7 @@ ojo humano es la estética y el juicio de jugabilidad, no el contrato.
 
 | Pieza | Estado |
 |---|---|
-| Suite headless | 262/262 verdes |
+| Suite headless | 276/276 verdes |
 | Pins de CI | fixture canónico ✅ · replay 3000 (drops) ✅ · replay 6000 (relevo) ✅ |
 | CLI publicado en `build/antsim` | vigente, con el canal F (`--activ-every`, `--inspect` en `--help` y en el stream) |
 | Proyecto Unity | migrado a `6000.6.0f1`: compila limpio en el editor, sin Safe Mode |

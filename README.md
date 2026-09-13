@@ -40,7 +40,7 @@ El bucle completo del jugador funciona y está verificado de extremo a extremo:
   intervenir (DropFood click-to-place, plan de 5 drops por partida, relanzar con
   el plan determinista).
 - **Escena Unity ensamblada con un comando de menú** (`SceneBootstrapper`), modelos
-  puros compilados en la suite headless y `262/262` tests verdes.
+  puros compilados en la suite headless y `276/276` tests verdes.
 - Detalles: [`docs/fase4-resumen.md`](docs/fase4-resumen.md) · smoke e2e:
   [`docs/fase4-smoke-e2e.md`](docs/fase4-smoke-e2e.md) · checklist del Play pass
   en el editor: [`docs/fase4-play-pass.md`](docs/fase4-play-pass.md).
@@ -130,7 +130,7 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (262/262), incluido el pin del hash del stream canónico |
+| `dotnet test` | la suite headless (276/276), incluido el pin del hash del stream canónico |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
