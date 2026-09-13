@@ -1,0 +1,1 @@
+VIS|world=640x480|floor=0.42:0.329:0.231|brown=1|antPx=0|carrierPx=0|itemPx=0|totalPx=307200|ui=none|mosaic=none|antRGB=89,41,26;carRGB=250,184,41;itemRGB=92,199,92;darkFrac=0

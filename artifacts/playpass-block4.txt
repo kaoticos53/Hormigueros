@@ -1,0 +1,15 @@
+# bloques 4: pasos A/P/A2/B/C (playpass-live.sh, seed 42 grid 96 speed 6)
+A|want=1|pick=1|pickdist=0|doffmarks=0|dofferr=modo apagado|dmode=1|dmarks=1|derr=-|dundook=1|dundo=0|dzerook=0|args=2|argsline=--drop 327:302.33:415.26|dmarks2=1|derr2=-
+P|sel=1|cardlines=7|cardhas=1|cardbrain=1|cardfields=8|card=Hormiga #1 · colonia 0 estado: viva posición: 332.3, 434.6 · rumbo 0.59 carga: sin carga vigor 0.75 · energía 1.00 · edad 23.4 s inmigrante: no · cerebro #2204119238 historial: 375 muestras · ticks 327-701|marks=1|summary=drops: 1/5 · t327 (302,415)|mode=1|tick=701
+A2|args=2|reload=ok
+B|rows=1|cmdrows=1|totalcmd=1|firstcmd=328|dropxy=302.33:415.26|tick=367
+#C C|tick=588|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=918|speed=6|keys=first-unload|toasts=1|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=1291|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=1621|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=1946|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=2274|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=2603|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=2927|speed=6|keys=-|toasts=0|anchored=0|jnew=0|jtarget=-|janchor=-|jmoved=0|jalt=0|jaltx=-|jaltsel=-|joutside=1|jmissflag=1|joutmoved=0
+#C C|tick=3251|speed=6|keys=relay-weak:0|toasts=1|anchored=1|jnew=1|jtarget=256:384|janchor=256:384|jmoved=1|jalt=1|jaltx=256:384|jaltsel=relay-weak:0|joutside=1|jmissflag=1|joutmoved=0
+C|tick=3251|speed=6|keys=relay-weak:0|toasts=1|anchored=1|jnew=1|jtarget=256:384|janchor=256:384|jmoved=1|jalt=1|jaltx=256:384|jaltsel=relay-weak:0|joutside=1|jmissflag=1|joutmoved=0

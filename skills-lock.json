@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "code-review": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/code-review/SKILL.md",
+      "computedHash": "b4f17857c85ca60af1df7d0b623dd03c2a48419f6123e714f3d9748ca744a1bf"
+    },
+    "unity-cli": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/unity-cli/SKILL.md",
+      "computedHash": "135db91c28ab6182e47760b4478c227ca7aa7d7f5036f820879195bb74c3e2b4"
+    },
+    "unity-package-management": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/unity-package-management/SKILL.md",
+      "computedHash": "461a74883a92a2319250bc4c5defdbaf9f76e0d56f0daae1c953fc8cbd6cd6f3"
+    }
+  }
+}
