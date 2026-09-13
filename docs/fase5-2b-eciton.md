@@ -317,6 +317,45 @@ debe mejorar:
    + stock víctima que se reponga (la víctima forrajeará y el saqueo
    será sostenible), o botín que no compita con el forrajeo propio.
 
+### 8sexies. SONDA «GOLPES PARA MATAR» (2026-09-13, sonda borrada)
+
+Pregunta de balance: ¿cuántos golpes necesita una Eciton SALVAJE para
+matar una colonia Lasius? Horizonte extendido a 20 000 ticks, 5 semillas:
+
+| seed | strikes | drenados | robados | muertes combate | víctima | raider |
+|---|---|---|---|---|---|---|
+| 42 | 11 | 3.85 ep | 3.3 ep | 0 | muere **t12471** | muere t8630 |
+| 77 | 5 | 1.75 ep | 0.3 ep | 0 | muere t12506 | muere t9121 |
+| 1234 | 1 | 0.35 ep | 0.3 ep | 0 | muere t11763 | muere t9072 |
+| 777 | 0 | 0 | 0 | 0 | muere t12577 | muere t8259 |
+| 2024 | 0 | 0 | 0 | 0 | muere t12170 | muere t9107 |
+
+**Respuesta: INFINITOS — la víctima jamás muere por combate.** En las 5
+semillas la colonia Lasius muere de VEJEZ (20 muertes age por partida,
+0 de combate): sus 10 fundadoras consumen la reserva fundadora y se
+extinguen de viejas hacia t11700–12600 — CON O SIN incursión (777 y
+2024 no recibieron ni un golpe y murieron igual). Matando a UNA hormiga
+requeriría ~29 golpes de combate puro (10 ep / 0.35); las semillas con
+contacto lograron 1–11.
+
+**Implicaciones de diseño para F5.2b.4:**
+
+1. Con las constantes actuales el combate es cosmético: no altera el
+   desenlace de NINGUNA partida (la víctima muere de vejez de todos
+   modos, y la atacante de hambre antes).
+2. Matar por combate exige vencer a la reposición: la presa come de su
+   stock mientras haya. El daño debe escalarse (×3–5) o el saqueo debe
+   drenar el STOCK (ya lo hace, 0.3 ep/golpe) hasta el punto de
+   provocar muerte por inanición INDIRECTA (hambre de la víctima por
+   stock robado) — que sí es un mecanismo realista: asfixia económica,
+   no carnaza.
+3. La vía realista sugerida: subir `StealPerStrike` (×5–10) para que el
+   saqueo vacíe la despensa de la víctima antes de que su forrajeo la
+   reponga, y dejar `StrikeDamage` bajo (la legionaria real mata por
+   desmembramiento, pero el juego gana más con la presión económica que
+   con la carnaza). Objetivo medible: c1 extinta por inanición inducida
+   en ≥ 2/5 semillas con c0 viva al final.
+
 ## 9. Criterio de cierre
 
 Una partida `--species lasius,eciton` (2 colonias, seed fijo, 7200 ticks):
