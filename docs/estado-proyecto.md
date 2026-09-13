@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-13 · HEAD: `acccfce` (post F5.1bis) · suite: 276/276 ·
-tag: `v0.4.0` (cierre de Fase 4)*
+*Actualizado: 2026-09-13 · HEAD: `a255611` (F5.2a.2 — hongo hecho) ·
+suite: 293/293 · tag: `v0.4.0` (cierre de Fase 4)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -18,7 +18,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 4 (F4.0–F4.4) | Capa jugador: stream, HUD, inspector, import, CI con pines | ✅ `v0.4.0` | `fase4-resumen.md` |
 | 5.0 | Mini-grafo MLP (canal F de activaciones) | ✅ | `fase5-plan.md` §1 |
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
-| **5.2a** | **Atta: cortar → transportar → hongo** | 🔲 **diseño cerrado, sin implementar** | `fase5-2a-atta.md` |
+| **5.2a** | **Atta: cortar → transportar → hongo** | 🔶 **en curso** — 5.2a.1 + 5.2a.2 HECHOS, diseño y transferencia validados | `fase5-2a-atta.md` |
 | 5.2b | Eciton + depredadores (alarma ofensiva, combate) | 🔲 | — |
 | 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🔲 | — |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
@@ -28,7 +28,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
 a bit. Fijado en CI con **3 pines de hash** (fixture canónico, replay con
-drops a 3000 y 6000 ticks) más el pin del stream; 276/276 tests.
+drops a 3000 y 6000 ticks) más el pin del stream; 293/293 tests.
 
 **Pre-entrenamiento con transferencia validada** — cadena de 8+ pools
 (frío → warm-starts encadenados → híbrido de dos bandas), benchmark de
@@ -58,29 +58,59 @@ bucle de jugador de un editor batch sobre Library fría se congela — bug
 conocido del indexador de Search de Unity 6000.x, investigado y
 documentado en `fase5-plan.md` §2bis).
 
-## Dónde estamos: cerrando Fase 5, entrando en especies
+**Ítems compuestos** (F5.2a.1) — las hojas son ítems con `CutsLeft`: el
+pickup corta un fragmento y la hoja sobrevive; corte = `Interact`, sin
+cambios en el cerebro. Eventos `LeafCut`/`LeafDepleted`, `.antsave` v3,
+`--leaf-fraction` en el CLI, hash invariante sin hojas (los 3 pines de CI
+no se movieron). Transferencia cross-especie VALIDADA: warm-v2 en cuerpo
+Atta descarga igual o más que en su cuerpo de entrenamiento (12 vs 11
+unloads a 12 000 ticks) y con hojas ambas especies cortan sin
+entrenamiento — F5.2a-bis (currículo Atta) postergado por innecesario.
 
-La Fase 5 lleva dos hitos entregados (F5.0, F5.1/5.1bis). **El siguiente
-trabajo real de contenido es F5.2a (Atta)**, y su diseño está CERRADO
-([`fase5-2a-atta.md`](fase5-2a-atta.md), 2026-09-13):
+**El hongo** (F5.2a.2) — segunda reserva de la cortadora: la descarga de
+fragmento alimenta `Colony.Fungus` (× LeafEfficiency 0.75) y la digestión
+proporcional al llenado entra por `RecordInflow` — la demografía calibrada
+lee la misma señal. Eventos `FungusFed`/`FungusDigested`, fungus en canal A
+y `.antsave` v3, `--species atta,lasius` en el CLI. Humo real (7200 ticks,
+hojas 100 %, warm-v2): 12 cortes → 3 descargas → 3 FungusFed → 1898 ticks
+de digestión; la Lasius compite sin hongo. 293/293 suite, pines intactos.
 
-- **Corte = `Interact`** sobre ítems compuestos (`FoodItem.CutsLeft`,
-  spawn con `LeafFraction`): el genoma sigue portable entre especies, la
-  novedad vive en el ítem, no en el cerebro.
-- **Hongo = segunda reserva** (`Colony.Fungus`) cuya digestión alimenta
-  el inflow existente — toda la demografía calibrada en F1–F3 no se toca.
-- Canales A/B/C con campos/eventos nuevos, `.antsave` v2, `--species` y
-  `--leaf-fraction` en el CLI. Implementación en 5 rodajas con hash
-  invariante cuando `LeafFraction = 0`.
+## Dónde estamos: dentro de F5.2a (Atta)
+
+El diseño de la cadena cortar→transportar→hongo está CERRADO
+([`fase5-2a-atta.md`](fase5-2a-atta.md)) y las DOS primeras rodajas están
+HECHAS:
+
+- ✅ **F5.2a.1 — ítems compuestos**: `FoodItem.CutsLeft/CutsInitial`,
+  `LeafFraction` en spawn (por constructor), eventos 13/14, hash solo con
+  hojas, `.antsave` v3, canal A con `[id,x,y,amount,cutsLeft,cutsInitial]`
+  en hojas, `--leaf-fraction` (modes `world`/`game`). 10 tests nuevos;
+  humo sembrado (warm-v2, 6000 ticks, hojas 100 %): 14 cortes → 3
+  descargas, 9 hojas mordidas.
+- ✅ **F5.2a.2 — hongo**: `Colony.Fungus/FungusMax`, descarga por especie,
+  digestión proporcional que alimenta el inflow existente, eventos
+  `FungusFed`/`FungusDigested`, fungus en canal A y `.antsave` v3. 7 tests
+  nuevos; humo real con la cadena completa visible (corte → descarga →
+  FungusFed → digestión).
+- ✅ **Sonda de transferencia** (§4.1): el genoma es portable entre
+  especies — validado empíricamente, no solo por diseño.
+
+Faltan: el humo de contratos A/B/C en Unity (5.2a.3), el pin de hash de la
+partida Atta canónica (5.2a.4 — `--species` ya se adelantó en 5.2a.2) y el
+humo visual en el multi-visor (5.2a.5).
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.2a — Atta** (diseño cerrado): rodajas 5.2a.1 ítems compuestos →
-   5.2a.2 hongo + `.antsave` v2 → 5.2a.3 contratos A/B/C → 5.2a.4 CLI +
-   pin de hash de la partida Atta canónica → 5.2a.5 humo visual en el
-   multi-visor. Criterio: Atta sembrada muestra la cadena completa
-   (`LeafCut` → portador → `FungusFed` → digestión → eclosión) y los 3
-   pines actuales siguen verdes.
+1. **F5.2a — Atta** (en curso, 2 de 5 rodajas):
+   - ✅ 5.2a.1 ítems compuestos · ✅ 5.2a.2 hongo (con `--species`
+     adelantado).
+   - 5.2a.3 contratos restantes: cortes y fungus-fed en canal C, parser
+     puro de Unity (GameStreamParser) consumiendo cuts/fungus.
+   - 5.2a.4 pin de hash de la partida Atta canónica (fixture nuevo; los
+     3 pines actuales no se tocan).
+   - 5.2a.5 humo visual en el multi-visor. Criterio de cierre: Atta
+     sembrada muestra la cadena completa (`LeafCut` → portador →
+     `FungusFed` → digestión → eclosión).
 2. **F5.2b — Eciton + depredadores**: alarma ofensiva (reusar la capa
    Alarm), objetivos móviles, combate en canal B. Criterio de fase: una
    partida de invasión Eciton vs colonia Atta sembrada.
@@ -93,7 +123,9 @@ trabajo real de contenido es F5.2a (Atta)**, y su diseño está CERRADO
    feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
 5. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
-   (hormiga/carga/huevo), serie de descargas en la gráfica.
+   (hormiga/carga/huevo), serie de descargas en la gráfica. Se añade:
+   render de hojas con mordiscos en el presenter (el canal A ya emite
+   los cortes; Unity aún no los consume).
 6. **Fase 6 — 2D → 3D**: explícitamente fuera de Fase 5; el adaptador
    cambia, los contratos no.
 
@@ -105,4 +137,4 @@ trabajo real de contenido es F5.2a (Atta)**, y su diseño está CERRADO
 | Feromonas costosas a escala | abierto — RLE resuelve render; la difusión es F5.3 |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas; pre-import de CI documentado como alternativa |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools, no a mano |
-| Pool Atta desde cero | abierto — el plan es transferencia (genomas Lasius en cuerpo Atta); currículo propio solo si falla (F5.2a-bis) |
+| Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta; el currículo propio (F5.2a-bis) solo si la evolución en vivo no alcanza |
