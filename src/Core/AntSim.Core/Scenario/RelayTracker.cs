@@ -52,6 +52,13 @@ public sealed class RelayTracker
         public long ChainSum;
         public int ChainCount;
 
+        // F5.1 (vida útil): con fundadoras vivas 3× más tiempo, el «drop» (suelta
+        // de un portador MUERTO con carga) puede no existir aún al llegar el
+        // primer unload — la muerte joven ya no produce sueltas. Un drop medio
+        // NULL no es «sin datos»: es el MEJOR escenario posible (nadie murió
+        // cargado). El semáforo lo trata como drop 0, no como gris.
+        public double? DropMeanOrNull => DropCount > 0 ? DropDistanceSum / (double)DropCount : (UnloadCount > 0 ? 0.0 : null);
+
         public double? UnloadMean => UnloadCount > 0 ? UnloadDistanceSum / (double)UnloadCount : null;
         public double? CarryLegMean => CarryLegCount > 0 ? CarryLegSum / (double)CarryLegCount : null;
         public double? DropMean => DropCount > 0 ? DropDistanceSum / (double)DropCount : null;
@@ -93,7 +100,7 @@ public sealed class RelayTracker
     public ColonyView? ForColony(int colonyId)
     {
         if (!_perColony.TryGetValue(colonyId, out var cr)) return null;
-        return new ColonyView(cr.FirstUnloadTick, cr.UnloadMean, cr.CarryLegMean, cr.DropMean,
+        return new ColonyView(cr.FirstUnloadTick, cr.UnloadMean, cr.CarryLegMean, cr.DropMeanOrNull,
             cr.UnloadCount, cr.ChainMean);
     }
 
