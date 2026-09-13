@@ -43,6 +43,21 @@ public static class ColonyController
     {
         SpeciesDescriptor sp = c.Species;
 
+        // — 0. Digestión del hongo (F5.2a.2, ANTES de todo el paso) —
+        // Solo especies con hongo. Tasa PROPORCIONAL al llenado: hongo vacío no
+        // digiere (el cuello de botella real de una cortadora). El caudal
+        // digerido entra por RecordInflow ⇒ alimenta Stock, InflowAccum y toda
+        // la demografía calibrada (gate de puesta, runway) SIN cambios.
+        if (c.FungusMax > 0f && c.Fungus > 0f)
+        {
+            float llenado = c.Fungus / c.FungusMax;
+            float digerido = Math.Min(c.Fungus, sp.DigestionRate * llenado * dt);
+            c.Fungus -= digerido;
+            c.RecordInflow(digerido);
+            c.InflowAccum += digerido;
+            events.Add(new SimEvent(SimEventKind.FungusDigested, tick, c.Id, 0, c.NestX, c.NestY));
+        }
+
         // — 1. Runway al inicio del paso (pre-alimentación) —
         float runway = Runway(c);
 
