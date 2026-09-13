@@ -18,6 +18,10 @@
 # Uso:
 #   scripts/check-unity-compile.sh                 # compila el proyecto del repo
 #   scripts/check-unity-compile.sh --log FICHERO   # solo analiza un log ya hecho
+#   scripts/check-unity-compile.sh --fake-log F    # veredicto COMPLETO sobre un log,
+#                                                  # sin arrancar Unity (seam de test:
+#                                                  # es el único modo de probar el ORDEN
+#                                                  # de los dos veredictos sin editor)
 #   scripts/check-unity-compile.sh --selftest      # verifica el analizador (sin Unity)
 #   scripts/check-unity-compile.sh --unity RUTA --project RUTA --quiet
 #
@@ -49,6 +53,7 @@ LOG=""
 ANALYZE_ONLY=0
 QUIET=0
 SELFTEST=0
+FAKE_LOG=0
 
 log() { [[ $QUIET -eq 1 ]] || echo "$@"; }
 
@@ -57,9 +62,10 @@ while [[ $# -gt 0 ]]; do
     --project) PROJECT="$2"; shift 2 ;;
     --unity)   UNITY="$2"; shift 2 ;;
     --log)     LOG="$2"; ANALYZE_ONLY=1; shift 2 ;;
+    --fake-log) LOG="$2"; FAKE_LOG=1; shift 2 ;;
     --quiet)   QUIET=1; shift ;;
     --selftest) SELFTEST=1; shift ;;
-    --help|-h) sed -n '2,40p' "$0"; exit 0 ;;
+    --help|-h) sed -n '2,42p' "$0"; exit 0 ;;
     *) echo "parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
@@ -135,8 +141,39 @@ if [[ $SELFTEST -eq 1 ]]; then
   if compiled_in_log "$tmp/truncated.log"; then echo "✗ selftest: un log SIN compilación pasó por bueno (falso verde)" >&2; fails=1; fi
   if ! compiled_in_log "$tmp/compiled.log"; then echo "✗ selftest: un log compilado se reportó como no compilado" >&2; fails=1; fi
   if compiled_in_log "$tmp/crashed.log"; then echo "✗ selftest: un cierre con código ≠ 0 pasó por bueno" >&2; fails=1; fi
+
+  # — El ORDEN de los dos veredictos, con el veredicto completo (--fake-log) —
+  # Unity sale con código ≠ 0 al fallar la compilación, así que el log de un
+  # `error CS` también parece «no compiló». Si ese caso se clasifica como 5, el
+  # diagnóstico manda a buscar un editor fantasma en vez de leer el error. Estos
+  # tres casos fijan el orden sin necesidad de un editor.
+  {
+    echo "Initialize engine version: 6000.6.0f1"
+    echo "Assets/Scripts/UI/Foo.cs(1,1): error CS1061: 'ColonyView?' does not contain a definition for 'Stock'"
+    echo "Scripts have compiler errors."
+    echo "[ExitDontLaunchBugReporter] Exiting without the bug reporter. Application will exit with return code 1"
+  } > "$tmp/errors-y-cierre.log"
+  # `|| rc=$?`: bajo `set -e`, un hijo que sale ≠ 0 como comando suelto mata el
+  # selftest antes de poder juzgarlo (pasó: el selftest moría en silencio).
+  rc_ord_err=0; rc_ord_ok=0; rc_ord_trunc=0
+  "$0" --fake-log "$tmp/errors-y-cierre.log" >/dev/null 2>&1 || rc_ord_err=$?
+  if [[ $rc_ord_err -ne 1 ]]; then
+    echo "✗ selftest: un log con 'error CS' y cierre ≠ 0 dio $rc_ord_err (esperado 1: los errores mandan)" >&2
+    fails=1
+  fi
+  "$0" --fake-log "$tmp/compiled.log" >/dev/null 2>&1 || rc_ord_ok=$?
+  if [[ $rc_ord_ok -ne 0 ]]; then
+    echo "✗ selftest: un log compilado y limpio dio $rc_ord_ok (esperado 0)" >&2
+    fails=1
+  fi
+  "$0" --fake-log "$tmp/truncated.log" >/dev/null 2>&1 || rc_ord_trunc=$?
+  if [[ $rc_ord_trunc -ne 5 ]]; then
+    echo "✗ selftest: un log sin compilación dio $rc_ord_trunc (esperado 5: no se puede dar por bueno)" >&2
+    fails=1
+  fi
+
   if [[ $fails -eq 0 ]]; then
-    echo "✓ selftest del analizador ok (limpio / con errores / sin falsos positivos / sin falso verde)"
+    echo "✓ selftest del analizador ok (limpio / con errores / sin falsos positivos / sin falso verde / orden de veredictos)"
     exit 0
   fi
   exit 1
@@ -207,7 +244,7 @@ TMP_LOG=""
 cleanup() { [[ -n "$TMP_LOG" && -f "$TMP_LOG" ]] && rm -f "$TMP_LOG"; return 0; }
 trap cleanup EXIT
 
-if [[ $ANALYZE_ONLY -eq 0 ]]; then
+if [[ $FAKE_LOG -eq 0 && $ANALYZE_ONLY -eq 0 ]]; then
   # Antes de gastar un arranque del editor: la ruta tiene que ser el proyecto del
   # juego. Una invocación con la RAÍZ del repo como proyecto dejó allí un
   # proyecto fantasma de 191 MB (Unity crea el esqueleto sin preguntar) y en
@@ -237,14 +274,6 @@ if [[ $ANALYZE_ONLY -eq 0 ]]; then
     echo "✗ el editor no escribió log (¿arrancó?) — prueba a lanzarlo a mano" >&2
     exit 4
   fi
-  if ! compiled_in_log "$LOG"; then
-    echo "✗ la instancia batch NO llegó a compilar (log sin 'Initialize engine version')" >&2
-    echo "  causa habitual: OTRO editor de Unity tiene este proyecto abierto y la" >&2
-    echo "  segunda instancia sale de inmediato — ciérralo, o comprueba una COPIA con" >&2
-    echo "  --project <copia>. Sin esta comprobación el veredicto sería un FALSO VERDE:" >&2
-    echo "  un log truncado no tiene 'error CS' y se leería como «compila sin errores»." >&2
-    exit 5
-  fi
 fi
 
 if [[ ! -f "$LOG" ]]; then
@@ -252,7 +281,14 @@ if [[ ! -f "$LOG" ]]; then
   exit 2
 fi
 
-# ── Veredicto ────────────────────────────────────────────────────────────────
+# ── Veredicto 1: errores de compilación ──────────────────────────────────────
+# EL ORDEN IMPORTA, y no es un detalle: Unity sale con código ≠ 0 cuando la
+# compilación falla, y `compiled_in_log` (que mira ese cierre para no dar falsos
+# verdes) descartaba el log — así que el caso más importante de todos, un
+# `error CS` de un MonoBehaviour, se reportaba como «la instancia batch NO llegó
+# a compilar: ¿otro editor abierto?» y mandaba a buscar un editor fantasma. Pasó
+# de verdad (los CS0234 de un modelo puro). Los errores van PRIMERO: si el log
+# los tiene, el veredicto es 1 y se imprimen.
 set +e
 ERR_LINES="$(analyze_log "$LOG")"
 rc=$?
@@ -263,6 +299,17 @@ if [[ $rc -ne 0 ]]; then
   printf '%s\n' "$ERR_LINES" >&2
   echo "    (el log completo está en $LOG)" >&2
   exit 1
+fi
+
+# ── Veredicto 2: sin errores, ¿la instancia llegó a compilar de verdad? ───────
+# Sin esta comprobación un log truncado (otro editor con el proyecto abierto) no
+# tiene 'error CS' y se leería como «compila sin errores»: un FALSO VERDE.
+if [[ $ANALYZE_ONLY -eq 0 ]] && ! compiled_in_log "$LOG"; then
+  echo "✗ la instancia batch NO llegó a compilar (log sin 'Initialize engine version' o cierre ≠ 0 sin errores)" >&2
+  echo "  causa habitual: OTRO editor de Unity tiene este proyecto abierto y la" >&2
+  echo "  segunda instancia sale de inmediato — ciérralo, o comprueba una COPIA con" >&2
+  echo "  --project <copia>." >&2
+  exit 5
 fi
 
 # `sort -u`: Unity repite cada aviso (salida del compilador + resumen), así que
