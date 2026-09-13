@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace AntSim.Unity.Scripts.Streaming
@@ -158,6 +159,40 @@ namespace AntSim.Unity.Scripts.Streaming
             2 => "●", // verde
             _ => "○", // gris: sin datos de relevo
         };
+
+        /// <summary>F5.1bis — versión COMPACTA para las vistas del multi-visor:
+        /// una línea POR COLONIA (no una tarjeta de 5 líneas por colonia) con lo
+        /// que se lee a media pantalla: semáforo, adultas, reserva y flujo 1 s.
+        /// Misma regla de reserva baja que la tarjeta grande. Sin datos de canal
+        /// A aún ⇒ texto de espera (nunca vacío: el jugador ve que la vista
+        /// está viva aunque el stream tarde en arrancar).</summary>
+        public string RenderCompact()
+        {
+            if (_cards.Count == 0)
+                return "esperando stream…";
+
+            var sb = new StringBuilder();
+            foreach (var card in _cards.Values.OrderBy(c => c.ColonyId))
+            {
+                if (sb.Length > 0) sb.AppendLine();
+                sb.Append('<').Append('b')  // rich text: título en negrita
+                  .Append(">colonia ").Append(card.ColonyId)
+                  .Append(' ').Append(LightGlyph(card.Light)).Append("</b>");
+                if (card.Colony is not GameStreamParser.ColonyView c)
+                {
+                    sb.Append("  —");  // semáforo llegado antes del canal A
+                    continue;
+                }
+                float frac = c.StockMax > 0 ? c.Stock / c.StockMax : 0f;
+                sb.Append("  ").Append(c.Adults).Append("h")
+                  .Append(' ').Append(F1(frac * 100f)).Append('%');
+                if (frac < 0.20f) sb.Append(" ¡BAJA!");
+                if (card.Window is GameStreamParser.ColonyMetricsView w && (w.Pickups > 0 || w.Unloads > 0))
+                    sb.Append(' ').Append(w.Pickups).Append("rec/")
+                      .Append(w.Unloads).Append("desc");
+            }
+            return sb.ToString();
+        }
 
         private static string F1(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
     }
