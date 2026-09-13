@@ -22,6 +22,47 @@ Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.m
 
 ## Notas de versión
 
+### v0.5.0 — Fase 5 (mitad): especies, multi-visor y la cortadora
+
+Dos hitos de contenido sobre el bucle jugable de v0.4.0, ambos con su
+criterio de cierre verificado en vivo y headless:
+
+- **F5.0 — el cerebro visible**: canal F de activaciones opt-in para la
+  hormiga inspeccionada (invariante de hash garantizado) y el mini-grafo
+  MLP renderizado headless; la neuroevolución se VE, no se presume.
+- **F5.1 / F5.1bis — pulido uGUI y multi-visor**: HUD por-elemento con
+  click exacto por toast, barras de stock, botones nativos, feromonas por
+  RenderTexture, diálogo de importación con cuarentena — y el **multi-visor**
+  de hasta 4 simulaciones en paralelo (una semilla y un pool por vista),
+  verificado a 2× medidos (60 tps) con semáforo de relevo por vista. El
+  escenario también sobrevive a un clon limpio de git (sonda con
+  `PumpOneTick` como respaldo del bucle batch).
+- **F5.2a — Atta, la cortadora (CERRADO)**: primera especie con economía
+  propia, y el genoma sigue portable (el corte ES `Interact`):
+  - ítems compuestos (`CutsLeft`): la hoja aguanta N cortes, spawn con
+    `--leaf-fraction`, hash invariante sin hojas;
+  - el **hongo**: segunda reserva (`Colony.Fungus`) que recibe la descarga
+    de fragmentos y digiere proporcionalmente al llenado hacia el inflow
+    existente — la demografía de F1–F3 lee la misma señal;
+  - `--species atta,lasius` en el CLI, canales A/C con `cuts`/`fungus`/
+    `cutters`, cuarto pin de hash CI (la partida Atta canónica) y tarjeta
+    de vista con barra de hongo y cortes acumulados;
+  - **criterio biológico SUPERADO**: cut → transport → `FungusFed` →
+    digestión → eclosión con la reserva fundadora agotada — la colonia
+    sostiene cría ALIMENTADA SOLO por el hongo (8 eclosiones, 6 698 ticks
+    de digestión).
+- **F5.2b — Eciton, la legionaria (diseño cerrado, primera rodaja HECHA)**:
+  combate de incursión en el mundo (golpe/robo/botín como carga con el
+  `Unload` de siempre, eventos 17–19 en canal B, `DeathCause.Combat`,
+  alarma inyectada en la capa de la víctima), transferencia warm-v2 →
+  cuerpo Eciton validada por sonda. Sensor dirigido y balance: en curso.
+- CI con **4 pins de hash** (stream canónico, replay 3000/6000 con drops,
+  partida Atta) y compilación batch de Unity; `305/305` tests verdes.
+- Detalles: [`docs/fase5-plan.md`](docs/fase5-plan.md) ·
+  [`docs/fase5-2a-atta.md`](docs/fase5-2a-atta.md) ·
+  [`docs/fase5-2b-eciton.md`](docs/fase5-2b-eciton.md) ·
+  [`docs/estado-proyecto.md`](docs/estado-proyecto.md).
+
 ### v0.4.0 — Fase 4: modo evolución jugable
 
 El bucle completo del jugador funciona y está verificado de extremo a extremo:
