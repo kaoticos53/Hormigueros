@@ -85,6 +85,20 @@ namespace AntSim.Unity.Scripts.EditorTools
                 });
         }
 
+        /// <summary>Criterio de cierre de F5.2a (5.2a.5): UNA vista Atta — el
+        /// stream de la partida canónica de la cortadora (especies atta,lasius,
+        /// hojas 100 %, warm-v2 en colonia 0, el mismo comando del pin CI
+        /// check-atta-command.sh) volcado a artifacts/multiview-atta.jsonl y
+        /// reproducido. La tarjeta de la vista debe mostrar el hongo de la
+        /// colonia 0 (barra ocre) y la línea de cortes acumulados; la colonia 1
+        /// Lasius SIN fungus y SIN línea de cortadora. Verificable en batch con
+        /// <c>-executeMethod …MultiViewSmokeProbe.RunSmokeAtta</c>.</summary>
+        public static void CreateMultiSimSmokeSceneAtta()
+        {
+            CreateMultiSimScene(views: 1, baseSeed: 42, pools: new string?[] { null },
+                replayFiles: new[] { "artifacts/multiview-atta.jsonl" });
+        }
+
         /// <summary>Monta la escena de N vistas. `pools` null = autodetección
         /// desde artifacts/ (una por vista, en orden; las vistas sobrantes sin
         /// pool). Lanza excepción con mensaje claro si N no está en 1..4.</summary>
@@ -386,6 +400,28 @@ namespace AntSim.Unity.Scripts.EditorTools
             card.Presenter = presenter;
             card.Body = body;
             card.StockBars = bars;
+
+            // F5.2a.5: barras del HONGO — una segunda franja por colonia, a la
+            // derecha de las de reserva (8 px de separación). Mismo patrón: se
+            // crean SIEMPRE (una por id posible) y ViewCardBehaviour las deja al
+            // 0 para colonias sin hongo. Solo en la escena Atta hoy, pero el
+            // componente las pinta en cualquier montaje que las conecte.
+            var fungusBars = new Image?[4];
+            for (int c = 0; c < fungusBars.Length; c++)
+            {
+                var bgo = new GameObject($"FungusBar_{c}", typeof(RectTransform));
+                bgo.transform.SetParent(go.transform, false);
+                var brt = (RectTransform)bgo.transform;
+                brt.anchorMin = new Vector2(0f, 0f);
+                brt.anchorMax = new Vector2(0f, 1f);
+                brt.pivot = new Vector2(0f, 0.5f);
+                brt.anchoredPosition = new Vector2(20f + c * 4f, 0f);
+                brt.sizeDelta = new Vector2(3f, -12f);
+                var fill = bgo.AddComponent<Image>();
+                fill.color = new Color(0.82f, 0.62f, 0.30f); // ocre
+                fungusBars[c] = fill;
+            }
+            card.FungusBars = fungusBars;
         }
 
         // ── Primitivas propias (replican la receta de SceneBootstrapper con

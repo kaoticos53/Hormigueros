@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Linq;
 using System.Text;
 using UnityEngine;
 using UnityEditor;
@@ -49,6 +50,20 @@ namespace AntSim.Unity.Scripts.EditorTools
             MultiSimBootstrapper.CreateMultiSimSmokeScene4();
             SessionState.SetFloat("MultiSmoke.Window", 115f);
             SessionState.SetFloat("MultiSmoke.Boost", 2f);
+            _enteringPlayAndRun();
+        }
+
+        /// <summary>Criterio de cierre de F5.2a (5.2a.5): la vista Atta — su
+        /// tarjeta debe mostrar la barra del HONGO de la colonia 0 y la línea
+        /// de CORTES acumulados, y la colonia 1 (Lasius) ninguna de las dos.
+        /// Batch: <c>-executeMethod …MultiViewSmokeProbe.RunSmokeAtta</c>.
+        /// Sale 0 solo si TODAS las aserciones pasan; si no, 1 (CI-ready).</summary>
+        public static void RunSmokeAtta()
+        {
+            MultiSimBootstrapper.CreateMultiSimSmokeSceneAtta();
+            SessionState.SetFloat("MultiSmoke.Window", 40f);
+            SessionState.SetFloat("MultiSmoke.Boost", 0f);
+            SessionState.SetInt("MultiSmoke.Mode", 2); // 2 = aserciones Atta
             _enteringPlayAndRun();
         }
 
@@ -130,9 +145,59 @@ namespace AntSim.Unity.Scripts.EditorTools
             _reported = true;
             SampleAll("final");
 
+            int rc = 0;
+            if (SessionState.GetInt("MultiSmoke.Mode", 0) == 2)
+                rc = AssertAtta();
+
             EditorApplication.isPlaying = false;
             // En batch el `-quit` del CLI no dispara con Play activo: salir a mano.
-            EditorApplication.Exit(0);
+            EditorApplication.Exit(rc);
+        }
+
+        /// <summary>Aserciones del criterio 5.2a.5 sobre el estado FINAL de la
+        /// vista única: hongo de la colonia 0 visible (barra > 0 y glifo/texto),
+        /// línea de cortes presente, colonia 1 Lasius sin hongo. Devuelve el
+        /// código de salida del editor (0 = criterio cumplido).</summary>
+        private static int AssertAtta()
+        {
+            var cardGo = GameObject.Find("ViewCard_0");
+            if (cardGo == null) { Debug.Log("[AttaSmoke] ✗ SIN ViewCard_0"); return 1; }
+
+            var body = cardGo.transform.Find("Body");
+            string text = body != null ? body.GetComponent<UnityEngine.UI.Text>().text : "";
+            Debug.Log($"[AttaSmoke] tarjeta=[{text.Replace('\n', ';')}]");
+
+            var behaviour = cardGo.GetComponent<ViewCardBehaviour>();
+            int failures = 0;
+            void Need(bool ok, string what)
+            {
+                if (ok) Debug.Log($"[AttaSmoke] ✓ {what}");
+                else { failures++; Debug.Log($"[AttaSmoke] ✗ {what}"); }
+            }
+
+            // 1) La tarjeta del modelo puro llega con hongo y cortes (canal A/C).
+            var card0 = behaviour.Cards.Cards.Values.FirstOrDefault(c => c.ColonyId == 0);
+            var card1 = behaviour.Cards.Cards.Values.FirstOrDefault(c => c.ColonyId == 1);
+            Need(card0?.Colony is { FungusMax: > 0f }, "colonia 0: FungusMax > 0 (canal A)");
+            Need((card0?.Colony?.Fungus ?? 0f) > 0f, "colonia 0: fungus > 0 acumulado (canal A)");
+            Need(card0 is { LeafCuts: > 0 }, "colonia 0: cortes acumulados > 0 (canal C)");
+            Need(card0 is { FungusFed: > 0 }, "colonia 0: fungusFed acumulado > 0 (canal C)");
+            Need(text.Contains("hongo ["), "tarjeta: línea del hongo renderizada");
+            Need(text.Contains("cortes "), "tarjeta: línea de cortes renderizada");
+
+            // 2) La barra del hongo existe y está LLENA > 0 (franja ocre).
+            var fungusBar = cardGo.transform.Find("FungusBar_0");
+            var fungusImg = fungusBar != null ? fungusBar.GetComponent<UnityEngine.UI.Image>() : null;
+            Need(fungusImg != null && fungusImg.fillAmount > 0f,
+                $"barra del hongo FungusBar_0 con fill > 0 (fill={fungusImg?.fillAmount:0.##})");
+
+            // 3) La colonia 1 (Lasius): sin hongo ni cortadora.
+            Need(card1?.Colony is { FungusMax: 0f }, "colonia 1: FungusMax == 0 (Lasius)");
+            Need((card1?.LeafCuts ?? 0) == 0 && (card1?.FungusFed ?? 0) == 0,
+                "colonia 1: sin actividad de cortadora");
+
+            Debug.Log($"[AttaSmoke] veredicto: {(failures == 0 ? "CRITERIO CUMPLIDO" : "FALLO")} ({failures} fallos)");
+            return failures == 0 ? 0 : 1;
         }
 
         private static void SampleAll(string phase)
