@@ -12,8 +12,22 @@ namespace AntSim.Core.World;
 /// </summary>
 public static class AntSenses
 {
+    /// <summary>Versión clásica (F1–F5.2a): canal 12 ProxFront = pared.
+    /// Los cuatro pines de hash de CI se fijan con ESTA vía.</summary>
     public static AntSensors Build(Colony c, Ant a, IReadOnlyList<FoodItem> items,
         float worldWidth, float worldHeight)
+        => Build(c, a, items, worldWidth, worldHeight, rivals: null);
+
+    /// <summary>
+    /// F5.2b.2: con `rivals` no nulo (especie beligerante en mundo multi-colonia),
+    /// el canal 12 ProxFront se reconvierte a «hormiga enemiga más cercana»:
+    /// 1 − dist/VisionRadius. Canales 11/13 siguen midiendo la pared (los bordes
+    /// siguen siendo el único obstáculo físico). El GATING es de la llamada:
+    /// un mundo de una colonia o sin especie beligerante pasa null ⇒ bytes
+    /// idénticos al build anterior (pines de CI intactos).
+    /// </summary>
+    public static AntSensors Build(Colony c, Ant a, IReadOnlyList<FoodItem> items,
+        float worldWidth, float worldHeight, IReadOnlyList<Colony>? rivals)
     {
         SpeciesDescriptor sp = c.Species;
         float reach = sp.SensorReach * a.SensorScale;
@@ -99,8 +113,31 @@ public static class AntSenses
                                 MathF.Min(a.Y, worldHeight - a.Y));
         float prox = Math.Clamp(1f - dWall / reach, 0f, 1f);
         s.ProxLeft = prox;
+        // F5.2b.2: con rivales, el frontal mide la presa, no la pared.
         s.ProxFront = prox;
         s.ProxRight = prox;
+        if (rivals != null)
+        {
+            float visionRival = sp.VisionRadius * a.SensorScale;
+            float bestD2 = visionRival * visionRival;
+            bool found = false;
+            for (int rc = 0; rc < rivals.Count; rc++)
+            {
+                var rival = rivals[rc];
+                if (rival.Id == c.Id) continue;
+                for (int i = 0; i < rival.Adults.Count; i++)
+                {
+                    var enemy = rival.Adults[i];
+                    if (!enemy.Alive) continue;
+                    float dx = enemy.X - a.X;
+                    float dy = enemy.Y - a.Y;
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 < bestD2) { bestD2 = d2; found = true; }
+                }
+            }
+            if (found)
+                s.ProxFront = Math.Clamp(1f - MathF.Sqrt(bestD2) / visionRival, 0f, 1f);
+        }
 
         // — Carga y estado —
         s.HasLoad = a.HasLoad ? 1f : 0f;

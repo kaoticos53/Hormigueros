@@ -321,7 +321,8 @@ public sealed class WorldSim
         SpeciesDescriptor sp = colony.Species;
         float dt = SimConstants.FixedDtSeconds;
 
-        var sensors = AntSenses.Build(colony, ant, _items, WorldWidth, WorldHeight);
+        var sensors = AntSenses.Build(colony, ant, _items, WorldWidth, WorldHeight,
+            rivals: sp.ContactRadius > 0f && _colonies.Count > 1 ? _colonies : null);
         var decision = AntDecision.Neutral();
         ant.Brain.Evaluate(in sensors, ref decision);
         DecisionValidator.SanitizeAndClamp(in decision, out decision);
