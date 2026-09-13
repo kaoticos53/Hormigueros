@@ -225,6 +225,21 @@ namespace AntSim.Unity.Scripts.Presenter
             return t - Mathf.Floor(t);
         }
 
+        /// <summary>Punto de entrada SIN DISPOSITIVO (F5.2, como PickNearest/
+        /// EnqueueDrop) para smokes batch: avanza el reloj de reproducción UN
+        /// tick y presenta. El bucle de jugador de un editor batch sobre un
+        /// Library recién importado puede quedar congelado (frameCount clavado,
+        /// dt=0 — la sonda del multi-visor lo detecta); esta entrada permite
+        /// verificar la reproducción determinista del stream sin bucle.
+        /// En interactivo NO se usa: el reloj lo empuja Update.</summary>
+        public void PumpOneTick()
+        {
+            _simTime += Dt;
+            _presenter.AdvanceTo((ulong)(_simTime / Dt) + 1);
+            _lastState = _presenter.Sample(0f);
+            Draw(_lastState);
+        }
+
         /// <summary>Lado del mundo en unidades (grid × celdas): la referencia de
         /// toda la escala visual.</summary>
         public float WorldSide => Streaming.WorldUnits.WorldSize(Grid);
