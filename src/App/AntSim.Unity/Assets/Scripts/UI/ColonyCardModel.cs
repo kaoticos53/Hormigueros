@@ -29,6 +29,10 @@ namespace AntSim.Unity.Scripts.Streaming
             public GameStreamParser.ColonyMetricsView? Window; // última ventana de 1 s
             public long EliteEntered;                         // acumulados desde el arranque
             public long GenomeDiscarded;
+            // F5.2a.5: cadena de la cortadora ACUMULADA (el canal C trae ventanas
+            // de 1 s; la tarjeta las suma — la UI no inventa, solo acumula).
+            public long LeafCuts;
+            public long FungusFed;
         }
 
         private readonly Dictionary<int, Card> _cards = new();
@@ -93,6 +97,15 @@ namespace AntSim.Unity.Scripts.Streaming
                 if (!_cards.TryGetValue(ev.ColonyId, out var card)) continue;
                 if (ev.Kind == 9) card.EliteEntered++;        // GenomeEnteredElite
                 else if (ev.Kind == 10) card.GenomeDiscarded++; // GenomeDiscarded
+            }
+
+            // F5.2a.5: cutters (canal C por colonia, ventana de 1 s) → acumulados.
+            foreach (var cv in v.Cutters)
+            {
+                if (!_cards.TryGetValue(cv.ColonyId, out var card))
+                    _cards[cv.ColonyId] = card = new Card { ColonyId = cv.ColonyId };
+                card.LeafCuts += cv.LeafCuts;
+                card.FungusFed += cv.FungusFed;
             }
         }
 
@@ -190,10 +203,32 @@ namespace AntSim.Unity.Scripts.Streaming
                 if (card.Window is GameStreamParser.ColonyMetricsView w && (w.Pickups > 0 || w.Unloads > 0))
                     sb.Append(' ').Append(w.Pickups).Append("rec/")
                       .Append(w.Unloads).Append("desc");
+                // F5.2a.5: el hongo en SU línea (colonia con FungusMax>0 = Atta;
+                // Lasius/Eciton no ensucian su tarjeta con fungus 0/0).
+                if (c.FungusMax > 0f)
+                {
+                    float ffrac = c.Fungus / c.FungusMax;
+                    sb.Append("  hongo [").Append(new string('#', FungusSegments(ffrac)))
+                      .Append(new string('.', 10 - FungusSegments(ffrac))).Append(']');
+                }
+                // Línea de cortadora: solo con actividad acumulada (tolerante:
+                // en mundos sin hojas nunca aparece).
+                if (card.LeafCuts > 0 || card.FungusFed > 0)
+                    sb.Append("\ncortes ").Append(card.LeafCuts)
+                      .Append(" · ").Append(card.FungusFed).Append(" al hongo");
             }
             return sb.ToString();
         }
 
         private static string F1(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+        /// <summary>Segmentos llenos de la barra del hongo (misma granularidad
+        /// de 10 que la reserva; modelo puro para que la vista solo pinte).</summary>
+        internal static int FungusSegments(float fraction)
+        {
+            if (fraction < 0f) fraction = 0f; else if (fraction > 1f) fraction = 1f;
+            int filled = (int)(fraction * 10f + 0.5f);
+            return filled;
+        }
     }
 }
