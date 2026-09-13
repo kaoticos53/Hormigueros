@@ -1,0 +1,4 @@
+Serie de pruebas para E:\Users\kaoti\Documentos\GitHub\Hormigueros\src\Core\AntSim.Core.Tests\bin\Debug\net8.0\AntSim.Core.Tests.dll (.NETCoreApp,Version=v8.0)
+1 archivos de prueba en total coincidieron con el patrón especificado.
+
+Correctas! - Con error:     0, Superado:     1, Omitido:     0, Total:     1, Duración: 2 m 15 s - AntSim.Core.Tests.dll (net8.0)

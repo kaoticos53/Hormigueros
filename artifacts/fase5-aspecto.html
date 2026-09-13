@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>F5.1 — aspecto verificado (Hormigueros)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 28px 32px 48px; background: #14110d; color: #ece8df;
+         font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: .2px; }
+  h2 { font-size: 17px; margin: 30px 0 10px; color: #86d6c7; text-transform: uppercase;
+       letter-spacing: 1.2px; font-weight: 600; }
+  p  { margin: 8px 0; color: #cfc9bd; max-width: 78ch; }
+  code { background: #221d17; padding: 1px 6px; border-radius: 4px; color: #e8c07a; }
+  table { border-collapse: collapse; margin-top: 6px; }
+  th, td { text-align: left; padding: 6px 14px 6px 0; border-bottom: 1px solid #2a241d; }
+  th { color: #9b9385; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; }
+  .ok { color: #7fd48c; font-weight: 600; }
+  .swatch { display: inline-block; width: 128px; height: 54px; border: 1px solid #3a3229;
+            vertical-align: middle; margin-right: 10px; }
+  .palette { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .palette figure { margin: 0; font-size: 13px; color: #b9b1a3; }
+  pre.mosaic { font: 13px/1.15 "Cascadia Mono", Consolas, monospace; background: #0d0b09;
+               border: 1px solid #2a241d; border-radius: 6px; padding: 14px 16px; overflow-x: auto;
+               color: #b8ada0; letter-spacing: .5px; }
+  .note { background: #1c1813; border-left: 3px solid #86d6c7; padding: 10px 14px; border-radius: 0 6px 6px 0; }
+</style>
+</head>
+<body>
+  <h1>Aspecto del mundo y del HUD — verificado por píxeles</h1>
+  <p>Pasada de pulido F5.1 (2026-09-12). Los números de abajo son <strong>medidos</strong>
+  por <code>scripts/playpass-live.sh</code> sobre la partida sembrada con
+  <code>pretrain-warm-v2</code> (seed 42, grid 96, 2 colonias). El defecto que
+  reportó el jugador —«el terreno es blanco y tampoco se ven hormigas»— pasaba
+  <em>todas</em> las muestras de estado; esto es lo que ahora lo delata.</p>
+
+  <h2>Invariantes</h2>
+  <table>
+    <tr><th>Invariante</th><th>Medida (en partida)</th><th>Medida (al abrir la escena)</th></tr>
+    <tr><td>El tablero se lee como tierra</td>
+        <td class="ok">brown=1 · suelo 0.42 : 0.33 : 0.23</td>
+        <td class="ok">brown=1 · suelo 0.42 : 0.33 : 0.23</td></tr>
+    <tr><td>Se ven hormigas (píxeles del color de la hormiga)</td>
+        <td class="ok">antPx=65 <span style="color:#9b9385">(de 307 200)</span></td>
+        <td>antPx=0 <span style="color:#9b9385">(sin partida no hay colonia: correcto)</span></td></tr>
+    <tr><td>Ningún texto del HUD se corta</td>
+        <td class="ok" colspan="2">hud.overflow=0 (medido con <code>preferredHeight</code> real de la fuente)</td></tr>
+    <tr><td>Ítems y portadoras visibles</td>
+        <td class="ok">itemPx=150 · carrierPx=0 <span style="color:#9b9385">(en esa muestra no había portadoras)</span></td>
+        <td>—</td></tr>
+  </table>
+
+  <h2>Paleta del mundo (materiales Unlit, color exacto)</h2>
+  <div class="palette">
+    <figure><span class="swatch" style="background:#6b5440"></span>suelo 0.42 / 0.33 / 0.23<br>+ rejilla cada 32 u</figure>
+    <figure><span class="swatch" style="background:#382d21"></span>mesa (bajo el tablero)<br>0.22 / 0.175 / 0.13</figure>
+    <figure><span class="swatch" style="background:#8f4620"></span>marco 0.56 / 0.45 / 0.31</figure>
+    <figure><span class="swatch" style="background:#592a1a"></span>hormiga 0.35 / 0.16 / 0.10<br>(tumbada, largo = 0.018 × mundo)</figure>
+    <figure><span class="swatch" style="background:#fab829"></span>portadora 0.98 / 0.72 / 0.16<br>(+25% de tamaño)</figure>
+    <figure><span class="swatch" style="background:#5cc75c"></span>ítem 0.36 / 0.78 / 0.36</figure>
+    <figure><span class="swatch" style="background:#ed7359"></span>colonia 0</figure>
+    <figure><span class="swatch" style="background:#6ba1f2"></span>colonia 1</figure>
+  </div>
+
+  <h2>El frame, leído como rejilla de caracteres</h2>
+  <p>La sonda baja el frame de la cámara a 48×16 celdas y clasifica cada una por
+  color dominante: <code>r</code>/<code>e</code> tierra · <code>#</code> panel u
+  oscuro · <code>.</code> texto/blanco · <code>g</code> verde · <code>b</code> azul.
+  Las columnas de <code>#</code> de los extremos son la mesa y los paneles del HUD;
+  el bloque terroso del centro es el tablero (768×768 u en un mundo de 768).</p>
+  <pre class="mosaic"> ############                             ######
+ rrrrrrrrrrrrrrrrrr rrrrrrr rr rrrrrrrrrre      
+      rrr rrrrrrrrrrrrrrrrrrrrrrrrr rrr rr      
+      rrr rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrre      
+      rrrrrrrrrrrrrr r rrrrrrrrrrrrrrrrrrr      
+      rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr      
+      rrrrr rrrrrrrrrrrrrrrrrrrrrrrrrrr rr      
+      rrrrrrrrrrrrrrrrrrrrrrr  rrrrrrrrrrr      
+      rrrrrrrr rrrrrrrrrrrrrr  rrrrrrrrrrr      
+      rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr      
+      rrrrrrrrrrrr rrrrrrrrrrrrrrrrrrrr re      
+      rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr      
+      rrrrrrrrrrrrrrrrrrrrrrrrrrr r       ######
+   ###            rrrrrrrrrrrrrrrrr ############
+ #################r rrrrrrrrrrrrrrr ############
+ ############                       ############</pre>
+
+  <h2>Captura real</h2>
+  <p class="note">El PNG del frame (1440×1080, partida sembrada a velocidad 6 con
+  portadoras en ruta) está en <code>artifacts/game-view.png</code>. La vista previa
+  sirve un solo archivo, así que la imagen no se puede incrustar aquí: ábrela desde
+  el explorador o desde Unity.</p>
+
+  <h2>Qué se cambió para que esto se vea así</h2>
+  <table>
+    <tr><th>Pieza</th><th>Decisión</th></tr>
+    <tr><td>Feromonas</td><td>Material transparente propio + textura 1×1 transparente de reposo: un unlit <em>sin</em> textura pinta blanco opaco y tapaba el tablero (en partida y, sobre todo, al abrir la escena sin darle a Play).</td></tr>
+    <tr><td>Hormigas</td><td>Cápsula tumbada (Rx 90°), alargada en la dirección de avance, longitud = 0.018 × lado del mundo (≈ 14 u ≈ 12 px a 720p). Antes: poste vertical de ~1 u.</td></tr>
+    <tr><td>Cámara</td><td>Ortográfica con <code>orthoSize = mundo · 0.52</code> y mesa 2,6× bajo el tablero: sin ella el 38% de la pantalla era vacío.</td></tr>
+    <tr><td>HUD</td><td>Paneles con acento, barra de estado (tick · reloj · semáforo por colonia), tarjetas 440×176 con barra de reserva dentro, modal de importación centrado con campo de ruta y tres botones.</td></tr>
+    <tr><td>Los botones del modal</td><td>Antes se pintaban siempre, flotando sobre el mundo, y no había forma de abrir el diálogo ni de darle la ruta: el pilar de importación era inalcanzable. Ahora se enseña/oculta por la regla del modelo y se abre con <code>I</code>.</td></tr>
+  </table>
+</body>
+</html>
