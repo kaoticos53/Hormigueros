@@ -60,6 +60,11 @@ public sealed class SpeciesDescriptor
     public float TCann = 15f;
     public float TCrit = 8f;
 
+    // — F5.2a.2: hongo (solo Atta; 0 = la especie no procesa hongo) —
+    public float FungusMax;       // ep de capacidad del hongo
+    public float DigestionRate;   // ep/s a hongo LLENO (proporcional al llenado)
+    public float LeafEfficiency;  // ep de hongo por ep de hoja descargada
+
     // — Constantes predefinidas (tabla de la especificación) —
     public static readonly SpeciesDescriptor LasiusNiger = new() { Name = "Lasius niger" };
 
@@ -86,7 +91,11 @@ public sealed class SpeciesDescriptor
         KFull = 2.8f, KMin = 1.0f,
         EggTime = 10f, LarvaTimeMax = 35f, PupaTime = 16f,
         DeathRate = 1f / 140f, EggCost = 0.7f, BaseLifespan = 300f,
-        StockMax = 120f, TSafe = 50f, TOoph = 30f, TCann = 18f, TCrit = 10f
+        StockMax = 120f, TSafe = 50f, TOoph = 30f, TCann = 18f, TCrit = 10f,
+        // — F5.2a.2: la cortadora procesa hoja en hongo —
+        FungusMax = 60f,
+        DigestionRate = 0.4f,
+        LeafEfficiency = 0.75f
     };
 
     public static readonly SpeciesDescriptor Eciton = new()

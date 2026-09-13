@@ -142,6 +142,10 @@ public sealed class WorldSim
             // (~80–110 s: la comida está a ≥ NestMinSpawnDistance, fuera de visión).
             Stock = sp.StockMax,
             StockMax = sp.StockMax,
+            // F5.2a.2: el hongo NACE VACÍO (la reina fundadora lo construye —
+            // es la economía de la especie, no una reserva inicial).
+            Fungus = 0f,
+            FungusMax = sp.FungusMax,
             QueenEnergy = 1f,
             Rng = _worldRng.Fork(0x9E3779B97F4A7C15UL + (ulong)id * 0xBF58476D1CE4E5B9UL),
             Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), BrainSizes,
@@ -407,7 +411,21 @@ public sealed class WorldSim
                 if (dx * dx + dy * dy <= NestRadius * NestRadius)
                 {
                     ant.Fitness += ant.LoadValue * RewardUnloadPerEp + RewardUnloadBonus;
-                    colony.RecordInflow(ant.LoadValue);
+                    // F5.2a.2: en especies con hongo, la descarga va al hongo
+                    // (con merma de procesado) y la digestión alimenta el stock
+                    // por otra vía — el relevo y su fitness no cambian.
+                    if (colony.FungusMax > 0f)
+                    {
+                        float procesado = ant.LoadValue * colony.Species.LeafEfficiency;
+                        float hueco = colony.FungusMax - colony.Fungus;
+                        float aceptado = Math.Min(procesado, hueco); // el excedente se pierde
+                        colony.Fungus += aceptado;
+                        _events.Add(new SimEvent(SimEventKind.FungusFed, Tick, colony.Id, ant.Id, ant.X, ant.Y));
+                    }
+                    else
+                    {
+                        colony.RecordInflow(ant.LoadValue);
+                    }
                     colony.InflowAccum += ant.LoadValue;
                     ant.HasLoad = false;
                     ant.LoadValue = 0f;
@@ -622,7 +640,15 @@ public sealed class WorldSim
         {
             var col = _colonies[c];
             h.AppendInt32(col.Id);
-            h.AppendFloat(col.Stock); h.AppendFloat(col.QueenEnergy);
+            h.AppendFloat(col.Stock);
+            // F5.2a.2: el hongo entra en el hash SOLO si la especie lo tiene —
+            // colonias sin hongo (FungusMax = 0 ⇒ Fungus = 0) no alteran los bytes.
+            if (col.FungusMax > 0f)
+            {
+                h.AppendFloat(col.Fungus);
+                h.AppendFloat(col.FungusMax);
+            }
+            h.AppendFloat(col.QueenEnergy);
             h.AppendFloat(col.InflowEma); h.AppendFloat(col.ConsumeEma);
             h.AppendFloat(col.EggAccumulator); h.AppendFloat(col.CannibalAccumulator);
             h.AppendInt32(col.Eggs.Count); h.AppendInt32(col.Larvae.Count);
@@ -778,6 +804,7 @@ public sealed class WorldSim
             NestX = nestX,
             NestY = nestY,
             StockMax = stockMax,
+            FungusMax = sp.FungusMax, // F5.2a.2: capacidad siempre de la especie
             Rng = rng,
             Pool = new GenomePool(rng.Fork(0xA5C3E7B9UL), BrainSizes, seedCount: 0),
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells),

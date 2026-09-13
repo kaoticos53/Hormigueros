@@ -21,6 +21,10 @@ public sealed class Colony
     public float Stock;         // ep
     public float StockMax;
 
+    // — F5.2a.2: hongo (solo especies con FungusMax > 0; 0 = sin hongo) —
+    public float Fungus;        // ep de hongo procesado
+    public float FungusMax;     // de la especie (Atta: 60; Lasius/Eciton: 0)
+
     // — Reina —
     public float QueenEnergy = 1f; // [0,1]
 

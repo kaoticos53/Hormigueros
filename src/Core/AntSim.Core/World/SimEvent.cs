@@ -31,7 +31,15 @@ public enum SimEventKind : byte
 
     /// <summary>F5.2a.1: la hoja en X/Y agotó su último corte y desaparece
     /// (acompaña al ItemConsumed del mundo).</summary>
-    LeafDepleted = 14
+    LeafDepleted = 14,
+
+    /// <summary>F5.2a.2: la colonia ColonyId procesó carga hacia el hongo
+    /// (solo especies con FungusMax > 0). AntId = 0; Cause = 0.</summary>
+    FungusFed = 15,
+
+    /// <summary>F5.2a.2: la digestión convirtió hongo → stock en la colonia
+    /// ColonyId (cada tick con digestión; agregable en canal C).</summary>
+    FungusDigested = 16
 }
 
 /// <summary>Causa de muerte (para telemetría y reproducción).</summary>
