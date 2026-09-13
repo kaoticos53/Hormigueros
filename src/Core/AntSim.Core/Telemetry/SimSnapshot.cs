@@ -54,13 +54,18 @@ public static class SimSnapshot
         public readonly float Stock;
         public readonly float StockMax;
         public readonly int EliteCount;
+        // F5.2a.2: hongo (0/0 = especies sin hongo — default tolerante).
+        public readonly float Fungus;
+        public readonly float FungusMax;
 
         public ColonyView(int id, float nestX, float nestY, int adultsAlive,
-            int eggs, int larvae, int pupae, float stock, float stockMax, int eliteCount)
+            int eggs, int larvae, int pupae, float stock, float stockMax, int eliteCount,
+            float fungus = 0f, float fungusMax = 0f)
         {
             Id = id; NestX = nestX; NestY = nestY; AdultsAlive = adultsAlive;
             Eggs = eggs; Larvae = larvae; Pupae = pupae;
             Stock = stock; StockMax = stockMax; EliteCount = eliteCount;
+            Fungus = fungus; FungusMax = fungusMax;
         }
     }
 
@@ -106,7 +111,8 @@ public static class SimSnapshot
             var colony = sim.Colonies[c];
             colonies.Add(new ColonyView(colony.Id, colony.NestX, colony.NestY,
                 colony.AdultCountAlive, colony.Eggs.Count, colony.Larvae.Count,
-                colony.Pupae.Count, colony.Stock, colony.StockMax, colony.Pool.EliteCount));
+                colony.Pupae.Count, colony.Stock, colony.StockMax, colony.Pool.EliteCount,
+                colony.Fungus, colony.FungusMax));
         }
 
         return new Frame(sim.Tick, ants, sim.Items, colonies);

@@ -173,11 +173,18 @@ postergado: la evolución en vivo partiendo de warm-v2 es suficiente.
    `world`/`game`). 10 tests (`CompoundItemTests`); 286/286 suite + 3 pines
    de CI verificados. Humo real sembrado (warm-v2, seed 42, 6000 ticks,
    hojas 100 %): 14 cortes → 3 descargas, 9 hojas mordidas.
-2. **F5.2a.2 — Hongo**: `Colony.Fungus`, descarga por especie, digestión en
-   `ColonyController`, eventos, `.antsave` v2, hash. Tests: Lasius sin
-   hongo = camino actual (hash invariante); Atta: hongo sube con descargas,
-   digestión alimenta inflow, stock crece sin forrajeo mientras haya hongo;
-   roundtrip save/load v2 bit a bit.
+2. **F5.2a.2 — Hongo** — ✅ HECHO (2026-09-13): `Colony.Fungus/FungusMax`
+   (Atta: 60 ep, nace VACÍO — la reina lo construye), descarga por especie
+   (× `LeafEfficiency` 0.75, excedente sobre hongo lleno se pierde),
+   digestión PROPORCIONAL al llenado como etapa 0 de `ColonyController` que
+   entra por `RecordInflow` (la demografía calibrada lee la misma señal),
+   eventos `FungusFed=15`/`FungusDigested=16`, fungus/fungusMax en canal A
+   y `.antsave` v3, hash SOLO con hongo (colonias sin hongo no alteran los
+   bytes). 7 tests (`FungusTests`); 293/293 suite, 3 pines de CI intactos.
+   Humo real: `--species atta,lasius --leaf-fraction 1.0 --seed-pool
+   warm-v2` (7200 ticks) — 12 cortes → 3 descargas → 3 FungusFed → 1898
+   ticks de digestión; lasius sin hongo (fungusMax 0). `--species` (parte
+   de 5.2a.4) se adelantó aquí para poder ejecutar el humo.
 3. **F5.2a.3 — Contratos**: canales A/B/C (campos + eventos), parser puro
    de Unity con defaults, tests de contrato contra stream real.
 4. **F5.2a.4 — CLI y escenarios**: `--leaf-fraction`, `--species`,
