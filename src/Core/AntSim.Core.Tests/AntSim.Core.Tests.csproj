@@ -38,6 +38,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneTileModel.cs" Link="UnityPure/PheromoneTileModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ActivationViewModel.cs" Link="UnityPure/ActivationViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneSelectorModel.cs" Link="UnityPure/PheromoneSelectorModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/MultiViewportModel.cs" Link="UnityPure/MultiViewportModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/ColonySparklineModel.cs" Link="UnityPure/ColonySparklineModel.cs" />
   </ItemGroup>
 

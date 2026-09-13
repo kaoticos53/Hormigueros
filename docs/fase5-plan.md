@@ -4,7 +4,7 @@ Realismo, especies y escala — la fase que convierte el simulador verificado
 en un mundo con contenido. Este documento es el PLAN de trabajo (no el
 registro de lo hecho): hitos, decisiones abiertas y criterios de cierre.
 Estado del que parte: Fase 4 cerrada
-([`fase4-resumen.md`](fase4-resumen.md)) — 262/262 tests, contratos de HUD
+([`fase4-resumen.md`](fase4-resumen.md)) — 276/276 tests, contratos de HUD
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
 
@@ -133,6 +133,82 @@ acabado):
 
 **Criterio de cierre**: una partida de 10 min contra el fixture 256 jugable
 solo con ratón, sin texto plano excepto la tarjeta de inspección.
+
+## 2bis. Dos fases de experiencia (F5.1bis — la decisión del jugador, 2026-09-13)
+
+El jugador pide explícitamente DOS maneras de usar el simulador, y la
+arquitectura ya las soporta — lo que faltaba es nombrarlas y darles su pieza
+de UI:
+
+- **Fase A — EVOLUCIÓN (sin gráficos)**: mejorar cerebros rápido. Es el modo
+  que ya existe y está maduro: `--mode pretrain` (arranque en frío),
+  `--mode pretrain --warm-start` (refinado), `scripts/pipeline.sh` (cadena
+  completa con `--verify` de regresión del relevo). Sin UI: corre headless y
+  tan rápido como la CPU permita. Su salida es un `.antgenome` que la Fase B
+  consume. **Nada que implementar — solo documentarlo como LA fase 1 del
+  flujo del jugador.**
+- **Fase B — OBSERVACIÓN/INTERVENCIÓN (en vivo, Unity)**: ver varias
+  simulaciones a la vez, sembradas con los pools de la Fase A, e intervenir
+  (drops). La pieza nueva es el **multi-visor**: N instancias del stream en
+  una escena, cada una con su cámara-viewport (Camera.rect) y su
+  `SimPresenterBehaviour` propio (Seed/SeedPoolPath independientes). El
+  presenter ya renderiza por `Graphics.DrawMesh` parametrizado por su propio
+  estado; el HUD por colonia ya existe. El montaje concreto:
+  `MultiSimBootstrapper` crea N cámaras con `rect` dividido (2×2 para 4,
+  1×N para 2), un presenter por viewport, y comparte el mundo de etiquetas.
+  Coste real: el CLI corre un proceso por stream (ya es así para 1);
+  `frame-every 2–4` baja el peso por stream.
+
+**Criterio de cierre**: partida de 4 vistas — 4 semillas/4 pools corriendo
+en paralelo a velocidad ≥2×, con el semáforo de relevo visible por vista.
+
+**El montaje — HECHO (2026-09-13)**:
+- `MultiViewportModel` (puro, 10 tests headless): geometría de los rects
+  (1 = pantalla · 2 = columnas · 3–4 = cuadrícula 2×2, gap 0.005 entre
+  vistas, vista 0 arriba-izquierda), el contrato de capas (Sim0..3 en los
+  slots 8..11 del TagManager — un test fija el ordinal) y las etiquetas.
+- `MultiSimBootstrapper` (menú **AntSim → Crear escena multi-visor**): por
+  vista, una cámara con `Camera.rect` + `cullingMask` propio, el mundo
+  COMPLETO en su capa (suelo, mesa, nidos, quad de feromonas, presenter),
+  y su `SimPresenterBehaviour` con Seed/SeedPoolPath independientes.
+  Guarda en `Assets/Scenes/MultiSim.unity` (nunca sobre Game.unity).
+  Los pools se autodetectan de artifacts/ en el orden de la cadena validada
+  (warm-v2 → warm-4 → warm3 → warm2); sin artifacts/, vistas sin sembrar
+  listas para asignar pool desde el inspector.
+- `SimPresenterBehaviour.RenderLayer` (nuevo campo): los DrawMesh de
+  hormigas e ítems van a esa capa; 0 = Default (la escena simple no cambia).
+- Verificado headless: compilación batch rc=0 / 0 error CS, ejecución del
+  bootstrapper en batch (rc=0) e inspección del .unity como texto — 4
+  cámaras con rects 0.4975² y culling masks 289/545/1057/2081, 8 objetos
+  por capa en 8/9/10/11, seeds 42–45.
+- **Tarjeta compacta por vista** (HECHO, 2026-09-13): `ViewCardBehaviour`
+  bajo el rótulo de cada vista, alimentado por SU presenter. El texto sale
+  de `ColonyCardModel.RenderCompact()` (puro, 4 tests): una línea POR
+  COLONIA con semáforo (el mismo glifo del canal D), adultas, reserva y
+  flujo rec/desc de la ventana — cabe en media pantalla, donde la tarjeta
+  de 440 px no cabe. La reserva lleva además una franja vertical por
+  colonia (Image fill con la MISMA regla del HUD grande: spec de
+  `HudElementLayoutModel.StockBars`, rojo bajo el 20%).
+- Defecto destapado en batch y corregido: un GameObject solo admite UN
+  Graphic — el rótulo de vista lleva el fondo (Image) en el padre y el
+  texto (Text) en un hijo.
+- **Smoke EN VIVO del multi-visor (HECHO, 2026-09-13)**: dos streams
+  sembrados volcados a archivo (v0: seed 42 + warm-v2 · v1: seed 77 +
+  hybrid, grid 96, frame-every 2, 3602 líneas cada uno) y reproducidos por
+  `MultiSimBootstrapper.CreateMultiSimSmokeScene` (2 vistas con
+  `ReplayFile`, el mismo camino del jugador sin procesos del CLI). La sonda
+  `MultiViewSmokeProbe` (batch, `-executeMethod …RunSmoke`: monta la escena
+  y ENTRA en Play — Play sí corre en batchmode) muestreó tras 25 s:
+  `V0 layer=8 mask=289 tick=748 ants=20 items=24` y `V1 layer=9 mask=545
+  tick=748 ants=20 items=24`, con POSES DISTINTAS por vista (mundos
+  independientes, semillas distintas) y tarjetas compactas con datos
+  (`colonia 0 ○ 10h 88.3%` ×2 por vista, canal D llegando). Capas y máscaras
+  exactamente las del contrato del modelo puro.
+  Defectos destapados por el smoke y corregidos: la sonda batch no entraba
+  en Play (añadido `RunSmoke` que la pide desde `update`), y el `ReplayFile`
+  relativo se resuelve contra el repo-root del PROYECTO (una copia sin
+  artifacts/ falla con «esperando stream…» — el smoke necesita los dumps
+  junto al proyecto, o resolver contra el repo real).
 
 ## 3. Realismo y especies (F5.2 — el contenido nuevo)
 

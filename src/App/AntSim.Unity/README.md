@@ -160,6 +160,42 @@ idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
 Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
 stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
 
+### Multi-visor: varias simulaciones a la vez (F5.1bis)
+
+La fase B del flujo del jugador: ver N partidas EN VIVO en una pantalla, cada
+una sembrada con su pool de la fase A (evolución headless). Menú
+**AntSim → Crear escena multi-visor**: construye y guarda
+`Assets/Scenes/MultiSim.unity` con 4 vistas en cuadrícula 2×2.
+
+- Cada vista es una cámara con `Camera.rect` propio y SU capa (`Sim0..3`,
+  slots 8–11 del TagManager): suelo, mesa, nidos, quad de feromonas y los
+  DrawMesh del presenter de esa vista viven en la capa, y el `cullingMask`
+  de la cámara solo ve su capa + UI. Sin capas, los cuatro mundos se
+  dibujarían superpuestos (misma posición del mundo).
+- Cada vista tiene su `SimPresenterBehaviour` con `Seed`/`SeedPoolPath`
+  independientes: N procesos del CLI, un stream por vista. Los pools se
+  autodetectan de `artifacts/` (warm-v2 → warm-4 → warm3 → warm2); si no
+  están, la vista arranca sin sembrar y se le asigna pool en el inspector.
+- `FrameEvery = 2` por vista: 15 Hz de canal A por stream, el coste de 4
+  streams a la vez. Velocidad por vista con **+/=** (cicla 1→2→4×).
+- La geometría y las capas son decisión de `MultiViewportModel` (puro,
+  10 tests headless — incluido el que fija el ordinal de las capas contra
+  el TagManager). El bootstrapper solo aplica lo que el modelo dicta.
+- El bootstrapper corre en batch como el de la escena simple:
+  `-executeMethod AntSim.Unity.Scripts.EditorTools.MultiSimBootstrapper.CreateMultiSimScene`.
+
+Trampa ya encontrada: un GameObject solo admite UN `Graphic` — el rótulo de
+cada vista lleva el fondo (`Image`) en el padre y el texto (`Text`) en un hijo.
+Intentar los dos en el mismo GO falla en batch con «a 'Image' is already added
+to the game object».
+
+Cada vista lleva además su **tarjeta compacta** (`ViewCardBehaviour`, bajo el
+rótulo): una línea por colonia con semáforo de relevo, adultas, reserva y
+flujo rec/desc — el texto sale de `ColonyCardModel.RenderCompact()` (puro y
+testeado headless), y la reserva añade una franja vertical por colonia con la
+misma regla de «reserva baja» del HUD grande. Cada tarjeta consume SOLO el
+stream de su vista: cuatro partidas, cuatro semáforos independientes.
+
 ## La ruta del proyecto está guardada (`-projectPath`)
 
 Unity **no falla** si le das un directorio que no es un proyecto: le crea el
