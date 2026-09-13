@@ -302,9 +302,19 @@ Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
    - *Eciton* (legionaria): ciclos nómadas y predación. Necesita feromona
      de alarma ofensiva (la capa Alarm ya existe y el canal la puede emitir)
      y objetivos móviles (las otras colonias).
-2. **Depredadores y agresividad inter-colonia**: agentes no-colonia con
-   cerebro propio (el contrato `IBrain`/`MlpBrain` es agnóstico del dueño);
-   los eventos de combate entran al canal B como kinds nuevos.
+     **DISEÑO CERRADO** (2026-09-13): [`fase5-2b-eciton.md`](fase5-2b-eciton.md)
+     — Eciton como ESPECIE que roba (no agente libre): combate en el paso
+     de hormiga con `ContactRadius`/`StrikeDamage`/`StealPerStrike` por
+     especie, botín como carga que el `Unload` existente convierte en
+     inflow, detección por el canal 14 reconvertido (gating por especie),
+     Alarm reusada como rastro de incursión, eventos 17–19 en canal B y
+     `.antsave` v4. Implementación en 5 rodajas.
+2. **Depredadores y agresividad inter-colonia** (como agentes libres):
+   agentes no-colonia con cerebro propio (el contrato `IBrain`/`MlpBrain` es
+   agnóstico del dueño); los eventos de combate entran al canal B como
+   kinds nuevos. NOTA F5.2b: el combate inter-colonia SE HACE en F5.2b
+   (Eciton especie que roba — [`fase5-2b-eciton.md`](fase5-2b-eciton.md));
+   lo que aquí queda abierto es solo el agente SIN colonia (F5.2d posible).
 3. **Competencia con apuestas observables**: hoy 2 colonias compiten y el
    semáforo contrasta sembrada vs natural; con especies el picker gana una
    dimensión (¿qué pool resiste a una invasora Eciton?).
