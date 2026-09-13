@@ -23,6 +23,9 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Barras de reserva por colonia (Image fill; orden = id).")]
         public Image?[]? StockBars;
 
+        [Tooltip("Barras de HONGO por colonia (Image fill; orden = id). Solo se pintan para colonias con FungusMax > 0 (Atta); las demás quedan al 0.")]
+        public Image?[]? FungusBars;
+
         private readonly Streaming.ColonyCardModel _cards = new();
 
         /// <summary>Modelo puro de tarjetas (tests y diagnósticos).</summary>
@@ -65,6 +68,22 @@ namespace AntSim.Unity.Scripts.Presenter
                 if (img == null) continue;
                 img.fillAmount = b.Fraction;
                 img.color = b.Low ? new Color(0.9f, 0.2f, 0.15f) : new Color(0.45f, 0.8f, 0.4f);
+            }
+
+            // F5.2a.5: barra del HONGO por colonia (la segunda reserva de la
+            // cortadora). Regla del modelo puro FungusSegments (misma granularidad
+            // que la reserva); color ocre del hongo, sin «baja» — el hongo NACE
+            // vacío por diseño (la fundadora lo construye), no es alerta.
+            if (FungusBars == null) return;
+            foreach (var c in _cards.Cards.Values)
+            {
+                if (c.Colony is not Streaming.GameStreamParser.ColonyView col) continue;
+                if (c.ColonyId >= FungusBars.Length) continue;
+                var img = FungusBars[c.ColonyId];
+                if (img == null) continue;
+                if (col.FungusMax <= 0f) { img.fillAmount = 0f; continue; }
+                img.fillAmount = Streaming.ColonyCardModel.FungusSegments(col.Fungus / col.FungusMax) / 10f;
+                img.color = new Color(0.82f, 0.62f, 0.30f); // ocre del hongo
             }
         }
     }
