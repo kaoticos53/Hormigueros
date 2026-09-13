@@ -291,11 +291,14 @@ Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
    - *Atta* (cortadora): cadena cortar→transportar→hongo. Necesita ítems
      compuestos (hoja = N carga) y un segundo objetivo de reserva (hongo);
      la economía ya soporta stock por colonia.
-     **DISEÑO CERRADO** (2026-09-13): [`fase5-2a-atta.md`](fase5-2a-atta.md)
-     — corte = `Interact` sobre un ítem con `CutsLeft` (genoma portable),
-     hongo = segunda reserva cuya digestión alimenta el inflow existente,
-     `.antsave` v2, canales A/B/C con campos/eventos nuevos y `--species`/
-     `--leaf-fraction` en el CLI. Implementación en 5 rodajas.
+     **CERRADO** (2026-09-13): [`fase5-2a-atta.md`](fase5-2a-atta.md) —
+     las 5 rodajas HECHAS (§6bis del doc): corte = `Interact` sobre un
+     ítem con `CutsLeft` (genoma portable), hongo = segunda reserva con
+     digestión proporcional que alimenta el inflow existente, `.antsave`
+     v3, canales A/C con cuts/fungus/cutters, `--species`/`--leaf-fraction`
+     en el CLI, 4º pin de hash en CI y humo visual del multi-visor con la
+     tarjeta de la cortadora (barra de hongo + cortes) verificado en vivo
+     (`RunSmokeAtta`) y headless (`AttaViewCardTests`).
    - *Eciton* (legionaria): ciclos nómadas y predación. Necesita feromona
      de alarma ofensiva (la capa Alarm ya existe y el canal la puede emitir)
      y objetivos móviles (las otras colonias).
@@ -362,10 +365,10 @@ grafo NEAT del mejor cortador visible.
 ## 8. Orden propuesto (resumen ejecutable)
 
 ```
-F5.0  mini-grafo MLP (canal de activaciones opt-in + render headless)   ~1 semana
-F5.1  pulido uGUI (toasts-rect, drag&drop, gráficas, iconos)            ~2–3 semanas
-F5.2a Atta: cortar→transportar→hongo (ítems compuestos + hongo)         ~2 semanas
-F5.2b Eciton + depredadores (Alarm ofensiva, combate en canal B)        ~2 semanas
+F5.0  mini-grafo MLP (canal de activaciones opt-in + render headless)   ✅
+F5.1  pulido uGUI (toasts-rect, drag&drop, gráficas, iconos)            ✅ (+5.1bis multi-visor)
+F5.2a Atta: cortar→transportar→hongo (ítems compuestos + hongo)         ✅ CERRADO (2026-09-13)
+F5.2b Eciton + depredadores (Alarm ofensiva, combate en canal B)        ← SIGUIENTE
 F5.2c NEAT v2 (.antgenome v2 + inspector de grafos generalizado)        ~3–4 semanas
 F5.3  SoA/ECS + LOD feromonas + GPU instancing (pin de hash)            ~3 semanas
 ```
