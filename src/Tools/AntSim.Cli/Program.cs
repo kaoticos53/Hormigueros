@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using AntSim.Core.Evolution;
+using AntSim.Core.Pheromone;
 using AntSim.Core.Serialization;
 using AntSim.Core.Scenario;
 using AntSim.Core.Training;
@@ -70,6 +71,7 @@ internal static class Program
         int frameEvery = 1;           // F4.1: canal A cada N ticks en modo game
         var drops = new List<(int Tick, float X, float Y)>(); // F4.1: comandos DropFood inyectados
         int pheroEvery = 0; // F4.5: canal E opt-in (feromonas en el stream)
+        var pheroLayers = new List<GameScenario.PheroRequest>(); // F5.1: canal E multi-capa
         uint inspectId = 0; // F5.0: hormiga inspeccionada (canal F de activaciones)
         int activEvery = 0; // F5.0: canal F opt-in (activaciones del MLP en el stream)
         bool presetsJson = false;   // --mode presets: salida JSON estructurada
@@ -161,6 +163,28 @@ internal static class Program
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out pheroEvery) || pheroEvery < 0)
                         return Fail("--phero-every requiere un entero ≥ 0 (0 = desactivado).");
                     break;
+                case "--phero-layers":
+                {
+                    // Canal E múltiple (F5.1): «0:home,1:home,1:alarm». Sin esta
+                    // lista, el canal E clásico emite UNA capa (home de la colonia
+                    // 0); con ella, cada tick trae "pheroSet" con la colonia y la
+                    // capa de cada paquete.
+                    string spec = Next(args, ref i);
+                    foreach (string part in spec.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string[] kv = part.Split(':');
+                        if (kv.Length != 2
+                            || !int.TryParse(kv[0], NumberStyles.None, CultureInfo.InvariantCulture, out int col)
+                            || col < 0
+                            || !TryParsePheroKind(kv[1], out PheromoneKind kind))
+                            return Fail("--phero-layers requiere colonia:capa (p. ej. 0:home,1:home,1:alarm; "
+                                      + "capas: food, home, alarm).");
+                        pheroLayers.Add(new GameScenario.PheroRequest(col, kind));
+                    }
+                    if (pheroLayers.Count == 0)
+                        return Fail("--phero-layers vacío: no hay ninguna capa que emitir.");
+                    break;
+                }
                 case "--inspect":
                     if (!uint.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out inspectId) || inspectId == 0)
                         return Fail("--inspect requiere un id de hormiga > 0.");
@@ -199,7 +223,8 @@ internal static class Program
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
                 "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
-                    pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery),
+                    pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery,
+                    pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null),
                 "presets" => PresetScenario.RenderCards(json: presetsJson),
                 "genome-info" => importPath == null
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
@@ -409,6 +434,18 @@ internal static class Program
         return n;
     }
 
+    /// <summary>Capa de feromona por nombre (completo o inicial), sin distinguir mayúsculas.</summary>
+    private static bool TryParsePheroKind(string text, out PheromoneKind kind)
+    {
+        switch (text.Trim().ToLowerInvariant())
+        {
+            case "food": case "f": kind = PheromoneKind.FoodTrail; return true;
+            case "home": case "h": kind = PheromoneKind.Home; return true;
+            case "alarm": case "a": kind = PheromoneKind.Alarm; return true;
+            default: kind = default; return false;
+        }
+    }
+
     private static string Next(string[] args, ref int i)
     {
         i++;
@@ -559,6 +596,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--inspect N] [--activ-every N] [--json]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json]");
     }
 }

@@ -107,8 +107,19 @@ acabado):
      no es terroso, si no se ve ninguna hormiga o si el HUD desborda. Todas
      las muestras de ESTADO estaban en verde mientras el mundo se veía blanco:
      el pass no podía fallar por algo que no medía.
-6. **Feromonas por colonia** — el canal E hoy emite HomeTrail de la colonia
-   0; selector de capa (Home/Food/Alarm) y de colonia, con paleta por capa.
+6. **Feromonas por colonia** — ✅ HECHO (2026-09-12): el canal E clásico emitía
+   home de la colonia 0, así que con dos colonias compitiendo se veía media
+   partida. Ahora `--phero-every N --phero-layers 0:home,1:home,1:alarm` emite
+   `pheroSet:[{c,k,d},…]` (colonia + tipo por paquete, en el orden pedido) y el
+   render tiene selector: `F` cicla la capa (home/food/alarm), `G` la colonia, y
+   cada capa tiene su color (verde casa, ámbar comida, rojo peligro). El canal
+   clásico no cambia de forma (fixtures y pines intactos) y si la capa pedida no
+   viene en el tick se pinta VACÍO en vez de dejar el rastro anterior. 21 tests
+   (12 del emisor + 9 del selector), incluido el que compara los ordinales del
+   Core con los del enum propio de Unity — la app Unity NO referencia el Core, y
+   esa frontera es la que mantiene los modelos puros compilables headless.
+   Queda: capa de territorio (cuando se deposite) y el chip de la capa activa en
+   el HUD (hoy la pinta el render y la nombra `LayerLabel`).
 7. **Audio y accesibilidad** — sonidos de evento (unload, eclosión, alerta)
    y escala de UI; sin diseño urgente, es lo único sin contrato previo.
 

@@ -6,6 +6,7 @@ using AntSim.Core.Serialization;
 using AntSim.Core.Evolution;
 using AntSim.Core.Brain;
 using AntSim.Core.Contracts;
+using AntSim.Core.Pheromone;
 using AntSim.Core.Telemetry;
 using AntSim.Core.World;
 
@@ -29,16 +30,58 @@ public static class GameScenario
     /// canal B se emiten SIEMPRE (son discretos, no interpolables). 1 = cada tick.</summary>
     public const int DefaultFrameEvery = 1;
 
+    /// <summary>
+    /// Una capa pedida del canal E: de qué COLONIA y de qué TIPO. Las capas son
+    /// por colonia (una hormiga solo lee las suyas), así que «las feromonas» del
+    /// mundo son N capas, no una: con dos colonias compitiendo, enseñar solo la
+    /// de la 0 era contar media partida.
+    /// </summary>
+    public readonly struct PheroRequest
+    {
+        public readonly int Colony;
+        public readonly PheromoneKind Kind;
+
+        public PheroRequest(int colony, PheromoneKind kind)
+        {
+            Colony = colony;
+            Kind = kind;
+        }
+    }
+
     public static string Run(ulong seed, int ticks, int colonies = 2, int grid = 256,
         int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
         IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
         bool cloneFromElite = false, int pheroEvery = 0,
-        uint inspectId = 0, int activEvery = 0)
+        uint inspectId = 0, int activEvery = 0,
+        IReadOnlyList<PheroRequest>? pheroLayers = null)
     {
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
         if (pheroEvery < 0) throw new ArgumentOutOfRangeException(nameof(pheroEvery));
         if (activEvery < 0) throw new ArgumentOutOfRangeException(nameof(activEvery));
+
+        if (pheroLayers != null)
+        {
+            // El conjunto de capas es un modo EXPLÍCITO y sustituto del canal E
+            // clásico: no se emiten los dos (sería el mismo dato dos veces por
+            // tick) y exige `pheroEvery`, porque sin cadencia no hay nada que
+            // emitir y el fallo sería silencioso en la UI.
+            if (pheroEvery <= 0)
+                throw new ArgumentException("pheroLayers requiere pheroEvery > 0.", nameof(pheroLayers));
+            if (pheroLayers.Count == 0)
+                throw new ArgumentException("pheroLayers vacío: no hay ninguna capa que emitir.", nameof(pheroLayers));
+            for (int i = 0; i < pheroLayers.Count; i++)
+            {
+                var r = pheroLayers[i];
+                if (r.Colony < 0 || r.Colony >= colonies)
+                    throw new ArgumentOutOfRangeException(nameof(pheroLayers),
+                        $"colonia {r.Colony} fuera de rango (0..{colonies - 1}).");
+                if (r.Kind == PheromoneKind.Territory)
+                    throw new ArgumentException(
+                        "Territory todavía no se deposita: la capa estaría siempre vacía.",
+                        nameof(pheroLayers));
+            }
+        }
 
         var sim = new WorldSim(seed, grid, colonies, cloneFromElite: cloneFromElite);
         var sb = new StringBuilder();
@@ -56,6 +99,13 @@ public static class GameScenario
         // toca el mundo (telemetría pura) y va en ticks múltiplo de pheroEvery.
         if (pheroEvery > 0)
             sb.Append(",\"pheroEvery\":").Append(pheroEvery);
+
+        // Canal E múltiple (F5.1): con `pheroLayers` la cabecera declara que los
+        // ticks traen "pheroSet" (array con colonia y tipo por paquete) en vez
+        // del "phero" suelto. El canal clásico no cambia: los pines de CI y los
+        // fixtures de stream quedan intactos.
+        if (pheroLayers != null)
+            sb.Append(",\"pheroSet\":true");
 
         // Canal F (F5.0): activaciones del cerebro de UNA hormiga inspeccionada,
         // opt-in como el E. La hormiga se elige por Id (el mismo que viaja en el
@@ -110,7 +160,10 @@ public static class GameScenario
             // la llave abierta); la línea cierra aquí. F5.0 fix: antes el canal E
             // se añadía tras la llave de cierre y el JSONL quedaba pegado.
             if (pheroEvery > 0 && sim.Tick % (ulong)pheroEvery == 0)
-                AppendPheromones(sb, sim);
+            {
+                if (pheroLayers == null) AppendPheromones(sb, sim);
+                else AppendPheromoneSet(sb, sim, pheroLayers);
+            }
             if (activEvery > 0 && sim.Tick % (ulong)activEvery == 0)
                 AppendActivations(sb, sim, inspectId);
             sb.Append('}').AppendLine(); // cierra el objeto del tick
@@ -122,11 +175,9 @@ public static class GameScenario
     }
 
     /// <summary>
-    /// Canal E (F4.5): capa FoodTrail de la colonia 0 como paquete binario —
-    /// RLE por filas + base64, dentro del tick JSON como string. Codificación
-    /// canónica: cabecera w,h (u16 LE) + filas no vacías [y (u16 LE) + pares
-    /// (valor, run ≤255)] donde cada fila suma exactamente w celdas. Telemetría
-    /// pura: lee, nunca escribe.
+    /// Canal E clásico (F4.5): capa Home de la colonia 0 como string base64 dentro
+    /// del tick JSON. Se mantiene tal cual — los fixtures de stream y los pines de
+    /// CI cuentan con este formato; el modo multi-capa es <see cref="AppendPheromoneSet"/>.
     /// </summary>
     private static void AppendPheromones(StringBuilder sb, WorldSim sim)
     {
@@ -134,6 +185,47 @@ public static class GameScenario
         // que caminan (el food trail exige llevar carga), así el canal muestra
         // actividad desde los primeros ticks.
         var layer = sim.Colonies[0].HomeLayer;
+        sb.Append(",\"phero\":\"").Append(Convert.ToBase64String(EncodeLayer(layer))).Append('"');
+    }
+
+    /// <summary>
+    /// Canal E múltiple (F5.1): varias capas —colonia×tipo— en el mismo tick como
+    /// array de paquetes con su procedencia. El orden del array es el que pidió el
+    /// llamante (determinista), y `k` es el ordinal de <see cref="PheromoneKind"/>
+    /// (0 FoodTrail, 1 Home, 2 Alarm): parte del contrato, no un detalle interno.
+    /// </summary>
+    private static void AppendPheromoneSet(StringBuilder sb, WorldSim sim, IReadOnlyList<PheroRequest> layers)
+    {
+        sb.Append(",\"pheroSet\":[");
+        for (int i = 0; i < layers.Count; i++)
+        {
+            var req = layers[i];
+            if (i > 0) sb.Append(',');
+            sb.Append("{\"c\":").Append(req.Colony)
+              .Append(",\"k\":").Append((int)req.Kind)
+              .Append(",\"d\":\"")
+              .Append(Convert.ToBase64String(EncodeLayer(LayerOf(sim.Colonies[req.Colony], req.Kind))))
+              .Append("\"}");
+        }
+        sb.Append(']');
+    }
+
+    private static PheromoneLayer LayerOf(Colony colony, PheromoneKind kind) => kind switch
+    {
+        PheromoneKind.FoodTrail => colony.FoodLayer,
+        PheromoneKind.Home => colony.HomeLayer,
+        PheromoneKind.Alarm => colony.AlarmLayer,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "capa sin datos que emitir.")
+    };
+
+    /// <summary>
+    /// Codificación canónica de una capa: cabecera w,h (u16 LE) + filas no vacías
+    /// [y (u16 LE) + pares (valor, run ≤255)], cada fila suma exactamente w celdas.
+    /// Cuantiza a byte (el render no distingue más), se salta las filas vacías y no
+    /// lee fuera de la capa. Telemetría pura: lee, no escribe.
+    /// </summary>
+    private static byte[] EncodeLayer(PheromoneLayer layer)
+    {
         int w = layer.Width, h = layer.Height;
         var payload = new List<byte>(w * h / 4 + 16);
         // Cabecera: w, h little-endian u16.
@@ -167,7 +259,7 @@ public static class GameScenario
             }
             y++;
         }
-        sb.Append(",\"phero\":\"").Append(Convert.ToBase64String(payload.ToArray())).Append('"');
+        return payload.ToArray();
     }
 
     /// <summary>

@@ -37,6 +37,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ImportDialogModel.cs" Link="UnityPure/ImportDialogModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneTileModel.cs" Link="UnityPure/PheromoneTileModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ActivationViewModel.cs" Link="UnityPure/ActivationViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneSelectorModel.cs" Link="UnityPure/PheromoneSelectorModel.cs" />
   </ItemGroup>
 
 </Project>

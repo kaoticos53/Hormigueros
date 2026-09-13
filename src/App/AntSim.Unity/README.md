@@ -245,10 +245,16 @@ escena se guarda y se registra en build settings sola.
   tarjeta de cuarentena (sha, fitness, genomas, reglas); Confirmar siembra la
   partida vía `SeedPoolPath`, Cancelar no toca nada. `ImportDialogModel`
   (puro) parsea el JSON canónico — testado headless contra el pool real.
-- **Feromonas visibles (F4.5)**: lanza el CLI con `--phero-every 30` y el quad
-  `PheromoneTiles` (lo crea el bootstrapper) pinta el rastro de la colonia 0
-  vía RenderTexture. `PheromoneTileModel` (puro) decodifica el paquete RLE —
-  la emisión es telemetría pura: el hash del mundo no cambia (test).
+- **Feromonas visibles (F4.5 · selector en F5.1)**: lanza el CLI con
+  `--phero-every 30` y el quad `PheromoneTiles` (lo crea el bootstrapper) pinta
+  el rastro de la colonia 0 vía RenderTexture. `PheromoneTileModel` (puro)
+  decodifica el paquete RLE. **Con dos colonias compitiendo**, añade
+  `--phero-layers 0:home,1:home,1:alarm`: cada tick trae entonces las capas
+  pedidas y `F` cicla la capa (home/food/alarm, cada una con su color) y `G` la
+  colonia; `PheromoneSelectorModel` (puro) decide qué capa se pinta y con qué
+  color, y el render pinta **vacío** si esa capa no viene (nunca deja el frame
+  anterior, que se leería como dato de otra colonia). La emisión es telemetría
+  pura: el hash del mundo no cambia (test).
 - **Mini-grafo MLP (F5.0, canal F)**: lanza el CLI con `--activ-every 30
   --inspect <antId>` y el stream trae en cada tick las 33 activaciones del
   cerebro de la hormiga inspeccionada (base64 s8). `ActivationViewModel`

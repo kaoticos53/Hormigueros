@@ -20,7 +20,34 @@ canales A/B/C del Core). Referencias: [`fase4-diseno-ux.md`](fase4-diseno-ux.md)
 | Eventos discretos (canal B) | `events:[[kind,colony,ant,x,y,cause],…]` | cada tick (si hubo) |
 | Métricas de ventana (canal C) | `metrics:{t0,t1,pickups,unloads,births,deaths,eggs,eclosed,consumed,commands}` | cada 30 ticks |
 | Salud del relevo | `relay:{firstUnload,dropAvg,unloadAvg,carryLeg}` | cada 120 ticks |
+| Feromonas (canal E, opt-in) | `phero:"base64"` si `--phero-every N` · `pheroSet:[{c,k,d},…]` si además `--phero-layers` | cada N ticks |
+| Activaciones del cerebro (canal F, opt-in) | `activ:"base64"` si `--activ-every N --inspect ID` | cada N ticks |
 | Hash de verificación | línea `{"end":true,...,"hash"}` | al final |
+
+### Canal E — feromonas (F4.5 · múltiple en F5.1)
+
+Las capas de feromona son **por colonia** y hay tres tipos activos, así que «las
+feromonas» del mundo son N capas, no una. Dos formatos, y el clásico no cambia:
+
+- **Clásico**: `"phero":"<base64>"` = capa **home de la colonia 0**. Es el que
+traen los fixtures de stream y los pines de CI: su forma NO puede cambiar.
+- **Múltiple** (`--phero-every N --phero-layers 0:home,1:home,1:alarm`): la
+cabecera declara `"pheroSet":true` y cada tick emite
+`"pheroSet":[{"c":colonia,"k":capa,"d":"<base64>"},…]` **en el orden pedido**
+(no es un conjunto: el mismo tick siempre trae el mismo array).
+
+`k` es el ordinal de `PheromoneKind` — **0 food, 1 home, 2 alarm** (Territory
+existe en el enum pero todavía no se deposita, así que el emisor la rechaza: un
+paquete siempre vacío la UI lo leería como «aquí no pasa nada»).
+
+El payload de cada paquete es el RLE canónico de siempre: `[w,h u16 LE]` + filas
+no vacías `[y u16 LE]` + pares `(valor byte, run ≤255)`, cada fila sumando
+exactamente `w` celdas; las filas ausentes son cero. La app Unity **no**
+referencia el Core: declara los ordinales en su propio enum
+(`PheromoneSelectorModel.Layer`) y un test compara ambos para que no se separen.
+El selector del HUD (`F` capa · `G` colonia) pinta la capa pedida o **vacío** si
+esa capa no viene en el tick — nunca deja el frame anterior, que se leería como
+dato de la colonia equivocada.
 
 Los códigos de `kind` (canal B) son los de `SimEventKind`:
 0 AntBorn · 1 AntDied · 2 ItemSpawned · 3 ItemConsumed · 4 Pickup · 5 Unload ·

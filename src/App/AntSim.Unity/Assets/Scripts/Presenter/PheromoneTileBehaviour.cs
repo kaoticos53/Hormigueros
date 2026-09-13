@@ -3,12 +3,22 @@ using UnityEngine;
 namespace AntSim.Unity.Scripts.Presenter
 {
     /// <summary>
-    /// Render de feromonas (F4.5) — wire-up FINO sobre <see cref="Streaming.PheromoneTileModel"/>.
-    /// Un quad bajo las hormigas muestra la capa FoodTrail de la colonia 0: el
-    /// decodificador puro llena la textura CPU-side y este componente la sube a
-    /// la RenderTexture del material (filtro bilinear para que las celdas de 8 u
-    /// se vean como rastros continuos). Pausa/velocidad del presenter aplican
-    /// solas: la textura solo cambia cuando llega un paquete nuevo.
+    /// Render de feromonas (F4.5) + selector de capa (F5.1) — wire-up FINO sobre
+    /// <see cref="Streaming.PheromoneSelectorModel"/> (decide QUÉ capa y de qué
+    /// color) y <see cref="Streaming.PheromoneTileModel"/> (decodifica el RLE).
+    ///
+    /// POR QUÉ HAY SELECTOR: las capas de feromona son POR COLONIA y hay tres
+    /// tipos activos. El canal E clásico enseñaba una sola (home de la colonia 0),
+    /// así que con dos colonias compitiendo no se podía ver el rastro de la otra
+    /// ni distinguir «casa» de «comida» o «peligro». Ahora se elige con F (capa) y
+    /// G (colonia), y cada capa tiene su color.
+    ///
+    /// Las acciones tienen punto de entrada SIN DISPOSITIVO (F5.2): el Play pass
+    /// cicla capas sin teclado, igual que selecciona hormigas o marca drops.
+    ///
+    /// Si la capa pedida no viene en el stream se pinta VACÍO — nunca se deja el
+    /// frame anterior: un rastro viejo con la etiqueta equivocada es peor que no
+    /// pintar nada (se leería como «esta colonia no tiene rastro»).
     /// </summary>
     public sealed class PheromoneTileBehaviour : MonoBehaviour
     {
@@ -18,44 +28,117 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Material con la RenderTexture destino (shader Unlit/Texture).")]
         public Material? TargetMaterial;
 
+        [Tooltip("Color por capa (paleta del selector). Apágalo para pintar todo con TrailColor.")]
+        public bool PaletteByLayer = true;
+
         [ColorUsage(false)]
-        [Tooltip("Color del rastro a intensidad máxima.")]
+        [Tooltip("Color fijo cuando PaletteByLayer está apagado.")]
         public Color TrailColor = new Color(0.35f, 0.85f, 0.45f);
+
+        [Tooltip("Atajo para ciclar la capa (home → food → alarm).")]
+        public KeyCode CycleLayerKey = KeyCode.F;
+
+        [Tooltip("Atajo para ciclar la colonia.")]
+        public KeyCode CycleColonyKey = KeyCode.G;
+
+        /// <summary>Selector puro (tests e inspección): decide capa, colonia y color.</summary>
+        public readonly Streaming.PheromoneSelectorModel Selector = new();
 
         /// <summary>Modelo puro decodificado (tests e inspección).</summary>
         public readonly Streaming.PheromoneTileModel Model = new();
 
         private Texture2D? _cpu;
         private RenderTexture? _rt;
-        private int _seenTick = -1;
+        private int _paintedTick = -1;
+        private int _paintedColony = int.MinValue;
+        private byte _paintedKind = 255;
+
+        /// <summary>Etiqueta de la capa pintada («feromonas · colonia 1 · alarm»).</summary>
+        public string LayerLabel => Selector.Label;
+
+        // ————— acciones sin dispositivo (F5.2) —————
+
+        public void SelectLayer(Streaming.PheromoneSelectorModel.Layer kind)
+        {
+            Selector.Select(kind);
+            _paintedTick = -1; // fuerza repintado aunque el tick no cambie
+        }
+
+        public void SelectColony(int colony)
+        {
+            Selector.SelectColony(colony);
+            _paintedTick = -1;
+        }
+
+        public void CycleLayer()
+        {
+            Selector.CycleLayer();
+            _paintedTick = -1;
+        }
+
+        public void CycleColony()
+        {
+            Selector.CycleColony();
+            _paintedTick = -1;
+        }
 
         private void Update()
         {
             var presenter = Presenter;
             if (presenter == null || TargetMaterial == null) return;
 
-            var view = presenter.Presenter.CurrentTick;
-            if (view == null || view.Tick == (ulong)_seenTick) return;
-            if (string.IsNullOrEmpty(view.Phero)) return;
-            _seenTick = (int)view.Tick;
+            var header = presenter.Presenter.Header;
+            if (header != null) Selector.SetColonyCount(header.Colonies);
 
-            if (!Model.Decode(view.Phero)) return;
+            if (Input.GetKeyDown(CycleLayerKey)) CycleLayer();
+            if (Input.GetKeyDown(CycleColonyKey)) CycleColony();
+
+            var view = presenter.Presenter.CurrentTick;
+            if (view == null) return;
+
+            string? payload = Selector.Payload(view);
+            bool yaPintado = (int)view.Tick == _paintedTick
+                             && Selector.Colony == _paintedColony
+                             && (byte)Selector.Kind == _paintedKind;
+            if (yaPintado) return;
+
+            _paintedTick = (int)view.Tick;
+            _paintedColony = Selector.Colony;
+            _paintedKind = (byte)Selector.Kind;
+
+            if (payload == null || !Model.Decode(payload))
+            {
+                ClearTiles();
+                return;
+            }
 
             int w = Model.Width, h = Model.Height;
-            if (w == 0 || h == 0) return;
-
+            if (w == 0 || h == 0)
+            {
+                ClearTiles();
+                return;
+            }
             EnsureTextures(w, h);
 
-            var pixels = new Color32[w * h];
+            var rgb = PaletteByLayer
+                ? Selector.Palette
+                : new Streaming.PheromoneSelectorModel.Rgb(TrailColor.r, TrailColor.g, TrailColor.b);
+            byte r = (byte)(rgb.R * 255f), g = (byte)(rgb.G * 255f), b = (byte)(rgb.B * 255f);
             var cells = Model.Cells;
-            byte r = (byte)(TrailColor.r * 255f), g = (byte)(TrailColor.g * 255f),
-                 b = (byte)(TrailColor.b * 255f);
+            var pixels = new Color32[cells.Length];
             for (int i = 0; i < cells.Length; i++)
-            {
-                byte a = cells[i];
-                pixels[i] = new Color32(r, g, b, a);
-            }
+                pixels[i] = new Color32(r, g, b, cells[i]);
             _cpu!.SetPixels32(pixels);
+            _cpu.Apply(false);
+            Graphics.Blit(_cpu, _rt);
+        }
+
+        /// <summary>Deja la capa en blanco (canal ausente o capa sin datos).</summary>
+        private void ClearTiles()
+        {
+            if (_cpu == null || _rt == null) return;
+            var pixels = new Color32[_cpu.width * _cpu.height]; // (0,0,0,0)
+            _cpu.SetPixels32(pixels);
             _cpu.Apply(false);
             Graphics.Blit(_cpu, _rt);
         }

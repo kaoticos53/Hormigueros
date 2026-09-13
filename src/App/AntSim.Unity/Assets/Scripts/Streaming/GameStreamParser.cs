@@ -142,6 +142,23 @@ namespace AntSim.Unity.Scripts.Streaming
               Births = births; Deaths = deaths; Eggs = eggs; Eclosed = eclosed; }
         }
 
+        /// <summary>
+        /// Un paquete del canal E múltiple (F5.1): de qué COLONIA y de qué TIPO,
+        /// con su rejilla RLE en base64. Las capas de feromona son por colonia, así
+        /// que «las feromonas» del mundo son N capas, no una.
+        /// </summary>
+        public readonly struct PheroLayerView
+        {
+            public readonly int Colony;
+            public readonly byte Kind;   // ordinal de PheromoneKind (0 food, 1 home, 2 alarm)
+            public readonly string Data; // base64 RLE, mismo formato que el canal E clásico
+
+            public PheroLayerView(int colony, byte kind, string data)
+            {
+                Colony = colony; Kind = kind; Data = data;
+            }
+        }
+
         /// <summary>Estado visible de un tick: lo que el presenter renderiza.</summary>
         public sealed class TickView
         {
@@ -157,6 +174,7 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
             public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
             public string? Phero;                                 // canal E (F4.5), base64 RLE
+            public readonly List<PheroLayerView> PheroSet = new(); // canal E múltiple (F5.1)
             public string? Activ;                                 // canal F (F5.0), base64 s8
         }
 
@@ -166,6 +184,7 @@ namespace AntSim.Unity.Scripts.Streaming
             public ulong Seed;
             public int Ticks, Colonies, Grid, FrameEvery;
             public int PheroEvery;   // canal E (F4.5); 0 = desactivado
+            public bool PheroSetMode; // canal E múltiple (F5.1): los ticks traen pheroSet
             public int ActivEvery;   // canal F (F5.0); 0 = desactivado
             public ulong InspectId;  // hormiga del canal F; 0 = sin inspección
         }
@@ -194,6 +213,7 @@ namespace AntSim.Unity.Scripts.Streaming
                     Grid = (int)p.Num("grid"),
                     FrameEvery = (int)p.Num("frameEvery"),
                     PheroEvery = raw.Contains("\"pheroEvery\"") ? (int)p.Num("pheroEvery") : 0,
+                    PheroSetMode = raw.Contains("\"pheroSet\":true"),
                     ActivEvery = raw.Contains("\"activEvery\"") ? (int)p.Num("activEvery") : 0,
                     InspectId = raw.Contains("\"inspectId\"") ? (ulong)p.Num("inspectId") : 0ul,
                 };
@@ -279,6 +299,22 @@ namespace AntSim.Unity.Scripts.Streaming
                 int start = pi + 9;
                 int end = raw.IndexOf('"', start);
                 if (end > start) v.Phero = raw.Substring(start, end - start);
+            }
+
+            // — Canal E múltiple (F5.1): [{"c":colonia,"k":capa,"d":base64}, …] —
+            // El orden del array es el que pidió el emisor: se conserva tal cual
+            // para que la UI pueda enseñarlo sin reordenar (y los tests de
+            // determinismo comparen listas, no conjuntos).
+            int psi = raw.IndexOf("\"pheroSet\":[", StringComparison.Ordinal);
+            if (psi >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, psi + "\"pheroSet\":[".Length - 1)))
+                {
+                    var p = new Reader(row);
+                    string data = p.Str("d");
+                    if (data.Length == 0) continue;
+                    v.PheroSet.Add(new PheroLayerView((int)p.Num("c"), (byte)p.Num("k"), data));
+                }
             }
 
             // — Canal F (F5.0): activaciones base64 del cerebro inspeccionado —
