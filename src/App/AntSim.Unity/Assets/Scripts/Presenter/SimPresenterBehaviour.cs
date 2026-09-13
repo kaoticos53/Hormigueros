@@ -70,6 +70,9 @@ namespace AntSim.Unity.Scripts.Presenter
         public Mesh ItemMesh = null!;
         public Material ItemMaterial = null!;
 
+        [Tooltip("Capa de render de ESTA vista (F5.1bis multi-visor): los DrawMesh van a esa capa y la cámara con la máscara correspondiente solo ve su mundo. 0 = Default (escena de una vista, compatible con todo lo anterior). Los suelos/nidos del multi-visor se crean en la MISMA capa, así que la máscara de la cámara completa la separación.")]
+        public int RenderLayer = 0;
+
         /// <summary>
         /// LONGITUD de la hormiga en unidades de mundo (no un factor de escala:
         /// el valor histórico —0.6— no significaba nada visible). 0 = automática
@@ -97,6 +100,12 @@ namespace AntSim.Unity.Scripts.Presenter
 
         [Header("Tiempo")]
         [Range(0f, 16f)] public float Speed = 1f; // 0 = pausa
+        [Tooltip("Multiplicador añadido sobre Speed con las teclas +/= (cicla 1 → 2 → 4). 1 = Speed tal cual. Es replay acelerado: nunca cambia la física.")]
+        public float SpeedBoost = 1f;
+        [Tooltip("Tecla que cicla el multiplicador de velocidad (1 → 2 → 4).")]
+        public KeyCode CycleSpeedKey = KeyCode.KeypadPlus;
+        [Tooltip("Tecla alternativa para ciclar la velocidad (para teclados sin keypad).")]
+        public KeyCode CycleSpeedKey2 = KeyCode.Equals;
 
         private readonly Streaming.GameStreamPresenter _presenter = new();
         private Streaming.StreamSource? _source;
@@ -182,11 +191,23 @@ namespace AntSim.Unity.Scripts.Presenter
             });
         }
 
+        private static readonly float[] SpeedBoosts = { 1f, 2f, 4f };
+        private int _speedBoostIndex;
+
         private void Update()
         {
+            // Fase rápida de observación: +/=. cicla 1 → 2 → 4 → 1. Es PURO replay:
+            // acelera el consumo del stream (más ticks por segundo real), nunca la
+            // física — la partida es la misma bit a bit, solo se ve más rápido.
+            if (Input.GetKeyDown(CycleSpeedKey) || Input.GetKeyDown(CycleSpeedKey2))
+            {
+                _speedBoostIndex = (_speedBoostIndex + 1) % SpeedBoosts.Length;
+                SpeedBoost = SpeedBoosts[_speedBoostIndex];
+            }
+
             // Pausa (Speed 0): congela el reloj de simulación, pero SIGUE dibujando
             // — si no, pausar dejaba la pantalla sin mundo.
-            if (Speed > 0f) _simTime += Time.deltaTime * Speed;
+            if (Speed > 0f) _simTime += Time.deltaTime * Speed * SpeedBoost;
 
             // Reproducción: el tick k+1 es el "actual" para interpolar desde k con
             // fracción frac(simTime/Dt) (retraso de 1 tick de la arquitectura).
