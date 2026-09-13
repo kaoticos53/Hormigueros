@@ -172,12 +172,21 @@ Rechazo de v3: patrón establecido.
 
 ## 8. Slicing (rodajas con su test)
 
-1. **F5.2b.1 — Cuerpo del combate**: `ContactRadius`/`StrikeDamage`/
-   `StealPerStrike` en el descriptor (0 por defecto = sin combate),
-   golpe+robo+`DeathCause.Combat` en `Act`, eventos 17/18/19, alarma
-   inyectada a la víctima. Tests: golpe a distancia, robo entra como
-   carga, descarga hace `RecordInflow` en el ladrón, víctima muere con
-   causa 2, especies con `ContactRadius = 0` bit-idénticos (pin).
+1. **F5.2b.1 — Cuerpo del combate — HECHO (2026-09-13)**:
+   `ContactRadius`/`StrikeDamage`/`StealPerStrike` en el descriptor (0 por
+   defecto = sin combate), `TryStrike` en `Act` (después del movimiento,
+   presa = la más cercana, empate por antId menor, vive en la ventana de
+   interacción con cooldown 0.5 s y gating `WantsInteraction`), robo como
+   carga (`LoadIsLoot`/`LootFromColony`), `DeathCause.Combat = 2` vía
+   `Ant.DiedInCombat`, eventos 17/18/19 (RaidInflow se emite en el Unload
+   del botín), alarma inyectada en la capa de la presa (0.8 u en la celda
+   del golpe). `.antsave` v4: por hormiga se persisten `LoadIsLoot`,
+   `LootFromColony` y `DiedInCombat`. 7 tests (`CombatTests`): daño con
+   control gemelo, robo clampado al stock real, RaidInflow + descarga,
+   muerte con causa 2, mundo sin Eciton invariante, cooldown/carga no
+   golpean, roundtrip v4 con hash idéntico. **305/305 suite; los 4 pines
+   de CI intactos** (el combate no consume RNG: solo muta por contacto
+   geométrico, y sin Eciton no hay contacto).
 2. **F5.2b.2 — Sensor canal 14**: modo `rivalCount > 0` (magnitud de
    enemigo más cercano) activo solo para Eciton en mundos multi-colonia;
    pines intactos. Tests: canal 14 con/sin rival, invariancia de hash en
@@ -195,6 +204,16 @@ Rechazo de v3: patrón establecido.
 5. **F5.2b.5 — Pin + humo visual**: 5º pin CI de la partida de invasión
    canónica; tarjeta de vista con línea `raids` (golpes/botín) en el
    multi-visor; criterio de cierre abajo.
+
+## 8bis. Estado de las rodajas
+
+| rodaja | estado |
+|---|---|
+| 5.2b.1 cuerpo del combate | ✅ HECHO (2026-09-13 — 305/305, 4 pines intactos) |
+| 5.2b.2 sensor canal 14 | 🔲 |
+| 5.2b.3 contratos (canal C raids + parser Unity) | 🔲 |
+| 5.2b.4 demografía y balance | 🔲 |
+| 5.2b.5 pin + humo visual | 🔲 |
 
 ## 9. Criterio de cierre
 
