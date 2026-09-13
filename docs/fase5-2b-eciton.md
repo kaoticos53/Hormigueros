@@ -210,10 +210,51 @@ Rechazo de v3: patrón establecido.
 | rodaja | estado |
 |---|---|
 | 5.2b.1 cuerpo del combate | ✅ HECHO (2026-09-13 — 305/305, 4 pines intactos) |
-| 5.2b.2 sensor canal 14 | 🔲 |
+| 5.2b.2 sensor canal 14 | 🔲 — sonda de transferencia ya VALIDADA (§8ter) |
 | 5.2b.3 contratos (canal C raids + parser Unity) | 🔲 |
 | 5.2b.4 demografía y balance | 🔲 |
 | 5.2b.5 pin + humo visual | 🔲 |
+
+### 8ter. SONDA DE TRANSFERENCIA A ECITON — VALIDADA CON MATICES (2026-09-13)
+
+Warm-v2 (entrenado en cuerpo Lasius para FORRAJEAR) sembrado en la colonia
+0 como Eciton, cuerpo Eciton con combate activo, colonia 1 Lasius sin
+sembrar. 12 000 ticks, seed 42 (sonda borrada tras su uso; resultado
+registrado aquí):
+
+| escenario | strikes | robos | RaidInflow | pickups | unloads | c0 max → final |
+|---|---|---|---|---|---|---|
+| A: Lasius+pool vs Lasius (control) | 0 | 0 | 0 | 21 | 11 | 21 → **1** |
+| B: Eciton+pool (transfer) | 2 | 2 | 2 | 19 | **13** | 18 → 0 (muere t8781) |
+| C: Eciton salvaje | 6 | 6 | 5 | 1 | 5 | 18 → 0 (muere t8630) |
+| D: B con nidos a 240 u | 2 | 2 | 2 | 20 | 13 | 18 → 0 |
+
+**Hallazgos:**
+
+1. **El genoma es portable y la política de interacción SE TRANSFIERE**:
+   en cuerpo Eciton la colonia sembrada golpea y roba (2 strikes → 2 robos
+   → 2 RaidInflow) SIN entrenamiento alguno, y su forrajeo no solo
+   sobrevive sino que MEJORA (13 unloads vs 11 del control) — VMax 3.6 y
+   sensor reach más corto favorecen la ida-vuelta. La sonda de F5.2a
+   (portabilidad a Atta) se confirma para el segundo cuerpo nuevo.
+2. **El combate emerge sin dirección**: la salvaje hace MÁS strikes (6) que
+   la sembrada (2) — el azar del vagabundeo produce contacto, y el golpe
+   paga fitness (RewardPickup/2). Nadie «busca» al rival: falta el sensor
+   de F5.2b.2 para que la incursión sea DIRIGIDA y no casual.
+3. **El riesgo de balance es la propia Eciton**: en B/C/D la colonia
+   atacante muere de hambre ~t8700 (AdultUpkeep 0.045 + Sin semilla de
+   stock tras el gasto inicial), aunque max población 18 y botín cobrado.
+   La economÍa del botín (0.30 ep/robo) NO sostiene a la legionaria: el
+   balance de F5.2b.4 (robo mayor, forrajeo Eciton viable, o botín que
+   alimente más) decide si la invasión es juego o suicidio.
+4. **Cero muertes de combate en 12 000 ticks**: StrikeDamage 0.35 sobre
+   capacidades ~10 ep necesita ~29 golpes para matar una hormiga — el daño
+   hoy hostiga pero no mata. F5.2b.4 recalibrará (más daño, más robo, o
+   ambos).
+
+**Veredicto: portable, con balance pendiente** — se autoriza F5.2b.2 (el
+sensor dirigirá la incursión y multiplicará los strikes efectivos) y la
+calibración económica queda anotada como el trabajo REAL de F5.2b.4.
 
 ## 9. Criterio de cierre
 
