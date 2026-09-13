@@ -29,6 +29,8 @@ public sealed class Ant
     // Carga
     public bool HasLoad;
     public float LoadValue;         // ep del ítem transportado
+    public bool LoadIsLoot;         // F5.2b.1: la carga es BOTÍN robado a otra colonia
+    public float LootFromColony;    // F5.2b.1: id de la colonia saqueada (telemetría)
 
     // Neuroevolución (Fase 2)
     public Evolution.MlpGenome? Genome;   // genoma con el que nació (nativo o inmigrante)
@@ -38,6 +40,7 @@ public sealed class Ant
 
     public bool Alive = true;
     public float InteractCooldown;  // s
+    public bool DiedInCombat;       // F5.2b.1: la energía llegó a 0 por golpes (no por hambre)
 
     public void InitFromVigor(float baseCapacity, float baseLifespan, float vigor)
     {
