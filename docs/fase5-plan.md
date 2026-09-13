@@ -210,6 +210,79 @@ en paralelo a velocidad ≥2×, con el semáforo de relevo visible por vista.
   artifacts/ falla con «esperando stream…» — el smoke necesita los dumps
   junto al proyecto, o resolver contra el repo real).
 
+**Criterio de cierre §2bis — VERIFICADO (2026-09-13)**:
+«partida de 4 vistas — 4 semillas/4 pools corriendo en paralelo a velocidad
+≥2×, con el semáforo de relevo visible por vista». Ejecución
+`-executeMethod …MultiViewSmokeProbe.RunSmoke4` (batch, ventana 115 s):
+
+| vista | pool (semilla) | capa/máscara | boost | tps | tick final | semáforo col.0 | col.1 |
+|---|---|---|---|---|---|---|---|
+| V0 | warm-v2 (42) | 8 / 289 | 2× | **60** | 6895 | **● verde** | ○ gris |
+| V1 | hybrid (77) | 9 / 545 | 2× | **60** | 6895 | **● verde** | ○ gris |
+| V2 | warm-4 (1234) | 10 / 1057 | 2× | **60** | 6895 | **● verde** | ○ gris |
+| V3 | warm3 (777) | 11 / 2081 | 2× | **60** | 6895 | **● verde** | ○ gris |
+
+- tps=60 = exactamente 2× (30 ticks/s de la arquitectura ×2): la velocidad
+  ≥2× es MEDIDA, no estimada. Streams de 7200 ticks volcados con el primer
+  unload dentro de la ventana (v0 t3943 · v3 t4007 · v1 t4457 · v2 t5414)
+  para que el semáforo CAMBIE de estado en vivo: gris → verde en la colonia
+  sembrada; la competidora sin sembrar queda gris — el contraste que el
+  criterio pide, en las cuatro vistas a la vez.
+- Defecto destapado y corregido: entrar en Play RECARGA el dominio y los
+  statics de la sonda volvían a su inicializador (ventana 25 s, boost
+  perdido) — la primera corrida del criterio midió 2× pero nunca llegó al
+  unload. Los parámetros viajan ahora por `SessionState`, que sobrevive al
+  reload, y el boost se re-aplica cada frame.
+- Los cuatro fixtures (artifacts/multiview-v0..v3.jsonl, 7202 líneas cada
+  uno) sustituyen a los de 3600: el criterio necesita ver el relevo vivo.
+
+**Clon limpio (2026-09-13)** — el bootstrapper funciona desde `git clone`:
+`CreateMultiSimScene` (4 vistas) y `CreateMultiSimSmokeScene` (2 vistas con
+los fixtures trackeados) generan su escena en batch con 0 error CS, seeds
+42–45, capas 8–11 y máscaras disjuntas idénticas a las del repo. La partida
+en vivo del clon destapó un defecto de ENTORNO, no de código: el bucle de
+jugador de un editor batch sobre un `Library` recién importado puede quedar
+congelado en el frame 1 (`Time.frameCount` clavado, `dt=0`; correlado con la
+excepción `SearchDatabase.EnumerateAll` de Unity 6 al indexar — 0 veces en
+un Library caliente). La sonda lo detecta y, SOLO en batch, avanza el
+reloj por `SimPresenterBehaviour.PumpOneTick()` (nueva entrada sin
+dispositivo, misma filosofía F5.2): la reproducción del stream llegó a
+tick 3600/3600 en las 2 vistas con poses distintas por vista y buffer
+vacío al final — determinismo intacto, distinto quién empuja el reloj.
+En interactivo el camino del jugador no cambia.
+
+**Investigación del defecto (2026-09-13)** — qué es y qué no:
+- **La excepción es de Unity, no del proyecto.**
+  `ArgumentOutOfRangeException` en `SearchDatabase.EnumerateAll →
+  SearchDatabase.GetDefaultSearchDatabase → SearchInit.IndexationOnStartup`
+  desde `Internal_CallDelayFunctions` (el arranque del indexado de Search).
+  Aparece EXACTAMENTE 2 veces por sesión en el clon (una por reload de
+  dominio: arranque + entrada en Play) y 0 veces con Library caliente.
+  Reproducida también reportada en el foro del beta de Unity 6.5 (hilo
+  «Unity 6.5 Beta is now available», marzo 2026, con el MISMO stack) — bug
+  conocido del indexador de Search en 6000.x, corregido en 6000.5+
+  («Search: Fixed exceptions…», UUM-122130/UUM-141720 lineage). El proyecto
+  lleva `6000.6.0f1`, que NO lo incluye.
+- **No es ProjectSettings**: `EditorSettings.asset`, `QualitySettings`,
+  `manifest.json` y `packages-lock.json` son byte-idénticos entre clon
+  (falla) y copyproj (funciona). La diferencia es el ESTADO de `Library/`:
+  el proyecto de copia fue importado por el editor interactivo del usuario;
+  el clon, por un proceso batch. No hay setting de proyecto que lo
+  controle — el toggle de indexado («Index Manager» / preferencias de
+  Search) es por-USUARIO (EditorPrefs), no versionable.
+- **La excepción NO es la causa directa del bucle congelado** (ocurre 2×
+  y no cada tick), pero es su marcador fiable: nunca coexistieron «excepción
+  presente» y «bucle vivo» en ninguna corrida. La hipótesis operativa: la
+  primera pasada de indexado de un Library fresco consume el arranque del
+  bucle del jugador en batch (con o sin excepción visible); en copyproj el
+  indexado ya estaba hecho.
+- **Mitigación adoptada**: la sonda detecta `frameCount ≤ 1` en batch y
+  avanza por `PumpOneTick` (verificado: 3600/3600, 2× corridas del clon,
+  reproducible). Mitigación de entorno para CI: pre-importar el proyecto
+  con un `-batchmode -quit` DESCARTANDO la primera sesión antes del smoke
+  (no verifica nada; solo calienta Library) — no lo hace innecesario el
+  fallback de la sonda, que cubre ambos estados.
+
 ## 3. Realismo y especies (F5.2 — el contenido nuevo)
 
 Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
