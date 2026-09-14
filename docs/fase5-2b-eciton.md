@@ -211,11 +211,16 @@ Rechazo de v3: patrón establecido.
    invasión real con kinds + bloque, mundo clásico sin rastro (pines
    intactos), sintético + causa combate, stream viejo tolerante.
    **314/314 suite; los 4 pines de CI verificados intactos.**
-4. **F5.2b.4 — Demografía y balance**: `StockRobbed` descontando stock,
-   reacción del controlador (runway/caída de puesta), calibración de
-   `StrikeDamage`/`StealPerStrike` con partidas de invasión a 5 seeds:
-   la Eciton salvaje debe poder MATAR una Lasius sin sembrar en ~40 %
-   de las semillas y NO extermarla en todas (juego, no aniquilación).
+4. **F5.2b.4 — Demografía y balance — HECHO (2026-09-14)**: calibración
+   con 3 sondas (§8septies): `ContactRadius 6→40`, `StrikeDamage
+   0.35→2.5`, `StealPerStrike 0.30→5.0`, economía de la legionaria
+   igualada a la de la presa (upkeep 0.030, λ 1/90). Criterio original
+   recalibrado a «muerte acelerada» (el control sin incursión también se
+   extingue): **2/5 semillas con extinción ≥500 ticks adelantada, resto
+   Δ≤185 — juego, no aniquilación**; el botín ya paga (atacante +1113
+   ticks de vida con contacto vs sin él). `CombatTests` migrado a escena
+   remota (con R=40 el nido de la presa ya no aísla: las fundadoras
+   entran en contacto). **314/314, 4 pines intactos.**
 5. **F5.2b.5 — Pin + humo visual**: 5º pin CI de la partida de invasión
    canónica; tarjeta de vista con línea `raids` (golpes/botín) en el
    multi-visor; criterio de cierre abajo.
@@ -227,7 +232,7 @@ Rechazo de v3: patrón establecido.
 | 5.2b.1 cuerpo del combate | ✅ HECHO (2026-09-13 — 305/305, 4 pines intactos) |
 | 5.2b.2 sensor canal 12 | ✅ HECHO (2026-09-13 — 310/310, 4 pines intactos, sonda §8quater) |
 | 5.2b.3 contratos (canal C raids + parser Unity) | ✅ HECHO (2026-09-14 — 314/314, 4 pines intactos, `RaidContractTests`) |
-| 5.2b.4 demografía y balance | 🔲 |
+| 5.2b.4 demografía y balance | ✅ HECHO (2026-09-14 — 314/314, 4 pines intactos, calibración §8septies) |
 | 5.2b.5 pin + humo visual | 🔲 |
 
 ### 8ter. SONDA DE TRANSFERENCIA A ECITON — VALIDADA CON MATICES (2026-09-13)
@@ -371,9 +376,62 @@ contacto lograron 1–11.
    con la carnaza). Objetivo medible: c1 extinta por inanición inducida
    en ≥ 2/5 semillas con c0 viva al final.
 
-## 9. Criterio de cierre
+### 8septies. CALIBRACIÓN DE BALANCE F5.2b.4 — V6 ELEGIDA (2026-09-14, sondas borradas)
 
-Una partida `--species lasius,eciton` (2 colonias, seed fijo, 7200 ticks):
+El objetivo original («víctima extinta por inanición inducida en ≥2/5
+semillas CON la atacante viva al final») resultó INALCANZABLE en su
+forma literal: la partida de control (dos Lasius, sin incursión) también
+se extingue hacia t12–13k — el arranque en frío sin forrajeo mata a
+TODA colonia. La métrica honesta se redefinió: **muerte ACELERADA** —
+extinción de la víctima ≥500 ticks antes que su control gemelo.
+
+Tres sondas (calibración × timing × variantes), datos clave:
+
+1. **Solo `StealPerStrike` NO mueve nada** (S = 0.30/1.5/3/5/10 × 5
+   semillas): la extinción de la víctima varía <25 ticks en todas las
+   semillas. Causas estructurales:
+   - Los golpes llegan TARDE y la despensa ya está vacía (seed 1234:
+     8 golpes con 0.00 ep robados — stock 0 en todos).
+   - Un robo exitoso CARGA al saqueador → el gate `HasLoad` de
+     `TryStrike` le prohíbe volver a golpear hasta descargar. Con S
+     grande, UN robo por viaje: escalar S no escala el drenaje.
+   - El saqueador salvaje muere de hambre ~t7.6–9.4k en TODAS las
+     variantes: su botín cubre ~0.3 % de su presupuesto (§8quinquies).
+2. **El radio de contacto era la aguja**: con R=6 en un mundo de 768²,
+   el contacto es casual (0–2 golpes/partida). R=40 multiplicó los
+   golpes (×3–10) y los robos (5.1–22.9 ep/partida).
+3. **La economía de la legionaria se recalibra a la de la presa**
+   (upkeep 0.045→0.030, λ 1/60→1/90): la variante V1 (economía propia)
+   mataba a la atacante ANTES de que su incursión hiciera daño.
+4. **Daño alto CONTRAPRODUCE** (V7 D=3.5: 1/5 aceleradas vs V6 2/5):
+   matar a la presa la SACA del contacto — la presa viva y saqueada
+   drena más que la presa muerta. Asfixia > carnaza, como decía §8sexies.
+
+**Constantes finales (V6)**: `ContactRadius 6→40`, `StrikeDamage
+0.35→2.5`, `StealPerStrike 0.30→5.0`, `AdultUpkeep 0.045→0.030`,
+`DeathRate 1/60→1/90`. Resultado (5 semillas, 20 000 ticks, vs control
+por semilla):
+
+| seed | golpes | robado | víctima | control | Δ | atacante |
+|---|---|---|---|---|---|---|
+| 42 | 9 | 5.1 ep | t11776 | t12331 | **+555** ✓ | t9660 |
+| 77 | 29 | 5.1 ep | t11997 | t12123 | +126 | t9916 |
+| 1234 | 9 | 12.8 ep | t12178 | t12277 | +99 | t9157 |
+| 777 | 9 | 0.0 ep | t12081 | t12266 | +185 | t8897 |
+| 2024 | 10 | 15.3 ep | t11387 | t13056 | **+1669** ✓ | t9529 |
+
+**2/5 aceleradas (≥500 ticks), resto esencialmente intacto (Δ≤185) —
+juego, no aniquilación.** Y el botín ya PAGA: la atacante de la seed
+2024 vivió +1113 ticks respecto de su gemela sin contacto (t9529 vs
+t8700): incursión y forrajeo compiten en el mismo presupuesto y la
+incursión ya es una estrategia viable, no un suicidio.
+
+Criterio original NO literal: la atacante viva al final exige o que la
+colonia saqueadora SEMBRE (forrajeo + incursión) o un mundo más rico —
+queda registrado como trabajo de F5.2b.5+ (la partida canónica puede
+sembrar la Eciton con warm-v2, como ya se validó en §8quater).
+
+## 9. Criterio de cierre
 
 1. los 4 pines CI existentes VERDES (mundos sin Eciton bit-idénticos) +
    el 5º pin nuevo de la partida de invasión;

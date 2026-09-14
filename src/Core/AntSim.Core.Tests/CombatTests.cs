@@ -21,6 +21,13 @@ public class CombatTests
 {
     private const ulong Seed = 42UL;
 
+    // F5.2b.4: con ContactRadius 40 (antes 6), una escena en el nido de la presa
+    // ya NO está aislada: las fundadoras que el constructor spawnea ahí entran
+    // en contacto y el golpe las elige A ELLAS (presa = la más cercana, empate
+    // por antId menor). Escena remota: a >400 u de AMBOS nidos nadie más está
+    // dentro del radio en los primeros pasos (las fundadoras apenas se mueven).
+    private const float EscenaX = 60f, EscenaY = 700f;
+
     private static Ant Fighter(Colony colony, float x, float y, AntDecision? decision = null)
     {
         var ant = new Ant
@@ -54,9 +61,9 @@ public class CombatTests
         presaColony.Stock = 50f;
         float stockPresaAntes = presaColony.Stock;
 
-        // Cara a cara (misma celda): el golpe es inmediato.
-        var raider = Fighter(atacante, presaColony.NestX + 2f, presaColony.NestY + 2f);
-        var victima = Fighter(presaColony, presaColony.NestX + 2f, presaColony.NestY + 2f);
+        // Cara a cara (misma celda), en la escena remota: el golpe es inmediato.
+        var raider = Fighter(atacante, EscenaX, EscenaY);
+        var victima = Fighter(presaColony, EscenaX, EscenaY);
         victima.Energy = 1f;
 
         // Control: una presa GEMELA lejos del raider sufre la misma caída
@@ -96,8 +103,8 @@ public class CombatTests
     {
         var (sim, atacante, _) = TwoColonyWorld(SpeciesDescriptor.Eciton);
         var presaColony = sim.Colonies[1];
-        var raider = Fighter(atacante, presaColony.NestX + 2f, presaColony.NestY + 2f);
-        Fighter(presaColony, presaColony.NestX + 2f, presaColony.NestY + 2f);
+        var raider = Fighter(atacante, EscenaX, EscenaY);
+        Fighter(presaColony, EscenaX, EscenaY);
 
         float alarmaAntes = presaColony.AlarmLayer.SumOfValues();
         sim.Step();
@@ -120,8 +127,8 @@ public class CombatTests
         var presaColony = sim.Colonies[1];
         presaColony.Stock = 50f;
 
-        var raider = Fighter(atacante, presaColony.NestX + 2f, presaColony.NestY + 2f);
-        Fighter(presaColony, presaColony.NestX + 2f, presaColony.NestY + 2f);
+        var raider = Fighter(atacante, EscenaX, EscenaY);
+        Fighter(presaColony, EscenaX, EscenaY);
         sim.Step(); // el golpe ocurre y el botín va a raider
         Assert.True(raider.HasLoad && raider.LoadIsLoot, "el golpe dejó botín");
 
@@ -158,9 +165,9 @@ public class CombatTests
         var (sim, atacante, _) = TwoColonyWorld(SpeciesDescriptor.Eciton);
         var presaColony = sim.Colonies[1];
 
-        var raider = Fighter(atacante, presaColony.NestX + 2f, presaColony.NestY + 2f);
-        var victima = Fighter(presaColony, presaColony.NestX + 2f, presaColony.NestY + 2f);
-        // Un golpe (0.35 ep sobre ~10 de capacidad) mata si queda menos de eso.
+        var raider = Fighter(atacante, EscenaX, EscenaY);
+        var victima = Fighter(presaColony, EscenaX, EscenaY);
+        // Un golpe (2.5 ep sobre ~10 de capacidad) mata si queda menos de eso.
         victima.Energy = SpeciesDescriptor.Eciton.StrikeDamage / victima.EnergyCapacity * 0.5f;
 
         sim.Step();
@@ -210,10 +217,10 @@ public class CombatTests
         presaColony.Stock = 50f;
 
         // Cargando: NO golpea (el botín no combina con otro robo).
-        var cargado = Fighter(atacante, presaColony.NestX + 2f, presaColony.NestY + 2f,
+        var cargado = Fighter(atacante, EscenaX, EscenaY,
             new AntDecision { Interact = 1f });
         cargado.HasLoad = true; cargado.LoadValue = 2f; cargado.LoadIsLoot = true;
-        var victima = Fighter(presaColony, presaColony.NestX + 2f, presaColony.NestY + 2f);
+        var victima = Fighter(presaColony, EscenaX, EscenaY);
         float stockPresa = presaColony.Stock;
 
         sim.Step();
@@ -226,9 +233,9 @@ public class CombatTests
         Assert.True(stockPresa - presaColony.Stock < 0.2f);
 
         // Cooldown: una hormiga recién golpeada no repite hasta 0.5 s.
-        var conCooldown = Fighter(atacante, presaColony.NestX + 3f, presaColony.NestY + 3f);
+        var conCooldown = Fighter(atacante, EscenaX + 3f, EscenaY + 3f);
         conCooldown.InteractCooldown = 0.5f;
-        var victima2 = Fighter(presaColony, presaColony.NestX + 3f, presaColony.NestY + 3f);
+        var victima2 = Fighter(presaColony, EscenaX + 3f, EscenaY + 3f);
         float e2 = victima2.Energy;
 
         sim.Step();
@@ -244,8 +251,8 @@ public class CombatTests
         var (sim, atacante, _) = TwoColonyWorld(SpeciesDescriptor.Eciton);
         var presaColony = sim.Colonies[1];
         presaColony.Stock = 50f;
-        var raider = Fighter(atacante, presaColony.NestX + 2f, presaColony.NestY + 2f);
-        Fighter(presaColony, presaColony.NestX + 2f, presaColony.NestY + 2f);
+        var raider = Fighter(atacante, EscenaX, EscenaY);
+        Fighter(presaColony, EscenaX, EscenaY);
         sim.Step(); // botín en raider
 
         Assert.True(raider.LoadIsLoot);
