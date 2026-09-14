@@ -80,9 +80,9 @@ de digestión; la Lasius compite sin hongo. 293/293 suite, pines intactos.
 
 ## Dónde estamos: F5.2b cerrado — la siguiente es F5.2c (NEAT)
 
-El diseño de la cadena cortar→transportar→hongo está CERRADO
-([`fase5-2a-atta.md`](fase5-2a-atta.md)) y las DOS primeras rodajas están
-HECHAS:
+La cadena del SAQUEO está CERRADA ([`fase5-2b-eciton.md`](fase5-2b-eciton.md)):
+las 5 rodajas HECHAS y el criterio de cierre §9 verificado 4/4 sobre la
+partida canónica del 5º pin:
 
 - ✅ **F5.2a.1 — ítems compuestos**: `FoodItem.CutsLeft/CutsInitial`,
   `LeafFraction` en spawn (por constructor), eventos 13/14, hash solo con
@@ -117,9 +117,37 @@ HECHAS:
   hongo tras agotar la reserva fundadora (8 eclosiones, 6 698 ticks de
   digestión) — la cadena cortar→transportar→hongo→cría cierra.
 
-**F5.2a CERRADO.** Lo que sigue es F5.2b (Eciton) — la deuda menor de
-renderizado de hojas en el tablero Unity queda anotada en el doc de Atta
-(§6bis).
+- ✅ **F5.2b.1 — cuerpo del combate** (`6bd1216`, `99a05f5`, `252b72d`):
+  `ContactRadius`/`StrikeDamage`/`StealPerStrike` en el descriptor (0 =
+  pacífica), `TryStrike` determinista en `Act` (presa más cercana, empate
+  por antId menor, sin RNG nuevo), robo como carga (`LoadIsLoot`), eventos
+  17/18/19, alarma ofensiva en la capa de la presa, `.antsave` v4. 7 tests.
+- ✅ **F5.2b.2 — sensor de presa** (`ba355ff`, `cd6c25a`, `75e8215`): canal
+  12 (`ProxFront`) reconvertido a «enemigo más cercana» con gating por
+  especie + mundo multi-colonia (mundos sin Eciton bit-idénticos). Sonda
+  honesta: ×9 contactos pero el robo no sube — el cuello era económico.
+- ✅ **F5.2b.3 — contratos** (`c508238`): bloque `raids` del canal C con
+  contadores ACUMULADOS (`TakeRaids` — los golpes son raros y la ventana
+  de 1 s los pasaba sin verlos), `RaidView` en el parser Unity, causa
+  combate (byte 2) en el inspector. 4 tests (`RaidContractTests`).
+- ✅ **F5.2b.4 — balance V6** (`8ab2452`): calibración con 3 sondas —
+  `ContactRadius 6→40` (la aguja real), `StrikeDamage 0.35→2.5`,
+  `StealPerStrike 0.30→5.0`, economía de la legionaria igualada a la de
+  la presa. Asfixia económica: 2/5 semillas con extinción acelerada
+  ≥500 ticks, resto Δ≤185 (juego, no aniquilación); el botín ya paga
+  (+1113 ticks de vida del saqueador con contacto). Daño alto
+  contraproduce: la presa muerta sale del contacto. `CombatTests` a
+  escena remota (con R=40 el nido de la presa ya no aísla).
+- ✅ **F5.2b.5 — tarjeta raids + 5º pin** (`8b25375`): línea
+  `raids N · M al nido` SOLO en la colonia beligerante (modelo puro +
+  `RaidViewCardTests`), quinto pin CI (`check-invasion-command.sh`,
+  hash `ac53b753…` — Eciton SEMBRADA con warm-v2, transferencia
+  validada §8quater). Criterio §9 4/4: 12 Strike, 1 RaidInflow,
+  9 StockRobbed (21.88 ep), 2 muertes combate.
+
+**F5.2b CERRADO.** Lo que sigue es F5.2c (NEAT / `.antgenome` v2). La
+deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
+el doc de Atta (§6bis).
 
 ## Lo que queda (en orden de dependencia)
 
