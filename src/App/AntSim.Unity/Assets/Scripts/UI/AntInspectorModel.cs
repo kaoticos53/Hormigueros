@@ -189,11 +189,12 @@ namespace AntSim.Unity.Scripts.Streaming
             }
         }
 
-        /// <summary>Causa de muerte como texto fijo del contrato (byte 0/1 del Core).</summary>
+        /// <summary>Causa de muerte como texto fijo del contrato (byte 0/1/2 del Core).</summary>
         public static string DeathCauseText(byte cause) => cause switch
         {
             0 => "vejez",
             1 => "inanición",
+            2 => "combate", // F5.2b: golpe de una Eciton
             _ => "causa " + cause.ToString(CultureInfo.InvariantCulture),
         };
 

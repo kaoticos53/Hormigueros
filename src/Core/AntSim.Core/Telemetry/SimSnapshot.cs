@@ -156,7 +156,12 @@ public sealed class MetricRecorder
 
     private long _pickups, _unloads, _births, _deaths, _eggsLaid, _eclosed, _itemsConsumed, _commands;
     private long _leafCuts, _fungusFed, _fungusDigested; // F5.2a.3
-    private readonly Dictionary<int, long[]> _perColony = new(); // F4.2: [pickups,unloads,births,deaths,eggs,eclosed] · F5.2a.3: [6]=leafCuts, [7]=fungusFed
+    private long _strikes, _robbedMilliEp, _raidInflows; // F5.2b.3: incursiones (robbed en centésimas de ep)
+    // F5.2b.3: telemetría ACUMULADA de incursiones desde la última lectura del
+    // bloque `raids` (los golpes son raros: la ventana de 1 s casi nunca los
+    // pilla — patrón acumulativo del RelayTracker, no el de ventana).
+    private readonly Dictionary<int, long[]> _raidSinceRead = new(); // [strikes, inflows]
+    private readonly Dictionary<int, long[]> _perColony = new(); // F4.2: [pickups,unloads,births,deaths,eggs,eclosed] · F5.2a.3: [6]=leafCuts, [7]=fungusFed · F5.2b.3: [8]=strikes, [9]=robbedCentiEp, [10]=raidInflows
     private ulong _windowStartTick = ulong.MaxValue; // ulong.MaxValue = ventana sin abrir
 
     /// <summary>Frame agregado desde el último <c>TakeFrame</c> (ventana cerrada).</summary>
@@ -202,6 +207,14 @@ public sealed class MetricRecorder
                 case SimEventKind.LeafCut: _leafCuts++; Bump(ev.ColonyId, 6); break;
                 case SimEventKind.FungusFed: _fungusFed++; Bump(ev.ColonyId, 7); break;
                 case SimEventKind.FungusDigested: _fungusDigested++; break;
+                // F5.2b.3: cadena del saqueo. StockRobbed lleva los ep en Cause
+                // (centésimas, sin float); el robo se contabiliza en la VÍCTIMA.
+                case SimEventKind.Strike: _strikes++; Bump(ev.ColonyId, 8); RaidBump(ev.ColonyId, 0); break;
+                case SimEventKind.StockRobbed:
+                    _robbedMilliEp += ev.Cause; // centésimas de ep, entero (sin float)
+                    Bump(ev.ColonyId, 9);
+                    break;
+                case SimEventKind.RaidInflow: _raidInflows++; Bump(ev.ColonyId, 10); RaidBump(ev.ColonyId, 1); break;
             }
         }
     }
@@ -224,6 +237,7 @@ public sealed class MetricRecorder
         _pickups = _unloads = _births = _deaths = 0;
         _eggsLaid = _eclosed = _itemsConsumed = _commands = 0;
         _leafCuts = _fungusFed = _fungusDigested = 0;
+        _strikes = 0; _robbedMilliEp = 0; _raidInflows = 0;
         foreach (var kv in _perColony) Array.Clear(kv.Value, 0, kv.Value.Length);
         _windowStartTick = end;
         return frame;
@@ -252,12 +266,54 @@ public sealed class MetricRecorder
         return list;
     }
 
+    /// <summary>
+    /// Ventana por colonia F5.2b.3: la cadena del saqueo de la ventana abierta
+    /// — golpes INFLIGIDOS y botín DESCARGADO en el nido (el «robado» va en la
+    /// tarjeta de la víctima vía canal B, aquí la tarjeta del atacante). Orden
+    /// canónico por id de colonia ascendente.
+    /// </summary>
+    public IReadOnlyList<(int ColonyId, long Strikes, long RaidInflows)> RaidWindows()
+    {
+        var list = new List<(int, long, long)>();
+        foreach (var kv in _perColony)
+            list.Add((kv.Key, kv.Value[8], kv.Value[10]));
+        list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+        return list;
+    }
+
+    /// <summary>
+    /// F5.2b.3 — incursiones ACUMULADAS desde la última <c>TakeRaids</c>, para
+    /// el bloque `raids` del stream (telemetría cada 120 ticks): los golpes son
+    /// eventos raros y la ventana de 1 s los pasaría sin verlos. Lectura
+    /// destructiva como TakeFrame, orden canónico por colonia.
+    /// </summary>
+    public IReadOnlyList<(int ColonyId, long Strikes, long RaidInflows)> TakeRaids()
+    {
+        var list = new List<(int, long, long)>();
+        foreach (var kv in _raidSinceRead)
+            list.Add((kv.Key, kv.Value[0], kv.Value[1]));
+        list.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+        foreach (var kv in _raidSinceRead) Array.Clear(kv.Value, 0, kv.Value.Length);
+        return list;
+    }
+
+    private void RaidBump(int colonyId, int idx)
+    {
+        if (colonyId < 0) return;
+        if (!_raidSinceRead.TryGetValue(colonyId, out var arr))
+        {
+            arr = new long[2];
+            _raidSinceRead[colonyId] = arr;
+        }
+        arr[idx]++;
+    }
+
     private void Bump(int colonyId, int idx)
     {
         if (colonyId < 0) return; // eventos sin colonia (spawns regulares, comandos)
         if (!_perColony.TryGetValue(colonyId, out var arr))
         {
-            arr = new long[8]; // F5.2a.3: + leafCuts, fungusFed
+            arr = new long[11]; // F5.2a.3: +leafCuts/fungusFed · F5.2b.3: +strikes/robbed/inflows
             _perColony[colonyId] = arr;
         }
         arr[idx]++;
