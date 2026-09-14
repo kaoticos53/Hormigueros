@@ -155,6 +155,17 @@ namespace AntSim.Unity.Scripts.Streaming
             { ColonyId = colonyId; LeafCuts = leafCuts; FungusFed = fungusFed; }
         }
 
+        /// <summary>F5.2b.3: cadena del saqueo de UNA colonia en la ventana
+        /// (strikes/raidInflows). Solo aparece si hubo incursiones este tick.</summary>
+        public readonly struct RaidView
+        {
+            public readonly int ColonyId;
+            public readonly long Strikes, RaidInflows;
+
+            public RaidView(int colonyId, long strikes, long raidInflows)
+            { ColonyId = colonyId; Strikes = strikes; RaidInflows = raidInflows; }
+        }
+
         public readonly struct ColonyMetricsView
         {
             public readonly int ColonyId;
@@ -196,6 +207,7 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly List<ColonyRelayView> ColonyRelays = new();
             public readonly List<ColonyMetricsView> ColonyMetrics = new();
             public readonly List<CutterView> Cutters = new(); // F5.2a.3
+            public readonly List<RaidView> Raids = new();     // F5.2b.3
             public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
             public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
             public string? Phero;                                 // canal E (F4.5), base64 RLE
@@ -408,6 +420,20 @@ namespace AntSim.Unity.Scripts.Streaming
                     string[] f = RowFields(row);
                     if (f.Length < 3) continue;
                     v.Cutters.Add(new CutterView((int)Reader.NumOf(f[0]),
+                        (long)Reader.NumOf(f[1]), (long)Reader.NumOf(f[2])));
+                }
+            }
+
+            // F5.2b.3: cadena del saqueo por colonia [col, strikes, raidInflows]
+            // (bloque AUSENTE cuando no hubo actividad — tolerante).
+            int rai = raw.IndexOf("\"raids\":[", StringComparison.Ordinal);
+            if (rai >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, rai + "\"raids\":[".Length - 1)))
+                {
+                    string[] f = RowFields(row);
+                    if (f.Length < 3) continue;
+                    v.Raids.Add(new RaidView((int)Reader.NumOf(f[0]),
                         (long)Reader.NumOf(f[1]), (long)Reader.NumOf(f[2])));
                 }
             }

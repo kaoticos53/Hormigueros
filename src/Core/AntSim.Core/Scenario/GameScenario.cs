@@ -500,6 +500,26 @@ public static class GameScenario
             {
                 sb.Append(",\"cutters\":[").Append(cutSb).Append(']');
             }
+
+            // F5.2b.3: cadena del saqueo por colonia — [col, strikes, raidInflows]
+            // ACUMULADOS desde la última emisión (cada 120 ticks; los golpes son
+            // raros y la ventana de 1 s los pasaría sin verlos). Ausencia = sin
+            // incursiones desde la lectura previa. El «robado» de la víctima viaja
+            // por canal B (StockRobbed.cause = ep·100).
+            var raids = metrics.TakeRaids();
+            bool anyRaid = false;
+            var raidSb = new System.Text.StringBuilder();
+            foreach (var (rcid, strikes, inflows) in raids)
+            {
+                if (strikes == 0 && inflows == 0) continue;
+                if (anyRaid) raidSb.Append(',');
+                raidSb.Append('[').Append(rcid).Append(',').Append(strikes).Append(',').Append(inflows).Append(']');
+                anyRaid = true;
+            }
+            if (anyRaid)
+            {
+                sb.Append(",\"raids\":[").Append(raidSb).Append(']');
+            }
             firstField = false;
         }
 

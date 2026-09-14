@@ -134,14 +134,25 @@ validación donde esté escrita.
 
 `MetricRecorder` añade por ventana de 1 s y por colonia:
 `strikes` (golpes infligidos), `robbed` (ep perdidos, solo víctimas).
-En el stream: bloque `raids:[[col, strikes, robbedEp],…]` bajo el mismo
-patrón tolerante de `cutters` — solo si hubo actividad.
+En el stream: bloque `raids:[[col, strikes, raidInflows],…]` — **HECHO con
+un matiz descubierto en el test**: los golpes son eventos RAROS y la
+ventana de 1 s los pasaría sin verlos (el test falló primero con «bloque
+ausente»). Así que el bloque lleva los contadores ACUMULADOS desde la
+última emisión (lectura destructiva `TakeRaids`, patrón del RelayTracker,
+no el de ventana): cada tick de telemetría (cada 120 ticks) reporta lo
+ocurrido desde la anterior. Ausencia = sin incursiones desde la lectura
+previa. El ep robado de la víctima viaja por canal B
+(`StockRobbed.cause = ep·100`).
+
+`RaidWindows()` expone además los contadores de la ventana abierta por
+colonía (índices 8/10 del array per-colonia) para el HUD interno.
 
 ### 4.3 Canal A
 
 Sin cambios estructurales: la carga robada es `HasLoad/LoadValue` de
 siempre. La única adición tolerante: `strikes` por colonia en el bloque
-de métricas del header (cero si no hay Eciton).
+de métricas del header (cero si no hay Eciton) — NO implementado: el
+bloque `raids` del canal C ya la cubre y el canal A queda intacto.
 
 ## 5. Demografía saqueada: el stock de la víctima
 
@@ -192,10 +203,14 @@ Rechazo de v3: patrón establecido.
    pines intactos. Tests: canal 14 con/sin rival, invariancia de hash en
    mundos sin Eciton, genoma portado de Lasius→Eciton que ROBA con política
    de forrajeo (sonda de transferencia, como §4.1 de Atta).
-3. **F5.2b.3 — Contratos**: canal C `raids`, canal B kinds 17–19 en
-   stream, parser puro de Unity con defaults tolerantes, `DeathCause=2`
-   en toasts (contrato HUD §causa dominante). Tests de contrato contra
-   stream real.
+3. **F5.2b.3 — Contratos — HECHO (2026-09-14)**: canal C `raids`
+   (contadores acumulados `TakeRaids`, no ventana — los golpes son raros),
+   canal B kinds 17–19 ya viajaban en el stream (tuple genérica), parser
+   puro de Unity con `RaidView` y defaults tolerantes, `DeathCause=2` →
+   texto «combate» en el inspector. 4 tests (`RaidContractTests`):
+   invasión real con kinds + bloque, mundo clásico sin rastro (pines
+   intactos), sintético + causa combate, stream viejo tolerante.
+   **314/314 suite; los 4 pines de CI verificados intactos.**
 4. **F5.2b.4 — Demografía y balance**: `StockRobbed` descontando stock,
    reacción del controlador (runway/caída de puesta), calibración de
    `StrikeDamage`/`StealPerStrike` con partidas de invasión a 5 seeds:
@@ -211,7 +226,7 @@ Rechazo de v3: patrón establecido.
 |---|---|
 | 5.2b.1 cuerpo del combate | ✅ HECHO (2026-09-13 — 305/305, 4 pines intactos) |
 | 5.2b.2 sensor canal 12 | ✅ HECHO (2026-09-13 — 310/310, 4 pines intactos, sonda §8quater) |
-| 5.2b.3 contratos (canal C raids + parser Unity) | 🔲 |
+| 5.2b.3 contratos (canal C raids + parser Unity) | ✅ HECHO (2026-09-14 — 314/314, 4 pines intactos, `RaidContractTests`) |
 | 5.2b.4 demografía y balance | 🔲 |
 | 5.2b.5 pin + humo visual | 🔲 |
 
