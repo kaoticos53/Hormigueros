@@ -33,6 +33,10 @@ namespace AntSim.Unity.Scripts.Streaming
             // de 1 s; la tarjeta las suma — la UI no inventa, solo acumula).
             public long LeafCuts;
             public long FungusFed;
+            // F5.2b.5: cadena del saqueo ACUMULADA (el bloque raids trae lo
+            // ocurrido DESDE la última emisión — la tarjeta suma de nuevo).
+            public long Strikes;
+            public long RaidInflows;
         }
 
         private readonly Dictionary<int, Card> _cards = new();
@@ -106,6 +110,17 @@ namespace AntSim.Unity.Scripts.Streaming
                     _cards[cv.ColonyId] = card = new Card { ColonyId = cv.ColonyId };
                 card.LeafCuts += cv.LeafCuts;
                 card.FungusFed += cv.FungusFed;
+            }
+
+            // F5.2b.5: raids (canal C por colonia, acumulados desde la emisión
+            // previa) → la tarjeta vuelve a sumar. Strikes infligidos por ESTA
+            // colonia; el «robado» de la víctima viaja por canal B (StockRobbed).
+            foreach (var rv in v.Raids)
+            {
+                if (!_cards.TryGetValue(rv.ColonyId, out var card))
+                    _cards[rv.ColonyId] = card = new Card { ColonyId = rv.ColonyId };
+                card.Strikes += rv.Strikes;
+                card.RaidInflows += rv.RaidInflows;
             }
         }
 
@@ -216,6 +231,11 @@ namespace AntSim.Unity.Scripts.Streaming
                 if (card.LeafCuts > 0 || card.FungusFed > 0)
                     sb.Append("\ncortes ").Append(card.LeafCuts)
                       .Append(" · ").Append(card.FungusFed).Append(" al hongo");
+                // F5.2b.5: línea del saqueo — golpes infligidos y botín descargado
+                // en el nido. Solo con actividad (en mundos pacíficos nunca sale).
+                if (card.Strikes > 0 || card.RaidInflows > 0)
+                    sb.Append("\nraids ").Append(card.Strikes)
+                      .Append(" · ").Append(card.RaidInflows).Append(" al nido");
             }
             return sb.ToString();
         }

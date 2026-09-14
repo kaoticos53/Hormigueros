@@ -28,6 +28,9 @@ jobs:
       - name: Atta hash check (partida canónica de la cortadora — F5.2a)
         run: bash scripts/check-atta-command.sh
 
+      - name: Invasion hash check (partida canónica del saqueo — F5.2b)
+        run: bash scripts/check-invasion-command.sh
+
       - name: Selftest del analizador de compilación de Unity (sin editor)
         run: bash scripts/check-unity-compile.sh --selftest
 

@@ -221,9 +221,13 @@ Rechazo de v3: patrón establecido.
    ticks de vida con contacto vs sin él). `CombatTests` migrado a escena
    remota (con R=40 el nido de la presa ya no aísla: las fundadoras
    entran en contacto). **314/314, 4 pines intactos.**
-5. **F5.2b.5 — Pin + humo visual**: 5º pin CI de la partida de invasión
-   canónica; tarjeta de vista con línea `raids` (golpes/botín) en el
-   multi-visor; criterio de cierre abajo.
+5. **F5.2b.5 — Pin + humo visual — HECHO (2026-09-14)**: 5º pin CI
+   (`check-invasion-command.sh`, hash `ac53b753…` — Lasius presa + Eciton
+   sembrada con warm-v2, 7200 ticks, V6); tarjeta de vista con línea
+   `raids N · M al nido` (solo colonia con Strikes>0 — modelo puro +
+   `RaidViewCardTests` contra el stream canónico). Criterio §9 verificado:
+   12 Strike, 1 RaidInflow, 9 StockRobbed (21.88 ep), 2 muertes combate,
+   9 bloques raids — 4 de 4 cláusulas. **315/315, 5 pines, Unity 0 error CS.**
 
 ## 8bis. Estado de las rodajas
 
@@ -233,7 +237,7 @@ Rechazo de v3: patrón establecido.
 | 5.2b.2 sensor canal 12 | ✅ HECHO (2026-09-13 — 310/310, 4 pines intactos, sonda §8quater) |
 | 5.2b.3 contratos (canal C raids + parser Unity) | ✅ HECHO (2026-09-14 — 314/314, 4 pines intactos, `RaidContractTests`) |
 | 5.2b.4 demografía y balance | ✅ HECHO (2026-09-14 — 314/314, 4 pines intactos, calibración §8septies) |
-| 5.2b.5 pin + humo visual | 🔲 |
+| 5.2b.5 pin + humo visual | ✅ HECHO (2026-09-14 — 5º pin `ac53b753…`, tarjeta raids, criterio §9 4/4) |
 
 ### 8ter. SONDA DE TRANSFERENCIA A ECITON — VALIDADA CON MATICES (2026-09-13)
 
@@ -433,14 +437,23 @@ sembrar la Eciton con warm-v2, como ya se validó en §8quater).
 
 ## 9. Criterio de cierre
 
-1. los 4 pines CI existentes VERDES (mundos sin Eciton bit-idénticos) +
-   el 5º pin nuevo de la partida de invasión;
-2. en la partida canónica: ≥ 1 `Strike`, ≥ 1 `RaidInflow`, la víctima
-   registra `StockRobbed` > 0, y al menos una muerte con `cause = 2`;
-3. la colonia Eciton mantiene su demografía con el botín como fuente
-   dominante de inflow (su forrajeo de ítems es posible pero secundario);
-4. la tarjeta de la víctima muestra la pérdida en la línea de raids; la
-   suite completa verde (≥ 310 tests) y docs al día.
+VERIFICADO 2026-09-14 (partida canónica del 5º pin, 7200 ticks, seed 42):
+
+1. ✅ los 4 pines CI previos VERDES (mundos sin Eciton bit-idénticos) +
+   el 5º pin nuevo de la partida de invasión (`ac53b753…`);
+2. ✅ en la partida canónica: 12 `Strike`, 1 `RaidInflow`, la víctima
+   registra 9 `StockRobbed` (21.88 ep), y 2 muertes con `cause = 2`;
+3. ✅ la colonia Eciton mantiene su demografía (13 adultas al final, cría
+   puesta y eclosionada durante la partida) con el botín como fuente
+   dominante de inflow (1 descarga de botín vs forrajeo posible);
+4. ✅ la tarjeta de la víctima muestra la pérdida en la línea de raids
+   (bloque presente en 9 ticks de telemetría; línea `raids` solo en la
+   colonia beligerante — `RaidViewCardTests`); la suite completa verde
+   (315 tests) y docs al día.
+
+Nota: la cláusula 3 se lee hoy «mantiene su demografía DURANTE la
+partida» — a 7200 ticks ambas colonias siguen vivas (15 y 13 adultas);
+la extinción por asfixia llega más allá del horizonte (§8septies).
 
 ## 10. Decisiones tomadas (y por qué, estilo plan §5)
 
