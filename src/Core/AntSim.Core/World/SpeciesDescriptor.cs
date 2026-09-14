@@ -110,12 +110,24 @@ public sealed class SpeciesDescriptor
         SensorReach = 18f, SenseAngle = 0.262f, VisionRadius = 90f,
         QMaxFood = 0.4f, QMaxHome = 0.4f, QMaxAlarm = 2.4f,
         CostMove = 0.0028f, CostDeposit = 0.03f,
-        AdultUpkeep = 0.045f,
+        // F5.2b.4: upkeep de Lasius (0.030) — el metabolismo de la legión no
+        // puede ser peor que el de la presa que asfixia.
+        AdultUpkeep = 0.030f,
         KFull = 1.6f, KMin = 0.6f,
         EggTime = 5f, LarvaTimeMax = 18f, PupaTime = 8f,
-        DeathRate = 1f / 60f, EggCost = 0.4f, BaseLifespan = 180f,
+        // F5.2b.4: λ de Lasius (1/90) — el metabolismo de la legión no puede
+        // ser peor que el de la presa que asfixia.
+        DeathRate = 1f / 90f, EggCost = 0.4f, BaseLifespan = 180f,
         StockMax = 80f, TSafe = 30f, TOoph = 20f, TCann = 12f, TCrit = 6f,
-        // — F5.2b.1: la legionaria golpea y roba (única especie beligerante) —
-        ContactRadius = 6f, StrikeDamage = 0.35f, StealPerStrike = 0.30f
+        // — F5.2b.1: la legionaria golpea y roba (única especie beligerante).
+        //    F5.2b.4 (calibración): R=40 en vez de 6 (a 6 u el contacto era una
+        //    aguja en 768²: 0-2 golpes/partida); D=2.5 mata forrajeras (drena el
+        //    repostaje de la víctima); S=5 hace que el botín PAGUE (la partida
+        //    seed 2024: 15.3 ep saqueados, víctima acelerada Δ+1669 ticks, y la
+        //    atacante vivió +829 ticks vs su gemela sin contacto). Economía
+        //    Lasius (upkeep 0.030, λ 1/90): la propia 0.045 + 1/60 mataba al
+        //    saqueador de hambre en ~t8-9k ANTES de que su incursión hiciera
+        //    daño. Datos en fase5-2b-eciton.md §8septies —
+        ContactRadius = 40f, StrikeDamage = 2.5f, StealPerStrike = 5.0f
     };
 }
