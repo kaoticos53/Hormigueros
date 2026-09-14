@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-13 · HEAD: F5.2a cerrado (hongo → contratos → pin CI → humo visual) ·
-suite: 298/298 · tag: `v0.4.0` (cierre de Fase 4)*
+*Actualizado: 2026-09-14 · HEAD: F5.2b CERRADO (cuerpo → sensor → contratos → balance V6 → 5º pin) ·
+suite: 315/315 · tag: `v0.4.0` (cierre de Fase 4), `v0.5.0` (cierre de F5.2a)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -18,8 +18,8 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 4 (F4.0–F4.4) | Capa jugador: stream, HUD, inspector, import, CI con pines | ✅ `v0.4.0` | `fase4-resumen.md` |
 | 5.0 | Mini-grafo MLP (canal F de activaciones) | ✅ | `fase5-plan.md` §1 |
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
-| **5.2a** | **Atta: cortar → transportar → hongo** | 🔶 **en curso** — 5.2a.1 + 5.2a.2 HECHOS, diseño y transferencia validados | `fase5-2a-atta.md` |
-| 5.2b | Eciton + depredadores (alarma ofensiva, combate) | 🔲 | — |
+| **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
+| **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
 | 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🔲 | — |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
@@ -27,10 +27,11 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
-a bit. Fijado en CI con **CUATRO pines de hash**, verificados los cuatro
-en una pasada el 2026-09-13 tras el cierre de F5.2a: stream canónico,
-replay con drops a 3000 y 6000 ticks, y la partida Atta canónica
-(`check-atta-command.sh`); 298/298 tests.
+a bit. Fijado en CI con **CINCO pines de hash**, verificados los cinco
+en una pasada el 2026-09-14 tras el cierre de F5.2b: stream canónico,
+replay con drops a 3000 y 6000 ticks, la partida Atta canónica
+(`check-atta-command.sh`) y la partida de INVASIÓN canónica
+(`check-invasion-command.sh`, el primer pin con combate); 315/315 tests.
 
 **Pre-entrenamiento con transferencia validada** — cadena de 8+ pools
 (frío → warm-starts encadenados → híbrido de dos bandas), benchmark de
@@ -77,7 +78,7 @@ y `.antsave` v3, `--species atta,lasius` en el CLI. Humo real (7200 ticks,
 hojas 100 %, warm-v2): 12 cortes → 3 descargas → 3 FungusFed → 1898 ticks
 de digestión; la Lasius compite sin hongo. 293/293 suite, pines intactos.
 
-## Dónde estamos: F5.2a cerrado — la siguiente es F5.2b (Eciton)
+## Dónde estamos: F5.2b cerrado — la siguiente es F5.2c (NEAT)
 
 El diseño de la cadena cortar→transportar→hongo está CERRADO
 ([`fase5-2a-atta.md`](fase5-2a-atta.md)) y las DOS primeras rodajas están
@@ -122,15 +123,17 @@ renderizado de hojas en el tablero Unity queda anotada en el doc de Atta
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.2b — Eciton + depredadores** (SIGUIENTE — F5.2a cerrado, ver
-   [`fase5-2a-atta.md`](fase5-2a-atta.md) §6bis):
-   **DISEÑO CERRADO** ([`fase5-2b-eciton.md`](fase5-2b-eciton.md)) — Eciton
-   como especie que ROBA stock ajeno (no agente libre): combate en el paso
-   de hormiga (`ContactRadius`/`StrikeDamage`/`StealPerStrike`), botín como
-   carga con el `Unload` existente, canal 14 reconvertido con gating por
-   especie, Alarm reusada como rastro de incursión, eventos 17–19 en canal
-   B, `.antsave` v4. 5 rodajas; el agente libre sin colonia queda como
-   posible F5.2d.
+1. **F5.2b — Eciton + depredadores** — ✅ **CERRADO** (2026-09-14, las 5
+   rodajas, ver [`fase5-2b-eciton.md`](fase5-2b-eciton.md)): Eciton como
+   especie que ROBA stock ajeno (no agente libre): combate en el paso de
+   hormiga (`ContactRadius 40`/`StrikeDamage 2.5`/`StealPerStrike 5.0` —
+   calibración V6, asfixia económica: 2/5 semillas con extinción
+   acelerada ≥500 ticks y el botín ya paga +1113 ticks de vida al
+   saqueador), botín como carga con el `Unload` existente, canal 12
+   reconvertido a sensor de presa con gating por especie, Alarm reusada
+   como rastro de incursión, eventos 17–19 en canal B, bloque `raids` en
+   canal C, tarjeta de vista con línea de saqueo, `.antsave` v4 y el 5º
+   pin CI. El agente libre sin colonia queda como posible F5.2d.
 3. **F5.2c — NEAT / `.antgenome` v2**: genes estructurales
    (nodos/conexiones por innovation), inspector de grafos generalizado,
    re-innovación determinista al importar. El hito más caro; red de
