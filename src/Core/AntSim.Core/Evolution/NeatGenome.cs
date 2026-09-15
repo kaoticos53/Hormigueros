@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using AntSim.Core.Brain;
 using AntSim.Core.Contracts;
 
@@ -78,6 +79,110 @@ public sealed class NeatGenome : IGenome
 
     /// <summary>Cerebro NEAT con orden topológico cacheado (una vez por genoma).</summary>
     public NeatBrain ToBrain() => new NeatBrain(_nodes, _conns);
+
+    // ————— Mutación in situ (F5.2c rodaja 2): revalidan tras cada cambio —————
+
+    /// <summary>Orden topológico de los ids (Kahn, menor id en empate) — el
+    /// mismo cálculo del cerebro, expuesto para AddConn (guarda anti-ciclo).</summary>
+    public int[] TopologicalOrder()
+    {
+        var adj = new Dictionary<int, List<int>>();
+        var indeg = new Dictionary<int, int>();
+        foreach (var n in _nodes) { adj[n.Id] = new List<int>(); indeg[n.Id] = 0; }
+        foreach (var c in _conns)
+        {
+            if (!c.Enabled) continue;
+            adj[c.From].Add(c.To);
+            indeg[c.To]++;
+        }
+        var ready = new SortedSet<int>(indeg.Where(kv => kv.Value == 0).Select(kv => kv.Key));
+        var order = new List<int>(_nodes.Count);
+        while (ready.Count > 0)
+        {
+            int id = ready.Min;
+            ready.Remove(id);
+            order.Add(id);
+            foreach (int to in adj[id]) if (--indeg[to] == 0) ready.Add(to);
+        }
+        return order.ToArray();
+    }
+
+    /// <summary>Id libre más bajo ≥ 25 para un nodo oculto nuevo.</summary>
+    public int NextHiddenId()
+    {
+        var used = new HashSet<int>(_nodes.Select(n => n.Id));
+        int id = NodeGene.FirstHiddenId;
+        while (used.Contains(id)) id++;
+        return id;
+    }
+
+    /// <summary>Peso de la conexión con esa innovation (revalida el genoma).</summary>
+    public void SetWeight(int innovation, float weight)
+    {
+        for (int i = 0; i < _conns.Count; i++)
+        {
+            if (_conns[i].Innovation != innovation) continue;
+            _conns[i] = _conns[i] with { Weight = weight };
+            Validate();
+            return;
+        }
+        throw new ArgumentException($"No hay conexión con innovation {innovation}.");
+    }
+
+    /// <summary>Bias del nodo con ese id (revalida el genoma).</summary>
+    public void SetBias(int nodeId, float bias)
+    {
+        for (int i = 0; i < _nodes.Count; i++)
+        {
+            if (_nodes[i].Id != nodeId) continue;
+            _nodes[i] = _nodes[i] with { Bias = bias };
+            Validate();
+            return;
+        }
+        throw new ArgumentException($"No hay nodo con id {nodeId}.");
+    }
+
+    /// <summary>Enabled de la conexión con esa innovation (revalida: togglear
+    /// puede romper la unicidad (from,to) si el pool introdujo otra activa —
+    /// el registro de innovaciones lo impide, la validación lo garantiza).</summary>
+    public void SetEnabled(int innovation, bool enabled)
+    {
+        for (int i = 0; i < _conns.Count; i++)
+        {
+            if (_conns[i].Innovation != innovation) continue;
+            _conns[i] = _conns[i] with { Enabled = enabled };
+            Validate();
+            return;
+        }
+        throw new ArgumentException($"No hay conexión con innovation {innovation}.");
+    }
+
+    /// <summary>Añade una conexión validando los invariantes (unicidad, ciclo,
+    /// topes) — la puerta ÚNICA para las mutaciones estructurales.</summary>
+    public void AddConnChecked(ConnGene conn)
+    {
+        _conns.Add(conn);
+        try { Validate(); }
+        catch
+        {
+            _conns.RemoveAt(_conns.Count - 1);
+            throw;
+        }
+    }
+
+    /// <summary>Añade un nodo oculto (id libre más bajo) — usado por AddNode vía
+    /// las conexiones que lo referencian; expuesto para tests.</summary>
+    public void AddHiddenNode(float bias = 0f, byte act = (byte)ActivationId.Tanh)
+    {
+        int id = NextHiddenId();
+        _nodes.Add(new NodeGene(id, NodeKind.Hidden, bias, act));
+        try { Validate(); }
+        catch
+        {
+            _nodes.RemoveAt(_nodes.Count - 1);
+            throw;
+        }
+    }
 
     /// <summary>
     /// Distancia genómica NEAT clásica: δ = c1·E/N + c2·D/N + c3·W̄, con

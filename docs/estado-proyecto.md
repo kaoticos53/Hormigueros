@@ -20,7 +20,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
 | **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
-| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 1/7 | `fase5-2c-neat.md` |
+| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 2/7 | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** (CI de ubuntu rota desde 09-12) | ✅ | `arquitectura.md` §CI |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
@@ -172,6 +172,17 @@ equivocado; corregido — el canal F v1 ahora emite el layout documentado
 F es opt-in y ningún mundo fijado lo activa). La
 deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
 el doc de Atta (§6bis).
+
+**F5.2c AVANCE — RODAJA 2 (operadores, 2026-09-15).** `NeatOperators` con las
+mutaciones estructurales (`MutateAddNode` por split de conexión viva,
+`MutateAddConn` con revalidación de unicidad y aciclicidad por llamada,
+`MutateToggle` como poda/activación que nunca rompe el grafo), las de pesos y
+sesgos, el `InnovationRegistry` (par→innovación compartido a nivel de pool,
+secuencia determinista tras el máximo visto) y el `Crossover`
+align-by-innovation (matching al azar, disjoint/excess solo del mejor padre,
+empate → A). El test central es el clásico NEAT: el circuito del mejor padre
+sobrevive 32 tiradas de matching al azar **y el hijo lo evalúa**
+(steer ≈ tanh(3·tanh(3x))). 348/348 tests, 5 pins intactos.
 
 ## Lo que queda (en orden de dependencia)
 
