@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
@@ -13,12 +14,13 @@ public sealed class GenomeImportInfo
     public GenomeImportInfo(bool ok, string? error, string fileName, string sha256,
         long bytes, string poolName, string speciesHint, ulong originSeed,
         int generation, double bestFitness, int genomeCount, string card,
-        string quarantineNote)
+        string quarantineNote, int formatVersion = -1, int nodeCount = -1, int connCount = -1)
     {
         Ok = ok; Error = error; FileName = fileName; Sha256 = sha256; Bytes = bytes;
         PoolName = poolName; SpeciesHint = speciesHint; OriginSeed = originSeed;
         Generation = generation; BestFitness = bestFitness; GenomeCount = genomeCount;
         Card = card; QuarantineNote = quarantineNote;
+        FormatVersion = formatVersion; NodeCount = nodeCount; ConnCount = connCount;
     }
 
     public bool Ok { get; }
@@ -34,6 +36,11 @@ public sealed class GenomeImportInfo
     public int GenomeCount { get; }
     public string Card { get; }
     public string QuarantineNote { get; }
+
+    // — F5.2c rodaja 4: forma del cerebro (v2) — —1 si no aplica (v1 plano o fallo).
+    public int FormatVersion { get; }
+    public int NodeCount { get; }
+    public int ConnCount { get; }
 
     /// <summary>Regla de cuarentena canónica (el oráculo la declara; la UI la pinta).</summary>
     public const string QuarantineRules =
@@ -73,9 +80,24 @@ public sealed class GenomeImportInfo
         }
 
         AntGenomeMetadata meta;
+        int fmt = AntGenomeFile.PeekFormatVersion(data);
+        int nodeCount = -1, connCount = -1;
         try
         {
-            (meta, _) = AntGenomeFile.Deserialize(data, expectedContractVersion);
+            // v2: parseo NEAT completo (trae metadatos Y forma del primer
+            // genoma); v1: la ruta clásica. Ambos fallan igual con Ok=false
+            // (v1 rechaza v2 con error claro).
+            if (fmt == AntGenomeFile.FormatVersionV2)
+            {
+                IReadOnlyList<NeatGenome> genomes;
+                (meta, genomes) = AntGenomeFile.DeserializeNeat(data, expectedContractVersion);
+                nodeCount = genomes[0].Nodes.Count;
+                connCount = genomes[0].Conns.Count;
+            }
+            else
+            {
+                (meta, _) = AntGenomeFile.Deserialize(data, expectedContractVersion);
+            }
         }
         catch (Exception ex)
         {
@@ -83,16 +105,28 @@ public sealed class GenomeImportInfo
         }
 
         var shaShort = sha.Substring(0, 8);
-        var card = string.Format(CultureInfo.InvariantCulture,
-            "{0} · {1} genomas · gen {2} · fitness {3:0.###} · {4:0.#} KiB · sha {5}",
-            fileName, meta.GenomeCount, meta.Generation, meta.BestFitnessAtExport,
-            bytes / 1024d, shaShort);
+        string card;
+        if (fmt == AntGenomeFile.FormatVersionV2)
+        {
+            card = string.Format(CultureInfo.InvariantCulture,
+                "{0} · v{1} · {2} genomas · {3}n/{4}c · gen {5} · fitness {6:0.###} · {7:0.#} KiB · sha {8}",
+                fileName, fmt, meta.GenomeCount, nodeCount, connCount,
+                meta.Generation, meta.BestFitnessAtExport, bytes / 1024d, shaShort);
+        }
+        else
+        {
+            card = string.Format(CultureInfo.InvariantCulture,
+                "{0} · {1} genomas · gen {2} · fitness {3:0.###} · {4:0.#} KiB · sha {5}",
+                fileName, meta.GenomeCount, meta.Generation, meta.BestFitnessAtExport,
+                bytes / 1024d, shaShort);
+        }
 
         return new GenomeImportInfo(
             ok: true, error: null, fileName: fileName, sha256: sha, bytes: bytes,
             poolName: meta.Name, speciesHint: meta.SpeciesHint, originSeed: meta.OriginSeed,
             generation: meta.Generation, bestFitness: meta.BestFitnessAtExport,
-            genomeCount: meta.GenomeCount, card: card, quarantineNote: QuarantineRules);
+            genomeCount: meta.GenomeCount, card: card, quarantineNote: QuarantineRules,
+            formatVersion: fmt, nodeCount: nodeCount, connCount: connCount);
     }
 
     private static GenomeImportInfo Fail(string error, string fileName) =>
@@ -130,6 +164,9 @@ public sealed class GenomeImportInfo
         sb.Append(",\"genomeCount\":").Append(GenomeCount);
         sb.Append(",\"card\":\"").Append(JsonEscape(Card)).Append('"');
         sb.Append(",\"quarantine\":\"").Append(JsonEscape(QuarantineNote)).Append('"');
+        sb.Append(",\"formatVersion\":").Append(FormatVersion);
+        sb.Append(",\"nodeCount\":").Append(NodeCount);
+        sb.Append(",\"connCount\":").Append(ConnCount);
         sb.Append('}');
         return sb.ToString();
     }
