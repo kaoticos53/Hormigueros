@@ -19,6 +19,33 @@ jobs:
       - name: Test (incluye el pin del hash del stream canónico)
         run: dotnet test --nologo -v q
 
+      # ─────────────────────────────────────────────────────────────────────────
+      # LOS 4 PINS DE HASH DE ABAJO SOLO SON VÁLIDOS CON CANONMATH.
+      #
+      # Los hashes canónicos del mundo NO son independientes de la plataforma:
+      # MathF.Tanh/Exp/Log/Sin/Cos difieren 1 ULP entre la libm de Windows y la
+      # de Linux, y un ULP en un sensor cambia una decisión y diverge el mundo.
+      # Todos los hashes fijados aquí (y el const de UnityStreamContractTests)
+      # se generaron con Sim/CanonMath — series en double con solo ops IEEE
+      # básicas — y SOLO reproducen con ella. No «arregles» un pin cambiando de
+      # runner o de SDK: cambia la matemática, no el entorno.
+      #
+      # TRAS UN CAMBIO INTENCIONAL DEL MUNDO (constantes de especie, fundadora,
+      # densidad de comida, activación del cerebro…), regenerar EN ORDEN:
+      #   1. bash scripts/check-stream-fixture.sh --update   (canal A/B/C base)
+      #   2. bash scripts/check-replay-command.sh --update   (pins 3000 y 6000
+      #      ticks: replay-command.expected y replay-command-6k.expected)
+      #   3. bash scripts/check-atta-command.sh --update     (F5.2a)
+      #   4. bash scripts/check-invasion-command.sh --update (F5.2b)
+      #   5. El 5º pin vive EN LA SUITE: UnityStreamContractTests
+      #      (const c143…). Lanza ese test, copia el hash REAL del fallo en la
+      #      constante y re-ejecuta hasta verde.
+      # Y SIEMPRE: revisa el diff de los .expected en el PR (los hashes viejos
+      # documentan el mundo anterior), verifica que TODOS los pins pasan en
+      # Windows Y Linux (WSL vale), y anota el cambio como intencional en el
+      # commit — un pin que cambia «solo a veces» es un bug de determinismo,
+      # no una regeneración.
+      # ─────────────────────────────────────────────────────────────────────────
       - name: Fixture hash check (regenera el stream canónico y compara)
         run: bash scripts/check-stream-fixture.sh
 
