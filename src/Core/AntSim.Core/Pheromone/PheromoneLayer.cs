@@ -67,10 +67,12 @@ public sealed class PheromoneLayer
         return true;
     }
 
-    /// <summary>Evaporación exponencial: values *= exp(−λ·dt) en celdas no nulas.</summary>
+    /// <summary>Evaporación exponencial: values *= exp(−λ·dt) en celdas no nulas.
+    /// CanonMath (F5.2c): exp cross-platform bit-exact — el factor alimenta el
+    /// estado del mundo y un ULP diverge el hash.</summary>
     public void Evaporate(float dtSeconds, float lambdaPerSecond)
     {
-        float factor = MathF.Exp(-lambdaPerSecond * dtSeconds);
+        float factor = CanonMath.Exp(-lambdaPerSecond * dtSeconds);
         for (int y = 0; y < Height; y++)
         {
             int row = y * Width;

@@ -1,4 +1,5 @@
 using System;
+using AntSim.Core.Sim;
 
 namespace AntSim.Core.Brain;
 
@@ -15,10 +16,14 @@ public enum ActivationId : byte
 
 public static class Activations
 {
+    // CanonMath (F5.2c): MathF.Tanh/Exp difieren 1 ULP entre Windows y Linux
+    // (libm del sistema) — con sensores que alimentan el cerebro, ese ULP
+    // cambia la decisión de una hormiga y el hash canónico diverge cross-
+    // platform. CanonMath es bit-exacta en cualquier SO.
     public static float Apply(ActivationId id, float x) => id switch
     {
-        ActivationId.Tanh => MathF.Tanh(x),
-        ActivationId.Sigmoid => 1.0f / (1.0f + MathF.Exp(-x)),
+        ActivationId.Tanh => CanonMath.Tanh(x),
+        ActivationId.Sigmoid => 1.0f / (1.0f + CanonMath.Exp(-x)),
         ActivationId.Linear => x,
         _ => throw new ArgumentOutOfRangeException(nameof(id), id, "Id de activación desconocido.")
     };

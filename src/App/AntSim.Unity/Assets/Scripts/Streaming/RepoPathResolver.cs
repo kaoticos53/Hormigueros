@@ -71,45 +71,49 @@ namespace AntSim.Unity.Scripts.Streaming
         }
 
         /// <summary>
-        /// Resuelve el ejecutable igual que <see cref="Resolve"/> y en Windows
-        /// aplica el sufijo .exe probando DOS formas por variante (cwd primero,
-        /// repo después):
+        /// Resuelve el ejecutable igual que <see cref="Resolve"/> probando DOS
+        /// formas por variante (cwd primero, repo después), con sufijo ".exe"
+        /// SOLO en Windows:
         ///   1. la ruta ES el ejecutable  → <c>build/antsim</c> + ".exe";
         ///   2. la ruta ES la carpeta de publicación → el ejecutable vive DENTRO
-        ///      con el nombre del último segmento: <c>build/antsim/antsim.exe</c>
+        ///      con el nombre del último segmento: <c>build/antsim/antsim[.exe]</c>
         ///      (layout real de <c>dotnet publish -o build/antsim</c>).
-        /// Si no existe nada, devuelve la variante canónica con el sufijo ya
-        /// aplicado: el error de Process.Start será claro.
+        /// Si no existe nada, devuelve la variante canónica: en Windows la
+        /// plana con sufijo (<c>build/antsim.exe</c>); en Linux la de carpeta
+        /// (<c>build/antsim/antsim</c>) — el error de Process.Start será claro
+        /// en ambos.
         /// </summary>
         public static string ResolveExecutable(string path, string? baseDir, string? repoRoot)
         {
             if (string.IsNullOrEmpty(path)) return path;
-            bool addExe = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                          && !Path.HasExtension(path);
-            if (!addExe) return Resolve(path, baseDir, repoRoot);
+            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+            string ext = isWindows && !Path.HasExtension(path) ? ".exe" : "";
 
             string leaf = Path.GetFileName(path.TrimEnd('/', '\\'));
 
             // Variante cwd (baseDir): ejecutable plano y dentro de la carpeta.
-            string c1 = Path.GetFullPath(baseDir != null ? Path.Combine(baseDir, path) : path) + ".exe";
+            string c1 = Path.GetFullPath(baseDir != null ? Path.Combine(baseDir, path) : path) + ext;
             if (File.Exists(c1)) return c1;
             string c1d = Path.GetFullPath(Path.Combine(
-                baseDir != null ? Path.Combine(baseDir, path) : path, leaf)) + ".exe";
+                baseDir != null ? Path.Combine(baseDir, path) : path, leaf)) + ext;
             if (File.Exists(c1d)) return c1d;
 
             // Variante repo root: mismas dos formas.
             if (repoRoot != null)
             {
-                string c2 = Path.GetFullPath(Path.Combine(repoRoot, path)) + ".exe";
+                string c2 = Path.GetFullPath(Path.Combine(repoRoot, path)) + ext;
                 if (File.Exists(c2)) return c2;
-                string c2d = Path.GetFullPath(Path.Combine(repoRoot, path, leaf)) + ".exe";
+                string c2d = Path.GetFullPath(Path.Combine(repoRoot, path, leaf)) + ext;
                 if (File.Exists(c2d)) return c2d;
             }
 
-            // Nada existe: variante canónica con sufijo (error claro).
+            // Nada existe: variante canónica (error claro). Windows: plana con
+            // sufijo. Linux: dentro de la carpeta de publicación.
             return repoRoot != null
-                ? Path.GetFullPath(Path.Combine(repoRoot, path)) + ".exe"
-                : c1;
+                ? (isWindows
+                    ? Path.GetFullPath(Path.Combine(repoRoot, path)) + ext
+                    : Path.GetFullPath(Path.Combine(repoRoot, path, leaf)))
+                : (isWindows ? c1 : c1d);
         }
     }
 }

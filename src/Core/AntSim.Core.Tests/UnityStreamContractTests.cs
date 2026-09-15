@@ -284,7 +284,7 @@ namespace AntSim.Core.Tests
         /// expected). Si falla, el determinismo del mundo se rompió; un cambio
         /// INTENCIONAL se actualiza en ambos sitios con --update y en este test.</summary>
         public const string CanonicalStreamHash =
-            "698c2fee7fbe2b5393e9b49ee45d0fa398e9f32fb4b74264b521059eb246a755";
+            "c143ab6f16822b7a702198739b53856f206a5a6e8d411e71c2ffdbcfa1700362";
 
         [Fact]
         public void FixtureHash_ElStreamCanonicoEsByteAByteEstable()

@@ -408,17 +408,20 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
-        public void StreamSource_ResuelveElExeDeWindows()
+        public void StreamSource_ResuelveElEjecutablePublicado()
         {
-            // El campo CliPath es multiplataforma ("build/antsim"): en Windows con
-            // UseShellExecute=false hay que resolver "antsim.exe" — el Play no
-            // debe fallar en silencio por un sufijo.
+            // El campo CliPath es multiplataforma ("build/antsim"): el ejecutable
+            // vive DENTRO de la carpeta de publicación con el nombre del último
+            // segmento. En Windows además lleva .exe (UseShellExecute=false no
+            // lo añade solo) — el Play no debe fallar en silencio por un sufijo.
+            bool win = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.Windows);
             string dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
                 "antsim-test-" + System.Guid.NewGuid().ToString("N")[..8]);
             System.IO.Directory.CreateDirectory(dir);
             try
             {
-                string exe = System.IO.Path.Combine(dir, "antsim.exe");
+                string exe = System.IO.Path.Combine(dir, "antsim" + (win ? ".exe" : ""));
                 System.IO.File.WriteAllText(exe, "");
                 var src = new AntSim.Unity.Scripts.Streaming.StreamSource(
                     System.IO.Path.Combine(dir, "antsim"));

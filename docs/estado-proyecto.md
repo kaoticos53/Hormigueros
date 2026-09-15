@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-09-14 · HEAD: F5.2b CERRADO (cuerpo → sensor → contratos → balance V6 → 5º pin) ·
-suite: 328/328 · tag: `v0.4.0` (cierre de Fase 4), `v0.5.0` (cierre de F5.2a)*
+suite: 338/338 (Windows y Linux) · tag: `v0.4.0` (cierre de Fase 4), `v0.5.0` (cierre de F5.2a)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -21,6 +21,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
 | 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 1/7 | `fase5-2c-neat.md` |
+| — | **Cross-platform: CanonMath + cabecera del stream** (CI de ubuntu rota desde 09-12) | ✅ | `arquitectura.md` §CI |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
 
@@ -31,7 +32,7 @@ a bit. Fijado en CI con **CINCO pines de hash**, verificados los cinco
 en una pasada el 2026-09-14 tras el cierre de F5.2b: stream canónico,
 replay con drops a 3000 y 6000 ticks, la partida Atta canónica
 (`check-atta-command.sh`) y la partida de INVASIÓN canónica
-(`check-invasion-command.sh`, el primer pin con combate); 328/328 tests.
+(`check-invasion-command.sh`, el primer pin con combate); 338/338 tests en Windows Y Linux (ver abajo).
 
 **Pre-entrenamiento con transferencia validada** — cadena de 8+ pools
 (frío → warm-starts encadenados → híbrido de dos bandas), benchmark de
@@ -144,6 +145,20 @@ partida canónica del 5º pin:
   hash `ac53b753…` — Eciton SEMBRADA con warm-v2, transferencia
   validada §8quater). Criterio §9 4/4: 12 Strike, 1 RaidInflow,
   9 StockRobbed (21.88 ep), 2 muertes combate.
+
+**CI VERDE OTRA VEZ — DETERMINISMO CROSS-PLATFORM (F5.2c, 2026-09-15).**
+La CI de ubuntu fallaba desde el 2026-09-12 y la suite local (Windows) no lo
+veía. Dos causas raíz, ambas encontradas reproduciendo la CI en WSL: (1) las
+trascendentes de `MathF` difieren 1 ULP entre UCRT y glibc — el mundo diverge
+desde el tick 1 y los pines de hash eran imposibles cross-platform; sustituidas
+por `Sim/CanonMath` (series en double, bit-exactas en todo SO, 10 tests
+propios); (2) `GameScenario.Run` recortaba la cabecera con `sb.Length -= 3`
+asumiendo `\r\n` de Windows — en Linux se comía una llave y TODOS los juegos
+con canales opt-in (E/E-mult/F) emitían JSONL inválido. Los 5 pines se
+regeneraron (el mundo es ligeramente distinto bajo CanonMath: cambio
+INTENCIONAL y documentado) y hoy pasan en ambos SO. Además: el resolutor de
+rutas del Unity CLI es simétrico cross-platform (carpeta de publicación en
+Linux también) y su test de `.exe` está portado.
 
 **F5.2b CERRADO.** Lo que sigue es F5.2c (NEAT / `.antgenome` v2), ya en
 curso: la rodaja 1 (genes estructurales + cerebro de grafo + conversión v1→v2
