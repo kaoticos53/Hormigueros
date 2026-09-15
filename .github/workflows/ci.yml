@@ -37,9 +37,10 @@ jobs:
       #      ticks: replay-command.expected y replay-command-6k.expected)
       #   3. bash scripts/check-atta-command.sh --update     (F5.2a)
       #   4. bash scripts/check-invasion-command.sh --update (F5.2b)
-      #   5. El 5º pin vive EN LA SUITE: UnityStreamContractTests
-      #      (const c143…). Lanza ese test, copia el hash REAL del fallo en la
-      #      constante y re-ejecuta hasta verde.
+      #   5. bash scripts/check-neat-command.sh --update     (F5.2c)
+      #   6. El pin del fixture de stream vive EN LA SUITE:
+      #      UnityStreamContractTests (const c143…). Lanza ese test, copia el
+      #      hash REAL del fallo en la constante y re-ejecuta hasta verde.
       # Y SIEMPRE: revisa el diff de los .expected en el PR (los hashes viejos
       # documentan el mundo anterior), verifica que TODOS los pins pasan en
       # Windows Y Linux (WSL vale), y anota el cambio como intencional en el
@@ -57,6 +58,9 @@ jobs:
 
       - name: Invasion hash check (partida canónica del saqueo — F5.2b)
         run: bash scripts/check-invasion-command.sh
+
+      - name: Neat hash check (invasión con pool v2 — cierre F5.2c)
+        run: bash scripts/check-neat-command.sh
 
       - name: Selftest del analizador de compilación de Unity (sin editor)
         run: bash scripts/check-unity-compile.sh --selftest

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -147,8 +148,21 @@ public static class GameScenario
 
         if (seedPoolPath != null)
         {
-            var (_, seeded) = AntGenomeFile.ReadFile(seedPoolPath, Brain.BrainContract.CurrentVersion);
-            sim.SeedPoolFromGenomes(0, seeded);
+            // F5.2c rodaja 7: el pool puede ser v1 (MLP) o v2 (NEAT) — la
+            // versión del archivo decide el camino de siembra. Ambos son
+            // deterministas y re-verificables por hash.
+            byte[] poolData = File.ReadAllBytes(seedPoolPath);
+            int formatVersion = AntGenomeFile.PeekFormatVersion(poolData);
+            if (formatVersion >= 2)
+            {
+                var (_, neatSeeded) = AntGenomeFile.ReadNeatFile(seedPoolPath, Brain.BrainContract.CurrentVersion);
+                sim.SeedPoolFromNeatGenomes(0, neatSeeded);
+            }
+            else
+            {
+                var (_, seeded) = AntGenomeFile.ReadFile(seedPoolPath, Brain.BrainContract.CurrentVersion);
+                sim.SeedPoolFromGenomes(0, seeded);
+            }
         }
 
         int nextDrop = 0;

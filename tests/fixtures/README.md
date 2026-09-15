@@ -33,3 +33,19 @@ cambia → `--update` en el script, todo revisable en el PR).
 
 La regla `*.antgenome` de `.gitignore` lleva una excepción explícita para
 este directorio.
+
+## `pretrain-neat.antgenome`
+
+El pool NEAT de cierre (F5.2c rodaja 7) — la entrada del 6º pin de CI
+(`scripts/check-neat-command.sh`, hash de partida `021ed04f…`).
+
+- **Formato**: `.antgenome` **v2** (grafos NEAT, writer canonizado) — 64
+  genomas, todos 33n/200c densos (warm-v2 convertidos + hijos de arena).
+- **Procedencia**: `--mode pretrain --seed 42 --pop 24 --generations 4
+  --warm-start tests/fixtures/warm-v2.antgenome --band-min 200 --band-max 260
+  --export artifacts/pretrain-neat.antgenome --neat` — `NeatCurriculumTrainer`
+  (warm-v2 como semilla + 4 gens/etapa con mutación estructural activa),
+  tope de arena 1064.9 (currículo 3 etapas), 11 especies.
+- **Quién lo consume**: `check-neat-command.sh` (CI), `NeatClosureProbe`
+  (suite: siembra de mundo NEAT + canal F con grafo), y cualquier
+  `--seed-pool` (el lector v2 acepta v1 y v2).
