@@ -2,10 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using AntSim.Core.Brain;
-using AntSim.Core.Contracts;
-using AntSim.Core.Evolution;
-using AntSim.Core.World;
 
 namespace AntSim.Unity.Scripts.Streaming
 {
@@ -62,27 +58,73 @@ namespace AntSim.Unity.Scripts.Streaming
         /// emite en el campo "graph" (n/h/c + profundidad por oculto).
         /// Devuelve null si no hay paquete o la topología no cuadra.
         /// </summary>
+        /// <summary>Constante local: primer id de nodo oculto (contrato v1).</summary>
+        private const int FirstHiddenId = 25; // FirstOutputId(19) + DecisionCount(6)
+        private const int FirstOutputId = 19;
+        private const int InputCount = 19;
+
+        /// <summary>
+        /// F5.2c rodaja 6 — render NEAT sin dependencias de Core: decodifica el
+        /// canal F con el total de nodos del grafo y lo explica con la topología
+        /// que el propio stream emite en el campo "graph" (n/h/c + profundidad
+        /// por oculto). Produce una tabla ASCII por profundidad.
+        /// </summary>
         public static string? RenderNeat(string? base64Payload,
             GameStreamParser.GraphView? graph, string? title = null)
         {
             if (graph == null || graph.H == null) return null;
             if (!TryDecodeRaw(base64Payload, graph.N, out float[] acts)) return null;
 
-            // Reconstruir los ids canónicos: [0..18] entradas, ocultos 25..,
-            // salidas 19..24 — el orden de evaluación que el canal F manda.
-            int inputs = AntSensorChannelInfo.Count;
-            int outputs = 6;
             int hidden = graph.H.Length;
-            if (graph.N != inputs + hidden + outputs) return null;
+            int outputs = OutputNames.Length;
+            if (graph.N != InputCount + hidden + outputs) return null;
 
-            var ids = new int[graph.N];
-            int w = 0;
-            for (int i = 0; i < inputs; i++) ids[w++] = i;
-            for (int i = 0; i < hidden; i++) ids[w++] = NodeGene.FirstHiddenId + i;
-            for (int i = 0; i < outputs; i++) ids[w++] = NodeGene.FirstOutputId + i;
+            // Calcular la profundidad máxima (las salidas viven en MaxDepth+1).
+            int maxDepth = 0;
+            foreach (int d in graph.H)
+                if (d > maxDepth) maxDepth = d;
 
-            var desc = new NeatGraphDescription(ids, graph.H, graph.C);
-            return MlpAsciiGraph.RenderNeat(desc, acts, title, OutputNames);
+            var sb = new StringBuilder();
+            sb.Append("NEAT ").Append(hidden).Append("h/").Append(graph.C)
+              .Append("c (").Append(graph.N).Append(" nodos)");
+            if (title != null) sb.Append(" — ").Append(title);
+            sb.AppendLine();
+
+            // Agrupar nodos por capa (profundidad): entradas=0, ocultos=1+d, salidas=maxDepth+1.
+            var layers = new List<(int slot, string name)>[maxDepth + 2];
+            for (int d = 0; d < layers.Length; d++) layers[d] = new();
+
+            // Entradas (ids 0..18).
+            for (int i = 0; i < InputCount; i++)
+                layers[0].Add((i, i < SensorNames.Length ? SensorNames[i] : $"ch{i}"));
+
+            // Ocultos (ids 25.., ordenados por profundidad).
+            for (int i = 0; i < hidden; i++)
+            {
+                int depth = graph.H[i];
+                int slot = 1 + Math.Max(0, depth);
+                if (slot >= layers.Length) slot = layers.Length - 1;
+                layers[slot].Add((InputCount + i, $"h{i + FirstHiddenId}"));
+            }
+
+            // Salidas (ids 19..24).
+            for (int i = 0; i < outputs; i++)
+                layers[maxDepth + 1].Add((InputCount + hidden + i, OutputNames[i]));
+
+            // Renderizar cada capa.
+            for (int d = 0; d < layers.Length; d++)
+            {
+                if (layers[d].Count == 0) continue;
+                sb.Append("== capa ").Append(d).Append(" ==").AppendLine();
+                foreach (var (slot, name) in layers[d])
+                {
+                    float v = acts[slot];
+                    sb.Append(' ').Append(name.PadRight(15))
+                      .Append(FormatValue(v)).Append(' ').Append(Bar(v))
+                      .AppendLine();
+                }
+            }
+            return sb.ToString();
         }
 
         /// <summary>Decode SIN validar contra tamaños de capa (NEAT: el total
