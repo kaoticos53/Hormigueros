@@ -306,6 +306,27 @@ public static class GameScenario
             }
             sb.Append(Convert.ToBase64String(payload));
         }
+        else if (target is { Alive: true } ant2 && ant2.Brain is NeatBrain neat)
+        {
+            // F5.2c — el mismo canal F para el grafo: total = nodos, orden de
+            // evaluación (ids fijos 0..24, luego ocultos por id).
+            var sensors = AntSenses.Build(sim.Colonies[ant2.ColonyId], ant2, sim.Items, sim.WorldWidth, sim.WorldHeight);
+            var decision = AntDecision.Neutral();
+            neat.Evaluate(in sensors, ref decision);
+
+            int total = neat.ActivationTotal;
+            var payload = new byte[2 + total];
+            payload[0] = (byte)total;
+            payload[1] = (byte)(total >> 8);
+            Span<float> act = stackalloc float[total];
+            neat.SnapshotActivations(act);
+            for (int i = 0; i < total; i++)
+            {
+                int q = (int)MathF.Round(act[i] * 128f);
+                payload[2 + i] = (byte)Math.Clamp(q, -128, 127);
+            }
+            sb.Append(Convert.ToBase64String(payload));
+        }
         sb.Append('"');
     }
 

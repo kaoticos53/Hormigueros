@@ -1,6 +1,6 @@
 # F5.2c — NEAT: topologías que evolucionan (.antgenome v2)
 
-Estado: **DISEÑO** (2026-09-15) · predecesores: [`fase5-2a-atta.md`](fase5-2a-atta.md)
+Estado: **EN CURSO — rodaja 1 HECHA** (2026-09-15) · predecesores: [`fase5-2a-atta.md`](fase5-2a-atta.md)
 y [`fase5-2b-eciton.md`](fase5-2b-eciton.md) (cerrados) · padre:
 [`fase5-plan.md`](fase5-plan.md) §3.4 · estado global:
 [`estado-proyecto.md`](estado-proyecto.md).
@@ -176,6 +176,7 @@ SHA-256 (32) de todo lo anterior
 | # | Rodaja | Contenido | Criterio |
 |---|---|---|---|
 | 1 | **Genes + cerebro** | `NodeGene`/`ConnGene`/`NeatGenome`/`NeatBrain` + conversión exacta v1→v2 | paridad de activaciones MLP↔NEAT bit a bit; Kahn valida aciclicidad; suite verde, 5 pins intactos |
+| ^ | **HECHO (2026-09-15)** | `NeatGenome` (invariantes 1–6, `FromMlp`, `DistanceTo`), `NeatBrain` (Kahn menor-id, activación bias-primero con fuentes por id ascendente, canal F layout canónico) | 13 tests: paridad bit a bit (200 semillas × 4 topologías + genomas reales warm-v2, decisiones Y activaciones), invariantes, determinismo, distancia. Descubrimiento colateral: el registro de activaciones del `MlpBrain` tenía un defecto de offsets (BlockCopy en bytes con offset float) — corregido, canal F v1 ahora emite el layout documentado; 328/328 tests, 5 pins intactos |
 | 2 | **Operadores** | mutaciones estructurales + crossover align-by-innovation + distancia genómica | determinismo (misma semilla ⇒ misma secuencia); el crossover no pierde el circuito del mejor padre (test del clásico XOR de NEAT adaptado) |
 | 3 | **Especiation en GenomePool** | agrupación por δ, cuotas por especie, `GenomePool.Stats` con nº de especies | una corrida de 200 generaciones con mutación estructural activa NO colapsa a 1 especie (mín 3 sostenidas) |
 | 4 | **Formato v2** | writer/reader + acepta-v1 + re-innovación canónica al importar + campos de cuarentena | roundtrip bit a bit; dos importaciones del mismo archivo ⇒ pools idénticos; `GenomeImportInfo` con la forma |
