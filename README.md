@@ -24,6 +24,38 @@ Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.m
 
 ## Notas de versión
 
+### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
+
+El cerebro de la hormiga deja de ser una red fija: los 7 rodajas de F5.2c
+(convirtieron el MLP 19·8·6 en grafos NEAT arbitrarios que MUTAN estructura
+en la arena) están cerrados, con el criterio de fin del plan cumplido.
+
+- **Genomas v2**: genes de nodo y conexión con innovations, binario
+  `.antgenome` v2 canonizado (roundtrip bit a bit, acepta v1, re-innovación
+  determinista al importar — doble importación ⇒ genomas idénticos).
+- **Cerebro de grafo**: `NeatBrain` con orden topológico Kahn y paridad
+  BIT A BIT con el MLP denso (la conversión no pierde nada: transferencia
+  warm-v2 con paridad en la generación 1).
+- **Operadores estructurales**: add-node (split que conserva la función),
+  add-conn (jamás ciclos ni duplicados), toggle (poda que no huerfana
+  outputs), crossover align-by-innovation (el circuito del mejor padre
+  sobrevive y se evalúa).
+- **Especiation con parentesco**: el hallazgo medido — el δ estructural es
+  ~50× más pequeño que el ruido de pesos entre densos no emparentados, así
+  que la agrupación mide LINAJE (δ < 0.05 = parientesco; si no, funda
+  especie). 200 generaciones sin colapso, cuotas sharing por especie.
+- **Meritocracia de arena medida**: con señal comparable, el tope cae en
+  gen 1–16 y la media del élite sube +29 % en 3 semillas — el pool NEAT
+  refina al patrón oro en vez de degradarlo.
+- **El mundo siembra v2**: `--seed-pool` acepta v1 y v2, las fundadoras
+  portan cerebros de grafo, y `--mode pretrain --neat` entrena y exporta.
+- **El grafo se ve**: canal F emite la topología (campo `graph` n/h/c) y
+  el inspector muestra el linaje con las formas de los cerebros.
+- **6º pin de CI** (`check-neat-command.sh`, hash `021ed04f…`): la partida
+  de invasión lasius+eciton con pool NEAT propio — el cierre del plan §3.
+
+**Suite 379/379 tests, 6 pins de hash verificados en Windows y Linux.**
+
 ### v0.6.1 — CI verde cross-platform: determinismo canónico reparado
 
 La CI de master llevaba rota desde el 12 de septiembre mientras la suite local
