@@ -315,6 +315,19 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   verificable sin el peso de ~170 ítems por línea a 30 Hz (13.5 MB vs 376 MB).
   Mismo hash final que con frameEvery 1: la cadencia de frames no toca la
   simulación — util para probar HUD/inspector/semáforo contra datos reales.
+- **Matemática canónica (F5.2c)**: las trascendentes de `MathF`
+  (Tanh/Exp/Log/Sin/Cos) no están especificadas bit a bit en .NET — cada
+  runtime delega en la libm del sistema (UCRT vs glibc) y difieren en 1 ULP.
+  Con sensores que alimentan el cerebro ese ULP cambia una decisión y el
+  mundo diverge: el hash canónico de Windows y Linux NUNCA coincidía (la CI
+  de ubuntu llevaba roja desde el 2026-09-12 por esto, más un defecto del
+  corte de cabecera con `AppendLine` dependiente del SO). `Sim/CanonMath.cs`
+  implementa las trascendentes con series de precisión controlada en double
+  (aritmética IEEE básica, 2^k por bits, reducción de argumento exacta):
+  mismo resultado bit a bit en cualquier SO, verificado suite + 5 pines en
+  Windows y Linux (WSL). Coste: 2–5× por llamada, decenas de llamadas por
+  tick — despreciable frente al tick. `Sqrt` sigue siendo `MathF.Sqrt`
+  (IEEE-exact, correctamente redondeado en toda plataforma).
 - **CI del contrato del stream**: el hash final de la partida canónica
   (seed 42, grid 96, 2 colonias, 7200 ticks — la de
   `artifacts/stream-fixture.jsonl`) está FIJADO en dos sitios que deben

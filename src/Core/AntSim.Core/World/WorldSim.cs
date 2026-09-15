@@ -334,8 +334,10 @@ public sealed class WorldSim
         ant.Heading = WrapPi(ant.Heading + decision.Steer * sp.OmegaMax * dt);
         float loadFactor = ant.HasLoad ? (0.6f + 0.4f * (1f - Math.Min(1f, ant.LoadValue / FoodItem.MaxValue))) : 1f;
         float v = decision.Speed * sp.VMax * ant.SpeedScale * loadFactor;
-        ant.X = Math.Clamp(ant.X + MathF.Cos(ant.Heading) * v * dt, 0f, WorldWidth);
-        ant.Y = Math.Clamp(ant.Y + MathF.Sin(ant.Heading) * v * dt, 0f, WorldHeight);
+        // CanonMath (F5.2c): Cos/Sin cross-platform bit-exact — el movimiento
+        // alimenta TODO el estado posterior del mundo.
+        ant.X = Math.Clamp(ant.X + CanonMath.Cos(ant.Heading) * v * dt, 0f, WorldWidth);
+        ant.Y = Math.Clamp(ant.Y + CanonMath.Sin(ant.Heading) * v * dt, 0f, WorldHeight);
         ant.Energy = Math.Max(0f, ant.Energy - sp.CostMove * v * dt / ant.EnergyCapacity);
 
         // — F5.2b.1: combate de incursión (después del movimiento, con la pose

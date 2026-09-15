@@ -96,7 +96,23 @@ public static class GameScenario
 
         AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite);
         if (pheroEvery > 0 || activEvery > 0)
-            sb.Length -= 3; // "}}\r\n" → cierra en el bucle: añadimos canales opt-in
+        {
+            // Retrocede el cierre para continuar con los canales opt-in.
+            // CUIDADO (defecto de CI destapado en F5.2c): AppendLine() escribe
+            // "\r\n" SOLO en Windows — en Linux escribe "\n", y el "-= 3"
+            // original se comía UNA llave de más en Linux (cabecera JSON
+            // inválida: los juegos con canales opt-in no parseaban en ubuntu).
+            // Contrato del corte: quitar los saltos reales y UNA llave — la
+            // cabecera queda "{"header":{…}," con el objeto raíz ABIERTO y
+            // los campos opt-in al nivel de la raíz; el Append('}') final
+            // cierra la raíz. Idéntico en ambos SO.
+            int newLen = sb.Length;
+            while (newLen > 0 && (sb[newLen - 1] == '\r' || sb[newLen - 1] == '\n'))
+                newLen--;
+            if (newLen > 0 && sb[newLen - 1] == '}')
+                newLen--;
+            sb.Length = newLen; // "…}" (header cerrado) — raíz abierta
+        }
 
         // Canal E (F4.5): feromonas opt-in. Se declara en la cabecera para que
         // el parser sepa que los ticks pueden traer "phero". La emisión nunca

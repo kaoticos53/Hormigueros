@@ -31,18 +31,20 @@ public static class AntSenses
     {
         SpeciesDescriptor sp = c.Species;
         float reach = sp.SensorReach * a.SensorScale;
-        float sinH = MathF.Sin(a.Heading);
-        float cosH = MathF.Cos(a.Heading);
+        // CanonMath (F5.2c): Sin/Cos de MathF difieren 1 ULP cross-platform —
+        // la sonda de olfato alimenta el cerebro, el ULP diverge el mundo.
+        float sinH = CanonMath.Sin(a.Heading);
+        float cosH = CanonMath.Cos(a.Heading);
 
         // Puntos de la sonda (marco local: +X = rumbo)
         float cx = a.X + cosH * reach;
         float cy = a.Y + sinH * reach;
         float angL = a.Heading + sp.SenseAngle;
         float angR = a.Heading - sp.SenseAngle;
-        float lx = a.X + MathF.Cos(angL) * reach;
-        float ly = a.Y + MathF.Sin(angL) * reach;
-        float rx = a.X + MathF.Cos(angR) * reach;
-        float ry = a.Y + MathF.Sin(angR) * reach;
+        float lx = a.X + CanonMath.Cos(angL) * reach;
+        float ly = a.Y + CanonMath.Sin(angL) * reach;
+        float rx = a.X + CanonMath.Cos(angR) * reach;
+        float ry = a.Y + CanonMath.Sin(angR) * reach;
 
         var s = AntSensors.Default();
 
