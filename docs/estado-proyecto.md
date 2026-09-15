@@ -166,6 +166,12 @@ el doc de Atta (§6bis).
    (nodos/conexiones por innovation), inspector de grafos generalizado,
    re-innovación determinista al importar. El hito más caro; red de
    seguridad: topología MLP fija como fallback documentado.
+   **Diseño cerrado** (2026-09-15) en
+   [`fase5-2c-neat.md`](fase5-2c-neat.md): contrato IBrain v1 congelado
+   (19/6), innovación local + re-innovación canónica al importar (sin
+   contador global), align-by-innovation + especiation por δ, topes
+   500/2000, v2 acepta v1 en carga, 7 rodajas con métricas de
+   no-estancamiento explícitas.
 4. **F5.3 — Escala**: SoA/ECS del `WorldSim` (migración con pin de hash —
    el arnés de regresión más estricto posible), LOD de difusión de
    feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
