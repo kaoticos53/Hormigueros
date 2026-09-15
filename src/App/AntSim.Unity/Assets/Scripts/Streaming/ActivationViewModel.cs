@@ -1,6 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using AntSim.Core.Brain;
+using AntSim.Core.Contracts;
+using AntSim.Core.Evolution;
+using AntSim.Core.World;
 
 namespace AntSim.Unity.Scripts.Streaming
 {
@@ -46,6 +51,59 @@ namespace AntSim.Unity.Scripts.Streaming
             {
                 int b = bytes[2 + i];
                 if (b > 127) b -= 256; // s8 con signo
+                activations[i] = b / 128f;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// F5.2c rodaja 6 — render NEAT: decodifica el canal F con el total de
+        /// nodos del grafo y lo explica con la topología que el propio stream
+        /// emite en el campo "graph" (n/h/c + profundidad por oculto).
+        /// Devuelve null si no hay paquete o la topología no cuadra.
+        /// </summary>
+        public static string? RenderNeat(string? base64Payload,
+            GameStreamParser.GraphView? graph, string? title = null)
+        {
+            if (graph == null || graph.H == null) return null;
+            if (!TryDecodeRaw(base64Payload, graph.N, out float[] acts)) return null;
+
+            // Reconstruir los ids canónicos: [0..18] entradas, ocultos 25..,
+            // salidas 19..24 — el orden de evaluación que el canal F manda.
+            int inputs = AntSensorChannelInfo.Count;
+            int outputs = 6;
+            int hidden = graph.H.Length;
+            if (graph.N != inputs + hidden + outputs) return null;
+
+            var ids = new int[graph.N];
+            int w = 0;
+            for (int i = 0; i < inputs; i++) ids[w++] = i;
+            for (int i = 0; i < hidden; i++) ids[w++] = NodeGene.FirstHiddenId + i;
+            for (int i = 0; i < outputs; i++) ids[w++] = NodeGene.FirstOutputId + i;
+
+            var desc = new NeatGraphDescription(ids, graph.H, graph.C);
+            return MlpAsciiGraph.RenderNeat(desc, acts, title, OutputNames);
+        }
+
+        /// <summary>Decode SIN validar contra tamaños de capa (NEAT: el total
+        /// lo manda el paquete). False si el paquete está vacío o corrupto.</summary>
+        public static bool TryDecodeRaw(string? base64Payload, int expectedTotal, out float[] activations)
+        {
+            activations = Array.Empty<float>();
+            if (string.IsNullOrEmpty(base64Payload)) return false;
+
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(base64Payload); }
+            catch (FormatException) { return false; }
+            if (bytes.Length < 2) return false;
+            int total = bytes[0] | (bytes[1] << 8);
+            if (total != expectedTotal || bytes.Length != 2 + total) return false;
+
+            activations = new float[total];
+            for (int i = 0; i < total; i++)
+            {
+                int b = bytes[2 + i];
+                if (b > 127) b -= 256;
                 activations[i] = b / 128f;
             }
             return true;

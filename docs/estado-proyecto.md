@@ -20,7 +20,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
 | **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
-| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 5/7 | `fase5-2c-neat.md` |
+| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 6/7 | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** (CI de ubuntu rota desde 09-12) | ✅ | `arquitectura.md` §CI |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
@@ -172,6 +172,19 @@ equivocado; corregido — el canal F v1 ahora emite el layout documentado
 F es opt-in y ningún mundo fijado lo activa). La
 deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
 el doc de Atta (§6bis).
+
+**F5.2c AVANCE — RODAJA 6 (canal F generalizado + inspector, 2026-09-15).**
+
+El canal F ya explica grafos ARBITRARIOS: `NeatBrain.Graph` cachea la
+topología (ids canónicos, profundidad por oculto, conexiones activas) y el
+stream NEAT la emite como `"graph":{"n","h":[...],"c"}`; el canal A gana el
+13º campo opcional `brainShape` ("8h/200c" — ausente en MLP, así que los
+streams v1 y los 5 pins CI no cambian). La vista reconstruye el grafo desde
+n/h/c y lo renderiza por profundidad; la tarjeta de linaje muestra la línea
+`cerebro:` con las formas de los cuerpos — los cerebros que CRECEN entre
+generaciones ya son visibles sin sondas. Defecto latente corregido: el indexado
+de profundidades asumía ocultos contiguos (falso en grafos crecidos donde Kahn
+intercala salidas). 378/378 tests, 5 pins intactos. Queda la rodaja 7 (cierre).
 
 **F5.2c AVANCE — RODAJA 5 (arena + transferencia, 2026-09-15).**
 `ArenaEvaluator.EvaluateNeat` (mismo protocolo exacto; fundadores NEAT con

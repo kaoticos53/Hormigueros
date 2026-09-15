@@ -30,14 +30,20 @@ public static class SimSnapshot
         public readonly float Age;            // s de sim
         public readonly bool IsImmigrant;     // en prueba de cuarentena
         public readonly uint GenomeFingerprint; // huella determinista del genoma (primeros pesos + tamaño)
+        /// <summary>F5.2c rodaja 6 — resumen topológico del cerebro NEAT
+        /// ("h/c" con n implícito: 19 entradas y 6 salidas son fijas) o cadena
+        /// vacía para el MLP clásico (el contrato v1 no cambia para los mundos
+        /// existentes: el campo es opcional, posicional y solo aparece en NEAT).</summary>
+        public readonly string BrainShape;
 
         public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive,
             float vigor = 0f, float energy = 0f, float age = 0f, bool isImmigrant = false,
-            uint genomeFingerprint = 0)
+            uint genomeFingerprint = 0, string brainShape = "")
         {
             Id = id; ColonyId = colonyId; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive;
             Vigor = vigor; Energy = energy; Age = age; IsImmigrant = isImmigrant;
             GenomeFingerprint = genomeFingerprint;
+            BrainShape = brainShape;
         }
     }
 
@@ -101,7 +107,7 @@ public static class SimSnapshot
                 var a = colony.Adults[i];
                 ants.Add(new AntPose(a.Id, colony.Id, a.X, a.Y, a.Heading, a.HasLoad, a.Alive,
                     a.Vigor, a.Energy, a.Age, a.IsImmigrantTrial,
-                    Fingerprint(a.Genome)));
+                    Fingerprint(a.Genome), BrainShapeOf(a.Brain)));
             }
         }
 
@@ -141,6 +147,23 @@ public static class SimSnapshot
             h = (h ^ bits) * 16777619u;
         }
         return h;
+    }
+
+    /// <summary>
+    /// F5.2c rodaja 6 — resumen n/h/c del cerebro (linaje): solo para NEAT (el
+    /// MLP clásico devuelve cadena vacía — el canal A de los mundos v1 no
+    /// cambia). Sin alocación por tick: la descripción vive cacheada en el
+    /// <see cref="NeatBrain"/>.
+    /// </summary>
+    public static string BrainShapeOf(Brain.IBrain brain)
+    {
+        return brain is Brain.NeatBrain nb
+            ? string.Concat(
+                nb.Graph.HiddenCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "h/",
+                nb.Graph.ActiveConnCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "c")
+            : "";
     }
 }
 

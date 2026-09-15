@@ -27,13 +27,19 @@ namespace AntSim.Unity.Scripts.Streaming
             // — Inspección (F4.2) —
             public readonly float Vigor, Energy, Age;
             public readonly bool IsImmigrant;
-            public readonly uint GenomeFingerprint;
+            public readonly uint GenomeFingerprint;        /// <summary>F5.2c rodaja 6 — forma del cerebro NEAT ("h/c") o cadena
+        /// vacía (MLP clásico). Campo 13 del canal A, opcional.</summary>
+        public readonly string BrainShape;
 
-            public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive,
-                float vigor = 0f, float energy = 0f, float age = 0f, bool isImmigrant = false, uint genomeFingerprint = 0)
-            { Id = id; ColonyId = colonyId; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive;
-              Vigor = vigor; Energy = energy; Age = age; IsImmigrant = isImmigrant;
-              GenomeFingerprint = genomeFingerprint; }
+        public AntPose(uint id, int colonyId, float x, float y, float heading, bool hasLoad, bool alive,
+            float vigor = 0f, float energy = 0f, float age = 0f, bool isImmigrant = false,
+            uint genomeFingerprint = 0, string brainShape = "")
+        {
+            Id = id; ColonyId = colonyId; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive;
+            Vigor = vigor; Energy = energy; Age = age; IsImmigrant = isImmigrant;
+            GenomeFingerprint = genomeFingerprint;
+            BrainShape = brainShape;
+        }
         }
 
         public readonly struct ItemView
@@ -146,6 +152,23 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>Ventana de métricas de UNA colonia (F4.2).</summary>
         /// <summary>F5.2a.3: cadena de la cortadora de UNA colonia en la ventana
         /// (cuts/fungusFed). Solo aparece si hubo actividad este tick.</summary>
+        /// <summary>F5.2c rodaja 6 — topología del grafo NEAT inspeccionado
+        /// (canal F): nº de nodos, profundidad topológica de cada oculto (el
+        /// orden es el del canal F: ocultos por id ascendente) y nº de
+        /// conexiones activas. Es TODO lo que la vista necesita para dibujar
+        /// el grafo arbitrario — los pesos no viajan.</summary>
+        public sealed class GraphView
+        {
+            public readonly int N;
+            public readonly int[] H;
+            public readonly int C;
+
+            public GraphView(int n, int[] h, int c)
+            {
+                N = n; H = h; C = c;
+            }
+        }
+
         public readonly struct CutterView
         {
             public readonly int ColonyId;
@@ -213,6 +236,9 @@ namespace AntSim.Unity.Scripts.Streaming
             public string? Phero;                                 // canal E (F4.5), base64 RLE
             public readonly List<PheroLayerView> PheroSet = new(); // canal E múltiple (F5.1)
             public string? Activ;                                 // canal F (F5.0), base64 s8
+            /// <summary>F5.2c rodaja 6 — topología del grafo inspeccionado
+            /// (canal F NEAT). Null en mundos MLP (el campo no viaja).</summary>
+            public GraphView? Graph;                              // canal F (F5.2c)
         }
 
         /// <summary>Cabecera del stream (parámetros de la partida).</summary>
@@ -286,7 +312,10 @@ namespace AntSim.Unity.Scripts.Streaming
                         f.Length > 9 ? (float)Reader.NumOf(f[8]) : 0f,
                         f.Length > 9 ? (float)Reader.NumOf(f[9]) : 0f,
                         f.Length > 10 && f[10] == "1",
-                        f.Length > 11 ? (uint)Reader.NumOf(f[11]) : 0u));
+                        f.Length > 11 ? (uint)Reader.NumOf(f[11]) : 0u,
+                        // F5.2c rodaja 6: 13º campo opcional ("h/c") — tolerante
+                        // con streams v1 (12 campos) y con cuerdas absent.
+                        f.Length > 12 ? RowString(f[12]) : ""));
                 }
             }
 
@@ -365,6 +394,17 @@ namespace AntSim.Unity.Scripts.Streaming
                 int start = aci + 9;
                 int end = raw.IndexOf('"', start);
                 if (end > start) v.Activ = raw.Substring(start, end - start);
+            }
+
+            // — Canal F NEAT (F5.2c rodaja 6): topología del grafo inspeccionado —
+            int gi = raw.IndexOf("\"graph\":", StringComparison.Ordinal);
+            if (gi >= 0)
+            {
+                var p = new Reader(ObjectBody(raw, gi + "\"graph\":".Length));
+                v.Graph = new GraphView(
+                    (int)p.Num("n"),
+                    IntArrayOf(raw, "h"),
+                    (int)p.Num("c"));
             }
 
             int mi = raw.IndexOf("\"metrics\":{", StringComparison.Ordinal);
@@ -527,6 +567,16 @@ namespace AntSim.Unity.Scripts.Streaming
             return SplitTop(inner).ToArray();
         }
 
+        /// <summary>Campo de fila como string sin comillas (F5.2c rodaja 6:
+        /// brainShape "h/c" del canal A).</summary>
+        private static string RowString(string field)
+        {
+            string s = field.Trim();
+            if (s.Length >= 2 && s[0] == '"' && s.EndsWith("\"", StringComparison.Ordinal))
+                return s.Substring(1, s.Length - 2);
+            return s;
+        }
+
         /// <summary>Divide un cuerpo de array en filas de nivel superior (por comas externas).</summary>
         private static IEnumerable<string> SplitTop(string body)
         {
@@ -554,6 +604,26 @@ namespace AntSim.Unity.Scripts.Streaming
             int j = i;
             while (j < s.Length && (char.IsDigit(s[j]) || s[j] == '-' || s[j] == '.')) j++;
             return s.Substring(i, j - i);
+        }
+
+        /// <summary>Array de enteros de una clave en el texto del tick
+        /// (F5.2c rodaja 6: profundidades "h" del canal F NEAT). Vacío si
+        /// ausente o malformado.</summary>
+        private static int[] IntArrayOf(string raw, string key)
+        {
+            int i = raw.IndexOf("\"" + key + "\":[", StringComparison.Ordinal);
+            if (i < 0) return Array.Empty<int>();
+            i += key.Length + 3;
+            int close = raw.IndexOf(']', i);
+            if (close <= i) return Array.Empty<int>();
+            string body = raw.Substring(i, close - i);
+            var result = new List<int>();
+            foreach (var s in SplitTop(body))
+            {
+                if (int.TryParse(s.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int v))
+                    result.Add(v);
+            }
+            return result.ToArray();
         }
 
         /// <summary>Lector de claves sobre un objeto JSON plano (números y strings cortos).</summary>
