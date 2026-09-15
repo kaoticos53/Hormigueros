@@ -19,6 +19,13 @@ namespace AntSim.Unity.Scripts.Streaming
     /// </summary>
     public sealed class AntInspectorModel
     {
+        // F5.2c rodaja 6: canal F del tick en curso para el grafo del cerebro.
+        private string? _lastActiv;
+        private GameStreamParser.GraphView? _lastGraph;
+
+        /// <summary>Último grafo renderizado del canal F (null si no hay o si el
+        /// inspector no está siguiendo a nadie).</summary>
+        public string? BrainGraph { get; private set; }
         /// <summary>Una muestra del canal A para la hormiga rastreada (12 campos).</summary>
         public readonly struct Sample
         {
@@ -191,6 +198,16 @@ namespace AntSim.Unity.Scripts.Streaming
                     a.HasLoad, a.Alive, a.Vigor, a.Energy, a.Age,
                     a.IsImmigrant, a.GenomeFingerprint, a.BrainShape));
             }
+
+            // F5.2c rodaja 6: capturar canal F del tick para el grafo del cerebro.
+            if (view.Activ != null)
+            {
+                _lastActiv = view.Activ;
+                _lastGraph = view.Graph;
+                BrainGraph = view.Graph != null
+                    ? ActivationViewModel.RenderNeat(view.Activ, view.Graph, title: null)
+                    : ActivationViewModel.Render(view.Activ, title: null);
+            }
         }
 
         /// <summary>Causa de muerte como texto fijo del contrato (byte 0/1/2 del Core).</summary>
@@ -301,8 +318,14 @@ namespace AntSim.Unity.Scripts.Streaming
         /// </summary>
         public string RenderCard()
         {
-            if (_followBrain is uint fb) return RenderLineageCard(fb);
-            return RenderAntCard();
+            string card = _followBrain is uint fb ? RenderLineageCard(fb) : RenderAntCard();
+            // F5.2c rodaja 6: si el canal F trae activaciones del cerebro,
+            // adjuntar el grafo al final de la tarjeta (informativo, no invasivo).
+            if (BrainGraph != null && card.Length > 0)
+            {
+                card += '\n' + BrainGraph;
+            }
+            return card;
         }
 
         /// <summary>Tarjeta del modo hormiga (un cuerpo).</summary>
