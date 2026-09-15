@@ -9,7 +9,9 @@ Estado actual: **Fases 0–4 completadas** (núcleo determinista + mundo + neuro
 + pre-entrenamiento headless con transferencia validada + **modo evolución jugable**:
 stream JSONL de 5 canales hacia la vista, escena Unity bootstrapeada con HUD —
 tarjetas de colonia con semáforo de relevo, toasts, inspector con linaje de cerebros —,
-importación con cuarentena, intervención `--drop` determinista y replay bit a bit).
+importación con cuarentena, intervención `--drop` determinista y replay bit a bit)
+y Fase 5 en marcha con **dos especies cerradas** (Atta la cortadora, Eciton la
+legionaria — incursión y asfixia económica calibradas).
 Ver [`docs/arquitectura.md`](docs/arquitectura.md) para el plan por fases completo,
 [`docs/especificaciones.md`](docs/especificaciones.md) para los contratos cerrados
 y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cierre,
@@ -21,6 +23,46 @@ y [`docs/fase5-plan.md`](docs/fase5-plan.md) para el plan de la Fase 5 (realismo
 Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.md).
 
 ## Notas de versión
+
+### v0.6.0 — Fase 5: Eciton, la legionaria (CERRADO)
+
+La segunda especie de Fase 5, cerrada slice a slice con sondas borradas y
+datos acumulados en [`docs/fase5-2b-eciton.md`](docs/fase5-2b-eciton.md):
+
+- **F5.2b.1 — el cuerpo de combate**: `ContactRadius`/`StrikeDamage`/
+  `StealPerStrike` en el descriptor de especie (solo Eciton ≠ 0 = pacífico),
+  golpe determinista sin RNG nuevo con reparto de botín (`LoadIsLoot`) que
+  fluye por el `Unload` de siempre, eventos 17–19 (Strike/RaidInflow/
+  StockRobbed) en canal B, `DeathCause.Combat` y alarma inyectada en la capa
+  de la víctima; `.antsave` v4.
+- **Sondas de transferencia**: warm-v2 en cuerpo Eciton forrajea MEJOR que
+  su control Lasius (13 descargas vs 11) y reacciona al sensor de presa sin
+  entrenamiento (strikes 2→18, ×9) — el genoma sigue portable en la segunda
+  especie tras Atta.
+- **F5.2b.2 — el sensor de presa**: canal 12 `ProxFront` reconvertido a
+  «hormiga enemiga más cercana» con gating por especie + mundo multi-colonia;
+  dos invariancias de hash (mundo clásico multi-colonia y mundo unicolonia
+  Eciton, byte a byte).
+- **F5.2b.3 — contratos**: bloque `raids` en canal C con contadores
+  acumulados entre lecturas (la ventana de 1 s no veía golpes tan raros —
+  descubierto por el propio test), parser Unity tolerante y causa «combate»
+  en la tarjeta del inspector.
+- **F5.2b.4 — calibración V6**: tres sondas demostraron que escalar el robo
+  solo NO mata (golpes tardíos con despensa vacía; un robo carga al
+  saqueador y le prohíbe volver a golpear) y que la palanca real era el
+  radio de contacto: `ContactRadius 6→40`, `StrikeDamage 0.35→2.5`,
+  `StealPerStrike 0.30→5.0`. Resultado: 2/5 semillas con extinción
+  ACCELERADA (hasta 1 669 ticks antes bajo 15.3 ep saqueados), asfixia
+  económica en vez de carnaza — y el botín ya PAGA (saqueador +1 113 ticks
+  vs su gemela sin contacto). Los CombatTests pasaron a escenario remoto
+  (>400 u de ambos nidos) para sobrevivir a futuros radios.
+- **F5.2b.5 — pin y tarjeta**: quinto pin de hash CI
+  (`check-invasion-command.sh`, partida de invasión canónica con Eciton
+  sembrada — el primer pin cuyo mundo depende del combate) y línea
+  `raids N · M al nido` en la tarjeta del multi-visor, solo para la colonia
+  beligerante. Criterio de cierre §9 verificado 4/4.
+- CI con **5 pins de hash**, suite **315/315** verde, Unity compila en
+  batch con 0 error CS.
 
 ### v0.5.0 — Fase 5 (mitad): especies, multi-visor y la cortadora
 
