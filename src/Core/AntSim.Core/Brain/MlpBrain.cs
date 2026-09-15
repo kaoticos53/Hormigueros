@@ -60,9 +60,13 @@ public sealed class MlpBrain : IBrain
             offset += _sizes[l] * (_sizes[l - 1] + 1);
         }
 
-        // F5.0: offsets del registro de activaciones (capa 0 = 0).
+        // F5.0: offsets del registro de activaciones. El bloque de sensores
+        // (capa 0) ocupa las primeras _inputCount posiciones; cada capa sigue
+        // después — el layout canónico es [entradas, ocultas…, salidas], como
+        // documenta SnapshotActivations. (Corregido en F5.2c: antes las
+        // ocultas se grababan en el offset 0 y APLASTABAN los sensores.)
         _layerOffsetActivation = new int[_sizes.Length];
-        int actOffset = 0;
+        int actOffset = _inputCount;
         for (int l = 1; l < _sizes.Length; l++)
         {
             _layerOffsetActivation[l] = actOffset;
@@ -131,7 +135,10 @@ public sealed class MlpBrain : IBrain
             }
 
             // F5.0: registro de la capa recién computada (canal F de inspección).
-            Buffer.BlockCopy(next, 0, _activations, _layerOffsetActivation[l], curCount * sizeof(float));
+            // OJO: BlockCopy trabaja en BYTES — el offset va en floats y se
+            // convierte aquí. (Antes se pasaba el offset float como byte:
+            // las ocultas aterrizaron siempre en el lugar equivocado.)
+            Buffer.BlockCopy(next, 0, _activations, _layerOffsetActivation[l] * sizeof(float), curCount * sizeof(float));
 
             (cur, next) = (next, cur);
         }

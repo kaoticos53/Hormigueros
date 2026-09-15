@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-09-14 · HEAD: F5.2b CERRADO (cuerpo → sensor → contratos → balance V6 → 5º pin) ·
-suite: 315/315 · tag: `v0.4.0` (cierre de Fase 4), `v0.5.0` (cierre de F5.2a)*
+suite: 328/328 · tag: `v0.4.0` (cierre de Fase 4), `v0.5.0` (cierre de F5.2a)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -20,7 +20,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
 | **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
-| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🔲 | — |
+| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 1/7 | `fase5-2c-neat.md` |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
 
@@ -31,7 +31,7 @@ a bit. Fijado en CI con **CINCO pines de hash**, verificados los cinco
 en una pasada el 2026-09-14 tras el cierre de F5.2b: stream canónico,
 replay con drops a 3000 y 6000 ticks, la partida Atta canónica
 (`check-atta-command.sh`) y la partida de INVASIÓN canónica
-(`check-invasion-command.sh`, el primer pin con combate); 315/315 tests.
+(`check-invasion-command.sh`, el primer pin con combate); 328/328 tests.
 
 **Pre-entrenamiento con transferencia validada** — cadena de 8+ pools
 (frío → warm-starts encadenados → híbrido de dos bandas), benchmark de
@@ -145,7 +145,16 @@ partida canónica del 5º pin:
   validada §8quater). Criterio §9 4/4: 12 Strike, 1 RaidInflow,
   9 StockRobbed (21.88 ep), 2 muertes combate.
 
-**F5.2b CERRADO.** Lo que sigue es F5.2c (NEAT / `.antgenome` v2). La
+**F5.2b CERRADO.** Lo que sigue es F5.2c (NEAT / `.antgenome` v2), ya en
+curso: la rodaja 1 (genes estructurales + cerebro de grafo + conversión v1→v2
+con paridad BIT A BIT) está hecha — `NeatGenome`/`NeatBrain` con 13 tests
+propios, incluyendo la paridad contra genomas reales del pool warm-v2. La
+sonda de paridad destapó además un defecto latente del `MlpBrain`: el registro
+de activaciones del canal F escribía con offsets de float donde `Buffer.BlockCopy`
+esperaba BYTES, por lo que las ocultas aterrizaron siempre en el lugar
+equivocado; corregido — el canal F v1 ahora emite el layout documentado
+`[entradas, ocultas, salidas]` (los 5 pines de hash siguen intactos: el canal
+F es opt-in y ningún mundo fijado lo activa). La
 deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
 el doc de Atta (§6bis).
 
