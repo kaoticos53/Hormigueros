@@ -34,6 +34,7 @@ public sealed class NeatBrain : IBrain
     private readonly float[] _value;
     private readonly float[] _activations;    // F5.0/F5.2c: registro por Evaluate (ids de gen)
     private readonly int _inputCount;
+    private readonly int[] _outIdx;           // índice interno de cada salida (precalculado: 0 lookups por Evaluate)
 
     public NeatBrain(IReadOnlyList<NodeGene> nodes, IReadOnlyList<ConnGene> conns)
     {
@@ -126,6 +127,10 @@ public sealed class NeatBrain : IBrain
         }
         _inStart[_order.Length] = w;
 
+        _outIdx = new int[AntDecision.DecisionCount];
+        for (int i = 0; i < _outIdx.Length; i++)
+            _outIdx[i] = _index[NodeGene.FirstOutputId + i];
+
         _value = new float[_order.Length];
         _activations = new float[_order.Length];
     }
@@ -172,13 +177,13 @@ public sealed class NeatBrain : IBrain
             if (id >= NodeGene.FirstOutputId && id < NodeGene.FirstHiddenId) _activations[w++] = value[i];
         }
 
-        // Salidas: ids 19..24 → índice interno por id.
-        decision.Steer = value[_index[NodeGene.FirstOutputId + 0]];
-        decision.Speed = value[_index[NodeGene.FirstOutputId + 1]];
-        decision.DepositFood = value[_index[NodeGene.FirstOutputId + 2]];
-        decision.DepositHome = value[_index[NodeGene.FirstOutputId + 3]];
-        decision.DepositAlarm = value[_index[NodeGene.FirstOutputId + 4]];
-        decision.Interact = value[_index[NodeGene.FirstOutputId + 5]];
+        // Salidas: índices internos precalculados (cero lookups por Evaluate).
+        decision.Steer = value[_outIdx[0]];
+        decision.Speed = value[_outIdx[1]];
+        decision.DepositFood = value[_outIdx[2]];
+        decision.DepositHome = value[_outIdx[3]];
+        decision.DepositAlarm = value[_outIdx[4]];
+        decision.Interact = value[_outIdx[5]];
     }
 
     /// <summary>
