@@ -145,14 +145,37 @@ public sealed class ArenaEvaluator
         ArenaResult best = default;
         for (int t = 0; t < _trials; t++)
         {
-            var result = EvaluateTrial(genome);
+            var result = EvaluateTrial(genome, null);
             if (t == 0 || result.Fitness > best.Fitness)
                 best = result;
         }
         return best;
     }
 
-    private ArenaResult EvaluateTrial(MlpGenome genome)
+    /// <summary>
+    /// Evaluación NEAT (F5.2c rodaja 5): el mismo protocolo exacto — misma
+    /// colonia, misma comida, mismos densados, mismo RNG de pruebas — con los
+    /// fundadores portando el cerebro de grafo. DIFERENCIA de régimen: los
+    /// fundadores NEAT no entran al pool de la colonia (Genome=null, sin
+    /// RecordFitness al morir) — la evolución la dueña el trainer; las crías
+    /// que eclosionen durante la prueba son hormigas MLP salvajes del pool
+    /// frío de la colonia, el mismo régimen que un mundo recién fundado.
+    /// </summary>
+    public ArenaResult EvaluateNeat(NeatGenome genome)
+    {
+        if (genome is null) throw new ArgumentNullException(nameof(genome));
+
+        ArenaResult best = default;
+        for (int t = 0; t < _trials; t++)
+        {
+            var result = EvaluateTrial(null, genome);
+            if (t == 0 || result.Fitness > best.Fitness)
+                best = result;
+        }
+        return best;
+    }
+
+    private ArenaResult EvaluateTrial(MlpGenome? mlp, NeatGenome? neat)
     {
         var sim = new WorldSim(_seed, EffectiveGridCells, 1);
         var colony = sim.Colonies[0];
@@ -170,15 +193,30 @@ public sealed class ArenaEvaluator
         sim.TargetItems = 0;
 
         // — Colonia completa del constructor (10 fundadoras con posiciones y rumbos
-        //   del flujo RNG real + cría inicial). La política evaluada va en todas las
-        //   fundadoras (clones: cada muerte alimenta el pool con SU fitness) y el
-        //   pool se siembra con el genoma para que la descendencia sean variantes.
-        sim.SeedPoolFromGenomes(0, new[] { genome });
-        for (int i = 0; i < colony.Adults.Count; i++)
+        //   del flujo RNG real + cría inicial). La política evaluada va en todas
+        //   las fundadoras (clones: cada muerte alimenta el pool con SU fitness) y
+        //   el pool se siembra con el genoma para que la descendencia sean variantes.
+        //   MLP: Genome != null ⇒ feedback de pool al morir. NEAT: Genome = null
+        //   (solo cerebro) ⇒ la descendencia nace del pool frío de la colonia.
+        if (neat is not null)
         {
-            var ant = colony.Adults[i];
-            ant.Genome = genome.Clone();
-            ant.Brain = ant.Genome.ToBrain();
+            var nb = neat.ToBrain();
+            for (int i = 0; i < colony.Adults.Count; i++)
+            {
+                var ant = colony.Adults[i];
+                ant.Genome = null;
+                ant.Brain = nb; // el mismo cerebro compartido es de solo lectura por tick
+            }
+        }
+        else
+        {
+            sim.SeedPoolFromGenomes(0, new[] { mlp! });
+            for (int i = 0; i < colony.Adults.Count; i++)
+            {
+                var ant = colony.Adults[i];
+                ant.Genome = mlp!.Clone();
+                ant.Brain = ant.Genome.ToBrain();
+            }
         }
         // Las FUNDADORAS son el genoma evaluado; la descendencia que eclosione
         // durante la prueba son variantes mutadas (Pool.Birth). Los índices <
