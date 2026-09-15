@@ -829,6 +829,44 @@ public sealed class WorldSim
         }
     }
 
+    /// <summary>
+    /// F5.2c rodaja 7 — siembra de pool NEAT: la MISMA disciplina que la siembra
+    /// MLP (élite + fundadoras re-cerebradas) pero las fundadoras portan el
+    /// cerebro de GRAFO (clonado por fundadora: cada una su instancia, Genome
+    /// queda null — la evolución in-arena es del pool MLP de la colonia, como
+    /// en EvaluateNeat).
+    /// </summary>
+    public void SeedPoolFromNeatGenomes(int colonyId, IReadOnlyList<NeatGenome> genomes)
+    {
+        var colony = _colonies[colonyId];
+        var brains = new NeatBrain[genomes.Count];
+        for (int i = 0; i < genomes.Count; i++) brains[i] = genomes[i].ToBrain();
+
+        // La élite MLP de la colonia queda VACÍA (la evolución in-arena no la
+        // alimenta — la misma disciplina de EvaluateNeat), pero los nacimientos
+        // SÍ necesitan un pool: densos en frío 19-8-6 (el régimen de un mundo
+        // recién fundado; Birth() sobre élite vacía lanzaría). Los descendientes
+        // nacen salvajes; solo las FUNDADORAS portan el cerebro NEAT.
+        int[] coldSizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
+        var cold = new List<MlpGenome>(4);
+        for (int i = 0; i < 4; i++)
+        {
+            int n = MlpBrain.ExpectedWeightCount(coldSizes);
+            var w = new float[n];
+            for (int k = 0; k < n; k++) w[k] = (float)((_worldRng.NextDouble01() * 2.0 - 1.0) * 0.1);
+            cold.Add(new MlpGenome(coldSizes, w));
+        }
+        colony.Pool.ReplaceElite(cold);
+
+        for (int i = 0; i < colony.Adults.Count; i++)
+        {
+            var ant = colony.Adults[i];
+            if (!ant.Alive) continue;
+            ant.Genome = null;
+            ant.Brain = brains[i % brains.Length];
+        }
+    }
+
     public void ExportEliteToFile(int colonyId, string path, string name, string speciesHint)
     {
         AntGenomeFile.WriteFile(path, name, speciesHint, _seed, 0, ExportElite(colonyId),

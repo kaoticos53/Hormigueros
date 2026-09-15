@@ -66,6 +66,7 @@ internal static class Program
         string? seedPoolPath = null;
         string? warmStartPath = null;
         string? exportPath = null;
+        bool neat = false; // F5.2c rodaja 7: pre-entrenar pool NEAT y exportar v2
         string? savePath = null;      // Fase 4: checkpoint .antsave
         int saveTick = 0;             // 0 = guardar al final de la ejecución
         string? antlogPath = null;    // Fase 4: registro de eventos .antlog
@@ -165,6 +166,9 @@ internal static class Program
                 case "--export":
                     exportPath = Next(args, ref i);
                     break;
+                case "--neat": // F5.2c rodaja 7
+                    neat = true;
+                    break;
                 case "--save":
                     savePath = Next(args, ref i);
                     break;
@@ -257,7 +261,7 @@ internal static class Program
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
                     : GenomeImportInfo.Inspect(importPath,
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
-                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld),
+                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);
@@ -344,7 +348,8 @@ internal static class Program
     }
 
     private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath,
-        string? warmStartPath, float bandMin, float bandMax, bool hybrid = false, bool fullWorld = false)
+        string? warmStartPath, float bandMin, float bandMax, bool hybrid = false, bool fullWorld = false,
+        bool neat = false)
     {
         // Currículo calibrado (Fase 3bis, arena realista); --generations limita el
         // máximo por etapa y --band-min/--band-max re-bandan TODAS las etapas
@@ -425,9 +430,44 @@ internal static class Program
 
         if (exportPath != null)
         {
-            AntGenomeFile.WriteFile(exportPath, "pretrain", SpeciesDescriptor.LasiusNiger.Name,
-                seed, 0, trained, AntSim.Core.Brain.BrainContract.CurrentVersion);
-            sb.Append("exported ").Append(trained.Count).Append(" genomes to ").Append(exportPath).AppendLine();
+            // F5.2c rodaja 7: --neat entrena el currículo con NeatCurriculumTrainer
+            // y exporta v2 (grafos). Sin --neat, el camino v1 clásico.
+            if (neat)
+            {
+                var neatSeeds = new System.Collections.Generic.List<NeatGenome>();
+                if (seeded != null)
+                    foreach (var m in seeded)
+                        neatSeeds.Add(NeatGenome.FromMlp(m.Sizes, m.CopyWeights(), m.Fitness));
+                var neatStages = new System.Collections.Generic.List<CurriculumStage>();
+                foreach (var s in stages)
+                    neatStages.Add(new CurriculumStage
+                    {
+                        Name = s.Name, MinDistance = s.MinDistance, MaxDistance = s.MaxDistance,
+                        MidDistance = s.MidDistance, ArenaCells = s.ArenaCells, TickBudget = s.TickBudget,
+                        CompetenceFitness = s.CompetenceFitness,
+                        MinGenerations = s.MinGenerations, MaxGenerations = s.MaxGenerations
+                    });
+                var neatTrainer = new NeatCurriculumTrainer(seed, pop, neatStages,
+                    stats => sb.Append("neat ").Append("gen stage=").Append(stats.Stage)
+                        .Append(" gen=").Append(stats.Generation)
+                        .Append(" best=").Append(stats.BestFitness.ToString("0.000", CultureInfo.InvariantCulture))
+                        .Append(" mean=").Append(stats.MeanFitness.ToString("0.000", CultureInfo.InvariantCulture))
+                        .Append(" competent=").Append(stats.CompetentCount).AppendLine(),
+                    seedGenomes: neatSeeds.Count > 0 ? neatSeeds : null);
+                var neatPop = neatTrainer.Run();
+                var neatElite = new System.Collections.Generic.List<NeatGenome>(neatTrainer.Pool.Elite);
+                AntGenomeFile.WriteNeatFile(exportPath, "pretrain-neat", SpeciesDescriptor.LasiusNiger.Name,
+                    seed, neatTrainer.Report.Count, neatElite, AntSim.Core.Brain.BrainContract.CurrentVersion);
+                sb.Append("exported NEAT ").Append(neatElite.Count).Append(" genomes (v2) to ").Append(exportPath).AppendLine();
+                sb.Append("neat best=").Append(neatTrainer.Pool.BestFitness.ToString("0.000", CultureInfo.InvariantCulture))
+                  .Append(" species=").Append(neatTrainer.Pool.Stats.Species.Count).AppendLine();
+            }
+            else
+            {
+                AntGenomeFile.WriteFile(exportPath, "pretrain", SpeciesDescriptor.LasiusNiger.Name,
+                    seed, 0, trained, AntSim.Core.Brain.BrainContract.CurrentVersion);
+                sb.Append("exported ").Append(trained.Count).Append(" genomes to ").Append(exportPath).AppendLine();
+            }
         }
 
         return sb.ToString();

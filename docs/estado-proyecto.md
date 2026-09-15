@@ -20,7 +20,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
 | **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
-| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 6/7 | `fase5-2c-neat.md` |
+| **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** (7 rodajas + 6º pin CI) | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** (CI de ubuntu rota desde 09-12) | ✅ | `arquitectura.md` §CI |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
@@ -172,6 +172,19 @@ equivocado; corregido — el canal F v1 ahora emite el layout documentado
 F es opt-in y ningún mundo fijado lo activa). La
 deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
 el doc de Atta (§6bis).
+
+**F5.2c CERRADO (rodajas 1–7, 2026-09-15).**
+
+El mundo ya siembra pools NEAT: `--seed-pool` acepta v1 y v2
+(`PeekFormatVersion` decide), las fundadoras portan cerebros de GRAFO
+(`SeedPoolFromNeatGenomes`, nacimientos sobre pool denso frío — el régimen
+de un mundo recién fundado), y el CLI entrena con `--mode pretrain --neat`
+(exportación v2 canonizada). El criterio de cierre del plan §3 está
+cumplido: partida de invasión lasius+eciton con pool NEAT propio de 64
+genomas, hash `021ed04f…` fijado como 6º pin de CI
+(`check-neat-command.sh`), y el grafo del cerebro sembrado visible por el
+canal F en la misma partida. La meritocracia de arena está medida en 3
+semillas (tope cae en gen 1–16, media +29 %, churn ~93 %). 379/379 tests.
 
 **F5.2c AVANCE — RODAJA 6 (canal F generalizado + inspector, 2026-09-15).**
 
