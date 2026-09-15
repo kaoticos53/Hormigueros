@@ -155,18 +155,22 @@ if [[ $SELFTEST -eq 1 ]]; then
   } > "$tmp/errors-y-cierre.log"
   # `|| rc=$?`: bajo `set -e`, un hijo que sale ≠ 0 como comando suelto mata el
   # selftest antes de poder juzgarlo (pasó: el selftest moría en silencio).
+  # `bash "$0"` y no `"$0"`: el exec-bit de los scripts no sobrevive al checkout
+  # en Windows (index 100644) y CI no puede ejecutarlos directamente — con
+  # `bash` el selftest funciona en cualquier checkout (defecto de CI 2026-09-15:
+  # el selftest daba 126 «permission denied» en ubuntu yCI entera en rojo).
   rc_ord_err=0; rc_ord_ok=0; rc_ord_trunc=0
-  "$0" --fake-log "$tmp/errors-y-cierre.log" >/dev/null 2>&1 || rc_ord_err=$?
+  bash "$0" --fake-log "$tmp/errors-y-cierre.log" >/dev/null 2>&1 || rc_ord_err=$?
   if [[ $rc_ord_err -ne 1 ]]; then
     echo "✗ selftest: un log con 'error CS' y cierre ≠ 0 dio $rc_ord_err (esperado 1: los errores mandan)" >&2
     fails=1
   fi
-  "$0" --fake-log "$tmp/compiled.log" >/dev/null 2>&1 || rc_ord_ok=$?
+  bash "$0" --fake-log "$tmp/compiled.log" >/dev/null 2>&1 || rc_ord_ok=$?
   if [[ $rc_ord_ok -ne 0 ]]; then
     echo "✗ selftest: un log compilado y limpio dio $rc_ord_ok (esperado 0)" >&2
     fails=1
   fi
-  "$0" --fake-log "$tmp/truncated.log" >/dev/null 2>&1 || rc_ord_trunc=$?
+  bash "$0" --fake-log "$tmp/truncated.log" >/dev/null 2>&1 || rc_ord_trunc=$?
   if [[ $rc_ord_trunc -ne 5 ]]; then
     echo "✗ selftest: un log sin compilación dio $rc_ord_trunc (esperado 5: no se puede dar por bueno)" >&2
     fails=1
