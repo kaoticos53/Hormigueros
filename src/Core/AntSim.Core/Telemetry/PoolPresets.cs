@@ -162,6 +162,22 @@ public static class PoolPresets
             reproCommand: "antsim --mode game --seed <N> --seed-pool artifacts/pretrain-warm-5.antgenome",
             isRecommended: false,
             tradeOff: "decae en mundo grande (2/5 semillas) — el híbrido + mundo-completo combinados no son gratis; usa warm-4 para mapa completo"),
+
+        // — Pool NEAT (F5.2c cierre): grafo v2, pool entrenado por arena con
+        //    mutación estructural. El grafo del cerebro es visible por canal F.
+        new PoolPreset(
+            id: "neat-cierre",
+            displayName: "NEAT · topologías que evolucionan",
+            tagline: "Pool v2 (grafos) con 64 genomas entrenados por arena + mutación estructural. Grafo visible por canal F.",
+            genomeFile: "artifacts/pretrain-neat.antgenome",
+            band: "200–260 u (arena 2700 ticks, 3 trials, 4 gens × 3 etapas)",
+            benchmark: new BenchmarkStats(pickups: 0, unloads: 0, seedsWithUnload: 0, seedsTotal: 0,
+                dropAvg: null, carryLegMean: null),
+            gameMode: new GameModeStats(seedsWithUnload: 0, seedsTotal: 0, unloads: 0),
+            sourceDoc: "docs/fase5-2c-neat.md rodaja 7 (cierre F5.2c); 6º pin CI check-neat-command.sh",
+            reproCommand: "antsim --mode game --seed <N> --seed-pool artifacts/pretrain-neat.antgenome --species lasius,eciton",
+            isRecommended: false,
+            tradeOff: "pool NEAT: fundadoras con cerebro de grafo, nacimientos en frío — el grafo evoluciona en la arena del modo juego"),
     };
 
     /// <summary>Busca un preset por Id estable (para saves/UI). null si no existe.</summary>

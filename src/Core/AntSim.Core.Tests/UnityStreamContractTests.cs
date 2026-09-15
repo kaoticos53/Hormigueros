@@ -577,19 +577,19 @@ namespace AntSim.Core.Tests
             string json = PresetScenario.RenderCards(json: true);
             var model = AntSim.Unity.Scripts.Streaming.PoolPickerModel.ParseJson(json);
 
-            Assert.Equal(6, model.Presets.Count);
+            Assert.Equal(7, model.Presets.Count);
 
             var rec = model.Recommended().ToList();
             var spec = model.Specialists().ToList();
             Assert.Equal(4, rec.Count);
-            Assert.Equal(2, spec.Count);
+            Assert.Equal(3, spec.Count);
 
             // Nivel 1 (recomendados): los 4 del diseño de UX, en orden canónico.
             Assert.Equal(new[] { "naturalista", "warm-v2", "warm-4", "warm3" },
                 rec.Select(p => p.Id).ToArray());
 
-            // Nivel 2 (especialistas): la cadena completa con su contrapartida.
-            Assert.Equal(new[] { "warm3-v2", "warm-5" }, spec.Select(p => p.Id).ToArray());
+            // Nivel 2 (especialistas): la cadena completa con su contrapartida + NEAT.
+            Assert.Equal(new[] { "warm3-v2", "warm-5", "neat-cierre" }, spec.Select(p => p.Id).ToArray());
 
             var warmv2 = rec.First(p => p.Id == "warm-v2");
             Assert.Equal(99, warmv2.Pickups);

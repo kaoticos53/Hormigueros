@@ -128,6 +128,8 @@ namespace AntSim.Unity.Scripts.Streaming
             state.Events.AddRange(curr.Events);
             state.Metrics = curr.Metrics;
             state.Relay = curr.Relay;
+            state.Activ = curr.Activ;
+            state.Graph = curr.Graph;
             state.Items.AddRange(curr.Items);
 
             var prev = _prev;
@@ -179,5 +181,8 @@ namespace AntSim.Unity.Scripts.Streaming
         public readonly List<GameStreamParser.EventView> Events = new();
         public GameStreamParser.MetricsView? Metrics;
         public GameStreamParser.RelayView? Relay;
+        /// <summary>F5.0/F5.2c: activaciones base64 del canal F y su topología.</summary>
+        public string? Activ;
+        public GameStreamParser.GraphView? Graph;
     }
 }

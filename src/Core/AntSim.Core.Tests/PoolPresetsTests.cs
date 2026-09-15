@@ -16,10 +16,10 @@ public sealed class PoolPresetsTests
     [Fact]
     public void SeisPresets_OrdenEstable_RecomendadosPrimero()
     {
-        Assert.Equal(6, PoolPresets.All.Count);
-        Assert.Equal(new[] { "naturalista", "warm-v2", "warm-4", "warm3", "warm3-v2", "warm-5" },
+        Assert.Equal(7, PoolPresets.All.Count);
+        Assert.Equal(new[] { "naturalista", "warm-v2", "warm-4", "warm3", "warm3-v2", "warm-5", "neat-cierre" },
             new[] { PoolPresets.All[0].Id, PoolPresets.All[1].Id, PoolPresets.All[2].Id,
-                    PoolPresets.All[3].Id, PoolPresets.All[4].Id, PoolPresets.All[5].Id });
+                    PoolPresets.All[3].Id, PoolPresets.All[4].Id, PoolPresets.All[5].Id, PoolPresets.All[6].Id });
 
         // Los 4 recomendados del diseño de UX van primero y sin TradeOff.
         var rec = new System.Collections.Generic.List<string>();
