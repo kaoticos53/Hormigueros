@@ -342,6 +342,20 @@ public static class GameScenario
                 payload[2 + i] = (byte)Math.Clamp(q, -128, 127);
             }
             sb.Append(Convert.ToBase64String(payload));
+
+            // F5.2c rodaja 6 — la topología viaja junto a las activaciones:
+            // {"n":total,"h":[profundidad por oculto],"c":conexiones activas}.
+            // Solo en NEAT (los mundos v1 no emiten el campo — el hash canónico
+            // no cambia). Determinista, cacheado en el cerebro.
+            var g = neat.Graph;
+            sb.Append(",\"graph\":{\"n\":").Append(g.NodeIds.Length)
+              .Append(",\"h\":[");
+            for (int i = 0; i < g.HiddenDepth.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(g.HiddenDepth[i]);
+            }
+            sb.Append("],\"c\":").Append(g.ActiveConnCount).Append('}');
         }
         sb.Append('"');
     }
@@ -384,7 +398,9 @@ public static class GameScenario
                 var a = frame.Ants[i];
                 if (i > 0) sb.Append(',');
                 // [id, colony, x, y, heading, load, alive, vigor, energy, age,
-                //  immigrant, genomeFingerprint] — F4.2: +5 campos de inspección
+                //  immigrant, genomeFingerprint(, brainShape)] — F4.2: +5 campos;
+                // F5.2c rodaja 6: 13º campo OPCIONAL solo si el cerebro es NEAT
+                // ("h/c"; cadena vacía nunca se emite — los mundos v1 no cambian).
                 sb.Append('[').Append(a.Id).Append(',').Append(a.ColonyId)
                   .Append(',').Append(F(a.X)).Append(',').Append(F(a.Y))
                   .Append(',').Append(F(a.Heading)).Append(',')
@@ -392,7 +408,10 @@ public static class GameScenario
                   .Append(F(a.Vigor)).Append(',').Append(F(a.Energy)).Append(',')
                   .Append(F(a.Age)).Append(',')
                   .Append(a.IsImmigrant ? "1," : "0,")
-                  .Append(a.GenomeFingerprint).Append(']');
+                  .Append(a.GenomeFingerprint);
+                if (a.BrainShape.Length > 0)
+                    sb.Append(',').Append('\"').Append(a.BrainShape).Append('\"');
+                sb.Append(']');
             }
             sb.Append("],\"items\":[");
             for (int i = 0; i < frame.Items.Count; i++)

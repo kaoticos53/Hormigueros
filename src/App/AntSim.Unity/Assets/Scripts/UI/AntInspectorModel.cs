@@ -28,12 +28,16 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly float Vigor, Energy, Age;
             public readonly bool IsImmigrant;
             public readonly uint GenomeFingerprint;
+            /// <summary>F5.2c rodaja 6 — forma del cerebro ("h/c") o cadena vacía
+            /// (MLP). 13º campo del canal A, opcional.</summary>
+            public readonly string BrainShape;
 
             public Sample(ulong tick, float x, float y, float heading, bool hasLoad, bool alive,
-                float vigor, float energy, float age, bool isImmigrant, uint genomeFingerprint)
+                float vigor, float energy, float age, bool isImmigrant, uint genomeFingerprint,
+                string brainShape = "")
             { Tick = tick; X = x; Y = y; Heading = heading; HasLoad = hasLoad; Alive = alive;
               Vigor = vigor; Energy = energy; Age = age; IsImmigrant = isImmigrant;
-              GenomeFingerprint = genomeFingerprint; }
+              GenomeFingerprint = genomeFingerprint; BrainShape = brainShape; }
         }
 
         /// <summary>Historial de una hormiga rastreada.</summary>
@@ -185,7 +189,7 @@ namespace AntSim.Unity.Scripts.Streaming
                 }
                 rec.Samples.Add(new Sample(view.Tick, a.X, a.Y, a.Heading,
                     a.HasLoad, a.Alive, a.Vigor, a.Energy, a.Age,
-                    a.IsImmigrant, a.GenomeFingerprint));
+                    a.IsImmigrant, a.GenomeFingerprint, a.BrainShape));
             }
         }
 
@@ -227,6 +231,32 @@ namespace AntSim.Unity.Scripts.Streaming
               .Append(" · ").Append(alive.ToString(CultureInfo.InvariantCulture))
               .Append(" vivo" + (alive == 1 ? "" : "s"))
               .Append('\n');
+
+            // F5.2c rodaja 6 — formas de los cerebros del linaje (13º campo del
+            // canal A): los cuerpos de UN cerebro comparten huella pero pueden
+            // diferir en forma cuando el pool reintroduce élites crecidas. Se
+            // muestra el conjunto (máximo 3) en el orden de aparición.
+            var shapes = new List<string>();
+            foreach (var r in lineage)
+            {
+                string sh = r.Last.BrainShape;
+                if (sh.Length > 0 && !shapes.Contains(sh)) shapes.Add(sh);
+            }
+            if (shapes.Count > 0)
+            {
+                sb.Append("cerebro: ");
+                for (int i = 0; i < shapes.Count && i < 3; i++)
+                {
+                    if (i > 0) sb.Append(" · ");
+                    sb.Append(shapes[i]);
+                }
+                if (shapes.Count > 3) sb.Append(" +").Append(shapes.Count - 3);
+                sb.Append('\n');
+            }
+            else
+            {
+                sb.Append("cerebro: MLP 19·8·6\n");
+            }
 
             // El cerebro es una identidad, no un cuerpo: edad y energía del
             // cuerpo actual; posición/rumbo SOLO si hay cuerpo único (con varios

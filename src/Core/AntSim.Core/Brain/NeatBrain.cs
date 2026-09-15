@@ -33,6 +33,7 @@ public sealed class NeatBrain : IBrain
     private readonly float[] _inW;            // peso de la fuente
     private readonly float[] _value;
     private readonly float[] _activations;    // F5.0/F5.2c: registro por Evaluate (ids de gen)
+    private readonly NeatGraphDescription? _graph; // F5.2c rodaja 6: forma cacheada para canal F/inspector
     private readonly int _inputCount;
     private readonly int[] _outIdx;           // índice interno de cada salida (precalculado: 0 lookups por Evaluate)
 
@@ -133,6 +134,7 @@ public sealed class NeatBrain : IBrain
 
         _value = new float[_order.Length];
         _activations = new float[_order.Length];
+        _graph = DescribeGraph(conns);
     }
 
     public BrainKind Kind => BrainKind.Neat;
@@ -140,6 +142,70 @@ public sealed class NeatBrain : IBrain
 
     /// <summary>Nº total de nodos del grafo — longitud del snapshot del canal F.</summary>
     public int ActivationTotal => _order.Length;
+
+    /// <summary>
+    /// Forma del grafo (F5.2c rodaja 6): ids en orden canónico, profundidad de
+    /// cada oculto, nº de conexiones activas. Cacheada en construcción (la
+    /// misma disciplina que el orden topológico: una vez por genoma, no por tick).
+    /// </summary>
+    public NeatGraphDescription Graph => _graph!;
+
+    /// <summary>
+    /// Topología del grafo para el canal F/inspector (F5.2c rodaja 6): ids en
+    /// orden canónico, profundidad de cada oculto y nº de conexiones activas.
+    /// Coste O(n + e), llamada única (la vista la cachea por huella).
+    /// </summary>
+    public NeatGraphDescription DescribeGraph(IReadOnlyList<ConnGene>? conns = null)
+    {
+        // Profundidad: Kahn por niveles — entradas = 0; un oculto = 1 + máx
+        // (profundidad de sus fuentes activas); las salidas no cuentan (van al
+        // final del render). Determinista y sin estado mutado.
+        var active = conns;
+        if (active is null)
+        {
+            // Sin la lista de conexiones, la profundidad no es calculable con
+            // exactitud; el contrato exige pasarla (el genoma la tiene).
+            throw new ArgumentNullException(nameof(conns),
+                "DescribeGraph necesita las conexiones (genome.Conns) para la profundidad.");
+        }
+
+        var depth = new Dictionary<int, int>(_order.Length);
+        var byId = new Dictionary<int, int>(_order.Length);
+        for (int i = 0; i < _order.Length; i++) byId[_order[i]] = i;
+
+        // Repetir pasadas hasta estabilizar (DAG: como mucho MaxDepth vueltas;
+        // en la práctica 2–3). Determinista.
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var c in active)
+            {
+                if (!c.Enabled) continue;
+                int dFrom = depth.TryGetValue(c.From, out int df) ? df : (c.From < _inputCount ? 0 : -1);
+                int dTo = depth.TryGetValue(c.To, out int dt) ? dt : -1;
+                int candidate = dFrom + 1;
+                if (candidate > dTo)
+                {
+                    depth[c.To] = candidate;
+                    changed = true;
+                }
+            }
+        }
+
+        var hiddenDepth = new List<int>();
+        for (int i = 0; i < _order.Length; i++)
+        {
+            int id = _order[i];
+            if (id >= NodeGene.FirstHiddenId)
+                hiddenDepth.Add(Math.Max(0, depth.TryGetValue(id, out int d) ? d : 1));
+        }
+
+        int activeConns = 0;
+        foreach (var c in active) if (c.Enabled) activeConns++;
+
+        return new NeatGraphDescription((int[])_order.Clone(), hiddenDepth.ToArray(), activeConns);
+    }
 
     public void Evaluate(in AntSensors sensors, ref AntDecision decision)
     {
