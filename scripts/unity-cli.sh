@@ -48,11 +48,13 @@ usage() { sed -n '2,28p' "$0"; }
 # una máquina con Unity instalado el fallo pasa desapercibido hasta que alguien
 # ve un proyecto nuevo donde no lo esperaba.
 wcli_selftest() {
-  local fails=0 root err rc
+  local fails=0 root err rc self="${BASH_SOURCE[0]}"
+  # bash "$self" y no "$0": el exec-bit no sobrevive al checkout en Windows
+  # (index 100644) y una ejecución directa daría 126 en CI/clone limpio.
 
   # 1. La raíz del repo (el caso del fantasma) → rc 2, y sin resolver el CLI.
   root="$(uproj_repo_root)"
-  err="$("$0" --project "$root" editor_status 2>&1 >/dev/null)"; rc=$?
+  err="$(bash "$self" --project "$root" editor_status 2>&1 >/dev/null)"; rc=$?
   if [[ $rc -ne 2 ]]; then
     echo "✗ la raíz del repo no se rechazó (rc=$rc)" >&2; fails=1
   fi
@@ -62,20 +64,20 @@ wcli_selftest() {
 
   # 2. Un directorio que no es proyecto → rc 2.
   local tmp; tmp="$(mktemp -d)"
-  err="$("$0" --project "$tmp" editor_status 2>&1 >/dev/null)"; rc=$?
+  err="$(bash "$self" --project "$tmp" editor_status 2>&1 >/dev/null)"; rc=$?
   if [[ $rc -ne 2 || "$err" != *"no parece un proyecto Unity"* ]]; then
     echo "✗ un directorio vacío no se rechazó (rc=$rc): $err" >&2; fails=1
   fi
   rm -rf "$tmp"
 
   # 3. Opción desconocida → rc 2 y uso.
-  err="$("$0" --no-existe 2>&1 >/dev/null)"; rc=$?
+  err="$(bash "$self" --no-existe 2>&1 >/dev/null)"; rc=$?
   if [[ $rc -ne 2 || "$err" != *"desconocida"* ]]; then
     echo "✗ una opción desconocida no se rechazó (rc=$rc): $err" >&2; fails=1
   fi
 
   # 4. --help → rc 0 y el uso.
-  if ! "$0" --help >/dev/null 2>&1; then
+  if ! bash "$self" --help >/dev/null 2>&1; then
     echo "✗ --help no devolvió 0" >&2; fails=1
   fi
 
