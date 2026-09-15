@@ -20,7 +20,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
 | **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
-| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 3/7 | `fase5-2c-neat.md` |
+| 5.2c | NEAT / `.antgenome` v2 (topologías que evolucionan) | 🚧 rodaja 4/7 | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** (CI de ubuntu rota desde 09-12) | ✅ | `arquitectura.md` §CI |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
@@ -172,6 +172,16 @@ equivocado; corregido — el canal F v1 ahora emite el layout documentado
 F es opt-in y ningún mundo fijado lo activa). La
 deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
 el doc de Atta (§6bis).
+
+**F5.2c AVANCE — RODAJA 4 (formato v2, 2026-09-15).** `.antgenome` v2
+binario (nodos 8 B / conns 12 B + SHA-256): el WRITER canoniza al escribir
+(nodos por id, innovations 1..K por (from,to) — `RenumberCanonically` es la
+definición compartida entre writer y lector), el lector v2 ACEPTA v1
+(convirtiéndolo con la paridad de rodaja 1) y el v1 RECHAZA v2 con error
+claro. La promesa §3.3 probada: dos importaciones del mismo archivo ⇒
+genomas idénticos. `GenomeImportInfo` gana FormatVersion/NodeCount/ConnCount
+— la tarjeta de cuarentena muestra la forma del cerebro (Nn/Mc) antes de
+sembrar. 367/367 tests, 5 pins intactos.
 
 **F5.2c AVANCE — RODAJA 3 (especiation, 2026-09-15).** `NeatGenomePool`:
 élite global (la especie decide quién CRÍA por cuota sharing = fitness medio ×
