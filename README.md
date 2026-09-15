@@ -24,6 +24,42 @@ Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.m
 
 ## Notas de versión
 
+### v0.6.1 — CI verde cross-platform: determinismo canónico reparado
+
+La CI de master llevaba rota desde el 12 de septiembre mientras la suite local
+(Windows) estaba verde. La investigación, reproducida en WSL/Ubuntu, destapó
+**tres causas apiladas**, cada una enmascarada por la siguiente
+([detalle en `docs/estado-proyecto.md`](docs/estado-proyecto.md)):
+
+- **CanonMath — matemática canónica multiplataforma (la profunda).**
+  `MathF.Tanh/Exp/Log/Sin/Cos` NO están especificadas bit a bit en .NET: cada
+  runtime delega en la libm del sistema (UCRT en Windows, glibc en Linux) y
+  difieren en 1 ULP. Con sensores alimentando el cerebro, ese ULP cambia la
+  decisión de una hormiga y el mundo diverge: el hash canónico de Windows era
+  imposible de reproducir en Linux DESDE EL TICK 1. Fix: `Sim/CanonMath`
+  implementa las cinco trascendentes con series en doble precisión usando solo
+  operaciones IEEE básicas (2^k por manipulación de bits, reducción de
+  argumento exacta, el núcleo exp de tanh queda en double para esquivar la
+  cancelación `1−t`). `Sqrt` se queda en `MathF` (IEEE exacto). Consecuencia
+  documentada: los 5 hashes de los pins CI se regeneraron — un cambio de mundo
+  intencional, el nuevo patrón oro.
+- **Cabecera del stream**: `GameScenario.Run` recortaba la cabecera con
+  `sb.Length -= 3`, asumiendo el `\r\n` de Windows; en Linux se comía una
+  llave de más y cada juego con canal opt-in (E/E-múltiple/F) emitía JSONL
+  inválido. Ahora recorta saltos de línea reales + exactamente una llave,
+  idéntico en ambas plataformas.
+- **Exec-bit en los selftests**: los scripts viajan como `100644` en el índice
+  (el checkout en Windows pierde el bit de ejecución) y CI los invoca vía
+  `bash scripts/…`, que funciona — pero los selftests se re-invocaban a sí
+  mismos con `"$0" --fake-log` (ejecución directa) → exit 126. Fix:
+  `bash "$0"` en `check-unity-compile.sh` y `unity-cli.sh`.
+
+También de paso: `RepoPathResolver` era asimétrico (la variante de publicación
+por carpeta solo existía en Windows) y su test de `.exe` está portado a ambas
+plataformas. **Suite 338/338 en Windows Y Linux; los 5 pins de hash pasan en
+ambas.** CI verde en `a2a35ec` — primera corrida verde de master desde el
+empuje de la cola de Fase 4.
+
 ### v0.6.0 — Fase 5: Eciton, la legionaria (CERRADO)
 
 La segunda especie de Fase 5, cerrada slice a slice con sondas borradas y
