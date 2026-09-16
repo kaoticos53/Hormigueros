@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-14 · HEAD: F5.2b CERRADO (cuerpo → sensor → contratos → balance V6 → 5º pin) ·
-suite: 338/338 (Windows y Linux) · tag: `v0.4.0` (cierre de Fase 4), `v0.5.0` (cierre de F5.2a)*
+*Actualizado: 2026-09-16 · HEAD: `dbc994f` (Unity NEAT wiring) ·
+suite: 379/379 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -18,270 +18,78 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 | 4 (F4.0–F4.4) | Capa jugador: stream, HUD, inspector, import, CI con pines | ✅ `v0.4.0` | `fase4-resumen.md` |
 | 5.0 | Mini-grafo MLP (canal F de activaciones) | ✅ | `fase5-plan.md` §1 |
 | 5.1 + 5.1bis | Pulido Unity + multi-visor | ✅ | `fase5-plan.md` §2/§2bis |
-| **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** (5 rodajas) | `fase5-2a-atta.md` |
-| **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** (5 rodajas) | `fase5-2b-eciton.md` |
-| **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** (7 rodajas + 6º pin CI) | `fase5-2c-neat.md` |
-| — | **Cross-platform: CanonMath + cabecera del stream** (CI de ubuntu rota desde 09-12) | ✅ | `arquitectura.md` §CI |
+| **5.2a** | **Atta: cortar → transportar → hongo** | ✅ **CERRADO** `v0.5.0` | `fase5-2a-atta.md` |
+| **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** `v0.6.0` | `fase5-2b-eciton.md` |
+| **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** `v0.7.0` | `fase5-2c-neat.md` |
+| — | **Cross-platform: CanonMath + cabecera del stream** | ✅ `v0.6.1` | `arquitectura.md` §CI |
 | 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
 
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
-a bit. Fijado en CI con **CINCO pines de hash**, verificados los cinco
-en una pasada el 2026-09-14 tras el cierre de F5.2b: stream canónico,
-replay con drops a 3000 y 6000 ticks, la partida Atta canónica
-(`check-atta-command.sh`) y la partida de INVASIÓN canónica
-(`check-invasion-command.sh`, el primer pin con combate); 338/338 tests en Windows Y Linux (ver abajo).
+a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
+el 2026-09-15: stream canónico, replay con drops a 3000 y 6000 ticks, la
+partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
+canónica (nuevo). **379/379 tests** en Windows Y Linux.
 
-**Pre-entrenamiento con transferencia validada** — cadena de 8+ pools
-(frío → warm-starts encadenados → híbrido de dos bandas), benchmark de
-referencia multi-semilla con `--verify` de regresión del relevo
-(first-unload, drop-avg, carry-leg). El mejor pool del modo evolución:
-`pretrain-warm-v2.antgenome`.
+**NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
+innovation), paridad bit a bit con MLP (`FromMlp`), operadores
+estructurales (add-node, add-conn, toggle), especiation por parentesco,
+arena fitness evaluando grafos reales, pool v2 exportado/importado con
+re-innovación canónica, grafo visible por canal F en el inspector. Pool
+sembrado: `pretrain-neat.antgenome` (64 genomas, tope arena 1064.9, 11
+especies). El jugador puede entrenar con `--mode pretrain --neat` y
+sembrar el resultado.
 
-**Modo evolución jugable** (Fase 4, tag `v0.4.0`) — el bucle completo
-demostrado end-to-end: elegir pool → ver en vivo → inspeccionar hormiga
-(con linaje de cerebros y mini-grafo MLP) → intervenir (`--drop`
-determinista) → verificar el hash. Import de `.antgenome` con cuarentena,
-HUD por-elemento uGUI, alertas derivadas (AlertDeriver) y semáforo de
-relevo por colonia.
+**Tres especies jugables** — Lasius (forrajera), Atta (cortadora con
+hongo), Eciton (legionaria con combate). Transferencia cross-especie
+validada: warm-v2 funciona en cuerpo Atta y Eciton. Cada especie tiene su
+pin CI y su partida canónica.
 
-**Presentación Unity** (F5.1) — escena bootstrapeada en un comando:
+**Presentación Unity** — escena bootstrapeada en un comando:
 terreno terroso, hormigas visibles y orientadas, feromonas por
 colonia/capa (selector F/G), tarjetas con gráfica de reserva, modal de
 importación, vida útil real de fundadoras (240 s), velocidad de replay
 +/= (1→2→4×).
 
+**Unity compila limpio** — 0 errores CS, 0 avisos CS en Unity 6000.6.0f1.
+Canal F NEAT en el inspector (`ActivationViewModel.RenderNeat`
+self-contained, sin dependencias de Core), pool NEAT en el picker
+(`PoolPresets`), tarjeta de linaje con forma del cerebro (`n/h/c`).
+
 **Multi-visor** (F5.1bis) — hasta 4 simulaciones EN VIVO en paralelo
 (capas Sim0–3, tarjetas compactas por vista con su propio semáforo).
-Criterio de cierre verificado: 4 vistas a 60 tps reales (2× medido) con
-gris → verde en la colonia sembrada de las cuatro. Verificado también
-desde clon limpio (con fallback determinista `PumpOneTick` cuando el
-bucle de jugador de un editor batch sobre Library fría se congela — bug
-conocido del indexador de Search de Unity 6000.x, investigado y
-documentado en `fase5-plan.md` §2bis).
 
-**Ítems compuestos** (F5.2a.1) — las hojas son ítems con `CutsLeft`: el
-pickup corta un fragmento y la hoja sobrevive; corte = `Interact`, sin
-cambios en el cerebro. Eventos `LeafCut`/`LeafDepleted`, `.antsave` v3,
-`--leaf-fraction` en el CLI, hash invariante sin hojas (los 3 pines de CI
-no se movieron). Transferencia cross-especie VALIDADA: warm-v2 en cuerpo
-Atta descarga igual o más que en su cuerpo de entrenamiento (12 vs 11
-unloads a 12 000 ticks) y con hojas ambas especies cortan sin
-entrenamiento — F5.2a-bis (currículo Atta) postergado por innecesario.
+**Ítems compuestos + hongo** (F5.2a) — hojas con `CutsLeft`, segunda
+reserva de hongo, digestión proporcional, eventos `LeafCut`/`LeafDepleted`
+/`FungusFed`/`FungusDigested`.
 
-**El hongo** (F5.2a.2) — segunda reserva de la cortadora: la descarga de
-fragmento alimenta `Colony.Fungus` (× LeafEfficiency 0.75) y la digestión
-proporcional al llenado entra por `RecordInflow` — la demografía calibrada
-lee la misma señal. Eventos `FungusFed`/`FungusDigested`, fungus en canal A
-y `.antsave` v3, `--species atta,lasius` en el CLI. Humo real (7200 ticks,
-hojas 100 %, warm-v2): 12 cortes → 3 descargas → 3 FungusFed → 1898 ticks
-de digestión; la Lasius compite sin hongo. 293/293 suite, pines intactos.
-
-## Dónde estamos: F5.2b cerrado — la siguiente es F5.2c (NEAT)
-
-La cadena del SAQUEO está CERRADA ([`fase5-2b-eciton.md`](fase5-2b-eciton.md)):
-las 5 rodajas HECHAS y el criterio de cierre §9 verificado 4/4 sobre la
-partida canónica del 5º pin:
-
-- ✅ **F5.2a.1 — ítems compuestos**: `FoodItem.CutsLeft/CutsInitial`,
-  `LeafFraction` en spawn (por constructor), eventos 13/14, hash solo con
-  hojas, `.antsave` v3, canal A con `[id,x,y,amount,cutsLeft,cutsInitial]`
-  en hojas, `--leaf-fraction` (modes `world`/`game`). 10 tests nuevos;
-  humo sembrado (warm-v2, 6000 ticks, hojas 100 %): 14 cortes → 3
-  descargas, 9 hojas mordidas.
-- ✅ **F5.2a.2 — hongo**: `Colony.Fungus/FungusMax`, descarga por especie,
-  digestión proporcional que alimenta el inflow existente, eventos
-  `FungusFed`/`FungusDigested`, fungus en canal A y `.antsave` v3. 7 tests
-  nuevos; humo real con la cadena completa visible (corte → descarga →
-  FungusFed → digestión).
-- ✅ **F5.2a.3 — contratos + parser Unity** (`d491f6b`, `9f053d5`): canal C
-  con `leafCuts`/`fungusFed` y bloque `cutters` por colonia;
-  `GameStreamParser` consume `cuts`/`fungus` (fix de `ArrayBody`, que
-  truncaba cada colonia en su array `nest` anidado).
-- ✅ **F5.2a.4 — pin Atta canónico en CI — HECHO** (`854dcad`; los 4 pines
-  verificados en una pasada el 2026-09-13, todos verdes): cuarto pin de
-  regresión (`check-atta-command.sh`) sobre la partida de la cortadora —
-  el primero cuyo mundo DEPENDE de los campos nuevos.
-- ✅ **F5.2a.5 — humo visual del multi-visor**: tarjeta de vista con la
-  cadena de la cortadora — modelo puro que acumula las ventanas de
-  cutters (canal C), línea `hongo [#.........]` solo para colonias con
-  hongo, línea de cortes solo con actividad, y BARRA ocre del hongo por
-  colonia en `ViewCardBehaviour`. Criterio verificado dos veces: en vivo
-  (`MultiViewSmokeProbe.RunSmokeAtta`, batch, 8 aserciones, salida 0) y
-  headless (`AttaViewCardTests` contra el stream canónico).
-
-- ✅ **Sonda de transferencia** (§4.1): el genoma es portable entre
-  especies — validado empíricamente, no solo por diseño.
-- ✅ **Sonda del bucle biológico** (§6.1): eclosiones sostenidas por el
-  hongo tras agotar la reserva fundadora (8 eclosiones, 6 698 ticks de
-  digestión) — la cadena cortar→transportar→hongo→cría cierra.
-
-- ✅ **F5.2b.1 — cuerpo del combate** (`6bd1216`, `99a05f5`, `252b72d`):
-  `ContactRadius`/`StrikeDamage`/`StealPerStrike` en el descriptor (0 =
-  pacífica), `TryStrike` determinista en `Act` (presa más cercana, empate
-  por antId menor, sin RNG nuevo), robo como carga (`LoadIsLoot`), eventos
-  17/18/19, alarma ofensiva en la capa de la presa, `.antsave` v4. 7 tests.
-- ✅ **F5.2b.2 — sensor de presa** (`ba355ff`, `cd6c25a`, `75e8215`): canal
-  12 (`ProxFront`) reconvertido a «enemigo más cercana» con gating por
-  especie + mundo multi-colonia (mundos sin Eciton bit-idénticos). Sonda
-  honesta: ×9 contactos pero el robo no sube — el cuello era económico.
-- ✅ **F5.2b.3 — contratos** (`c508238`): bloque `raids` del canal C con
-  contadores ACUMULADOS (`TakeRaids` — los golpes son raros y la ventana
-  de 1 s los pasaba sin verlos), `RaidView` en el parser Unity, causa
-  combate (byte 2) en el inspector. 4 tests (`RaidContractTests`).
-- ✅ **F5.2b.4 — balance V6** (`8ab2452`): calibración con 3 sondas —
-  `ContactRadius 6→40` (la aguja real), `StrikeDamage 0.35→2.5`,
-  `StealPerStrike 0.30→5.0`, economía de la legionaria igualada a la de
-  la presa. Asfixia económica: 2/5 semillas con extinción acelerada
-  ≥500 ticks, resto Δ≤185 (juego, no aniquilación); el botín ya paga
-  (+1113 ticks de vida del saqueador con contacto). Daño alto
-  contraproduce: la presa muerta sale del contacto. `CombatTests` a
-  escena remota (con R=40 el nido de la presa ya no aísla).
-- ✅ **F5.2b.5 — tarjeta raids + 5º pin** (`8b25375`): línea
-  `raids N · M al nido` SOLO en la colonia beligerante (modelo puro +
-  `RaidViewCardTests`), quinto pin CI (`check-invasion-command.sh`,
-  hash `ac53b753…` — Eciton SEMBRADA con warm-v2, transferencia
-  validada §8quater). Criterio §9 4/4: 12 Strike, 1 RaidInflow,
-  9 StockRobbed (21.88 ep), 2 muertes combate.
-
-**CI VERDE OTRA VEZ — DETERMINISMO CROSS-PLATFORM (F5.2c, 2026-09-15).**
-La CI de ubuntu fallaba desde el 2026-09-12 y la suite local (Windows) no lo
-veía. Dos causas raíz, ambas encontradas reproduciendo la CI en WSL: (1) las
-trascendentes de `MathF` difieren 1 ULP entre UCRT y glibc — el mundo diverge
-desde el tick 1 y los pines de hash eran imposibles cross-platform; sustituidas
-por `Sim/CanonMath` (series en double, bit-exactas en todo SO, 10 tests
-propios); (2) `GameScenario.Run` recortaba la cabecera con `sb.Length -= 3`
-asumiendo `\r\n` de Windows — en Linux se comía una llave y TODOS los juegos
-con canales opt-in (E/E-mult/F) emitían JSONL inválido. Los 5 pines se
-regeneraron (el mundo es ligeramente distinto bajo CanonMath: cambio
-INTENCIONAL y documentado) y hoy pasan en ambos SO. Además: el resolutor de
-rutas del Unity CLI es simétrico cross-platform (carpeta de publicación en
-Linux también) y su test de `.exe` está portado.
-
-**F5.2b CERRADO.** Lo que sigue es F5.2c (NEAT / `.antgenome` v2), ya en
-curso: la rodaja 1 (genes estructurales + cerebro de grafo + conversión v1→v2
-con paridad BIT A BIT) está hecha — `NeatGenome`/`NeatBrain` con 13 tests
-propios, incluyendo la paridad contra genomas reales del pool warm-v2. La
-sonda de paridad destapó además un defecto latente del `MlpBrain`: el registro
-de activaciones del canal F escribía con offsets de float donde `Buffer.BlockCopy`
-esperaba BYTES, por lo que las ocultas aterrizaron siempre en el lugar
-equivocado; corregido — el canal F v1 ahora emite el layout documentado
-`[entradas, ocultas, salidas]` (los 5 pines de hash siguen intactos: el canal
-F es opt-in y ningún mundo fijado lo activa). La
-deuda menor de renderizado de hojas en el tablero Unity sigue anotada en
-el doc de Atta (§6bis).
-
-**F5.2c CERRADO (rodajas 1–7, 2026-09-15).**
-
-El mundo ya siembra pools NEAT: `--seed-pool` acepta v1 y v2
-(`PeekFormatVersion` decide), las fundadoras portan cerebros de GRAFO
-(`SeedPoolFromNeatGenomes`, nacimientos sobre pool denso frío — el régimen
-de un mundo recién fundado), y el CLI entrena con `--mode pretrain --neat`
-(exportación v2 canonizada). El criterio de cierre del plan §3 está
-cumplido: partida de invasión lasius+eciton con pool NEAT propio de 64
-genomas, hash `021ed04f…` fijado como 6º pin de CI
-(`check-neat-command.sh`), y el grafo del cerebro sembrado visible por el
-canal F en la misma partida. La meritocracia de arena está medida en 3
-semillas (tope cae en gen 1–16, media +29 %, churn ~93 %). 379/379 tests.
-
-**F5.2c AVANCE — RODAJA 6 (canal F generalizado + inspector, 2026-09-15).**
-
-El canal F ya explica grafos ARBITRARIOS: `NeatBrain.Graph` cachea la
-topología (ids canónicos, profundidad por oculto, conexiones activas) y el
-stream NEAT la emite como `"graph":{"n","h":[...],"c"}`; el canal A gana el
-13º campo opcional `brainShape` ("8h/200c" — ausente en MLP, así que los
-streams v1 y los 5 pins CI no cambian). La vista reconstruye el grafo desde
-n/h/c y lo renderiza por profundidad; la tarjeta de linaje muestra la línea
-`cerebro:` con las formas de los cuerpos — los cerebros que CRECEN entre
-generaciones ya son visibles sin sondas. Defecto latente corregido: el indexado
-de profundidades asumía ocultos contiguos (falso en grafos crecidos donde Kahn
-intercala salidas). 378/378 tests, 5 pins intactos. Queda la rodaja 7 (cierre).
-
-**F5.2c AVANCE — RODAJA 5 (arena + transferencia, 2026-09-15).**
-`ArenaEvaluator.EvaluateNeat` (mismo protocolo exacto; fundadores NEAT con
-Genome=null — la evolución la lleva el trainer, no el pool de la colonia) y
-`NeatCurriculumTrainer` (etapas v1 + nacimientos del `NeatGenomePool` con
-mutación estructural). Sonda A/B (se borra): la transferencia warm-v2 v1→v2
-es de PARIDAD INMEDIATA (gen 1: ratio 1.021 contra el patrón oro MLP), B
-empata A en 20 gens y con 60 SUPERA su best (117.91 vs 116.17) — la
-estructura evoluciona contenida (+0.5–1% conns, un toggle podó) como
-variación lista, no como ruido. 367/367 tests, 5 pins intactos.
-
-**F5.2c AVANCE — RODAJA 4 (formato v2, 2026-09-15).** `.antgenome` v2
-binario (nodos 8 B / conns 12 B + SHA-256): el WRITER canoniza al escribir
-(nodos por id, innovations 1..K por (from,to) — `RenumberCanonically` es la
-definición compartida entre writer y lector), el lector v2 ACEPTA v1
-(convirtiéndolo con la paridad de rodaja 1) y el v1 RECHAZA v2 con error
-claro. La promesa §3.3 probada: dos importaciones del mismo archivo ⇒
-genomas idénticos. `GenomeImportInfo` gana FormatVersion/NodeCount/ConnCount
-— la tarjeta de cuarentena muestra la forma del cerebro (Nn/Mc) antes de
-sembrar. 367/367 tests, 5 pins intactos.
-
-**F5.2c AVANCE — RODAJA 3 (especiation, 2026-09-15).** `NeatGenomePool`:
-élite global (la especie decide quién CRÍA por cuota sharing = fitness medio ×
-tamaño, no quién VIVE), `PoolSpeciesStats`, diversidad y cuarentena con los
-umbrales v1. La sonda de la rodaja destapó que el δ estructural es ~50× más
-pequeño que el ruido de pesos (denso ajeno δ=0.28, skip δ=0.005): un δt único
-no puede separar linaje de ruido, así que la agrupación mide PARIENTESCO
-(δ < 0.05 = linaje común; si no, distancia 0.5 > δt=0.4 funda especie aunque
-la forma sea idéntica). Criterio de cierre cumplido: 200 generaciones con
-mutación estructural activa sin colapsar (≥2 sostenidas siempre, 3 en la
-gen 200). 358/358 tests, 5 pins intactos.
-
-**F5.2c AVANCE — RODAJA 2 (operadores, 2026-09-15).** `NeatOperators` con las
-mutaciones estructurales (`MutateAddNode` por split de conexión viva,
-`MutateAddConn` con revalidación de unicidad y aciclicidad por llamada,
-`MutateToggle` como poda/activación que nunca rompe el grafo), las de pesos y
-sesgos, el `InnovationRegistry` (par→innovación compartido a nivel de pool,
-secuencia determinista tras el máximo visto) y el `Crossover`
-align-by-innovation (matching al azar, disjoint/excess solo del mejor padre,
-empate → A). El test central es el clásico NEAT: el circuito del mejor padre
-sobrevive 32 tiradas de matching al azar **y el hijo lo evalúa**
-(steer ≈ tanh(3·tanh(3x))). 348/348 tests, 5 pins intactos.
+**Saqueo + combate** (F5.2b) — Eciton roba stock (`ContactRadius 40`,
+`StrikeDamage 2.5`, `StealPerStrike 5.0`), balance V6 calibrado con
+sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
+`raids` en canal C.
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.2b — Eciton + depredadores** — ✅ **CERRADO** (2026-09-14, las 5
-   rodajas, ver [`fase5-2b-eciton.md`](fase5-2b-eciton.md)): Eciton como
-   especie que ROBA stock ajeno (no agente libre): combate en el paso de
-   hormiga (`ContactRadius 40`/`StrikeDamage 2.5`/`StealPerStrike 5.0` —
-   calibración V6, asfixia económica: 2/5 semillas con extinción
-   acelerada ≥500 ticks y el botín ya paga +1113 ticks de vida al
-   saqueador), botín como carga con el `Unload` existente, canal 12
-   reconvertido a sensor de presa con gating por especie, Alarm reusada
-   como rastro de incursión, eventos 17–19 en canal B, bloque `raids` en
-   canal C, tarjeta de vista con línea de saqueo, `.antsave` v4 y el 5º
-   pin CI. El agente libre sin colonia queda como posible F5.2d.
-3. **F5.2c — NEAT / `.antgenome` v2**: genes estructurales
-   (nodos/conexiones por innovation), inspector de grafos generalizado,
-   re-innovación determinista al importar. El hito más caro; red de
-   seguridad: topología MLP fija como fallback documentado.
-   **Diseño cerrado** (2026-09-15) en
-   [`fase5-2c-neat.md`](fase5-2c-neat.md): contrato IBrain v1 congelado
-   (19/6), innovación local + re-innovación canónica al importar (sin
-   contador global), align-by-innovation + especiation por δ, topes
-   500/2000, v2 acepta v1 en carga, 7 rodajas con métricas de
-   no-estancamiento explícitas.
-4. **F5.3 — Escala**: SoA/ECS del `WorldSim` (migración con pin de hash —
+1. **F5.3 — Escala**: SoA/ECS del `WorldSim` (migración con pin de hash —
    el arnés de regresión más estricto posible), LOD de difusión de
    feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
-5. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
+2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
    hojas con mordiscos en el presenter (el canal A ya emite `cuts` y la
    tarjeta ya lee el hongo/cortes; el tablero aún pinta las hojas como
    esferas simples).
-6. **Fase 6 — 2D → 3D**: explícitamente fuera de Fase 5; el adaptador
+3. **Fase 6 — 2D → 3D**: explícitamente fuera de Fase 5; el adaptador
    cambia, los contratos no.
 
 ## Riesgos abiertos
 
 | Riesgo | Estado |
 |---|---|
-| NEAT estanca la evolución | abierto — empieza con fallback de topología fija |
+| NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
 | Feromonas costosas a escala | abierto — RLE resuelve render; la difusión es F5.3 |
-| Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas; pre-import de CI documentado como alternativa |
-| Balance de especies | se calibrará con tests de balance contra el benchmark de pools, no a mano |
-| Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta; el currículo propio (F5.2a-bis) solo si la evolución en vivo no alcanza |
+| Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
+| Balance de especies | se calibrará con tests de balance contra el benchmark de pools |
+| Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta |
