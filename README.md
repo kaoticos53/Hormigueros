@@ -257,6 +257,49 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
     --load partida.antsave --antlog partida.antlog
 ```
 
+## Jugar en Unity (modo visual)
+
+El juego tiene un modo visual completo: hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
+
+```bash
+# Lanzar Unity con la escena lista para Play:
+bash scripts/play-game.sh
+
+# O abrir el proyecto manualmente en Unity 6000.x:
+#   1. File → Open Project → selecciona src/App/AntSim.Unity
+#   2. Menú AntSim → Jugar (o AntSim → Crear escena de juego + Play)
+```
+
+**Controles en juego:**
+| Tecla | Acción |
+|-------|--------|
+| Click | Inspeccionar hormiga (ver cerebro MLP/NEAT) |
+| D     | Modo marcar drops (click en el suelo, Z deshace) |
+| F     | Rotar capa de feromonas (home → food → alarm) |
+| G     | Rotar colonia en la capa de feromonas |
+| I     | Abrir diálogo de importar pool (.antgenome) |
+| J     | Saltar cámara a la alerta seleccionada |
+| Espacio | Pausar/reanudar |
+| ⬇     | Arrastrar .antgenome desde el explorador para importar |
+
+**Configurar desde el inspector de SimPresenterBehaviour:**
+- `SeedPoolPath` = `artifacts/pretrain-warm-v2.antgenome` (o `pretrain-neat.antgenome`)
+- `Species` = `lasius` (o `lasius,eciton` para invasión)
+- `Grid` = 96 (grid 96² = 768 u) o 256 (grid 256² = 2048 u)
+- `Ticks` = 7200 (2 horas de juego) o más
+- `Speed` = 3 (velocidad del presenter, 3× real)
+- `InspectId` = id de la hormiga a inspeccionar
+
+**Pools disponibles:**
+- `pretrain-warm-v2` — pool de referencia, buen relevo y forrajeo
+- `pretrain-neat` — pool NEAT con grafos evolutivos
+- `pretrain-warm3-v2` — especialista en relevo profundo
+- `pretrain-warm-5` — especialista en forrajeo lejano
+
+**Multi-visor (comparar pools):**
+- Menú AntSim → Multi-visor (4 simulaciones en paralelo)
+- Cada vista tiene su propio stream, pool y relay light
+
 ## Pipeline encadenado (scripts/pipeline.sh)
 
 `scripts/pipeline.sh` encadena el flujo completo: pretrain en frío → warm-start
