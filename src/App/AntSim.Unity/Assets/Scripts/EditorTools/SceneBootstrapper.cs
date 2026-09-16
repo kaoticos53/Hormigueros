@@ -125,6 +125,10 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.AntMaterial = NewMat(new Color(0.35f, 0.16f, 0.10f), "AntMat");
             presenter.CarrierMaterial = NewMat(new Color(0.98f, 0.72f, 0.16f), "CarrierMat");
             presenter.ItemMaterial = NewMat(new Color(0.36f, 0.78f, 0.36f), "ItemMat");
+            // F5.2a: hojas con mordiscos — verde oscuro para la hoja, marrón
+            // oscuro para las muescas de corte (CutsLeft/CutsInitial del canal A).
+            presenter.LeafMaterial = NewMat(new Color(0.15f, 0.50f, 0.12f), "LeafMat");
+            presenter.BiteMaterial = NewMat(new Color(0.30f, 0.15f, 0.05f), "BiteMat");
             // Canal E activo por defecto en la escena: el quad de feromonas ya
             // existe — sin este campo el canal quedaría apagado y el quad vacío.
             presenter.PheroEvery = 30;

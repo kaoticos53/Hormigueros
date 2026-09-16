@@ -70,6 +70,12 @@ namespace AntSim.Unity.Scripts.Presenter
         public Mesh ItemMesh = null!;
         public Material ItemMaterial = null!;
 
+        [Header("F5.2a: hojas con mordiscos (CutsLeft/CutsInitial del canal A)")]
+        [Tooltip("Material de la hoja (verde oscuro, distinto del ítem simple).")]
+        public Material? LeafMaterial;
+        [Tooltip("Material de los mordiscos (marrón oscuro, se dibuja en la superficie de la hoja).")]
+        public Material? BiteMaterial;
+
         [Tooltip("Capa de render de ESTA vista (F5.1bis multi-visor): los DrawMesh van a esa capa y la cámara con la máscara correspondiente solo ve su mundo. 0 = Default (escena de una vista, compatible con todo lo anterior). Los suelos/nidos del multi-visor se crean en la MISMA capa, así que la máscara de la cámara completa la separación.")]
         public int RenderLayer = 0;
 
@@ -288,12 +294,52 @@ namespace AntSim.Unity.Scripts.Presenter
             {
                 // Ítem: esfera natural (1 u de diámetro) escalada por el diámetro
                 // querido; el tamaño insinúa la cantidad restante.
+                // F5.2a: las hojas (IsLeaf) se dibujan con material verde oscuro
+                // y mordiscos visibles — pequeñas esferas marrones en la superficie
+                // que representan los cortes consumidos (CutsInitial - CutsLeft).
+                int layer = RenderLayer > 0 ? RenderLayer : 0;
                 foreach (var it in state.Items)
                 {
                     var pos = new Vector3(it.X, lift * 0.7f, it.Y);
                     float s = itemS * (0.55f + 0.03f * it.Amount);
-                    var mtx = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s);
-                    Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, RenderLayer > 0 ? RenderLayer : 0);
+
+                    if (it.IsLeaf && LeafMaterial != null)
+                    {
+                        // Hoja: esfera achatada (más plana que un ítem simple)
+                        // para insinuar la forma de hoja.
+                        var leafScale = new Vector3(s * 1.1f, s * 0.5f, s * 1.1f);
+                        var mtx = Matrix4x4.TRS(pos, Quaternion.identity, leafScale);
+                        Graphics.DrawMesh(ItemMesh, mtx, LeafMaterial, layer);
+
+                        // Mordiscos: pequeñas esferas marrones en los bordes.
+                        // Cada corte consumido (CutsInitial - CutsLeft) se representa
+                        // como una muesca en la superficie, distribuida uniformemente
+                        // alrededor del perímetro de la hoja.
+                        if (BiteMaterial != null)
+                        {
+                            int bitesEaten = it.CutsInitial - it.CutsLeft;
+                            int totalBites = it.CutsInitial > 0 ? it.CutsInitial : 1;
+                            float biteRadius = s * 0.18f; // tamaño de cada mordisco
+                            float leafRadius = s * 0.55f; // radio de la hoja
+                            for (int b = 0; b < bitesEaten; b++)
+                            {
+                                float angle = (b / (float)totalBites) * Mathf.PI * 2f;
+                                float bx = pos.x + Mathf.Cos(angle) * leafRadius;
+                                float bz = pos.z + Mathf.Sin(angle) * leafRadius;
+                                float by = pos.y + (b % 2 == 0 ? 0.05f : -0.05f); // alternar arriba/abajo
+                                var bitePos = new Vector3(bx, by, bz);
+                                var biteMtx = Matrix4x4.TRS(bitePos, Quaternion.identity,
+                                    Vector3.one * biteRadius);
+                                Graphics.DrawMesh(ItemMesh, biteMtx, BiteMaterial, layer);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Ítem simple: esfera tal cual.
+                        var mtx = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s);
+                        Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, layer);
+                    }
                 }
             }
         }

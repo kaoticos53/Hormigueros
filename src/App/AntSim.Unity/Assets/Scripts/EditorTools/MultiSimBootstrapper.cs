@@ -290,6 +290,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.AntMaterial = NewFlatMat(new Color(0.35f, 0.16f, 0.10f), $"AntMat_V{v.Index}");
             presenter.CarrierMaterial = NewFlatMat(new Color(0.98f, 0.72f, 0.16f), $"CarrierMat_V{v.Index}");
             presenter.ItemMaterial = NewFlatMat(new Color(0.36f, 0.78f, 0.36f), $"ItemMat_V{v.Index}");
+            presenter.LeafMaterial = NewFlatMat(new Color(0.15f, 0.50f, 0.12f), $"LeafMat_V{v.Index}");
+            presenter.BiteMaterial = NewFlatMat(new Color(0.30f, 0.15f, 0.05f), $"BiteMat_V{v.Index}");
             presenter.AntScale = 0f;
             presenter.ActorLift = world * 0.0008f;
 
