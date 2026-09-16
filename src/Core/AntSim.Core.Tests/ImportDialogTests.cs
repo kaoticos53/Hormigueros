@@ -138,5 +138,32 @@ namespace AntSim.Core.Tests
                 TestPaths.RepoPath(PoolPath), BrainContract.CurrentVersion).ToJson();
             Assert.Equal(json1, json2);
         }
+
+        [Fact]
+        public void DragPath_FlujoCompleto_OpenSetInspectConfirm()
+        {
+            // F5.1 deuda: drag & drop — simula el flujo completo cuando el
+            // jugador suelta un .antgenome: abrir modal → poner ruta → inspeccionar
+            // → confirmar. El drag en sí es OnGUI (Unity), pero el modelo puro
+            // debe soportar este flujo.
+            var model = new ImportDialogModel();
+            string absPath = TestPaths.RepoPath(PoolPath);
+            var info = GenomeImportInfo.Inspect(absPath, BrainContract.CurrentVersion);
+            Assert.True(info.Ok);
+
+            // Abrir modal (drag abre si no estaba abierto)
+            model.Open();
+            Assert.True(model.ModalVisible);
+
+            // Inspeccionar con la ruta soltada
+            string? card = model.Inspect(absPath, info.ToJson());
+            Assert.NotNull(card);
+            Assert.Contains("24 genomas", card);
+
+            // Confirmar — entrega la ruta para --seed-pool
+            string? confirmed = model.Confirm();
+            Assert.Equal(absPath, confirmed);
+            Assert.Equal(ImportDialogModel.Phase.Confirmed, model.CurrentPhase);
+        }
     }
 }

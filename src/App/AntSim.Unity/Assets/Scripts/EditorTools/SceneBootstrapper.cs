@@ -285,7 +285,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             // cajas vacías, uno de los motivos del aspecto pobre del HUD).
             hints.text = "click: inspeccionar hormiga   ·   D: marcar drops (Z deshace)   ·   " +
                          "F: capa de feromonas (home/food/alarm)   ·   G: colonia   ·   " +
-                         "I: importar pool   ·   J: ir a la alerta   ·   Espacio: pausa";
+                         "I: importar pool   ·   J: ir a la alerta   ·   Espacio: pausa   ·   " +
+                         "\u2b07: soltar .antgenome";
 
             // — HUD layout: reparte el stream a todo —
             var hudGo = new GameObject("HudLayout");
@@ -385,6 +386,30 @@ namespace AntSim.Unity.Scripts.EditorTools
             hud.ImportDialogText = importText;
             hud.DialogBackdrop = backdropGo;
             hud.ImportModal = modalGo;
+
+            // — F5.1 deuda: overlay de drag & drop —— texto centrado que
+            //   se enciende cuando el jugador arrastra un .antgenome ——
+            var dragOverlayGo = new GameObject("DragOverlay", typeof(RectTransform));
+            dragOverlayGo.transform.SetParent(canvasGo.transform, false);
+            var dragRt = (RectTransform)dragOverlayGo.transform;
+            dragRt.anchorMin = Vector2.zero; dragRt.anchorMax = Vector2.one;
+            dragRt.offsetMin = Vector2.zero; dragRt.offsetMax = Vector2.zero;
+            var dragImg = dragOverlayGo.AddComponent<UnityEngine.UI.Image>();
+            dragImg.color = new Color(0.1f, 0.4f, 0.2f, 0.6f); // verde oscuro semitransparente
+            dragImg.raycastTarget = false;
+            var dragTextGo = new GameObject("DragText", typeof(RectTransform));
+            dragTextGo.transform.SetParent(dragRt, false);
+            var dragTextRt = (RectTransform)dragTextGo.transform;
+            dragTextRt.anchorMin = dragTextRt.anchorMax = new Vector2(0.5f, 0.5f);
+            dragTextRt.sizeDelta = new Vector2(600f, 80f);
+            var dragText = dragTextGo.AddComponent<UnityEngine.UI.Text>();
+            dragText.text = "\u2b07  Soltar para importar pool .antgenome";
+            dragText.fontSize = 24;
+            dragText.alignment = TextAnchor.MiddleCenter;
+            dragText.color = Color.white;
+            dragText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            hud.DragOverlayText = dragText;
+            dragOverlayGo.SetActive(false);
 
             // — F5.1: per-elemento — contenedor de toasts clicables + barras + botones —
             RectTransform toastContainer = CreateToastContainer(canvasGo.transform, hud);

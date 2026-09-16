@@ -139,6 +139,119 @@ namespace AntSim.Unity.Scripts.Presenter
             }
         }
 
+        // ─── F5.1 deuda: drag & drop de .antgenome ─────────────────────
+        // Unity expone los eventos de drag via OnGUI (IMGUI layer), incluso
+        // en escenas uGUI. Cuando el jugador arrastra un archivo .antgenome
+        // sobre la ventana, se acepta el drag y al soltar se carga la ruta
+        // en el campo de texto + se lanza Inspect() automáticamente.
+        // Si el modal NO está abierto, se abre primero (el jugador puede
+        // soltar en cualquier momento, no solo dentro del modal).
+
+        /// <summary>¿Hay un archivo .antgenome arrastrándose sobre la ventana?</summary>
+        public bool IsDragHovering { get; private set; }
+
+        private void OnGUI()
+        {
+            var e = Event.current;
+            if (e == null) return;
+
+            switch (e.type)
+            {
+                case EventType.DragUpdated:
+                {
+                    // ¿El drag contiene al menos un .antgenome?
+                    if (DragAndDrop.objectReferences.Length > 0)
+                    {
+                        bool hasGenome = false;
+                        foreach (var obj in DragAndDrop.objectReferences)
+                        {
+                            if (obj is UnityEngine.TextAsset ta != null && ta.name.EndsWith(".antgenome"))
+                            {
+                                hasGenome = true; break;
+                            }
+                        }
+                        // También acepta paths de arrastre del explorador
+                        // (cuando Unity no puede resolver el asset)
+                        if (!hasGenome && DragAndDrop.paths.Length > 0)
+                        {
+                            foreach (var p in DragAndDrop.paths)
+                            {
+                                if (p != null && p.EndsWith(".antgenome", System.StringComparison.OrdinalIgnoreCase))
+                                {
+                                    hasGenome = true; break;
+                                }
+                            }
+                        }
+
+                        if (hasGenome)
+                        {
+                            DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+                            IsDragHovering = true;
+                            e.Use();
+                        }
+                    }
+                    break;
+                }
+
+                case EventType.DragPerform:
+                {
+                    DragAndDrop.AcceptDrag();
+                    IsDragHovering = false;
+
+                    string? droppedPath = null;
+
+                    // Prioridad 1: paths del explorador (arrastre desde el filesystem)
+                    if (DragAndDrop.paths.Length > 0)
+                    {
+                        foreach (var p in DragAndDrop.paths)
+                        {
+                            if (p != null && p.EndsWith(".antgenome", System.StringComparison.OrdinalIgnoreCase))
+                            {
+                                droppedPath = p; break;
+                            }
+                        }
+                    }
+
+                    // Prioridad 2: TextAsset del proyecto Unity
+                    if (droppedPath == null)
+                    {
+                        foreach (var obj in DragAndDrop.objectReferences)
+                        {
+                            if (obj is TextAsset ta && ta.name.EndsWith(".antgenome"))
+                            {
+                                // En el editor, la ruta del asset es relativa al proyecto
+                                droppedPath = UnityEditor.AssetDatabase.GetAssetPath(ta);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (droppedPath != null)
+                    {
+                        GenomePath = droppedPath;
+                        // Abrir el modal si no estaba abierto
+                        if (!Model.ModalVisible) Open();
+                        // Auto-inspeccionar el archivo soltado
+                        Inspect();
+                        Debug.Log($"[ImportDialog] .antgenome arrastrado: {droppedPath}");
+                    }
+
+                    e.Use();
+                    break;
+                }
+
+                case EventType.DragExited:
+                {
+                    if (IsDragHovering)
+                    {
+                        IsDragHovering = false;
+                        e.Use();
+                    }
+                    break;
+                }
+            }
+        }
+
         /// <summary>Hook para la UI (el bootstrapper conecta un setter de Text).</summary>
         public event System.Action<string>? OnDialogChanged;
     }
