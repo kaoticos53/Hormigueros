@@ -54,7 +54,7 @@ en la arena) están cerrados, con el criterio de fin del plan cumplido.
 - **6º pin de CI** (`check-neat-command.sh`, hash `021ed04f…`): la partida
   de invasión lasius+eciton con pool NEAT propio — el cierre del plan §3.
 
-**Suite 379/379 tests, 6 pins de hash verificados en Windows y Linux.**
+**Suite 382/382 tests, 6 pins de hash verificados en Windows y Linux.**
 
 ### v0.6.1 — CI verde cross-platform: determinismo canónico reparado
 
@@ -326,7 +326,7 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (276/276), incluido el pin del hash del stream canónico |
+| `dotnet test` | la suite headless (382/382), incluido el pin del hash del stream canónico |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |

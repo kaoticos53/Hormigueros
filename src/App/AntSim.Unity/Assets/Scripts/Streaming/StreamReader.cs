@@ -29,7 +29,7 @@ namespace AntSim.Unity.Scripts.Streaming
         /// (canal F) — telemetría pura, el hash del mundo no cambia.</summary>
         public void StreamGame(ulong seed, int ticks, int grid, int colonies, int frameEvery,
             string? seedPoolPath, Action<string> onLine, IReadOnlyList<string>? extraArgs = null,
-            int pheroEvery = 0, int activEvery = 0, uint inspectId = 0)
+            int pheroEvery = 0, int activEvery = 0, uint inspectId = 0, string? species = null)
         {
             var psi = new ProcessStartInfo
             {
@@ -46,6 +46,8 @@ namespace AntSim.Unity.Scripts.Streaming
             psi.ArgumentList.Add("--frame-every"); psi.ArgumentList.Add(frameEvery.ToString());
             if (seedPoolPath != null)
             { psi.ArgumentList.Add("--seed-pool"); psi.ArgumentList.Add(seedPoolPath); }
+            if (!string.IsNullOrWhiteSpace(species))
+            { psi.ArgumentList.Add("--species"); psi.ArgumentList.Add(species); }
             if (pheroEvery > 0)
             { psi.ArgumentList.Add("--phero-every"); psi.ArgumentList.Add(pheroEvery.ToString()); }
             if (activEvery > 0)

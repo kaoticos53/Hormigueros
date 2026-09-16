@@ -90,7 +90,7 @@ namespace AntSim.Unity.Scripts.Streaming
             }
             Card = parsed.Import;
             CurrentPhase = Phase.Reviewing;
-            return Card.CardText;
+            return parsed.Import!.CardText;
         }
 
         /// <summary>Confirmar la importación: pasa a <c>Confirmed</c> y devuelve

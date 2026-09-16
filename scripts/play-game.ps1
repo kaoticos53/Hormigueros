@@ -96,17 +96,10 @@ if (-not $UnityBin) {
     if (Test-Path $standalone) { $UnityBin = $standalone }
 }
 
-# 4. Launcher del Hub
+# 4. No usar el launcher del Hub: no es un Editor válido para -projectPath.
+#    Fallar aquí evita abrir la interfaz del Hub y dejar al usuario sin juego.
 if (-not $UnityBin) {
-    $launcher = "$env:LOCALAPPDATA\Unity\bin\unity.exe"
-    if (Test-Path $launcher) {
-        $UnityBin = $launcher
-        Write-Host "  (Usando launcher del Hub)" -ForegroundColor Yellow
-    }
-}
-
-if (-not $UnityBin) {
-    Write-Host "  X No se encontro Unity" -ForegroundColor Red
+    Write-Host "  X No se encontro el Editor de Unity (no se usa el launcher del Hub)" -ForegroundColor Red
     Write-Host "    Descarga desde: https://unity.com/download" -ForegroundColor Yellow
     exit 3
 }

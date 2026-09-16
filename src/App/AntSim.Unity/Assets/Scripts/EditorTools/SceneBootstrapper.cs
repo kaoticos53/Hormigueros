@@ -112,6 +112,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.Colonies = 2;
             presenter.Ticks = 7200;
             presenter.FrameEvery = 1;
+            presenter.Species = "lasius";
+            presenter.SeedPoolPath = "artifacts/pretrain-warm-v2.antgenome";
+            presenter.Speed = 3f;
             // Mallas a ESCALA NATURAL (cápsula 2 u × 1 u, esfera 1 u de diámetro):
             // el presenter escala en unidades de mundo, así que pre-escalar aquí
             // solo escondía el número real (una cápsula de 0.25 u que el presenter
@@ -179,7 +182,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             RemoveCollider(pheroQuad);
             var pheroMat = NewTransparentMat("PheromoneMat");
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(pheroMat, "Assets/Materials/PheromoneMat.mat");
+            CreateOrReplaceAsset(pheroMat, "Assets/Materials/PheromoneMat.mat");
             pheroQuad.GetComponent<Renderer>().sharedMaterial = pheroMat;
             var phero = pheroQuad.AddComponent<Presenter.PheromoneTileBehaviour>();
             phero.Presenter = presenter;
@@ -287,10 +290,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             hints.rectTransform.anchoredPosition = new Vector2(0f, 18f);
             // Sin emoji (la fuente LegacyRuntime de uGUI no los tiene: salían
             // cajas vacías, uno de los motivos del aspecto pobre del HUD).
-            hints.text = "click: inspeccionar hormiga   ·   D: marcar drops (Z deshace)   ·   " +
-                         "F: capa de feromonas (home/food/alarm)   ·   G: colonia   ·   " +
-                         "I: importar pool   ·   J: ir a la alerta   ·   Espacio: pausa   ·   " +
-                         "\u2b07: soltar .antgenome";
+            hints.text = "click: inspeccionar   ·   + / -: velocidad (30%–1000%)   ·   Espacio: pausa   ·   " +
+                         "D: drops (Z deshace)   ·   F: feromonas   ·   G: colonia   ·   I: importar pool   ·   \u2b07: soltar .antgenome";
 
             // — HUD layout: reparte el stream a todo —
             var hudGo = new GameObject("HudLayout");
@@ -423,6 +424,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             hud.BindNativeButtons(buttons[0], buttons[1], buttons[2], buttons[3]);
             hud.BindImportPathField(pathField);
 
+            // — Control de velocidad interactivo (30% a 1000% / 0.3× a 10.0×) —
+            CreateSpeedControls(canvasGo.transform, presenter, hud);
+
             // — Guardar + registrar en build settings —
             // No basta con crear la escena: el «reiniciar con plan» (F4.4) y el
             // diálogo de importación (F4.3) relanzan la partida con
@@ -483,7 +487,7 @@ namespace AntSim.Unity.Scripts.EditorTools
         // ── Asistente de primera ejecución (Windows-friendly) ──────────────
         // Menú AntSim → Asistente: guía al usuario paso a paso para elegir
         // pool, especie y grid sin tener que editar el inspector a mano.
-        private static class FirstRunWizard
+        private sealed class FirstRunWizard : EditorWindow
         {
             private const string PrefKey = "AntSim_FirstRunDone";
             private static int _step;
@@ -495,11 +499,23 @@ namespace AntSim.Unity.Scripts.EditorTools
             private static Vector2 _scroll;
 
             [MenuItem("AntSim/Asistente de primera ejecucion", priority = 5)]
-            public static void Show() { _step = 0; _pool = "pretrain-warm-v2"; _species = "lasius"; _grid = 96; _colonies = 2; LoadPools(); EditorApplication.update += OnGUI; }
+            public static void OpenWizard()
+            {
+                _step = 0;
+                _pool = "pretrain-warm-v2";
+                _species = "lasius";
+                _grid = 96;
+                _colonies = 2;
+                LoadPools();
+                var window = GetWindow<FirstRunWizard>(true, "AntSim — Asistente", true);
+                window.minSize = new Vector2(520f, 400f);
+                window.maxSize = new Vector2(520f, 400f);
+                window.ShowUtility();
+            }
 
             private static void LoadPools()
             {
-                string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", ".."));
+                string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", "..", ".."));
                 var arts = System.IO.Path.Combine(root, "artifacts");
                 var fixs = System.IO.Path.Combine(root, "tests", "fixtures");
                 var list = new System.Collections.Generic.List<string>();
@@ -516,11 +532,10 @@ namespace AntSim.Unity.Scripts.EditorTools
                 _pools = list.ToArray();
             }
 
-            private static void OnGUI()
+            private void OnGUI()
             {
-                if (!EditorApplication.isUpdating) return;
                 int w = 520, h = 400;
-                var rect = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+                var rect = new Rect((position.width - w) / 2f, (position.height - h) / 2f, w, h);
 
                 // Paso 0: bienvenida
                 if (_step == 0)
@@ -533,7 +548,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                     GUILayout.Label("Te guia para configurar la partida sin tocar el inspector.");
                     GUILayout.Space(10);
                     if (GUILayout.Button("Empezar", GUILayout.Height(36))) _step = 1;
-                    if (GUILayout.Button("Saltar (configurar manualmente)")) { EditorApplication.update -= OnGUI; }
+                    if (GUILayout.Button("Saltar (configurar manualmente)")) { Close(); }
                     GUILayout.EndArea();
                     return;
                 }
@@ -556,7 +571,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                     GUILayout.Space(10);
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("Siguiente", GUILayout.Height(32))) _step = 2;
-                    if (GUILayout.Button("Cancelar")) { EditorApplication.update -= OnGUI; }
+                    if (GUILayout.Button("Cancelar")) { Close(); }
                     GUILayout.EndHorizontal();
                     GUILayout.EndArea();
                     return;
@@ -585,7 +600,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("Siguiente", GUILayout.Height(32))) _step = 3;
                     if (GUILayout.Button("Atras")) _step = 1;
-                    if (GUILayout.Button("Cancelar")) { EditorApplication.update -= OnGUI; }
+                    if (GUILayout.Button("Cancelar")) { Close(); }
                     GUILayout.EndHorizontal();
                     GUILayout.EndArea();
                     return;
@@ -594,7 +609,8 @@ namespace AntSim.Unity.Scripts.EditorTools
                 // Paso 3: grid y confirmacion
                 if (_step == 3)
                 {
-                    GUI.Box(rect, "");\                    GUILayout.BeginArea(rect);
+                    GUI.Box(rect, "");
+                    GUILayout.BeginArea(rect);
                     GUILayout.Space(20);
                     GUILayout.Label("Paso 3/3 — Tamano del mundo", EditorStyles.boldLabel);
                     GUILayout.Space(8);
@@ -613,7 +629,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("Crear escena y Jugar", GUILayout.Height(36)))
                     {
-                        EditorApplication.update -= OnGUI;
+                        Close();
                         EditorPrefs.SetBool(PrefKey, true);
                         CreateGameScene();
                         // Configurar el presenter
@@ -622,7 +638,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                         {
                             presenter.Grid = _grid;
                             presenter.Colonies = _colonies;
-                            string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", ".."));
+                            string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", "..", ".."));
                             string poolPath = System.IO.Path.Combine(root, "artifacts", _pool + ".antgenome");
                             if (System.IO.File.Exists(poolPath)) presenter.SeedPoolPath = poolPath;
                             presenter.Species = _species;
@@ -845,6 +861,185 @@ namespace AntSim.Unity.Scripts.EditorTools
         }
 
         /// <summary>
+        /// Crea el panel flotante superior de control de velocidad (30% a 1000% / 0.3× a 10.0×),
+        /// con slider continuo, botón de pausa/reanudar, botones +/- y presets rápidos.
+        /// </summary>
+        private static void CreateSpeedControls(Transform canvas, Presenter.SimPresenterBehaviour presenter, Presenter.HudLayoutBehaviour hud)
+        {
+            var panelGo = new GameObject("SpeedControlPanel", typeof(RectTransform));
+            panelGo.transform.SetParent(canvas, false);
+            var panelRt = (RectTransform)panelGo.transform;
+            panelRt.anchorMin = new Vector2(0.5f, 1f);
+            panelRt.anchorMax = new Vector2(0.5f, 1f);
+            panelRt.pivot = new Vector2(0.5f, 1f);
+            panelRt.anchoredPosition = new Vector2(0f, -48f);
+            panelRt.sizeDelta = new Vector2(620f, 44f);
+
+            var bg = panelGo.AddComponent<UnityEngine.UI.Image>();
+            bg.color = PanelFill;
+            bg.raycastTarget = false;
+
+            // Borde de acento
+            var barGo = new GameObject("Accent", typeof(RectTransform));
+            barGo.transform.SetParent(panelRt, false);
+            var brt = (RectTransform)barGo.transform;
+            brt.anchorMin = new Vector2(0f, 0f);
+            brt.anchorMax = new Vector2(0f, 1f);
+            brt.pivot = new Vector2(0f, 0.5f);
+            brt.anchoredPosition = new Vector2(1f, 0f);
+            brt.sizeDelta = new Vector2(4f, -8f);
+            barGo.AddComponent<UnityEngine.UI.Image>().color = AccentNeutral;
+
+            UnityEngine.UI.Button MakeBtn(Transform parent, string name, string label, Vector2 pos, Vector2 size, Color? tint = null, int fontSize = 13)
+            {
+                var go = new GameObject(name, typeof(RectTransform));
+                go.transform.SetParent(parent, false);
+                var rt = (RectTransform)go.transform;
+                rt.anchorMin = rt.anchorMax = new Vector2(0f, 0.5f);
+                rt.pivot = new Vector2(0f, 0.5f);
+                rt.anchoredPosition = pos;
+                rt.sizeDelta = size;
+                var img = go.AddComponent<UnityEngine.UI.Image>();
+                img.color = tint ?? new Color(0.18f, 0.20f, 0.24f, 0.95f);
+                var btn = go.AddComponent<UnityEngine.UI.Button>();
+                var colors = btn.colors;
+                colors.normalColor = Color.white;
+                colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
+                colors.pressedColor = new Color(0.75f, 0.75f, 0.75f, 1f);
+                colors.fadeDuration = 0.08f;
+                btn.colors = colors;
+                var txtGo = new GameObject("Label", typeof(RectTransform));
+                txtGo.transform.SetParent(rt, false);
+                var trt = (RectTransform)txtGo.transform;
+                trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
+                trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+                var text = txtGo.AddComponent<UnityEngine.UI.Text>();
+                text.text = label;
+                text.alignment = TextAnchor.MiddleCenter;
+                text.fontSize = fontSize;
+                text.font = DefaultFont();
+                return btn;
+            }
+
+            // 1. Botón de Pausa / Reanudar
+            var pauseBtn = MakeBtn(panelRt, "PauseBtn", "\u23f8 Pausa", new Vector2(10f, 0f), new Vector2(82f, 30f), new Color(0.20f, 0.34f, 0.52f, 0.95f));
+            var pauseText = pauseBtn.GetComponentInChildren<UnityEngine.UI.Text>();
+
+            // 2. Botón Menos [-]
+            var minusBtn = MakeBtn(panelRt, "SpeedMinusBtn", "–", new Vector2(98f, 0f), new Vector2(26f, 30f), new Color(0.18f, 0.20f, 0.24f, 0.95f), 15);
+
+            // 3. Slider uGUI (rango 0.3 a 10.0)
+            float startSpeed = presenter != null && presenter.Speed > 0f ? presenter.Speed : Streaming.SpeedControlModel.DefaultSpeed;
+            var slider = CreateSlider(panelRt, "SpeedSlider", new Vector2(0f, 0.5f), new Vector2(128f, 0f), new Vector2(150f, 20f),
+                Streaming.SpeedControlModel.MinSpeed, Streaming.SpeedControlModel.MaxSpeed, startSpeed);
+
+            // 4. Botón Más [+]
+            var plusBtn = MakeBtn(panelRt, "SpeedPlusBtn", "+", new Vector2(282f, 0f), new Vector2(26f, 30f), new Color(0.18f, 0.20f, 0.24f, 0.95f), 15);
+
+            // 5. Etiqueta de velocidad
+            var labelGo = new GameObject("SpeedLabel", typeof(RectTransform));
+            labelGo.transform.SetParent(panelRt, false);
+            var lrt = (RectTransform)labelGo.transform;
+            lrt.anchorMin = lrt.anchorMax = new Vector2(0f, 0.5f);
+            lrt.pivot = new Vector2(0f, 0.5f);
+            lrt.anchoredPosition = new Vector2(312f, 0f);
+            lrt.sizeDelta = new Vector2(100f, 30f);
+            var speedLabel = labelGo.AddComponent<UnityEngine.UI.Text>();
+            speedLabel.font = DefaultFont();
+            speedLabel.fontSize = 13;
+            speedLabel.color = Ink;
+            speedLabel.alignment = TextAnchor.MiddleCenter;
+            speedLabel.text = Streaming.SpeedControlModel.FormatSpeed(startSpeed);
+
+            // 6. Botones de preset rápido (30%, 100%, 300%, 1000%)
+            var p30 = MakeBtn(panelRt, "Preset_30", "30%", new Vector2(416f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p100 = MakeBtn(panelRt, "Preset_100", "1×", new Vector2(458f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p300 = MakeBtn(panelRt, "Preset_300", "3×", new Vector2(496f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p1000 = MakeBtn(panelRt, "Preset_1000", "10×", new Vector2(534f, 0f), new Vector2(42f, 26f), new Color(0.28f, 0.18f, 0.14f, 0.95f), 11);
+
+            var presets = new (float speed, UnityEngine.UI.Button btn)[]
+            {
+                (0.3f, p30),
+                (1.0f, p100),
+                (3.0f, p300),
+                (10.0f, p1000),
+            };
+
+            hud.BindSpeedControls(slider, speedLabel, pauseBtn, pauseText, presets, minusBtn, plusBtn);
+        }
+
+        /// <summary>
+        /// Crea un Slider uGUI estándar programáticamente.
+        /// </summary>
+        private static UnityEngine.UI.Slider CreateSlider(Transform parent, string name, Vector2 anchor, Vector2 pos, Vector2 size, float minVal, float maxVal, float initialVal)
+        {
+            var sliderGo = new GameObject(name, typeof(RectTransform));
+            sliderGo.transform.SetParent(parent, false);
+            var rt = (RectTransform)sliderGo.transform;
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = anchor;
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+
+            var slider = sliderGo.AddComponent<UnityEngine.UI.Slider>();
+            slider.minValue = minVal;
+            slider.maxValue = maxVal;
+            slider.value = initialVal;
+            slider.direction = UnityEngine.UI.Slider.Direction.LeftToRight;
+
+            // Background
+            var bgGo = new GameObject("Background", typeof(RectTransform));
+            bgGo.transform.SetParent(rt, false);
+            var bgRt = (RectTransform)bgGo.transform;
+            bgRt.anchorMin = new Vector2(0f, 0.35f);
+            bgRt.anchorMax = new Vector2(1f, 0.65f);
+            bgRt.offsetMin = Vector2.zero;
+            bgRt.offsetMax = Vector2.zero;
+            var bgImg = bgGo.AddComponent<UnityEngine.UI.Image>();
+            bgImg.color = new Color(0.12f, 0.13f, 0.16f, 0.95f);
+
+            // Fill Area
+            var fillAreaGo = new GameObject("Fill Area", typeof(RectTransform));
+            fillAreaGo.transform.SetParent(rt, false);
+            var fillAreaRt = (RectTransform)fillAreaGo.transform;
+            fillAreaRt.anchorMin = new Vector2(0f, 0.35f);
+            fillAreaRt.anchorMax = new Vector2(1f, 0.65f);
+            fillAreaRt.offsetMin = new Vector2(4f, 0f);
+            fillAreaRt.offsetMax = new Vector2(-4f, 0f);
+
+            var fillGo = new GameObject("Fill", typeof(RectTransform));
+            fillGo.transform.SetParent(fillAreaRt, false);
+            var fillRt = (RectTransform)fillGo.transform;
+            fillRt.anchorMin = Vector2.zero;
+            fillRt.anchorMax = Vector2.one;
+            fillRt.offsetMin = Vector2.zero;
+            fillRt.offsetMax = Vector2.zero;
+            var fillImg = fillGo.AddComponent<UnityEngine.UI.Image>();
+            fillImg.color = AccentNeutral;
+            slider.fillRect = fillRt;
+
+            // Handle Slide Area
+            var handleAreaGo = new GameObject("Handle Slide Area", typeof(RectTransform));
+            handleAreaGo.transform.SetParent(rt, false);
+            var handleAreaRt = (RectTransform)handleAreaGo.transform;
+            handleAreaRt.anchorMin = Vector2.zero;
+            handleAreaRt.anchorMax = Vector2.one;
+            handleAreaRt.offsetMin = new Vector2(8f, 0f);
+            handleAreaRt.offsetMax = new Vector2(-8f, 0f);
+
+            var handleGo = new GameObject("Handle", typeof(RectTransform));
+            handleGo.transform.SetParent(handleAreaRt, false);
+            var handleRt = (RectTransform)handleGo.transform;
+            handleRt.sizeDelta = new Vector2(16f, 22f);
+            var handleImg = handleGo.AddComponent<UnityEngine.UI.Image>();
+            handleImg.color = Color.white;
+            slider.handleRect = handleRt;
+            slider.targetGraphic = handleImg;
+
+            return slider;
+        }
+
+        /// <summary>
         /// Campo de texto del modal (F5.1). uGUI no trae un «InputField» de una
         /// línea por sí solo: hay que montar la Image de fondo, el Text de edición
         /// y el placeholder, y asignarlos. Sin esto no había forma de dar la ruta
@@ -1046,7 +1241,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             tex.filterMode = FilterMode.Bilinear;
             tex.Apply();
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(tex, "Assets/Materials/GridTex.asset");
+            CreateOrReplaceAsset(tex, "Assets/Materials/GridTex.asset");
             return tex;
         }
 
@@ -1089,6 +1284,21 @@ namespace AntSim.Unity.Scripts.EditorTools
         }
 
         /// <summary>
+        /// Hace idempotente «Crear escena de juego»: Unity conserva los assets
+        /// generados por una escena anterior y CreateAsset falla si el mismo
+        /// nombre vuelve a aparecer. La escena nueva ya no usa esos objetos,
+        /// así que reemplazarlos es seguro y evita errores rojos engañosos en la
+        /// consola al regenerar desde cero.
+        /// </summary>
+        private static void CreateOrReplaceAsset(UnityEngine.Object asset, string path)
+        {
+            EnsureMaterialFolder();
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path) != null)
+                AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(asset, path);
+        }
+
+        /// <summary>
         /// Material de color PLANO del mundo (suelo, marco, nidos, hormigas,
         /// ítems). Unlit a propósito:
         ///
@@ -1119,7 +1329,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 m.SetColor("_EmissionColor", c);
             }
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
 
@@ -1136,7 +1346,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // «doesn't have a color property '_Color'» en la consola. Se comprueba.
             if (m.HasProperty("_Color")) m.color = Color.white;
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
 
@@ -1156,7 +1366,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
             tex.Apply();
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(tex, "Assets/Materials/PheromoneEmpty.asset");
+            CreateOrReplaceAsset(tex, "Assets/Materials/PheromoneEmpty.asset");
             return tex;
         }
 
@@ -1174,7 +1384,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 mesh.RecalculateNormals();
             }
             Object.DestroyImmediate(go);
-            AssetDatabase.CreateAsset(mesh, $"Assets/Materials/{name}.asset");
+            CreateOrReplaceAsset(mesh, $"Assets/Materials/{name}.asset");
             return mesh;
         }
     }

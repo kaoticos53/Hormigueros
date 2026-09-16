@@ -11,8 +11,9 @@ namespace AntSim.Unity.Scripts.Streaming
     /// <c>build/antsim</c> o <c>artifacts/pretrain-warm-v2.antgenome</c> no
     /// resuelven desde ahí y el Play pass falla con «stream falló». El ancla
     /// es la carpeta del proyecto Unity (<c>src/App/AntSim.Unity</c>, dada por
-    /// Application.dataPath en el componente): subir DOS niveles da la raíz
-    /// del repo, donde viven build/ y artifacts/. Las rutas absolutas pasan
+    /// Application.dataPath en el componente): subir TRES niveles desde esa
+    /// carpeta da la raíz del repo (src/App/AntSim.Unity → src/App → src →
+    /// raíz), donde viven build/ y artifacts/. Las rutas absolutas pasan
     /// intactas; las relativas se intentan primero contra el cwd (comportami-
     /// ento de siempre) y después contra el repo root.
     /// </summary>
