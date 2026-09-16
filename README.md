@@ -263,11 +263,12 @@ El juego tiene un modo visual completo: hormigas animadas, HUD con tarjetas de c
 
 ```bash
 # Lanzar Unity con la escena lista para Play:
-bash scripts/play-game.sh
+scripts\play-game.bat        # Windows (CMD/PowerShell)
+bash scripts/play-game.sh    # Linux/macOS (Git Bash tambien vale)
 
 # O abrir el proyecto manualmente en Unity 6000.x:
-#   1. File → Open Project → selecciona src/App/AntSim.Unity
-#   2. Menú AntSim → Jugar (o AntSim → Crear escena de juego + Play)
+#   1. File - Open Project - selecciona src/App/AntSim.Unity
+#   2. Menu AntSim - Jugar (o AntSim - Crear escena de juego + Play)
 ```
 
 **Controles en juego:**
