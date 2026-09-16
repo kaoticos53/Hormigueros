@@ -19,6 +19,8 @@ namespace AntSim.Unity.Scripts.Presenter
         public int Grid = 96;
         public int Colonies = 2;
         public int FrameEvery = 1;
+        [Tooltip("Especies del mundo, separadas por coma (p. ej. lasius o lasius,eciton). Vacío = default del CLI.")]
+        public string Species = "lasius";
         public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome (relativa al repo root)
 
         [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
@@ -105,13 +107,20 @@ namespace AntSim.Unity.Scripts.Presenter
         public float ActorLift = 0.6f;
 
         [Header("Tiempo")]
-        [Range(0f, 16f)] public float Speed = 1f; // 0 = pausa
-        [Tooltip("Multiplicador añadido sobre Speed con las teclas +/= (cicla 1 → 2 → 4). 1 = Speed tal cual. Es replay acelerado: nunca cambia la física.")]
+        [Tooltip("Velocidad de simulación/reproducción en rango 30% (0.3×) a 1000% (10.0×). 0 = pausa.")]
+        [Range(0.3f, 10f)] public float Speed = 3f;
+        [Tooltip("Multiplicador adicional (1 por defecto).")]
         public float SpeedBoost = 1f;
-        [Tooltip("Tecla que cicla el multiplicador de velocidad (1 → 2 → 4).")]
-        public KeyCode CycleSpeedKey = KeyCode.KeypadPlus;
-        [Tooltip("Tecla alternativa para ciclar la velocidad (para teclados sin keypad).")]
-        public KeyCode CycleSpeedKey2 = KeyCode.Equals;
+        [Tooltip("Tecla para aumentar la velocidad (+ / = / Keypad +).")]
+        public KeyCode IncreaseSpeedKey = KeyCode.KeypadPlus;
+        public KeyCode IncreaseSpeedKey2 = KeyCode.Equals;
+        [Tooltip("Tecla para reducir la velocidad (- / _ / Keypad -).")]
+        public KeyCode DecreaseSpeedKey = KeyCode.KeypadMinus;
+        public KeyCode DecreaseSpeedKey2 = KeyCode.Minus;
+        [Tooltip("Tecla para pausar / reanudar la simulación.")]
+        public KeyCode PauseKey = KeyCode.Space;
+
+        private float _pausedSpeed = 3f;
 
         private readonly Streaming.GameStreamPresenter _presenter = new();
         private Streaming.StreamSource? _source;
@@ -127,6 +136,65 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Último estado muestreado (poses del tick en curso) — lo consumen
         /// p. ej. el raycast de selección de la tarjeta de inspección.</summary>
         public Streaming.RenderState? CurrentState => _lastState;
+
+        /// <summary>Velocidad efectiva actual de simulación (Speed * SpeedBoost).</summary>
+        public float EffectiveSpeed => Speed * SpeedBoost;
+
+        /// <summary>Indica si la simulación está pausada (Speed == 0).</summary>
+        public bool IsPaused => Speed <= 0f;
+
+        /// <summary>Fija la velocidad con clamp entre 30% (0.3x) y 1000% (10.0x).</summary>
+        public void SetSpeed(float newSpeed)
+        {
+            if (newSpeed <= 0f)
+            {
+                if (Speed > 0f) _pausedSpeed = Speed;
+                Speed = 0f;
+            }
+            else
+            {
+                Speed = Streaming.SpeedControlModel.ClampSpeed(newSpeed, allowPause: false);
+                _pausedSpeed = Speed;
+            }
+        }
+
+        /// <summary>Fija la velocidad a partir de un porcentaje (30% a 1000%).</summary>
+        public void SetSpeedPercent(float percent)
+        {
+            SetSpeed(Streaming.SpeedControlModel.PercentToSpeed(percent));
+        }
+
+        /// <summary>Aumenta la velocidad al siguiente preset lógico o +10%.</summary>
+        public void StepSpeedUp()
+        {
+            if (Speed <= 0f)
+            {
+                Speed = _pausedSpeed > 0f ? _pausedSpeed : Streaming.SpeedControlModel.DefaultSpeed;
+                return;
+            }
+            SetSpeed(Streaming.SpeedControlModel.StepUp(Speed));
+        }
+
+        /// <summary>Reduce la velocidad al preset lógico inferior o -10%.</summary>
+        public void StepSpeedDown()
+        {
+            if (Speed <= 0f) return;
+            SetSpeed(Streaming.SpeedControlModel.StepDown(Speed));
+        }
+
+        /// <summary>Alterna entre pausa y la velocidad previa.</summary>
+        public void TogglePause()
+        {
+            if (Speed > 0f)
+            {
+                _pausedSpeed = Speed;
+                Speed = 0f;
+            }
+            else
+            {
+                Speed = _pausedSpeed > 0f ? _pausedSpeed : Streaming.SpeedControlModel.DefaultSpeed;
+            }
+        }
 
         private void Start()
         {
@@ -182,7 +250,7 @@ namespace AntSim.Unity.Scripts.Presenter
                         _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery,
                             seedPool.Length > 0 ? seedPool : null,
                             line => _presenter.Feed(line), PendingDropArgs,
-                            PheroEvery, ActivEvery, InspectId);
+                            PheroEvery, ActivEvery, InspectId, Species);
                 }
                 catch (Exception ex)
                 {
@@ -197,18 +265,20 @@ namespace AntSim.Unity.Scripts.Presenter
             });
         }
 
-        private static readonly float[] SpeedBoosts = { 1f, 2f, 4f };
-        private int _speedBoostIndex;
-
         private void Update()
         {
-            // Fase rápida de observación: +/=. cicla 1 → 2 → 4 → 1. Es PURO replay:
-            // acelera el consumo del stream (más ticks por segundo real), nunca la
-            // física — la partida es la misma bit a bit, solo se ve más rápido.
-            if (Input.GetKeyDown(CycleSpeedKey) || Input.GetKeyDown(CycleSpeedKey2))
+            // Atajos de teclado: + / = aumentan velocidad, - / _ reducen velocidad, Espacio pausa/reanuda
+            if (Input.GetKeyDown(IncreaseSpeedKey) || Input.GetKeyDown(IncreaseSpeedKey2))
             {
-                _speedBoostIndex = (_speedBoostIndex + 1) % SpeedBoosts.Length;
-                SpeedBoost = SpeedBoosts[_speedBoostIndex];
+                StepSpeedUp();
+            }
+            else if (Input.GetKeyDown(DecreaseSpeedKey) || Input.GetKeyDown(DecreaseSpeedKey2))
+            {
+                StepSpeedDown();
+            }
+            else if (Input.GetKeyDown(PauseKey))
+            {
+                TogglePause();
             }
 
             // Pausa (Speed 0): congela el reloj de simulación, pero SIGUE dibujando

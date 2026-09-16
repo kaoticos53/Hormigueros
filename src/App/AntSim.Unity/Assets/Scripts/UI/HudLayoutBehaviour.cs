@@ -64,6 +64,16 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Panel del modal de importación (contiene el texto y los botones).")]
         public GameObject? ImportModal;
 
+        [Header("Control de velocidad (30% a 1000%)")]
+        [Tooltip("Slider uGUI de velocidad (rango 0.3 a 10.0).")]
+        public UnityEngine.UI.Slider? SpeedSlider;
+        [Tooltip("Texto indicador de la velocidad actual (ej. 300% (3.0×)).")]
+        public UnityEngine.UI.Text? SpeedText;
+        [Tooltip("Botón para alternar pausa / reanudar.")]
+        public UnityEngine.UI.Button? SpeedPauseButton;
+        [Tooltip("Texto del botón de pausa / reanudar.")]
+        public UnityEngine.UI.Text? SpeedPauseButtonText;
+
         private readonly Streaming.ColonyCardModel _cards = new();
         private readonly Streaming.CommandHistoryModel _history = new();
         private Streaming.HudToastsModel? _toasts;
@@ -107,6 +117,7 @@ namespace AntSim.Unity.Scripts.Presenter
 
             RenderCards();
             RenderStatus();
+            RenderSpeedControls();
             RenderToasts();
             RenderStockBars();
             RenderHistory();
@@ -210,6 +221,106 @@ namespace AntSim.Unity.Scripts.Presenter
                 ImportDialog.GenomePath = v;
                 ImportDialog.Inspect();
             });
+        }
+
+        private bool _isUpdatingSlider;
+
+        /// <summary>
+        /// Conecta los controles de velocidad del HUD (Slider, Text, botón de pausa y botones de preset).
+        /// </summary>
+        public void BindSpeedControls(
+            UnityEngine.UI.Slider? slider,
+            UnityEngine.UI.Text? label,
+            UnityEngine.UI.Button? pauseBtn,
+            UnityEngine.UI.Text? pauseBtnText,
+            (float speed, UnityEngine.UI.Button btn)[]? presetBtns = null,
+            UnityEngine.UI.Button? minusBtn = null,
+            UnityEngine.UI.Button? plusBtn = null)
+        {
+            SpeedSlider = slider;
+            SpeedText = label;
+            SpeedPauseButton = pauseBtn;
+            SpeedPauseButtonText = pauseBtnText;
+
+            if (slider != null)
+            {
+                slider.minValue = Streaming.SpeedControlModel.MinSpeed;
+                slider.maxValue = Streaming.SpeedControlModel.MaxSpeed;
+                if (Presenter != null) slider.value = Presenter.Speed > 0f ? Presenter.Speed : Streaming.SpeedControlModel.DefaultSpeed;
+                slider.onValueChanged.AddListener(val =>
+                {
+                    if (_isUpdatingSlider || Presenter == null) return;
+                    Presenter.SetSpeed(val);
+                });
+            }
+
+            if (pauseBtn != null)
+            {
+                pauseBtn.onClick.AddListener(() =>
+                {
+                    if (Presenter != null) Presenter.TogglePause();
+                });
+            }
+
+            if (minusBtn != null)
+            {
+                minusBtn.onClick.AddListener(() =>
+                {
+                    if (Presenter != null) Presenter.StepSpeedDown();
+                });
+            }
+
+            if (plusBtn != null)
+            {
+                plusBtn.onClick.AddListener(() =>
+                {
+                    if (Presenter != null) Presenter.StepSpeedUp();
+                });
+            }
+
+            if (presetBtns != null)
+            {
+                foreach (var (speed, btn) in presetBtns)
+                {
+                    if (btn == null) continue;
+                    float targetSpeed = speed;
+                    btn.onClick.AddListener(() =>
+                    {
+                        if (Presenter != null) Presenter.SetSpeed(targetSpeed);
+                    });
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sincroniza los controles uGUI de velocidad con el estado real de SimPresenterBehaviour.
+        /// </summary>
+        private void RenderSpeedControls()
+        {
+            if (Presenter == null) return;
+            float currentSpeed = Presenter.Speed;
+
+            // Actualizar slider sin disparar evento recursivo
+            if (SpeedSlider != null && currentSpeed > 0f && Mathf.Abs(SpeedSlider.value - currentSpeed) > 0.005f)
+            {
+                _isUpdatingSlider = true;
+                SpeedSlider.value = currentSpeed;
+                _isUpdatingSlider = false;
+            }
+
+            // Actualizar etiqueta
+            if (SpeedText != null)
+            {
+                string formatted = Streaming.SpeedControlModel.FormatSpeed(currentSpeed);
+                if (SpeedText.text != formatted) SpeedText.text = formatted;
+            }
+
+            // Actualizar texto de botón de pausa
+            if (SpeedPauseButtonText != null)
+            {
+                string pauseLabel = currentSpeed <= 0f ? "\u25b6 Reanudar" : "\u23f8 Pausa";
+                if (SpeedPauseButtonText.text != pauseLabel) SpeedPauseButtonText.text = pauseLabel;
+            }
         }
 
         private readonly Dictionary<Streaming.HudElementLayoutModel.ButtonAction, UnityEngine.UI.Button> _buttons = new();

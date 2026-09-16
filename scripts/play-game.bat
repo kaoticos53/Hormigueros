@@ -2,95 +2,91 @@
 REM ═══════════════════════════════════════════════════════════════════════════
 REM  play-game.bat — Lanza Unity y abre el juego con la escena lista para Play.
 REM
-REM  USO:
-REM    play-game.bat
-REM
-REM  Esto abre Unity con la escena de juego construida. Cuando el editor cargue,
-REM  dale a Play para ver la simulacion en vivo.
-REM
-REM  CONTROLES EN JUEGO:
-REM    Click     → inspeccionar hormiga (ver su cerebro)
-REM    D         → modo marcar drops (click en suelo, Z deshace)
-REM    F         → rotar capa de feromonas (home / food / alarm)
-REM    G         → rotar colonia en la capa de feromonas
-REM    I         → abrir dialogo de importar pool (.antgenome)
-REM    J         → saltar camara a la alerta seleccionada
-REM    Espacio   → pausar / reanudar
-REM    Drag-drop → arrastrar .antgenome desde el explorador para importar
-REM
-REM  REQUISITO: Unity 6000.x instalado (con el Hub o standalone).
+REM  USO:  play-game.bat
+REM  CONTROLES: Click=inspeccionar · D=marcar drops · F=feromonas · I=importar
+REM              J=saltar a alerta · Espacio=pausa · drag-drop=.antgenome
 REM ═══════════════════════════════════════════════════════════════════════════
-setlocal
-set ROOT=%~dp0..
-set PROJECT=%ROOT%\src\App\AntSim.Unity
+setlocal enabledelayedexpansion
+set "ROOT=%~dp0.."
+set "PROJECT=%ROOT%\src\App\AntSim.Unity"
 
-echo ══════════════════════════════════════════════════════════════════════════
-echo   AntSim — Lanzar juego en Unity
+echo.
+echo  AntSim — Lanzar juego en Unity
 echo ══════════════════════════════════════════════════════════════════════════
 
-REM Verificar que el proyecto existe
 if not exist "%PROJECT%\Assets\Scripts\EditorTools\SceneBootstrapper.cs" (
-    echo X Proyecto Unity no encontrado en %PROJECT%
+    echo  X Proyecto Unity no encontrado
     exit /b 2
 )
 
-REM Buscar Unity en rutas comunes
-set UNITY_BIN=
-if defined UNITY_CLI (
-    if exist "%UNITY_CLI%" (
-        set UNITY_BIN=%UNITY_CLI%
-        goto :found
-    )
-)
+set "UNITY_BIN="
 
-REM Buscar en el Hub
-for %%d in (
-    "%ProgramFiles%\Unity\Hub\Editor\*"
-    "%LOCALAPPDATA%\Unity\Hub\Editor\*"
-) do (
-    if exist "%%~d\Editor\Unity.exe" (
-        set UNITY_BIN=%%~d\Editor\Unity.exe
-        goto :found
-    )
-)
-
-REM Buscar en la ruta del Hub comun
-if exist "%LOCALAPPDATA%\Unity\bin\unity.exe" (
-    set UNITY_BIN=%LOCALAPPDATA%\Unity\bin\unity.exe
+REM 1. Variable de entorno
+if defined UNITY_CLI if exist "%UNITY_CLI%" (
+    set "UNITY_BIN=%UNITY_CLI%"
     goto :found
 )
 
-REM Ultimo recurso: buscar en Program Files con wildcard
-for /d %%d in "%ProgramFiles%\Unity\Hub\Editor\*" do (
-    if exist "%%d\Editor\Unity.exe" (
-        set UNITY_BIN=%%d\Editor\Unity.exe
+REM 2. Buscar el editor real en Program Files (.getVersion.batstyle)
+if exist "C:\Program Files\Unity\Hub\Editor\6000.6.0f1\Editor\Unity.exe" (
+    set "UNITY_BIN=C:\Program Files\Unity\Hub\Editor\6000.6.0f1\Editor\Unity.exe"
+    goto :found
+)
+if exist "C:\Program Files\Unity\Hub\Editor\6000.6.0f2\Editor\Unity.exe" (
+    set "UNITY_BIN=C:\Program Files\Unity\Hub\Editor\6000.6.0f2\Editor\Unity.exe"
+    goto :found
+)
+if exist "C:\Program Files\Unity\Hub\Editor\6000.5.0f1\Editor\Unity.exe" (
+    set "UNITY_BIN=C:\Program Files\Unity\Hub\Editor\6000.5.0f1\Editor\Unity.exe"
+    goto :found
+)
+if exist "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe" (
+    set "UNITY_BIN=C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
+    goto :found
+)
+if exist "C:\Program Files\Unity\Hub\Editor\6000.3.0f1\Editor\Unity.exe" (
+    set "UNITY_BIN=C:\Program Files\Unity\Hub\Editor\6000.3.0f1\Editor\Unity.exe"
+    goto :found
+)
+
+REM 3. Buscar con dir /b (listar directorios de Hub\Editor)
+for /f "tokens=*" %%d in ('dir /b /ad "C:\Program Files\Unity\Hub\Editor" 2^>nul') do (
+    if exist "C:\Program Files\Unity\Hub\Editor\%%d\Editor\Unity.exe" (
+        set "UNITY_BIN=C:\Program Files\Unity\Hub\Editor\%%d\Editor\Unity.exe"
         goto :found
     )
 )
 
-echo X No se encontro Unity CLI
-echo.
-echo   Opciones:
-echo   1. Abre Unity Hub - Add - selecciona: %PROJECT%
-echo   2. Anade Unity al PATH: set UNITY_CLI=C:\ruta\a\Unity.exe
-echo   3. Abre el proyecto manualmente en el editor
-echo.
-echo   Una vez abierto el proyecto:
-echo     Menu AntSim - Crear escena de juego (o AntSim - Jugar)
-echo     Pulsa Play para ver la simulacion
-echo.
+REM 4. LOCALAPPDATA
+for /f "tokens=*" %%d in ('dir /b /ad "%LOCALAPPDATA%\Unity\Hub\Editor" 2^>nul') do (
+    if exist "%LOCALAPPDATA%\Unity\Hub\Editor\%%d\Editor\Unity.exe" (
+        set "UNITY_BIN=%LOCALAPPDATA%\Unity\Hub\Editor\%%d\Editor\Unity.exe"
+        goto :found
+    )
+)
+
+REM 5. Instalacion standalone
+if exist "C:\Program Files\Unity\Editor\Unity.exe" (
+    set "UNITY_BIN=C:\Program Files\Unity\Editor\Unity.exe"
+    goto :found
+)
+
+REM 6. No usar el launcher del Hub: no acepta -projectPath como el Editor
+REM    y deja al usuario creyendo que el juego se ha abierto correctamente.
+
+echo  X No se encontro el Editor de Unity (no se usa el launcher del Hub)
+echo    Instala Unity 6 desde https://unity.com/download
 exit /b 3
 
 :found
-echo Unity:  %UNITY_BIN%
-echo Proyecto: %PROJECT%
+echo  Unity:    !UNITY_BIN!
+echo  Proyecto: %PROJECT%
 echo.
-echo Abriendo Unity... (puede tardar 30-60s la primera vez)
+echo  Abriendo Unity...
+start "" "!UNITY_BIN!" -projectPath "%PROJECT%"
 echo.
-
-REM Abrir Unity con el proyecto
-start "" "%UNITY_BIN%" -projectPath "%PROJECT%"
-
-echo Unity lanzado. Sigue las instrucciones en el editor.
+echo  Cuando cargue el editor:
+echo    1. Menu AntSim - Jugar
+echo    2. Pulsa Play (triangle verde)
 echo.
 endlocal

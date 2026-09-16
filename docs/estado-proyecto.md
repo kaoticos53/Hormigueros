@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-16 · HEAD: `dbc994f` (Unity NEAT wiring) ·
-suite: 379/379 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+*Actualizado: 2026-09-16 · HEAD: `7fc89f4` (Windows-first UX) ·
+suite: 382/382 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -31,7 +31,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
 el 2026-09-15: stream canónico, replay con drops a 3000 y 6000 ticks, la
 partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica (nuevo). **379/379 tests** en Windows Y Linux.
+canónica (nuevo). **382/382 tests** en Windows Y Linux.
 
 **NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
 innovation), paridad bit a bit con MLP (`FromMlp`), operadores

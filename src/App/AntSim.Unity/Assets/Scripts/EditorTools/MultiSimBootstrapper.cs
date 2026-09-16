@@ -184,6 +184,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (!AssetDatabase.IsValidFolder("Assets/Scenes"))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
+            RegisterInBuildSettings(ScenePath);
             Debug.Log($"[MultiSim] escena de {views} vistas creada y guardada en {ScenePath}. " +
                       "Pools: " + string.Join(", ", System.Array.ConvertAll(viewPools, p => p ?? "(sin)")));
         }
@@ -448,6 +449,22 @@ namespace AntSim.Unity.Scripts.EditorTools
                 AssetDatabase.CreateFolder("Assets", "Materials");
         }
 
+        private static void CreateOrReplaceAsset(UnityEngine.Object asset, string path)
+        {
+            EnsureMaterialFolder();
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path) != null)
+                AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(asset, path);
+        }
+
+        private static void RegisterInBuildSettings(string scenePath)
+        {
+            var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            if (scenes.Exists(s => s.path == scenePath)) return;
+            scenes.Insert(0, new EditorBuildSettingsScene(scenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
+        }
+
         private static Texture2D NewGridTexture(Color fill, Color line, string name)
         {
             const int N = 64;
@@ -460,7 +477,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             tex.wrapMode = TextureWrapMode.Repeat;
             tex.filterMode = FilterMode.Bilinear;
             tex.Apply();
-            AssetDatabase.CreateAsset(tex, $"Assets/Materials/{name}.asset");
+            CreateOrReplaceAsset(tex, $"Assets/Materials/{name}.asset");
             return tex;
         }
 
@@ -473,7 +490,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             m.mainTextureScale = new Vector2(24f, 24f); // GridTiles de la escena simple
             if (m.HasProperty("_Color")) m.color = Color.white;
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
 
@@ -492,7 +509,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 m.SetColor("_EmissionColor", c);
             }
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
 
@@ -522,8 +539,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             m.mainTexture = tex;
             if (m.HasProperty("_Color")) m.color = Color.white;
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(tex, $"Assets/Materials/{name}_Empty.asset");
-            AssetDatabase.CreateAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(tex, $"Assets/Materials/{name}_Empty.asset");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
 
@@ -534,7 +551,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             mesh.name = name;
             Object.DestroyImmediate(go);
             EnsureMaterialFolder();
-            AssetDatabase.CreateAsset(mesh, $"Assets/Materials/{name}.asset");
+            CreateOrReplaceAsset(mesh, $"Assets/Materials/{name}.asset");
             return mesh;
         }
 
