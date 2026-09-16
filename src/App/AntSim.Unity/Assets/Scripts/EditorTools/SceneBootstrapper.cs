@@ -443,6 +443,44 @@ namespace AntSim.Unity.Scripts.EditorTools
         }
 
         /// <summary>
+        /// Crea la escena y entra en Play de un solo clic (F5.3).
+        /// Menú: AntSim → Jugar. Requiere que el CLI esté compilado en
+        /// build/antsim/ y que el presenter tenga SeedPoolPath configurado
+        /// en el inspector (o que el stream exista en artifacts/).
+        /// Si la escena ya existe, la carga en vez de crear una nueva.
+        /// </summary>
+        [MenuItem("AntSim/Jugar", priority = 10)]
+        public static void PlayGame()
+        {
+            const string ScenePath = "Assets/Scenes/Game.unity";
+
+            // Cargar la escena si ya existe; si no, crearla.
+            if (System.IO.File.Exists(System.IO.Path.Combine(Application.dataPath, "..", ScenePath)))
+            {
+                EditorSceneManager.OpenScene(ScenePath);
+                Debug.Log("[AntSim] Escena cargada desde " + ScenePath);
+            }
+            else
+            {
+                CreateGameScene();
+            }
+
+            // Verificar que el CLI esté compilado.
+            string cliPath = System.IO.Path.Combine(Application.dataPath, "..", "..", "..", "..", "build", "antsim");
+            if (!System.IO.Directory.Exists(cliPath))
+            {
+                Debug.LogWarning("[AntSim] CLI no encontrado en build/antsim/. " +
+                    "Compila con: dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");
+            }
+
+            // Entrar en Play.
+            EditorApplication.EnterPlaymode();
+            Debug.Log("[AntSim] ¡Jugando! Velocidad: 3× (cambia en el inspector). " +
+                "Haz click en una hormiga para inspeccionarla. D para marcar drops. " +
+                "I para importar un pool. F para feromonas.");
+        }
+
+        /// <summary>
         /// Registra la escena de juego en build settings sin pisar lo que ya
         /// hubiera: es lo que hace posible recargarla en Play («reiniciar con
         /// plan», importar un pool) y lo que hace que un player tenga algo que
