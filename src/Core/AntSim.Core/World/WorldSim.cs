@@ -269,6 +269,14 @@ public sealed class WorldSim
             }
         }
 
+        // F5.3 rodaja 1: compactación SoA lista pero deshabilitada.
+        // La compactación (CompactDeadAnts) es O(n) y elimina hormigas
+        // muertas de Adults. Sin embargo, HashLine() itera Adults.Count
+        // y añade datos de hormigas muertas (Alive=false) al bloque hash;
+        // compactar cambia el conteo y rompe los 6 pines de CI.
+        // Habilitar requiere cambiar HashLine para saltar hormigas muertas
+        // y regenerar TODOS los pines — rodaja 2 de F5.3.
+
         if (Tick % PheromoneUpdateEvery == 0)
         {
             foreach (var colony in _colonies)
@@ -314,6 +322,26 @@ public sealed class WorldSim
             if (!ant.Alive) continue;
             Act(colony, ant);
         }
+    }
+
+    // ─── F5.3 rodaja 1: compactación O(n) de hormigas muertas ──────
+    // Sin SoA: la compactación in-place sobre la lista es O(n) con un solo
+    // pass — writeIdx avanza solo para vivas, y un RemoveRange al final
+    // trunca el excedente. Mucho más rápido que RemoveAll cuando mueren
+    // muchas hormigas por tick (típico en equilibrio). El SoA se usa en
+    // rodaja 2 para NearestItem batch y brujula de dirección.
+    private static void CompactDeadAnts(Colony colony)
+    {
+        var adults = colony.Adults;
+        int writeIdx = 0;
+        int len = adults.Count;
+        for (int i = 0; i < len; i++)
+        {
+            if (adults[i].Alive)
+                adults[writeIdx++] = adults[i];
+        }
+        if (writeIdx < len)
+            adults.RemoveRange(writeIdx, len - writeIdx);
     }
 
     private void Act(Colony colony, Ant ant)
