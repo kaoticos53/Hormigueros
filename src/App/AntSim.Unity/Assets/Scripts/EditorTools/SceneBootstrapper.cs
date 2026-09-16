@@ -480,6 +480,174 @@ namespace AntSim.Unity.Scripts.EditorTools
                 "I para importar un pool. F para feromonas.");
         }
 
+        // ── Asistente de primera ejecución (Windows-friendly) ──────────────
+        // Menú AntSim → Asistente: guía al usuario paso a paso para elegir
+        // pool, especie y grid sin tener que editar el inspector a mano.
+        private static class FirstRunWizard
+        {
+            private const string PrefKey = "AntSim_FirstRunDone";
+            private static int _step;
+            private static string _pool = "pretrain-warm-v2";
+            private static string _species = "lasius";
+            private static int _grid = 96;
+            private static int _colonies = 2;
+            private static string[] _pools = System.Array.Empty<string>();
+            private static Vector2 _scroll;
+
+            [MenuItem("AntSim/Asistente de primera ejecucion", priority = 5)]
+            public static void Show() { _step = 0; _pool = "pretrain-warm-v2"; _species = "lasius"; _grid = 96; _colonies = 2; LoadPools(); EditorApplication.update += OnGUI; }
+
+            private static void LoadPools()
+            {
+                string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", ".."));
+                var arts = System.IO.Path.Combine(root, "artifacts");
+                var fixs = System.IO.Path.Combine(root, "tests", "fixtures");
+                var list = new System.Collections.Generic.List<string>();
+                if (System.IO.Directory.Exists(arts))
+                    foreach (var f in System.IO.Directory.GetFiles(arts, "*.antgenome"))
+                        list.Add(System.IO.Path.GetFileNameWithoutExtension(f));
+                if (System.IO.Directory.Exists(fixs))
+                    foreach (var f in System.IO.Directory.GetFiles(fixs, "*.antgenome"))
+                    {
+                        string name = System.IO.Path.GetFileNameWithoutExtension(f);
+                        if (!list.Contains(name)) list.Add(name);
+                    }
+                if (list.Count == 0) list.Add("(no hay pools en artifacts/ o tests/fixtures/)");
+                _pools = list.ToArray();
+            }
+
+            private static void OnGUI()
+            {
+                if (!EditorApplication.isUpdating) return;
+                int w = 520, h = 400;
+                var rect = new Rect((Screen.width - w) / 2, (Screen.height - h) / 2, w, h);
+
+                // Paso 0: bienvenida
+                if (_step == 0)
+                {
+                    GUI.Box(rect, "");
+                    GUILayout.BeginArea(rect);
+                    GUILayout.Space(20);
+                    GUILayout.Label("AntSim — Asistente de primera ejecucion", EditorStyles.boldLabel);
+                    GUILayout.Space(10);
+                    GUILayout.Label("Te guia para configurar la partida sin tocar el inspector.");
+                    GUILayout.Space(10);
+                    if (GUILayout.Button("Empezar", GUILayout.Height(36))) _step = 1;
+                    if (GUILayout.Button("Saltar (configurar manualmente)")) { EditorApplication.update -= OnGUI; }
+                    GUILayout.EndArea();
+                    return;
+                }
+
+                // Paso 1: elegir pool
+                if (_step == 1)
+                {
+                    GUI.Box(rect, "");
+                    GUILayout.BeginArea(rect);
+                    GUILayout.Space(20);
+                    GUILayout.Label("Paso 1/3 — Pool de cerebros pre-entrenados", EditorStyles.boldLabel);
+                    GUILayout.Space(8);
+                    _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(220));
+                    foreach (var p in _pools)
+                    {
+                        bool sel = p == _pool;
+                        if (GUILayout.Toggle(sel, p, EditorStyles.boldLabel)) _pool = p;
+                    }
+                    GUILayout.EndScrollView();
+                    GUILayout.Space(10);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Siguiente", GUILayout.Height(32))) _step = 2;
+                    if (GUILayout.Button("Cancelar")) { EditorApplication.update -= OnGUI; }
+                    GUILayout.EndHorizontal();
+                    GUILayout.EndArea();
+                    return;
+                }
+
+                // Paso 2: elegir especie
+                if (_step == 2)
+                {
+                    GUI.Box(rect, "");
+                    GUILayout.BeginArea(rect);
+                    GUILayout.Space(20);
+                    GUILayout.Label("Paso 2/3 — Especie y colonias", EditorStyles.boldLabel);
+                    GUILayout.Space(8);
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Especie:", GUILayout.Width(80));
+                    if (GUILayout.Toggle(_species == "lasius", "Lasius (forrajera)")) _species = "lasius";
+                    if (GUILayout.Toggle(_species == "lasius,eciton", "Invasion (Lasius + Eciton)")) _species = "lasius,eciton";
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(6);
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Colonias:", GUILayout.Width(80));
+                    if (GUILayout.Toggle(_colonies == 1, "1")) _colonies = 1;
+                    if (GUILayout.Toggle(_colonies == 2, "2 (invasion)")) _colonies = 2;
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(10);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Siguiente", GUILayout.Height(32))) _step = 3;
+                    if (GUILayout.Button("Atras")) _step = 1;
+                    if (GUILayout.Button("Cancelar")) { EditorApplication.update -= OnGUI; }
+                    GUILayout.EndHorizontal();
+                    GUILayout.EndArea();
+                    return;
+                }
+
+                // Paso 3: grid y confirmacion
+                if (_step == 3)
+                {
+                    GUI.Box(rect, "");\                    GUILayout.BeginArea(rect);
+                    GUILayout.Space(20);
+                    GUILayout.Label("Paso 3/3 — Tamano del mundo", EditorStyles.boldLabel);
+                    GUILayout.Space(8);
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Grid:", GUILayout.Width(80));
+                    if (GUILayout.Toggle(_grid == 96, "96 (768 u, rapido)")) _grid = 96;
+                    if (GUILayout.Toggle(_grid == 256, "256 (2048 u, grande)")) _grid = 256;
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(16);
+                    GUILayout.Label("Resumen:", EditorStyles.boldLabel);
+                    GUILayout.Label($"  Pool: {_pool}");
+                    GUILayout.Label($"  Especie: {_species}");
+                    GUILayout.Label($"  Colonias: {_colonies}");
+                    GUILayout.Label($"  Grid: {_grid} ({_grid * 8} u)");
+                    GUILayout.Space(12);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Crear escena y Jugar", GUILayout.Height(36)))
+                    {
+                        EditorApplication.update -= OnGUI;
+                        EditorPrefs.SetBool(PrefKey, true);
+                        CreateGameScene();
+                        // Configurar el presenter
+                        var presenter = Object.FindAnyObjectByType<Presenter.SimPresenterBehaviour>();
+                        if (presenter != null)
+                        {
+                            presenter.Grid = _grid;
+                            presenter.Colonies = _colonies;
+                            string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", ".."));
+                            string poolPath = System.IO.Path.Combine(root, "artifacts", _pool + ".antgenome");
+                            if (System.IO.File.Exists(poolPath)) presenter.SeedPoolPath = poolPath;
+                            presenter.Species = _species;
+                        }
+                        EditorApplication.EnterPlaymode();
+                    }
+                    if (GUILayout.Button("Atras")) _step = 2;
+                    GUILayout.EndHorizontal();
+                    GUILayout.EndArea();
+                }
+            }
+        }
+
+        [MenuItem("AntSim/Configuracion rapida (sin asistente)", priority = 15)]
+        public static void QuickConfig()
+        {
+            // Aplica los defaults y entra en Play sin wizard
+            const string ScenePath = "Assets/Scenes/Game.unity";
+            if (System.IO.File.Exists(System.IO.Path.Combine(Application.dataPath, "..", ScenePath)))
+                EditorSceneManager.OpenScene(ScenePath);
+            else
+                CreateGameScene();
+            EditorApplication.EnterPlaymode();
+        }
+
         /// <summary>
         /// Registra la escena de juego en build settings sin pisar lo que ya
         /// hubiera: es lo que hace posible recargarla en Play («reiniciar con
