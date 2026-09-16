@@ -57,6 +57,8 @@ namespace AntSim.Unity.Scripts.Presenter
         public UnityEngine.UI.Text? StatusText;
         [Tooltip("Pistas de teclado (texto fijo que rellena el bootstrapper).")]
         public UnityEngine.UI.Text? HintsText;
+        [Tooltip("Overlay de drag & drop (se muestra cuando se arrastra un .antgenome).")]
+        public UnityEngine.UI.Text? DragOverlayText;
         [Tooltip("Velo oscuro del modal de importación (se enciende con el modal).")]
         public GameObject? DialogBackdrop;
         [Tooltip("Panel del modal de importación (contiene el texto y los botones).")]
@@ -111,6 +113,7 @@ namespace AntSim.Unity.Scripts.Presenter
             RenderDropPlan();
             RenderImportDialog();
             RenderModalVisibility();
+            RenderDragOverlay();
         }
 
         /// <summary>F5.1: barra de estado superior — derivada del modelo puro de
@@ -342,6 +345,17 @@ namespace AntSim.Unity.Scripts.Presenter
             if (text == null && ImportDialog.Model.ModalVisible) text = ImportDialog.Model.RenderDialog();
             if (text == null) return;
             if (ImportDialogText.text != text) ImportDialogText.text = text;
+        }
+
+        /// <summary>F5.1 deuda: overlay de drag &amp; drop. Cuando el jugador arrastra
+        /// un .antgenome sobre la ventana, se muestra un borde luminoso con
+        /// el texto "Soltar para importar" en el centro de la pantalla.</summary>
+        private void RenderDragOverlay()
+        {
+            if (DragOverlayText == null) return;
+            bool hovering = ImportDialog != null && ImportDialog.IsDragHovering;
+            if (DragOverlayText.gameObject.activeSelf != hovering)
+                DragOverlayText.gameObject.SetActive(hovering);
         }
     }
 }
