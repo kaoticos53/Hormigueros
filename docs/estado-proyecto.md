@@ -72,9 +72,8 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.3 — Escala**: SoA/ECS del `WorldSim` (migración con pin de hash —
-   el arnés de regresión más estricto posible), LOD de difusión de
-   feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
+1. **F5.3 rodaja 1 — SoA done**: `AntSoA` (parallel arrays), `CompactDeadAnts` (O(n) in-place), infraestructura lista. La compactación está deshabilitada porque `HashLine()` itera `Adults.Count` y incluye hormigas muertas (Alive=false); habilitarla requiere cambiar el hasher y regenerar los 6 pines (rodaja 2).
+   **F5.3 rodajas 2–3 pendientes**: LOD de difusión de feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
