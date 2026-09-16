@@ -19,6 +19,9 @@ namespace AntSim.Unity.Scripts.EditorTools
         [MenuItem("AntSim/Crear escena de juego", priority = 0)]
         public static void CreateGameScene()
         {
+            // Asegura que Universal Render Pipeline (URP) esté configurado como pipeline activo
+            UrpSetup.EnsureUrpPipelineAsset();
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // Grid del mundo en CELDAS. Ojo: el Core simula en UNIDADES y su lado
@@ -110,7 +113,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // relevo real) ajustar Grid/Ticks a mano o usar ReplayFile.
             presenter.Grid = GridCells;
             presenter.Colonies = 2;
-            presenter.Ticks = 7200;
+            presenter.Ticks = 36000;
             presenter.FrameEvery = 1;
             presenter.Species = "lasius";
             presenter.SeedPoolPath = "artifacts/pretrain-warm-v2.antgenome";
@@ -121,12 +124,19 @@ namespace AntSim.Unity.Scripts.EditorTools
             // multiplicaba por una «escala» sin relación con el tamaño en pantalla).
             presenter.AntMesh = PrimitiveMesh(PrimitiveType.Capsule, 1f, "AntMesh");
             presenter.ItemMesh = PrimitiveMesh(PrimitiveType.Sphere, 1f, "ItemMesh");
-            // Hormiga: marrón rojizo oscuro. Ni tan oscura como la mesa (se
-            // perdería) ni tan clara como el suelo o el surco de la rejilla (se
-            // confundiría con el terreno): es el tono que hace que la colonia se
-            // VEA moverse por el tablero.
+            // Hormiga por defecto: marrón rojizo oscuro.
             presenter.AntMaterial = NewMat(new Color(0.35f, 0.16f, 0.10f), "AntMat");
             presenter.CarrierMaterial = NewMat(new Color(0.98f, 0.72f, 0.16f), "CarrierMat");
+            // Materiales de hormigas diferenciados por colonia (armonizados con acentos de nido):
+            // Colonia 0: Terracota / Ámbar cálido
+            var antMat0 = NewMat(new Color(0.85f, 0.35f, 0.20f), "AntMatColony0");
+            var carrierMat0 = NewMat(new Color(0.98f, 0.70f, 0.20f), "CarrierMatColony0");
+            // Colonia 1: Azul acero / Celeste
+            var antMat1 = NewMat(new Color(0.25f, 0.55f, 0.90f), "AntMatColony1");
+            var carrierMat1 = NewMat(new Color(0.40f, 0.85f, 0.95f), "CarrierMatColony1");
+            presenter.ColonyAntMaterials = new Material[] { antMat0, antMat1 };
+            presenter.ColonyCarrierMaterials = new Material[] { carrierMat0, carrierMat1 };
+
             presenter.ItemMaterial = NewMat(new Color(0.36f, 0.78f, 0.36f), "ItemMat");
             // F5.2a: hojas con mordiscos — verde oscuro para la hoja, marrón
             // oscuro para las muescas de corte (CutsLeft/CutsInitial del canal A).
@@ -290,7 +300,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             hints.rectTransform.anchoredPosition = new Vector2(0f, 18f);
             // Sin emoji (la fuente LegacyRuntime de uGUI no los tiene: salían
             // cajas vacías, uno de los motivos del aspecto pobre del HUD).
-            hints.text = "click: inspeccionar   ·   + / -: velocidad (30%–1000%)   ·   Espacio: pausa   ·   " +
+            hints.text = "click: inspeccionar   ·   + / -: velocidad (1×–100×)   ·   Espacio: pausa   ·   " +
                          "D: drops (Z deshace)   ·   F: feromonas   ·   G: colonia   ·   I: importar pool   ·   \u2b07: soltar .antgenome";
 
             // — HUD layout: reparte el stream a todo —
@@ -873,7 +883,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             panelRt.anchorMax = new Vector2(0.5f, 1f);
             panelRt.pivot = new Vector2(0.5f, 1f);
             panelRt.anchoredPosition = new Vector2(0f, -48f);
-            panelRt.sizeDelta = new Vector2(620f, 44f);
+            panelRt.sizeDelta = new Vector2(810f, 44f);
 
             var bg = panelGo.AddComponent<UnityEngine.UI.Image>();
             bg.color = PanelFill;
@@ -901,7 +911,9 @@ namespace AntSim.Unity.Scripts.EditorTools
                 rt.sizeDelta = size;
                 var img = go.AddComponent<UnityEngine.UI.Image>();
                 img.color = tint ?? new Color(0.18f, 0.20f, 0.24f, 0.95f);
+                img.raycastTarget = true;
                 var btn = go.AddComponent<UnityEngine.UI.Button>();
+                btn.targetGraphic = img;
                 var colors = btn.colors;
                 colors.normalColor = Color.white;
                 colors.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
@@ -918,6 +930,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 text.alignment = TextAnchor.MiddleCenter;
                 text.fontSize = fontSize;
                 text.font = DefaultFont();
+                text.raycastTarget = false; // no interceptar clicks del botón
                 return btn;
             }
 
@@ -928,7 +941,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // 2. Botón Menos [-]
             var minusBtn = MakeBtn(panelRt, "SpeedMinusBtn", "–", new Vector2(98f, 0f), new Vector2(26f, 30f), new Color(0.18f, 0.20f, 0.24f, 0.95f), 15);
 
-            // 3. Slider uGUI (rango 0.3 a 10.0)
+            // 3. Slider uGUI (rango 1.0 a 100.0)
             float startSpeed = presenter != null && presenter.Speed > 0f ? presenter.Speed : Streaming.SpeedControlModel.DefaultSpeed;
             var slider = CreateSlider(panelRt, "SpeedSlider", new Vector2(0f, 0.5f), new Vector2(128f, 0f), new Vector2(150f, 20f),
                 Streaming.SpeedControlModel.MinSpeed, Streaming.SpeedControlModel.MaxSpeed, startSpeed);
@@ -943,29 +956,47 @@ namespace AntSim.Unity.Scripts.EditorTools
             lrt.anchorMin = lrt.anchorMax = new Vector2(0f, 0.5f);
             lrt.pivot = new Vector2(0f, 0.5f);
             lrt.anchoredPosition = new Vector2(312f, 0f);
-            lrt.sizeDelta = new Vector2(100f, 30f);
+            lrt.sizeDelta = new Vector2(110f, 30f);
             var speedLabel = labelGo.AddComponent<UnityEngine.UI.Text>();
             speedLabel.font = DefaultFont();
             speedLabel.fontSize = 13;
             speedLabel.color = Ink;
             speedLabel.alignment = TextAnchor.MiddleCenter;
             speedLabel.text = Streaming.SpeedControlModel.FormatSpeed(startSpeed);
+            speedLabel.raycastTarget = false;
 
-            // 6. Botones de preset rápido (30%, 100%, 300%, 1000%)
-            var p30 = MakeBtn(panelRt, "Preset_30", "30%", new Vector2(416f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p100 = MakeBtn(panelRt, "Preset_100", "1×", new Vector2(458f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p300 = MakeBtn(panelRt, "Preset_300", "3×", new Vector2(496f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p1000 = MakeBtn(panelRt, "Preset_1000", "10×", new Vector2(534f, 0f), new Vector2(42f, 26f), new Color(0.28f, 0.18f, 0.14f, 0.95f), 11);
+            // 6. Botones de preset rápido (1×, 5×, 10× Base, 25×, 50×, 100×)
+            var p1 = MakeBtn(panelRt, "Preset_1", "1×", new Vector2(426f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p5 = MakeBtn(panelRt, "Preset_5", "5×", new Vector2(464f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p10 = MakeBtn(panelRt, "Preset_10", "10× Base", new Vector2(502f, 0f), new Vector2(66f, 26f), new Color(0.18f, 0.42f, 0.28f, 0.95f), 11);
+            var p25 = MakeBtn(panelRt, "Preset_25", "25×", new Vector2(572f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p50 = MakeBtn(panelRt, "Preset_50", "50×", new Vector2(614f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p100 = MakeBtn(panelRt, "Preset_100", "100×", new Vector2(656f, 0f), new Vector2(46f, 26f), new Color(0.38f, 0.20f, 0.14f, 0.95f), 11);
 
-            var presets = new (float speed, UnityEngine.UI.Button btn)[]
-            {
-                (0.3f, p30),
-                (1.0f, p100),
-                (3.0f, p300),
-                (10.0f, p1000),
-            };
+            // 7. Botón de Siguiente Generación (bucle evolutivo continuo)
+            var nextGenBtn = MakeBtn(panelRt, "NextGenBtn", "\u21bb Sig. Gen", new Vector2(708f, 0f), new Vector2(76f, 26f), new Color(0.20f, 0.38f, 0.52f, 0.95f), 11);
 
-            hud.BindSpeedControls(slider, speedLabel, pauseBtn, pauseText, presets, minusBtn, plusBtn);
+            // Añadir controlador interactivo en tiempo de ejecución (asegura listeners en Play mode)
+            var speedCtrl = panelGo.AddComponent<UI.SpeedControlBehaviour>();
+            speedCtrl.Presenter = presenter;
+            speedCtrl.SpeedSlider = slider;
+            speedCtrl.SpeedLabel = speedLabel;
+            speedCtrl.PauseButton = pauseBtn;
+            speedCtrl.PauseButtonText = pauseText;
+            speedCtrl.MinusButton = minusBtn;
+            speedCtrl.PlusButton = plusBtn;
+            speedCtrl.Preset1 = p1;
+            speedCtrl.Preset5 = p5;
+            speedCtrl.Preset10 = p10;
+            speedCtrl.Preset25 = p25;
+            speedCtrl.Preset50 = p50;
+            speedCtrl.Preset100 = p100;
+            speedCtrl.NextGenButton = nextGenBtn;
+
+            hud.SpeedSlider = slider;
+            hud.SpeedText = speedLabel;
+            hud.SpeedPauseButton = pauseBtn;
+            hud.SpeedPauseButtonText = pauseText;
         }
 
         /// <summary>
@@ -997,6 +1028,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             bgRt.offsetMax = Vector2.zero;
             var bgImg = bgGo.AddComponent<UnityEngine.UI.Image>();
             bgImg.color = new Color(0.12f, 0.13f, 0.16f, 0.95f);
+            bgImg.raycastTarget = true;
 
             // Fill Area
             var fillAreaGo = new GameObject("Fill Area", typeof(RectTransform));
@@ -1016,6 +1048,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             fillRt.offsetMax = Vector2.zero;
             var fillImg = fillGo.AddComponent<UnityEngine.UI.Image>();
             fillImg.color = AccentNeutral;
+            fillImg.raycastTarget = false;
             slider.fillRect = fillRt;
 
             // Handle Slide Area
@@ -1033,6 +1066,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             handleRt.sizeDelta = new Vector2(16f, 22f);
             var handleImg = handleGo.AddComponent<UnityEngine.UI.Image>();
             handleImg.color = Color.white;
+            handleImg.raycastTarget = true;
             slider.handleRect = handleRt;
             slider.targetGraphic = handleImg;
 
@@ -1246,18 +1280,32 @@ namespace AntSim.Unity.Scripts.EditorTools
         }
 
         /// <summary>
-        /// Material TRANSPARENTE para capas superpuestas (feromonas). Busca un
-        /// shader que ya mezcle alpha y, si solo hay Standard, lo configura a mano
-        /// (solo poner `_Mode` no basta: hacen falta blends, ZWrite y keyword).
+        /// <summary>
+        /// Material TRANSPARENTE para capas superpuestas (feromonas). Busca primero
+        /// el shader de Universal Render Pipeline (URP) y como fallback los legacy/built-in.
         /// </summary>
         private static Material NewTransparentMat(string name)
         {
-            Shader? sh = Shader.Find("Unlit/Transparent");
+            Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Transparent");
             if (sh == null) sh = Shader.Find("Legacy Shaders/Transparent/Diffuse");
             if (sh == null) sh = Shader.Find("Sprites/Default");
+            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
+
             var m = new Material(sh!) { name = name };
-            if (sh != null && sh.name == "Standard")
+            if (sh != null && sh.name.StartsWith("Universal Render Pipeline"))
+            {
+                m.SetFloat("_Surface", 1f); // 1 = Transparent
+                m.SetFloat("_Blend", 0f);   // 0 = Alpha
+                m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                m.SetInt("_ZWrite", 0);
+                m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+            }
+            else if (sh != null && sh.name == "Standard")
             {
                 m.SetFloat("_Mode", 2f);
                 m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
@@ -1271,6 +1319,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // Arranca SIN pintar (textura transparente) y con el tinte en blanco: el
             // canal E solo cambia la textura, así que el quad nace invisible.
             m.mainTexture = NewEmptyTexture();
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", m.mainTexture);
             if (m.HasProperty("_Color")) m.color = Color.white;
             return m;
         }
@@ -1300,27 +1349,26 @@ namespace AntSim.Unity.Scripts.EditorTools
 
         /// <summary>
         /// Material de color PLANO del mundo (suelo, marco, nidos, hormigas,
-        /// ítems). Unlit a propósito:
+        /// ítems). Unlit nativo de URP / Built-in a propósito:
         ///
         ///   · El color que se ve es el que se elige — sin depender del ambiente
-        ///     del editor ni de la intensidad de una luz. El defecto histórico
-        ///     (Standard con ambiente por defecto) pintaba el tablero apagado y
-        ///     hacía que cualquier ajuste de look fuese una lotería.
+        ///     del editor ni de la intensidad de una luz.
         ///   · La sonda visual MIDE píxeles: con iluminación, el tono renderizado
         ///     no es el del material y el invariante «hay hormigas visibles» no se
         ///     puede comprobar con tolerancias razonables.
-        ///
-        /// Unlit/Color es del pipeline integrado; si algún día el proyecto pasa a
-        /// URP, el respaldo deja el color en emisión (también independiente de la luz).
         /// </summary>
         private static Material NewMat(Color c, string name)
         {
-            var sh = Shader.Find("Unlit/Color");
+            Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Color");
             if (sh == null) sh = Shader.Find("Unlit/Texture");
+            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
+
             var m = new Material(sh!) { name = name };
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             m.color = c;
-            if (sh != null && sh.name == "Unlit/Color") m.SetColor("_Color", c);
             if (sh != null && sh.name == "Standard")
             {
                 // Respaldo: albedo negro + emisión pura ⇒ color independiente de la luz.
@@ -1338,12 +1386,16 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// guardar/recargar la escena y el suelo se quedaría liso (o blanco).</summary>
         private static Material NewUnlitTextureMat(string name, Texture2D tex, int tiles)
         {
-            var sh = Shader.Find("Unlit/Texture");
+            Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Texture");
+            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
+
             var m = new Material(sh!) { name = name, mainTexture = tex };
             m.mainTextureScale = new Vector2(tiles, tiles);
-            // Unlit/Texture NO tiene `_Color` en Unity 6: asignarlo escupe
-            // «doesn't have a color property '_Color'» en la consola. Se comprueba.
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            if (m.HasProperty("_BaseMap_ST")) m.SetVector("_BaseMap_ST", new Vector4(tiles, tiles, 0, 0));
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
             if (m.HasProperty("_Color")) m.color = Color.white;
             EnsureMaterialFolder();
             CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");

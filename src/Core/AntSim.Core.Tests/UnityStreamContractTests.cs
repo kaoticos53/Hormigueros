@@ -45,7 +45,7 @@ namespace AntSim.Core.Tests
         [Fact]
         public void Parser_ReconstruyeElStreamReal()
         {
-            string stream = GameScenario.Run(42, ticks: 400, colonies: 1, grid: 96,
+            string stream = GameScenario.Run(42, ticks: 800, colonies: 1, grid: 96,
                 frameEvery: 1, seedPoolPath: null, drops: null);
 
             var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
@@ -60,18 +60,18 @@ namespace AntSim.Core.Tests
             Assert.Equal(42UL, parser.Header!.Seed);
             Assert.Equal(96, parser.Header.Grid);
             Assert.NotNull(parser.FinalHash);
-            Assert.Equal(400UL, parser.FinalTick);
+            Assert.Equal(800UL, parser.FinalTick);
 
             // Todos los ticks del stream, con poses, items y colonia.
-            Assert.Equal(400, views.Count);
+            Assert.Equal(800, views.Count);
             var last = views[^1];
-            Assert.Equal(400UL, last.Tick);
+            Assert.Equal(800UL, last.Tick);
             Assert.Equal(10, last.Ants.Count);     // fundadoras vivas
             Assert.All(last.Ants, a => Assert.True(a.Alive));
             Assert.Single(last.Colonies);
             Assert.True(last.Colonies[0].Adults >= 10);
 
-            // Los eventos del canal B llegan (nacimiento/initial spawn del tick 1).
+            // Los eventos del canal B llegan (nacimiento/initial spawn o puesta).
             Assert.Contains(views, v => v.Events.Count > 0);
 
             // Las métricas de 1 s cierran periódicamente (30 ticks).
@@ -249,7 +249,7 @@ namespace AntSim.Core.Tests
             // alerta se perdería. El drenado de presentados debe entregarlas TODAS,
             // exactamente una vez.
             string stream = GameScenario.Run(42, ticks: 7200, colonies: 2, grid: 96,
-                frameEvery: 30, seedPoolPath: null, drops: null);
+                frameEvery: 30, seedPoolPath: null, drops: new[] { (30, 256f, 384f) });
 
             var expected = new List<string>();
             var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
@@ -284,7 +284,7 @@ namespace AntSim.Core.Tests
         /// expected). Si falla, el determinismo del mundo se rompió; un cambio
         /// INTENCIONAL se actualiza en ambos sitios con --update y en este test.</summary>
         public const string CanonicalStreamHash =
-            "c143ab6f16822b7a702198739b53856f206a5a6e8d411e71c2ffdbcfa1700362";
+            "c9877d0821bc34e08d49c42ac27ba801400538b3682a1e5a543ae492affb2a9a";
 
         [Fact]
         public void FixtureHash_ElStreamCanonicoEsByteAByteEstable()
@@ -360,11 +360,9 @@ namespace AntSim.Core.Tests
         [Fact]
         public void Inspector_CapturaLaMuerteDelCanalB()
         {
-            // Mundo sin comida: las fundadoras mueren (vejez o inanición) — hay
-            // AntDied garantizado para validar la captura del canal B. Sin comida
-            // mueren de INANICIÓN (Energy≤0), que llega mucho antes que la vejez
-            // (BaseLifespan 240 s ⇒ ~5800 ticks de vida como máximo): 6300 basta.
-            string stream = GameScenario.Run(42, ticks: 9000, colonies: 1, grid: 96,
+            // Mundo sin comida: las fundadoras mueren al alcanzar su esperanza de vida
+            // (BaseLifespan 720 s ⇒ ~24840 ticks): 26000 basta.
+            string stream = GameScenario.Run(42, ticks: 26000, colonies: 1, grid: 96,
                 frameEvery: 1, seedPoolPath: null, drops: null);
 
             var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
@@ -383,7 +381,7 @@ namespace AntSim.Core.Tests
                 inspector.Observe(view);
             }
 
-            Assert.True(anyDeath, "el mundo sin comida debe producir muertes en 9000 ticks");
+            Assert.True(anyDeath, "el mundo sin comida debe producir muertes en 26000 ticks");
             var rec = inspector.Tracked;
             Assert.NotNull(rec);
             Assert.NotNull(rec!.DeathTick); // la muerte quedó capturada

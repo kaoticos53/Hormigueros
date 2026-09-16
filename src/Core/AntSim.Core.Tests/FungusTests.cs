@@ -119,13 +119,13 @@ public class FungusTests
     {
         var sim = NewWorld(SpeciesDescriptor.Atta);
         var colony = sim.Colonies[0];
-        colony.Fungus = 30f; // llenado 0.5
+        colony.Fungus = colony.Species.FungusMax * 0.5f; // llenado 0.5
         float stockAntes = colony.Stock;
 
         sim.Step(); // dt = 1/30
 
         float esperado = 0.4f * 0.5f / 30f; // DigestionRate × llenado × dt
-        Assert.Equal(30f - esperado, colony.Fungus, 4);
+        Assert.Equal(colony.Species.FungusMax * 0.5f - esperado, colony.Fungus, 4);
         // InflowAccum lo consume la EWMA al cierre del MISMO paso: lo observable
         // es el stock — digestión entró, consumo (reina+adultas) salió.
         _out.WriteLine($"stock={colony.Stock} antes={stockAntes} esperado+={esperado}");

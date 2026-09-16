@@ -166,7 +166,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             for (int i = 0; i < layout.Count; i++)
             {
                 var v = layout[i];
-                string replayName = replayFiles != null && i < replayFiles.Count && replayFiles[i] != null
+                string? replayName = replayFiles != null && i < replayFiles.Count && replayFiles[i] != null
                     ? Path.GetFileNameWithoutExtension(replayFiles[i]!) : null;
                 string caption = MultiViewportModel.ViewCaption(
                     v.Label, baseSeed + (ulong)i,
@@ -279,7 +279,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.Colonies = 2;
             // Las N partidas comparten horizonte (7200 ticks); velocidad por
             // vista con +/= (SpeedBoost) o el Speed del inspector.
-            presenter.Ticks = 7200;
+            presenter.Ticks = 36000;
             presenter.FrameEvery = 2;   // 15 Hz de canal A por vista: N streams van finos
             presenter.Seed = seed;
             presenter.SeedPoolPath = pool;
@@ -290,6 +290,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.ItemMesh = PrimitiveMeshAsset(PrimitiveType.Sphere, $"ItemMesh_V{v.Index}");
             presenter.AntMaterial = NewFlatMat(new Color(0.35f, 0.16f, 0.10f), $"AntMat_V{v.Index}");
             presenter.CarrierMaterial = NewFlatMat(new Color(0.98f, 0.72f, 0.16f), $"CarrierMat_V{v.Index}");
+            var antMat0 = NewFlatMat(new Color(0.85f, 0.35f, 0.20f), $"AntMatColony0_V{v.Index}");
+            var carrierMat0 = NewFlatMat(new Color(0.98f, 0.70f, 0.20f), $"CarrierMatColony0_V{v.Index}");
+            var antMat1 = NewFlatMat(new Color(0.25f, 0.55f, 0.90f), $"AntMatColony1_V{v.Index}");
+            var carrierMat1 = NewFlatMat(new Color(0.40f, 0.85f, 0.95f), $"CarrierMatColony1_V{v.Index}");
+            presenter.ColonyAntMaterials = new Material[] { antMat0, antMat1 };
+            presenter.ColonyCarrierMaterials = new Material[] { carrierMat0, carrierMat1 };
             presenter.ItemMaterial = NewFlatMat(new Color(0.36f, 0.78f, 0.36f), $"ItemMat_V{v.Index}");
             presenter.LeafMaterial = NewFlatMat(new Color(0.15f, 0.50f, 0.12f), $"LeafMat_V{v.Index}");
             presenter.BiteMaterial = NewFlatMat(new Color(0.30f, 0.15f, 0.05f), $"BiteMat_V{v.Index}");
@@ -484,10 +490,16 @@ namespace AntSim.Unity.Scripts.EditorTools
         private static Material NewGridMat(string name, Color fill, Color line)
         {
             var tex = NewGridTexture(fill, line, name + "_Tex");
-            var sh = Shader.Find("Unlit/Texture");
+            Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Texture");
+            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
+
             var m = new Material(sh!) { name = name, mainTexture = tex };
             m.mainTextureScale = new Vector2(24f, 24f); // GridTiles de la escena simple
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
+            if (m.HasProperty("_BaseMap_ST")) m.SetVector("_BaseMap_ST", new Vector4(24f, 24f, 0, 0));
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
             if (m.HasProperty("_Color")) m.color = Color.white;
             EnsureMaterialFolder();
             CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
@@ -496,12 +508,16 @@ namespace AntSim.Unity.Scripts.EditorTools
 
         private static Material NewFlatMat(Color c, string name)
         {
-            var sh = Shader.Find("Unlit/Color");
+            Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Color");
             if (sh == null) sh = Shader.Find("Unlit/Texture");
+            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
+
             var m = new Material(sh!) { name = name };
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             m.color = c;
-            if (sh != null && sh.name == "Unlit/Color") m.SetColor("_Color", c);
             if (sh != null && sh.name == "Standard")
             {
                 m.SetColor("_Color", Color.black);
@@ -515,12 +531,26 @@ namespace AntSim.Unity.Scripts.EditorTools
 
         private static Material NewTransparentMat(string name)
         {
-            Shader? sh = Shader.Find("Unlit/Transparent");
+            Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
+            if (sh == null) sh = Shader.Find("Unlit/Transparent");
             if (sh == null) sh = Shader.Find("Legacy Shaders/Transparent/Diffuse");
             if (sh == null) sh = Shader.Find("Sprites/Default");
+            if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
+
             var m = new Material(sh!) { name = name };
-            if (sh != null && sh.name == "Standard")
+            if (sh != null && sh.name.StartsWith("Universal Render Pipeline"))
+            {
+                m.SetFloat("_Surface", 1f);
+                m.SetFloat("_Blend", 0f);
+                m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                m.SetInt("_ZWrite", 0);
+                m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+            }
+            else if (sh != null && sh.name == "Standard")
             {
                 m.SetFloat("_Mode", 2f);
                 m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
@@ -537,6 +567,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
             tex.Apply();
             m.mainTexture = tex;
+            if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
             if (m.HasProperty("_Color")) m.color = Color.white;
             EnsureMaterialFolder();
             CreateOrReplaceAsset(tex, $"Assets/Materials/{name}_Empty.asset");

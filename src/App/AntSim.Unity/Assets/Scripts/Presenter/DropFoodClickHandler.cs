@@ -129,6 +129,7 @@ namespace AntSim.Unity.Scripts.Presenter
         /// defecto, del campo del componente.</summary>
         private int GridCells()
         {
+            if (Presenter == null) return 256;
             return Presenter.Presenter.Header?.Grid ?? Presenter.Grid;
         }
 
