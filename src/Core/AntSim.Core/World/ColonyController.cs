@@ -259,9 +259,16 @@ public static class ColonyController
         // expansión espera al primer ciclo de comida — biología de fundación
         // real: primera puesta limitada, expansión ligada a la entrada.
         float inflowGate = Math.Clamp(c.InflowEma * 10f, 0f, 1f);
+        // Feedback homeostático biológico: si el stock es abundante (>60%) acelera la puesta;
+        // si el stock cae en zona crítica (<20%) frena la puesta para proteger la colonia.
+        float stockRatio = sp.StockMax > 0f ? c.Stock / sp.StockMax : 0f;
+        float stockFeedback = stockRatio > 0.60f
+            ? (1.0f + 0.35f * ((stockRatio - 0.60f) / 0.40f))
+            : Math.Clamp(stockRatio / 0.20f, 0.05f, 1.0f);
+
         float lambda = Math.Clamp(
             (MaxAdultsPerColony - c.AdultCountAlive) * KRepl * inflowGate + c.AdultCountAlive * sp.DeathRate,
-            0f, LambdaMax) * rho * qQueen * huecos;
+            0f, LambdaMax) * rho * qQueen * huecos * stockFeedback;
 
         c.EggAccumulator += lambda * dt;
         while (c.EggAccumulator >= 1f && c.Stock >= sp.EggCost)

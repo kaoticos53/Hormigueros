@@ -31,10 +31,10 @@ namespace AntSim.Core.Tests
         [Fact]
         public void CanalD_ElStreamTraeAlertasYSemaforoPorColonia()
         {
-            // Partida real con muerte de colonia (semilla 42, 1200 ticks trae
+            // Partida real con muerte de colonia (semilla 42, horizonte extendido trae
             // mortalidad/puesta parada en grid 96): el canal D debe aparecer con
             // el esquema {k, lvl, col, x, y, t, txt} y el semáforo [col, byte].
-            string stream = GameScenario.Run(42, ticks: 5200, colonies: 2, grid: 96,
+            string stream = GameScenario.Run(42, ticks: 12000, colonies: 2, grid: 96,
                 frameEvery: 30, seedPoolPath: null, drops: null);
 
             bool sawAlert = false, sawLight = false;
@@ -63,7 +63,7 @@ namespace AntSim.Core.Tests
         {
             // Las alertas con colonia (p. ej. laying:0) anclan al NIDO de ESA
             // colonia — el salto de cámara del toast cae sobre la colonia culpable.
-            string stream = GameScenario.Run(42, ticks: 5200, colonies: 2, grid: 96,
+            string stream = GameScenario.Run(42, ticks: 12000, colonies: 2, grid: 96,
                 frameEvery: 30, seedPoolPath: null, drops: null);
             var parser = new GameStreamParser();
 
@@ -267,7 +267,7 @@ namespace AntSim.Core.Tests
         public void Toasts_DelStream_Real_ConNivelYColonia()
         {
             string stream = GameScenario.Run(42, ticks: 5200, colonies: 2, grid: 96,
-                frameEvery: 30, seedPoolPath: null, drops: null);
+                frameEvery: 30, seedPoolPath: null, drops: new[] { (30, 256f, 384f) });
             var toasts = new HudToastsModel();
             foreach (var v in Parse(stream)) toasts.Observe(v);
 

@@ -40,7 +40,27 @@ public sealed class Ant
 
     public bool Alive = true;
     public float InteractCooldown;  // s
+    public float TrophallaxisCooldown; // s: enfriamiento entre transferencias de trofalaxia
+    public float LifetimeFoodGathered; // ep: total de alimento recolectado y entregado al nido
+    public float LifetimeDistanceExplored; // u: distancia total recorrida en su vida
     public bool DiedInCombat;       // F5.2b.1: la energía llegó a 0 por golpes (no por hambre)
+
+    /// <summary>
+    /// Casta / rol etológico por edad y experiencia (polietismo temporal):
+    /// - Nodriza (Nurse): joven (primer 25% de vida), permanece cuidando cría.
+    /// - Forrajera (Forager): madura, busca y transporta alimento.
+    /// - Exploradora / Patrullera (Scout): veterana, explora distancias lejanas.
+    /// </summary>
+    public AntCaste Caste
+    {
+        get
+        {
+            float relAge = Lifespan > 0f ? Age / Lifespan : 0f;
+            if (relAge < 0.25f) return AntCaste.Nurse;
+            if (LifetimeFoodGathered > 4f || relAge < 0.70f) return AntCaste.Forager;
+            return AntCaste.Scout;
+        }
+    }
 
     public void InitFromVigor(float baseCapacity, float baseLifespan, float vigor)
     {
@@ -51,5 +71,18 @@ public sealed class Ant
         SensorScale = 0.9f + 0.2f * vigor;
         Energy = 1f; // nace con la reserva completa
         Age = 0f;
+        TrophallaxisCooldown = 0f;
+        LifetimeFoodGathered = 0f;
+        LifetimeDistanceExplored = 0f;
     }
+}
+
+/// <summary>
+/// Roles de división del trabajo por edad y experiencia (polietismo temporal).
+/// </summary>
+public enum AntCaste : byte
+{
+    Nurse = 0,    // Nodriza (cuidado de cría y nido)
+    Forager = 1,  // Forrajera (recolección de alimento)
+    Scout = 2     // Exploradora / Patrullera (frontera y patrullaje)
 }

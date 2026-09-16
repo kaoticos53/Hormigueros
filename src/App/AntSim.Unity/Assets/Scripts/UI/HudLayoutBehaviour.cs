@@ -91,6 +91,28 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Modelo puro del historial de comandos (auditoría §4).</summary>
         public Streaming.CommandHistoryModel History => _history;
 
+        private void Start()
+        {
+            // Asegurar EventSystem para interacción uGUI
+            UI.SpeedControlBehaviour.EnsureEventSystem();
+
+            // Re-vincular botones nativos en tiempo de ejecución (evita pérdida de delegates anónimos)
+            if (NativeButtons != null && NativeButtons.Length >= 4)
+            {
+                BindNativeButtons(NativeButtons[0], NativeButtons[1], NativeButtons[2], NativeButtons[3]);
+            }
+
+            if (ImportPathField != null)
+            {
+                BindImportPathField(ImportPathField);
+            }
+
+            if (SpeedSlider != null || SpeedPauseButton != null)
+            {
+                BindSpeedControls(SpeedSlider, SpeedText, SpeedPauseButton, SpeedPauseButtonText);
+            }
+        }
+
         private void Update()
         {
             var presenter = Presenter;
@@ -134,6 +156,10 @@ namespace AntSim.Unity.Scripts.Presenter
             if (StatusText == null) return;
             string? line = _cards.StatusLine(_lastTick, _lastSpeed);
             if (line == null) return;
+            if (Presenter != null && (Presenter.Generation > 1 || Presenter.BestSurvivalSeconds > 0f))
+            {
+                line = $"[Gen #{Presenter.Generation} · Récord: {Presenter.BestSurvivalSeconds:0.0}s] " + line;
+            }
             if (StatusText.text != line) StatusText.text = line;
         }
 
@@ -372,7 +398,7 @@ namespace AntSim.Unity.Scripts.Presenter
             if (ToastsText == null) return;
             var sb = new System.Text.StringBuilder();
             int n = 0;
-            foreach (var line in _toasts.RenderLines())
+            foreach (var line in Toasts.RenderLines())
             {
                 if (n++ > 0) sb.Append('\n');
                 sb.Append(line);
@@ -394,7 +420,7 @@ namespace AntSim.Unity.Scripts.Presenter
         {
             var container = ToastContainer!;
             var template = ToastTemplate!;
-            var elements = Streaming.HudElementLayoutModel.ToastElements(_toasts.Active);
+            var elements = Streaming.HudElementLayoutModel.ToastElements(Toasts.Active);
 
             // Desactiva los que ya no están (pool, no Destroy): la raíz entera.
             var present = new HashSet<string>();

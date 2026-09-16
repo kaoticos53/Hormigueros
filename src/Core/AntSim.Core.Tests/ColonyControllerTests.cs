@@ -95,8 +95,8 @@ public class ColonyControllerTests
         var adult = Assert.Single(c.Adults);
         Assert.True(adult.Alive);
         AssertClose(0.8f, adult.Vigor);
-        // Capacidad = base·(0.25 + 0.75·vigor) = 10·0.85
-        AssertClose(10f * (0.25f + 0.75f * 0.8f), adult.EnergyCapacity);
+        // Capacidad = base·(0.25 + 0.75·vigor)
+        AssertClose(c.Species.EnergyCapacity * (0.25f + 0.75f * 0.8f), adult.EnergyCapacity);
     }
 
     [Fact]
@@ -163,8 +163,8 @@ public class ColonyControllerTests
             Step(c, new List<SimEvent>());
 
         Assert.Empty(c.Eggs);
-        // Cada huevo recupera η_egg·ε_egg = 0.3·0.5 = 0.15 ep.
-        Assert.True(c.Stock >= stockBefore + 5 * 0.15f - 0.1f);
+        // Cada huevo recupera η_egg·ε_egg
+        Assert.True(c.Stock >= stockBefore + 5 * (ColonyController.EtaEgg * c.Species.EggCost) - 0.1f);
     }
 
     [Fact]

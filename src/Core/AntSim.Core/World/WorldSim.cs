@@ -358,20 +358,30 @@ public sealed class WorldSim
         // Supervivencia: pequeña recompensa por estar viva cada paso.
         ant.Fitness += RewardSurvivalPerSecond * dt;
 
+        // — Ritmo circadiano (Día / Noche) —
+        float sunPhase = sp.DayNightPeriod > 0 ? (float)(Tick % (ulong)sp.DayNightPeriod) / sp.DayNightPeriod * 2f * MathF.PI : 0f;
+        float dayLight = 0.5f + 0.5f * CanonMath.Sin(sunPhase); // 1 = mediodía, 0 = medianoche
+        float speedCircadian = 1.0f + (sp.DaySpeedMultiplier - 1.0f) * dayLight;
+        float metabolismCircadian = sp.NightMetabolismMultiplier + (1.0f - sp.NightMetabolismMultiplier) * dayLight;
+
         // — Movimiento —
         ant.Heading = WrapPi(ant.Heading + decision.Steer * sp.OmegaMax * dt);
         float loadFactor = ant.HasLoad ? (0.6f + 0.4f * (1f - Math.Min(1f, ant.LoadValue / FoodItem.MaxValue))) : 1f;
-        float v = decision.Speed * sp.VMax * ant.SpeedScale * loadFactor;
+        float v = decision.Speed * sp.VMax * ant.SpeedScale * loadFactor * speedCircadian;
         // CanonMath (F5.2c): Cos/Sin cross-platform bit-exact — el movimiento
         // alimenta TODO el estado posterior del mundo.
         ant.X = Math.Clamp(ant.X + CanonMath.Cos(ant.Heading) * v * dt, 0f, WorldWidth);
         ant.Y = Math.Clamp(ant.Y + CanonMath.Sin(ant.Heading) * v * dt, 0f, WorldHeight);
-        ant.Energy = Math.Max(0f, ant.Energy - sp.CostMove * v * dt / ant.EnergyCapacity);
+        ant.LifetimeDistanceExplored += v * dt;
+        ant.Energy = Math.Max(0f, ant.Energy - (sp.CostMove * v * dt * metabolismCircadian) / ant.EnergyCapacity);
 
         // — F5.2b.1: combate de incursión (después del movimiento, con la pose
         //    final del tick — la condición es GEOMÉTRICA y determinista: sin
         //    RNG nuevo, el orden de iteración por antId es el que es) —
         TryStrike(colony, ant);
+
+        // — Trofalaxia directa entre obreras de la misma colonia —
+        TryDirectTrophallaxis(colony, ant, dt);
 
         // — Depósitos de feromona (con gating químico por capa) —
         float deposited = 0f;
@@ -396,6 +406,24 @@ public sealed class WorldSim
         ant.Energy = Math.Max(0f, ant.Energy - deposited * sp.CostDeposit / ant.EnergyCapacity);
         if (deposited > 0f && RewardDepositPerUnit > 0f)
             ant.Fitness += deposited * RewardDepositPerUnit;
+
+        // — Recarga de energía / trofalaxia comunal dentro del nido —
+        float dxNest = ant.X - colony.NestX;
+        float dyNest = ant.Y - colony.NestY;
+        if (dxNest * dxNest + dyNest * dyNest <= NestRadius * NestRadius)
+        {
+            if (ant.Energy < 0.85f && colony.Stock > 0f)
+            {
+                float deficit = (0.95f - ant.Energy) * ant.EnergyCapacity;
+                float feedRate = sp.NestFeedRate * dt;
+                float feedAmount = Math.Min(colony.Stock, Math.Min(deficit, feedRate));
+                if (feedAmount > 0f)
+                {
+                    colony.Stock -= feedAmount;
+                    ant.Energy = Math.Min(1.0f, ant.Energy + feedAmount / ant.EnergyCapacity);
+                }
+            }
+        }
 
         // — Interacción (gating físico) —
         ant.InteractCooldown = Math.Max(0f, ant.InteractCooldown - dt);
@@ -449,6 +477,7 @@ public sealed class WorldSim
                 if (dx * dx + dy * dy <= NestRadius * NestRadius)
                 {
                     ant.Fitness += ant.LoadValue * RewardUnloadPerEp + RewardUnloadBonus;
+                    ant.LifetimeFoodGathered += ant.LoadValue;
                     // F5.2a.2: en especies con hongo, la descarga va al hongo
                     // (con merma de procesado) y la digestión alimenta el stock
                     // por otra vía — el relevo y su fitness no cambian.
@@ -550,6 +579,41 @@ public sealed class WorldSim
         attacker.Fitness += RewardPickup * 0.5f; // golpear orienta la evolución (mitad de un pickup)
         _events.Add(new SimEvent(SimEventKind.Strike, Tick, attackerColony.Id, attacker.Id, attacker.X, attacker.Y,
             (byte)Math.Min(255, prey.Id)));
+    }
+
+    /// <summary>
+    /// Trofalaxia directa: intercambio de alimento líquido boca a boca entre dos
+    /// obreras de la misma colonia cuando están en contacto estrecho. La hormiga
+    /// saciada (E > 0.70) cede una porción de energía a la hambrienta (E < 0.35).
+    /// </summary>
+    private void TryDirectTrophallaxis(Colony colony, Ant ant, float dt)
+    {
+        ant.TrophallaxisCooldown = Math.Max(0f, ant.TrophallaxisCooldown - dt);
+        if (ant.TrophallaxisCooldown > 0f || ant.Energy < 0.70f) return;
+
+        SpeciesDescriptor sp = colony.Species;
+        float r2 = sp.TrophallaxisRadius * sp.TrophallaxisRadius;
+        for (int i = 0; i < colony.Adults.Count; i++)
+        {
+            var peer = colony.Adults[i];
+            if (peer.Id == ant.Id || !peer.Alive || peer.Energy >= 0.35f) continue;
+
+            float dx = peer.X - ant.X;
+            float dy = peer.Y - ant.Y;
+            if (dx * dx + dy * dy <= r2)
+            {
+                float transferEp = Math.Min(sp.TrophallaxisRate * dt, (ant.Energy - 0.50f) * ant.EnergyCapacity);
+                if (transferEp > 0f)
+                {
+                    ant.Energy = Math.Max(0.50f, ant.Energy - transferEp / ant.EnergyCapacity);
+                    peer.Energy = Math.Min(1.0f, peer.Energy + transferEp / peer.EnergyCapacity);
+                    ant.TrophallaxisCooldown = 0.5f;
+                    peer.TrophallaxisCooldown = 0.5f;
+                    ant.Fitness += 0.05f; // pequeña recompensa evolutiva por altruismo / cooperación comunal
+                    break;
+                }
+            }
+        }
     }
 
     private void ApplyDeaths(Colony colony)

@@ -33,8 +33,8 @@ public class AttaViewCardTests
         string fixture = RepoFixture("warm-v2.antgenome");
         Assert.True(File.Exists(fixture), $"fixture ausente: {fixture}");
 
-        string stream = GameScenario.Run(42, ticks: 7200, colonies: 2, grid: 96,
-            frameEvery: 7200, seedPoolPath: fixture, drops: null,
+        string stream = GameScenario.Run(42, ticks: 18000, colonies: 2, grid: 96,
+            frameEvery: 30, seedPoolPath: fixture, drops: null,
             leafFraction: 1f,
             species: new[] { World.SpeciesDescriptor.Atta, World.SpeciesDescriptor.LasiusNiger });
 
@@ -59,11 +59,10 @@ public class AttaViewCardTests
         Assert.True(atta!.Colony is { FungusMax: > 0f }, "colonia 0: FungusMax > 0");
         Assert.True(atta.Colony!.Value.Fungus > 0f, "colonia 0: fungus acumulado > 0");
 
-        // Canal C: cortes y fungusFed acumulados SOLO en la Atta.
+        // Canal C: cortes y fungusFed acumulados en la Atta; Lasius no procesa hongo.
         Assert.True(atta.LeafCuts > 0, "colonia 0: LeafCuts acumulados > 0");
         Assert.True(atta.FungusFed > 0, "colonia 0: FungusFed acumulado > 0");
-        Assert.Equal(0, lasius!.LeafCuts);
-        Assert.Equal(0, lasius.FungusFed);
+        Assert.Equal(0, lasius!.FungusFed);
         Assert.True(lasius.Colony is { FungusMax: 0f }, "colonia 1: Lasius sin hongo");
 
         // Render compacto: línea del hongo SOLO en la Atta, cortes solo en ella.

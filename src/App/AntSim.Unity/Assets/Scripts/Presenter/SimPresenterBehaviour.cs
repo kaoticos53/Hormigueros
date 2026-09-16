@@ -15,7 +15,7 @@ namespace AntSim.Unity.Scripts.Presenter
         [Header("Fuente del stream (CLI construido del Core)")]
         public string CliPath = "build/antsim";
         public ulong Seed = 42;
-        public int Ticks = 7200;         // 4 min de sim
+        public int Ticks = 36000;        // 20 min de sim
         public int Grid = 96;
         public int Colonies = 2;
         public int FrameEvery = 1;
@@ -69,6 +69,10 @@ namespace AntSim.Unity.Scripts.Presenter
         public Mesh AntMesh = null!;
         public Material AntMaterial = null!;
         public Material CarrierMaterial = null!;
+        [Tooltip("Materiales de hormigas diferenciados por índice de colonia [0..N-1].")]
+        public Material[]? ColonyAntMaterials;
+        [Tooltip("Materiales de portadoras diferenciados por índice de colonia [0..N-1].")]
+        public Material[]? ColonyCarrierMaterials;
         public Mesh ItemMesh = null!;
         public Material ItemMaterial = null!;
 
@@ -107,8 +111,8 @@ namespace AntSim.Unity.Scripts.Presenter
         public float ActorLift = 0.6f;
 
         [Header("Tiempo")]
-        [Tooltip("Velocidad de simulación/reproducción en rango 30% (0.3×) a 1000% (10.0×). 0 = pausa.")]
-        [Range(0.3f, 10f)] public float Speed = 3f;
+        [Tooltip("Velocidad de simulación/reproducción en rango 1.0× (10% base) a 100.0× (1000% base). 10.0× = base normal. 0 = pausa.")]
+        [Range(1f, 100f)] public float Speed = 10f;
         [Tooltip("Multiplicador adicional (1 por defecto).")]
         public float SpeedBoost = 1f;
         [Tooltip("Tecla para aumentar la velocidad (+ / = / Keypad +).")]
@@ -120,7 +124,7 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Tecla para pausar / reanudar la simulación.")]
         public KeyCode PauseKey = KeyCode.Space;
 
-        private float _pausedSpeed = 3f;
+        private float _pausedSpeed = 10f;
 
         private readonly Streaming.GameStreamPresenter _presenter = new();
         private Streaming.StreamSource? _source;
@@ -130,8 +134,11 @@ namespace AntSim.Unity.Scripts.Presenter
         public Streaming.GameStreamPresenter Presenter => _presenter;
         private float _simTime;           // segundos de sim consumidos
         private const float Dt = 1f / 30f; // tick fijo de la arquitectura
-        private bool _streaming;
+        private volatile bool _streaming;
         private Streaming.RenderState? _lastState; // último estado muestreado (p. ej. para el inspector)
+
+        /// <summary>Indica si el worker en segundo plano está transmitiendo datos.</summary>
+        public bool IsStreaming => _streaming;
 
         /// <summary>Último estado muestreado (poses del tick en curso) — lo consumen
         /// p. ej. el raycast de selección de la tarjeta de inspección.</summary>
@@ -143,7 +150,7 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Indica si la simulación está pausada (Speed == 0).</summary>
         public bool IsPaused => Speed <= 0f;
 
-        /// <summary>Fija la velocidad con clamp entre 30% (0.3x) y 1000% (10.0x).</summary>
+        /// <summary>Fija la velocidad con clamp entre 1.0x (10% base) y 100.0x (1000% base).</summary>
         public void SetSpeed(float newSpeed)
         {
             if (newSpeed <= 0f)
@@ -158,7 +165,7 @@ namespace AntSim.Unity.Scripts.Presenter
             }
         }
 
-        /// <summary>Fija la velocidad a partir de un porcentaje (30% a 1000%).</summary>
+        /// <summary>Fija la velocidad a partir de un porcentaje relativo a la base (10% a 1000%).</summary>
         public void SetSpeedPercent(float percent)
         {
             SetSpeed(Streaming.SpeedControlModel.PercentToSpeed(percent));
@@ -180,6 +187,35 @@ namespace AntSim.Unity.Scripts.Presenter
         {
             if (Speed <= 0f) return;
             SetSpeed(Streaming.SpeedControlModel.StepDown(Speed));
+        }
+
+        /// <summary>Generación evolutiva actual acumulada en la sesión.</summary>
+        public static int GenerationCount = 1;
+
+        /// <summary>Récord histórico de supervivencia en segundos.</summary>
+        public static float AllTimeBestSurvivalSeconds = 0f;
+
+        /// <summary>Generación actual del presentador.</summary>
+        public int Generation => GenerationCount;
+
+        /// <summary>Tiempo de supervivencia transcurrido en la generación actual (s).</summary>
+        public float CurrentSurvivalSeconds => _simTime;
+
+        /// <summary>Mejor tiempo histórico de supervivencia (s).</summary>
+        public float BestSurvivalSeconds => AllTimeBestSurvivalSeconds;
+
+        /// <summary>
+        /// Avanza inmediatamente a la siguiente generación evolutiva: registra el récord
+        /// de supervivencia, incrementa la generación y relanza el escenario sembrado con la élite acumulada.
+        /// </summary>
+        public void TriggerNextGeneration()
+        {
+            if (_simTime > AllTimeBestSurvivalSeconds)
+                AllTimeBestSurvivalSeconds = _simTime;
+
+            GenerationCount++;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
 
         /// <summary>Alterna entre pausa y la velocidad previa.</summary>
@@ -353,8 +389,24 @@ namespace AntSim.Unity.Scripts.Presenter
                     var scale = new Vector3(len * 0.33f, len * 0.5f, len * 0.16f);
                     var pos = new Vector3(a.X, lift, a.Y);
                     var rot = Quaternion.Euler(90f, -a.Heading * Mathf.Rad2Deg, 0f);
-                    var mat = a.HasLoad ? CarrierMaterial : AntMaterial;
+
+                    Material mat;
+                    if (a.HasLoad)
+                    {
+                        if (ColonyCarrierMaterials != null && a.ColonyId >= 0 && a.ColonyId < ColonyCarrierMaterials.Length && ColonyCarrierMaterials[a.ColonyId] != null)
+                            mat = ColonyCarrierMaterials[a.ColonyId];
+                        else
+                            mat = CarrierMaterial ?? AntMaterial;
+                    }
+                    else
+                    {
+                        if (ColonyAntMaterials != null && a.ColonyId >= 0 && a.ColonyId < ColonyAntMaterials.Length && ColonyAntMaterials[a.ColonyId] != null)
+                            mat = ColonyAntMaterials[a.ColonyId];
+                        else
+                            mat = AntMaterial;
+                    }
                     if (mat == null) mat = AntMaterial;
+
                     var mtx = Matrix4x4.TRS(pos, rot, scale);
                     Graphics.DrawMesh(AntMesh, mtx, mat, layer);
                 }

@@ -378,7 +378,9 @@ namespace AntSim.Unity.Scripts.Streaming
               .Append(last.Y.ToString("0.0", CultureInfo.InvariantCulture))
               .Append(" · rumbo ").Append(last.Heading.ToString("0.00", CultureInfo.InvariantCulture))
               .Append('\n');
-            sb.Append("carga: ").Append(last.HasLoad ? "con carga" : "sin carga").Append('\n');
+            string casteStr = last.Age < 180f ? "Nodriza" : (last.HasLoad ? "Recolectora" : "Exploradora");
+            sb.Append("casta: ").Append(casteStr)
+              .Append(" · carga: ").Append(last.HasLoad ? "con carga" : "sin carga").Append('\n');
             sb.Append("vigor ").Append(last.Vigor.ToString("0.00", CultureInfo.InvariantCulture))
               .Append(" · energía ").Append(last.Energy.ToString("0.00", CultureInfo.InvariantCulture))
               .Append(" · edad ").Append(last.Age.ToString("0.0", CultureInfo.InvariantCulture)).Append(" s\n");
