@@ -1565,14 +1565,31 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// veía un mundo blanco con dos puntos de color (los nidos). Es la causa
         /// del «el terreno es blanco» del Play pass, y por eso la capa arranca
         /// con una textura que no pinta nada en vez de sin textura.
+        ///
+        /// IDEMPOTENTE A PROPÓSITO: si el asset ya existe se devuelve SU instancia,
+        /// sin borrarla ni recrearla. Pasaba por <see cref="CreateOrReplaceAsset"/>
+        /// (borrar + crear en cada pasada) y eso rompe dos cosas:
+        ///   1. reproducibilidad — la instancia viva muere bajo los pies de cualquier
+        ///      material que ya la referenciase, y la siguiente salvada del material
+        ///      serializa «m_Texture: {fileID: 0}»: le pasó al quad de feromonas
+        ///      (su textura de reposo desapareció del .mat sin que nadie edítase el
+        ///      material a mano);
+        ///   2. convivencia con un editor ABIERTO — la sesión conserva referencias a
+        ///      la instancia anterior, que la pasada batch acaba de destruir.
+        /// El resultado: una pasada del generador ya no cambia los materiales que no
+        /// debía tocar, y el asset se crea como mucho UNA vez por proyecto.
         /// </summary>
         private static Texture2D NewEmptyTexture()
         {
+            const string path = "Assets/Materials/PheromoneEmpty.asset";
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing != null) return existing;
+
             var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "PheromoneEmpty" };
             tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
             tex.Apply();
             EnsureMaterialFolder();
-            CreateOrReplaceAsset(tex, "Assets/Materials/PheromoneEmpty.asset");
+            AssetDatabase.CreateAsset(tex, path);
             return tex;
         }
 
