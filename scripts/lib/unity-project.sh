@@ -14,9 +14,13 @@
 #   · que NO sea la raíz del repo (el caso del fantasma, con mensaje propio);
 #   · que tenga las marcas de un proyecto Unity (Packages/manifest.json y
 #     ProjectSettings/ProjectVersion.txt);
-#   · que sea ESTE proyecto: su manifest declara `com.unity.pipeline`, el
-#     paquete con el que los passes conducen el editor. Un proyecto nuevo de
-#     Unity trae solo `com.unity.modules.*`, así que no pasa.
+#   · que sea ESTE proyecto: tenga los scripts del juego
+#     (Assets/Scripts/EditorTools/SceneBootstrapper.cs). La marca es el CÓDIGO,
+#     no la lista de paquetes: esa cambia con las decisiones de dependencias
+#     (los com.unity.ai.* y com.unity.pipeline salieron del manifest) y una
+#     marca que caduca acaba rechazando el proyecto real. La capacidad de
+#     conducir el editor (com.unity.pipeline) la exige aparte quien la usa
+#     (scripts/playpass-live.sh), no esta guarda de identidad.
 #
 # Uso desde un script:
 #   source "$ROOT/scripts/lib/unity-project.sh"
@@ -76,11 +80,11 @@ require_unity_project() {
     return 2
   fi
 
-  if ! grep -q '"com.unity.pipeline"' "$manifest"; then
+  local game_scripts="$abs/Assets/Scripts/EditorTools/SceneBootstrapper.cs"
+  if [[ ! -f "$game_scripts" ]]; then
     echo "✗ -projectPath no es ESTE proyecto: $abs" >&2
-    echo "  su Packages/manifest.json no declara com.unity.pipeline (el paquete con" >&2
-    echo "  el que los passes conducen el editor). ¿Un proyecto Unity nuevo o vacío?" >&2
-    echo "  El proyecto del juego es src/App/AntSim.Unity." >&2
+    echo "  no tiene los scripts del juego (Assets/Scripts/EditorTools/SceneBootstrapper.cs)." >&2
+    echo "  ¿Un proyecto Unity nuevo, vacío o ajeno? El del juego es src/App/AntSim.Unity." >&2
     return 2
   fi
 
@@ -95,15 +99,25 @@ uproj_selftest() {
   trap 'rm -rf "$tmp"' RETURN 2>/dev/null || true
 
   mkdir -p "$tmp/real/Packages" "$tmp/real/ProjectSettings" \
-           "$tmp/ghost/Packages" "$tmp/ghost/ProjectSettings" "$tmp/vacio"
-  printf '{"dependencies":{"com.unity.pipeline":"0.7.0-exp.1","com.unity.ugui":"2.0.0"}}\n' \
+           "$tmp/real/Assets/Scripts/EditorTools" \
+           "$tmp/ghost/Packages" "$tmp/ghost/ProjectSettings" \
+           "$tmp/pipeline/Packages" "$tmp/pipeline/ProjectSettings" "$tmp/vacio"
+  # Proyecto real: SIN com.unity.pipeline (como el manifest vigente), con los
+  # scripts del juego — la marca es el código, no un paquete.
+  printf '{"dependencies":{"com.unity.render-pipelines.universal":"17.0.3","com.unity.ugui":"2.0.0"}}\n' \
     > "$tmp/real/Packages/manifest.json"
   printf 'm_EditorVersion: 6000.6.0f1\n' > "$tmp/real/ProjectSettings/ProjectVersion.txt"
+  printf '// marcador de identidad\n' > "$tmp/real/Assets/Scripts/EditorTools/SceneBootstrapper.cs"
   printf '{"dependencies":{"com.unity.modules.ai":"1.0.0"}}\n' \
     > "$tmp/ghost/Packages/manifest.json"
   printf 'm_EditorVersion: 6000.6.0f1\n' > "$tmp/ghost/ProjectSettings/ProjectVersion.txt"
+  # Proyecto ajeno que SÍ trae el paquete de conducción pero no es el juego:
+  # también debe rechazarse (identidad por scripts, no por dependencia).
+  printf '{"dependencies":{"com.unity.pipeline":"0.7.0-exp.1"}}\n' \
+    > "$tmp/pipeline/Packages/manifest.json"
+  printf 'm_EditorVersion: 6000.6.0f1\n' > "$tmp/pipeline/ProjectSettings/ProjectVersion.txt"
 
-  # 1. Proyecto real (marcas + com.unity.pipeline) → ok, una sola línea en stdout.
+  # 1. Proyecto real (marcas + scripts del juego, sin com.unity.pipeline) → ok.
   out="$(require_unity_project "$tmp/real" 2>/dev/null)"; rc=$?
   if [[ $rc -ne 0 || "$out" != "$(cd "$tmp/real" && pwd)" ]]; then
     echo "✗ un proyecto válido se rechazó (rc=$rc, out=$out)" >&2; fails=1
@@ -125,10 +139,18 @@ uproj_selftest() {
     echo "✗ la raíz del repo NO se rechazó (rc=$rc)" >&2; fails=1
   fi
 
-  # 4. Proyecto Unity ajeno (manifest por defecto, sin pipeline) → rechazado.
+  # 4. Proyecto Unity ajeno (sin scripts del juego) → rechazado, y el motivo
+  #    nombra la marca real.
   out="$(require_unity_project "$tmp/ghost" 2>&1 >/dev/null)"; rc=$?
-  if [[ $rc -ne 2 || "$out" != *"com.unity.pipeline"* ]]; then
-    echo "✗ un proyecto Unity sin com.unity.pipeline NO se rechazó (rc=$rc)" >&2; fails=1
+  if [[ $rc -ne 2 || "$out" != *"SceneBootstrapper.cs"* ]]; then
+    echo "✗ un proyecto Unity ajeno NO se rechazó (rc=$rc)" >&2; fails=1
+  fi
+
+  # 4bis. Proyecto ajeno que declara com.unity.pipeline: la dependencia sola NO
+  #       basta — sin los scripts del juego sigue siendo otro proyecto.
+  out="$(require_unity_project "$tmp/pipeline" 2>&1 >/dev/null)"; rc=$?
+  if [[ $rc -ne 2 || "$out" != *"SceneBootstrapper.cs"* ]]; then
+    echo "✗ un proyecto con com.unity.pipeline pero sin los scripts del juego NO se rechazó (rc=$rc)" >&2; fails=1
   fi
 
   # 5. Directorio vacío, ruta inexistente y fichero → rechazados.
@@ -153,7 +175,7 @@ uproj_selftest() {
 
   rm -rf "$tmp"
   if [[ $fails -ne 0 ]]; then return 1; fi
-  echo "✓ selftest del guardián de -projectPath ok (6 casos: válido, relativo, raíz del repo, proyecto ajeno, vacío/inexistente/fichero)"
+  echo "✓ selftest del guardián de -projectPath ok (7 casos: válido sin com.unity.pipeline, relativo, raíz del repo, ajeno, ajeno con pipeline, vacío/inexistente/fichero)"
   return 0
 }
 

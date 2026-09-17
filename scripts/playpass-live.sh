@@ -619,6 +619,17 @@ fi
 # (el accidente que borró 191 MB a mano: scripts/lib/unity-project.sh).
 PROJECT="$(require_unity_project "$PROJECT")" || exit 2
 
+# La guarda de identidad ya no exige com.unity.pipeline (la marca es el código
+# del juego), pero ESTE script sí lo necesita: es el paquete con el que se
+# conduce el editor (simulate_key/simulate_pointer). Sin él, el fallo aparecería
+# a mitad del pass con un error opaco de la CLI.
+if ! grep -q '"com.unity.pipeline"' "$PROJECT/Packages/manifest.json"; then
+  echo "✗ falta com.unity.pipeline en $PROJECT/Packages/manifest.json" >&2
+  echo "  El pass EN VIVO conduce el editor y no puede funcionar sin ese paquete." >&2
+  echo "  Añádelo (0.7.0-exp.1) al manifest del proyecto, o usa los modos de análisis." >&2
+  exit 4
+fi
+
 # ── Resolución del Unity CLI ─────────────────────────────────────────────────
 # Encontrar el binario (`find_unity_cli`) y convertir rutas (`winpath`) viven en
 # la librería compartida: el envoltorio scripts/unity-cli.sh usa EXACTAMENTE las
