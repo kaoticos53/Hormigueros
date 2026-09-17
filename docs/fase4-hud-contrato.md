@@ -104,6 +104,34 @@ ventana de métricas (1 s). Datos y componentes, en orden de tarjeta:
 | Flujo 1 s | `metrics.pickups/unloads/births/deaths/eggs/eclosed` | mini-barras de la ventana; las muertes coloreadas por causa dominante si se registra (`AntDied.cause`) |
 | Cerebros | contadores de `GenomeEnteredElite`/`GenomeDiscarded` acumulados por la UI desde el arranque del stream | *"7 élite · 3 descartados"* — línea permanente, no toast |
 | Comandos | `metrics.commands` acumulado | *"3 comandos"* — enlaza al panel de historial (§4) |
+| **Curva de aprendizaje** (F5.3ter) | `fitcurve` del canal C | Gráfica por GENERACIÓN (no por tiempo): fitness medio de cada cohorte. Se autoescala (el fitness no tiene techo) y retiene las últimas generaciones |
+| **Cobertura del mundo** (F5.3ter) | `learning` del canal C | "cobertura 23.3 % · 2148/9216 celdas · radio 536 u" — el color del trazo dice el nivel (gris < 5 %, ámbar, azul ≥ 25 %): distingue *aprender* de *dar vueltas* |
+
+### Canal C — bloques de aprendizaje (F5.3ter)
+
+Cada 120 ticks (1 Hz con el reloj de sim) y **solo si hay datos**, el tick trae
+dos bloques nuevos. Los streams anteriores no los traen y el parser los tolera
+(no aparece la tarjeta, no se inventa un cero):
+
+- `"learning":[[col, gen, nacimientos, hormigas, caídas, fitness_medio,
+  fitness_mejor, celdas_pisadas, celdas_totales, radio_max, élite_mejor,
+  élite_medio],…]` — una fila por colonia.
+- `"fitcurve":[[col, generación, hormigas, media, mejor],…]` — la SERIE
+  completa en su ventana (una fila por generación, no solo la actual).
+
+Semántica que la UI **no** recalcula (vive en `Core/Telemetry/LearningTracker`):
+
+| Campo | Significado |
+|---|---|
+| `gen` | Generación = **nacimientos / 64** (capacidad de la élite del pool: tras 64 nacimientos toda la élite ha podido ser reemplazada). No hay contador de generaciones en el mundo —la evolución es continua— así que esta es la definición operativa |
+| `hormigas`/`caídas` | Tamaño de la cohorte en curso y cuántas de ella ya cayeron |
+| `fitness_medio` | Media del fitness de TODAS las hormigas de la cohorte (vivas + caídas, cada una con su valor actual): con solo las vivas se mediría supervivencia, no calidad |
+| `élite_mejor`/`élite_medio` | El aprendizaje ACUMULADO del pool (0 mientras nadie ha muerto en una colonia fría) |
+| `celdas_pisadas`/`radio_max` | Mundo conocido por ESA colonia, leído de su capa de huella CHC (F5.3): cada colonia conoce lo suyo, no la unión |
+
+El panel del HUD (`LearningPanelModel` + `LearningPanelBehaviour`) pinta la
+curva con el color del nivel de cobertura y las dos líneas de texto; su forma y
+su texto se verifican headless contra streams reales (`LearningPanelTests`).
 
 ## 3. Estado global (barra superior)
 

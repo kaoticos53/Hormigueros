@@ -92,6 +92,7 @@ public static class GameScenario
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();
+        var learning = new LearningTracker(); // F5.3ter: curva por generación + cobertura
         var alerts = new AlertDeriver();
         var alertsOut = new List<AlertDeriver.Alert>();
 
@@ -181,6 +182,7 @@ public static class GameScenario
             sim.Step();
             relay.Observe(sim.LastEvents, sim);
             metrics.Observe(sim.LastEvents);
+            learning.Observe(sim);   // F5.3ter: curva por generación (tick a tick, barato)
 
             // Canal D (F4.2): las alertas derivadas del HUD viajan EN el stream —
             // la UI nunca inventa umbrales (regla dura del contrato §6.4) y no
@@ -189,7 +191,7 @@ public static class GameScenario
             var frame = metrics.TakeFrame(sim.Tick);
             alerts.Observe(sim.LastEvents, frame, relay, sim, alertsOut);
 
-            AppendTick(sb, sim, metrics, relay, alerts, alertsOut, frame, grid, frameEvery);
+            AppendTick(sb, sim, metrics, relay, alerts, alertsOut, frame, grid, frameEvery, learning);
             // Canales opt-in: se añaden DENTRO del objeto del tick (AppendTick deja
             // la llave abierta); la línea cierra aquí. F5.0 fix: antes el canal E
             // se añadía tras la llave de cierre y el JSONL quedaba pegado.
@@ -393,7 +395,8 @@ public static class GameScenario
 
     private static void AppendTick(StringBuilder sb, WorldSim sim, MetricRecorder metrics,
         RelayTracker relay, AlertDeriver alerts, List<AlertDeriver.Alert> alertsOut,
-        MetricRecorder.MetricFrame? metricFrame, int grid, int frameEvery)
+        MetricRecorder.MetricFrame? metricFrame, int grid, int frameEvery,
+        LearningTracker? learning = null)
     {
         bool firstField = true;
         sb.Append('{');
@@ -631,6 +634,63 @@ public static class GameScenario
                     : RelayLight.Grey;
                 sb.Append('[').Append(col.Id).Append(',')
                   .Append((byte)light).Append(']');
+            }
+            sb.Append(']');
+            firstField = false;
+        }
+
+        // — Canal C: aprendizaje (F5.3ter). Curva de fitness por GENERACIÓN y
+        //   cobertura del mundo. Telemetría pura: la cobertura escanea la capa de
+        //   huella (F5.3) y el resto lo lleva el tracker tick a tick; el mundo no
+        //   se toca. `learning` es opcional para que los llamadores antiguos
+        //   (tests, fixtures) sigan emitiendo el mismo stream sin el bloque.
+        if (learning != null && sim.Tick % 120 == 0)
+        {
+            var views = learning.Snapshot(sim);
+            if (!firstField) sb.Append(',');
+            // [col, generación, nacimientos, hormigas de la generación, caídas,
+            //  fitness medio, mejor de la generación, celdas pisadas, celdas
+            //  totales, distancia máx, élite mejor, élite media] — enteros cuando
+            // el dato es un recuento (los floats van con el formato corto canónico).
+            sb.Append("\"learning\":[");
+            for (int i = 0; i < views.Count; i++)
+            {
+                var v = views[i];
+                if (i > 0) sb.Append(',');
+                sb.Append('[').Append(v.ColonyId).Append(',')
+                  .Append(v.Generation).Append(',')
+                  .Append(v.Births).Append(',')
+                  .Append(v.GenerationAnts).Append(',')
+                  .Append(v.GenerationDead).Append(',')
+                  .Append(F((float)v.GenerationMean)).Append(',')
+                  .Append(F((float)v.GenerationBest)).Append(',')
+                  .Append(v.VisitedCells).Append(',')
+                  .Append(v.TotalCells).Append(',')
+                  .Append((int)MathF.Round(v.MaxDistanceFromNest)).Append(',')
+                  .Append(F((float)v.EliteBest)).Append(',')
+                  .Append(F((float)v.EliteAverage)).Append(']');
+            }
+            sb.Append(']');
+
+            // La curva: [col, generación, hormigas, media, mejor]. Un bloque aparte
+            // porque es una SERIE (una fila por generación) y así el parser del HUD
+            // la lee sin anidar arrays dentro del bloque por colonia.
+            sb.Append(",\"fitcurve\":[");
+            bool firstPoint = true;
+            for (int i = 0; i < views.Count; i++)
+            {
+                var v = views[i];
+                for (int g = 0; g < v.Curve.Count; g++)
+                {
+                    var p = v.Curve[g];
+                    if (!firstPoint) sb.Append(',');
+                    firstPoint = false;
+                    sb.Append('[').Append(v.ColonyId).Append(',')
+                      .Append(p.Generation).Append(',')
+                      .Append(p.Ants).Append(',')
+                      .Append(F((float)p.Mean)).Append(',')
+                      .Append(F((float)p.Best)).Append(']');
+                }
             }
             sb.Append(']');
             firstField = false;

@@ -201,6 +201,54 @@ namespace AntSim.Unity.Scripts.Streaming
         }
 
         /// <summary>
+        /// F5.3ter — aprendizaje de UNA colonia (canal C): la curva de fitness por
+        /// generación se resume aquí (generación en curso, media y mejor de la
+        /// cohorte, y el aprendizaje acumulado del pool: élite) más el mundo que
+        /// esa colonia conoce (celdas pisadas, cobertura y radio máximo).
+        /// </summary>
+        public readonly struct LearningView
+        {
+            public readonly int ColonyId;
+            public readonly int Generation;
+            public readonly int Births;
+            public readonly int Ants;        // hormigas nacidas en la generación en curso
+            public readonly int Dead;        // de esas, cuántas cayeron
+            public readonly float MeanFitness;   // media de la generación (vivas + caídas)
+            public readonly float BestFitness;
+            public readonly int VisitedCells;
+            public readonly int TotalCells;
+            public readonly int MaxDistance;     // u, redondeado
+            public readonly float EliteBest;
+            public readonly float EliteAverage;
+
+            public LearningView(int colonyId, int generation, int births, int ants, int dead,
+                float meanFitness, float bestFitness, int visitedCells, int totalCells,
+                int maxDistance, float eliteBest, float eliteAverage)
+            {
+                ColonyId = colonyId; Generation = generation; Births = births;
+                Ants = ants; Dead = dead; MeanFitness = meanFitness; BestFitness = bestFitness;
+                VisitedCells = visitedCells; TotalCells = totalCells; MaxDistance = maxDistance;
+                EliteBest = eliteBest; EliteAverage = eliteAverage;
+            }
+
+            /// <summary>Fracción [0,1] del mundo pisada por esta colonia.</summary>
+            public float Coverage => TotalCells > 0 ? (float)VisitedCells / TotalCells : 0f;
+        }
+
+        /// <summary>F5.3ter — un punto de la curva de aprendizaje: [col, gen, hormigas, media, mejor].</summary>
+        public readonly struct FitnessPointView
+        {
+            public readonly int ColonyId;
+            public readonly int Generation;
+            public readonly int Ants;
+            public readonly float Mean;
+            public readonly float Best;
+
+            public FitnessPointView(int colonyId, int generation, int ants, float mean, float best)
+            { ColonyId = colonyId; Generation = generation; Ants = ants; Mean = mean; Best = best; }
+        }
+
+        /// <summary>
         /// Un paquete del canal E múltiple (F5.1): de qué COLONIA y de qué TIPO,
         /// con su rejilla RLE en base64. Las capas de feromona son por colonia, así
         /// que «las feromonas» del mundo son N capas, no una.
@@ -231,6 +279,8 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly List<ColonyMetricsView> ColonyMetrics = new();
             public readonly List<CutterView> Cutters = new(); // F5.2a.3
             public readonly List<RaidView> Raids = new();     // F5.2b.3
+            public readonly List<LearningView> Learning = new();      // canal C (F5.3ter)
+            public readonly List<FitnessPointView> FitnessCurve = new(); // curva por generación
             public readonly List<AlertView> Alerts = new();      // canal D (F4.2)
             public readonly List<ColonyLightView> Lights = new(); // semáforo por colonia
             public string? Phero;                                 // canal E (F4.5), base64 RLE
@@ -475,6 +525,39 @@ namespace AntSim.Unity.Scripts.Streaming
                     if (f.Length < 3) continue;
                     v.Raids.Add(new RaidView((int)Reader.NumOf(f[0]),
                         (long)Reader.NumOf(f[1]), (long)Reader.NumOf(f[2])));
+                }
+            }
+
+            // F5.3ter: aprendizaje por colonia — [col, gen, nacimientos, hormigas,
+            // caídas, media, mejor, celdas, celdas_totales, dist_máx, élite, élite_media]
+            // (bloque AUSENTE en streams antiguos o mundos sin tracker: tolerante).
+            int lni = raw.IndexOf("\"learning\":[", StringComparison.Ordinal);
+            if (lni >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, lni + "\"learning\":[".Length - 1)))
+                {
+                    string[] f = RowFields(row);
+                    if (f.Length < 12) continue;
+                    v.Learning.Add(new LearningView(
+                        (int)Reader.NumOf(f[0]), (int)Reader.NumOf(f[1]), (int)Reader.NumOf(f[2]),
+                        (int)Reader.NumOf(f[3]), (int)Reader.NumOf(f[4]),
+                        (float)Reader.NumOf(f[5]), (float)Reader.NumOf(f[6]),
+                        (int)Reader.NumOf(f[7]), (int)Reader.NumOf(f[8]), (int)Reader.NumOf(f[9]),
+                        (float)Reader.NumOf(f[10]), (float)Reader.NumOf(f[11])));
+                }
+            }
+
+            // La curva de fitness por generación: [col, gen, hormigas, media, mejor].
+            int fci = raw.IndexOf("\"fitcurve\":[", StringComparison.Ordinal);
+            if (fci >= 0)
+            {
+                foreach (string row in SplitTop(ArrayBody(raw, fci + "\"fitcurve\":[".Length - 1)))
+                {
+                    string[] f = RowFields(row);
+                    if (f.Length < 5) continue;
+                    v.FitnessCurve.Add(new FitnessPointView(
+                        (int)Reader.NumOf(f[0]), (int)Reader.NumOf(f[1]), (int)Reader.NumOf(f[2]),
+                        (float)Reader.NumOf(f[3]), (float)Reader.NumOf(f[4])));
                 }
             }
 

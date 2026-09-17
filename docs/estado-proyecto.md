@@ -1,13 +1,17 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-09-16 · HEAD: `7fc89f4` (Windows-first UX) ·
-suite: 382/382 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+suite: 463/463 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
 índice con veredicto. Enlaces: [`arquitectura.md`](arquitectura.md) (plan
 global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
-[`fase5-plan.md`](fase5-plan.md) (plan vigente de Fase 5).
+[`fase5-plan.md`](fase5-plan.md) (plan vigente de Fase 5),
+[`ideas-externas.md`](ideas-externas.md) (revisión de cuatro simuladores
+afines con propuestas priorizadas por valor/coste) y
+[`politicas-benchmark.md`](politicas-benchmark.md) (la vara externa: aleatoria
+vs scripted vs evolucionada en la misma arena).
 
 ## Resumen en una tabla
 
@@ -31,7 +35,7 @@ global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
 a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
 el 2026-09-15: stream canónico, replay con drops a 3000 y 6000 ticks, la
 partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica (nuevo). **382/382 tests** en Windows Y Linux.
+canónica (nuevo). **463/463 tests** en Windows Y Linux.
 
 **NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
 innovation), paridad bit a bit con MLP (`FromMlp`), operadores
@@ -74,6 +78,37 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 
 1. **F5.3 rodaja 1 — SoA done**: `AntSoA` (parallel arrays), infraestructura lista.
    **F5.3 rodaja 2 — HECHO (2026-09-17)**: el mundo COMPACTA las adultas muertas al final de cada `Step` (O(n), `BankAndCompactDeadAnts`). Claves del diseño: el fitness de por vida de las muertas va a un BANCO por colonia (el pool ya cobró en el tick de la muerte) que `HashLine`, el save y la arena suman para producir lo mismo que la lista con cadáveres; `HashLine` y los checkpoints solo describen vivas; los registros de shaping de la arena van claveados por `Id` (la posición en la lista ya no es identidad). Pines: solo invasión y NEAT se movieron (hay muertes en sus ventanas de hash); stream/replay/Atta son byte-idénticos. La fila del canal A desaparece en el tick de la muerte (contrato actualizado en `UnityStreamContractTests`): la muerte la captura el canal B.
+   **F5.3 rodaja 2bis — HECHO (2026-09-17): huella CHC (4ª capa) y tropotaxis en ratio.**
+   La señal NEGATIVA que faltaba, inspirada en [`ideas-externas.md`](ideas-externas.md) §1 (anthill):
+   `PheromoneKind.Footprint` con depósito pasivo `Q_max_footprint·v·dt` (por unidad RECORRIDA, sin
+   gasto de energía: es cutícula que se roza, no una decisión del cerebro), τ½ 240 s y difusión 0.06;
+   el giro es un REFLEJO periférico `g·(der−izq)/(1+s·max)` — RATIO, no canal de sensor, así que los
+   19 canales y los `.antgenome` no cambian. Calibrado con sonda: 0.08 u/u · g 8 · s 4 ⇒ ~0.33 rad/s
+   (≈15 % de Ω_max). Evidencia del diseño: con 1 colonia a 7200 ticks el 5 % de celdas más pisadas
+   pasa de concentrar el **49 % del tráfico al 23 %** y el máximo por celda baja de 0.98 a 0.83, sin
+   coste económico (stock 41 → 46). Control A/B `--footprint 0` (depósito sí, respuesta no). Canal E:
+   `k=4` y selector violeta en el HUD. Checkpoint **v5** (+1 capa; los v2–v4 cargan con huella a cero).
+   Los 6 pines regenerados (el mundo cambia a propósito) y **443/443 tests** (463 con el benchmark de políticas y el panel de aprendizaje).
+   **F5.3 rodaja 2ter — HECHO (2026-09-17): benchmark de políticas (idea nº 2 de `ideas-externas`).**
+   La vara EXTERNA que faltaba: aleatoria vs scripted vs evolucionada en la misma arena, mismas
+   semillas y **política congelada** (`WorldSim.ForcePolicy` — la descendencia hereda el mismo cerebro
+   y no realimenta el pool, así que se mide el cerebro y no la evolución de la prueba). Nuevo
+   `ScriptedBrain` (reglas explícitas: brújula + visión + rastro + vuelta al centro en la pared),
+   `PolicyBenchmark` y `--mode bench`. Resultados (10 semillas, 2 bandas, `docs/politicas-benchmark.md`):
+   la aleatoria está **muerta por construcción** (0 pickups en 20 partidas) mientras scripted y
+   evolucionada empatan (diferencias ≤ 2 SE, y el orden se invierte con `--trials`); evolucionar
+   durante la prueba no ayuda a estos horizontes. El hook es inerte sin política fijada (test de
+   hash) ⇒ los 6 pines siguen valiendo.
+   **F5.3 rodaja 2quater — HECHO (2026-09-17): curva de aprendizaje y cobertura en el canal C + HUD (idea nº 5 de `ideas-externas`).**
+   `LearningTracker` en Core: por colonia, curva de fitness por GENERACIÓN (generación = nacimientos/64,
+   la capacidad de la élite; y el fitness de una cohorte es el de TODAS sus hormigas, contabilizadas por
+   deltas para no medir supervivencia) y cobertura del mundo leída de la huella CHC (celdas pisadas +
+   radio máximo). Dos bloques nuevos en el canal C (`learning`, `fitcurve`) cada 120 ticks; `LearningPanelModel`
+   + `LearningPanelBehaviour` en el HUD (curva por generación autoescalada, color por nivel de cobertura y
+   dos líneas de datos en la tarjeta, que crece a 268 px). Telemetría pura: test de hash y 5 pines verdes;
+   Unity compila en batch sin avisos. Evidencia: en 9000 ticks la colonia sembrada con warm-v2 conoce
+   **2148/9216 celdas (23.3 %)** con fitness medio 4.7, y la fría 728 (7.9 %) con 1.8 — la diferencia de
+   aprendizaje se ve en el HUD. **463/463 tests**.
    **F5.3 rodaja 3 pendiente**: LOD de difusión de feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites

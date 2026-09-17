@@ -343,9 +343,17 @@ ruta de Windows.
 
 - El texto uGUI legacy puede recortar líneas largas (Overflow activado en
   `NewText` lo mitiga). El uGUI **por elemento** de F5.1 ya está hecho (toasts con
-  hit-test exacto, barras de stock, botones nativos — ver el bloque 2): lo que
-  queda de F5.1 es chip de estado por runway, drag&drop del `.antgenome`,
-  gráficas por tarjeta, tipografía/iconos y audio/accesibilidad.
+  hit-test exacto, barras de stock, gráfica de reserva, curva de aprendizaje,
+  botones nativos — ver el bloque 2): lo que queda de F5.1 es chip de estado por
+  runway, drag&drop del `.antgenome`, tipografía/iconos y audio/accesibilidad.
+- **Geometría de tarjeta cambiada en F5.3ter** (la banda de APRENDIZAJE: curva de
+  fitness 62–88 y dos líneas de texto 90–124): la tarjeta pasa de 204 a **268 px**
+  de alto y el paso de 216 a **280**; el cuerpo de texto tiene ahora 126 px de
+  inset inferior. El gate visual de píxeles (que mide desbordes y solapes) hay
+  **que re-ejecutarlo** en el próximo Play pass: hasta entonces, la única
+  verificación de esta geometría es el compilado en batch (0 errores CS) y los
+  tests headless del modelo — que cubren la curva y el texto, no el rect en
+  pantalla.
 - `Shader.Find("Standard")` en editor devuelve el shader aunque no haya
   referencia de proyecto; en build player requiere que el shader esté incluido
   (para builds, añadir a *Graphics → Always Included Shaders*).
