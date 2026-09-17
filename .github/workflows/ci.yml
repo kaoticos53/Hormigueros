@@ -20,7 +20,8 @@ jobs:
         run: dotnet test --nologo -v q
 
       # ─────────────────────────────────────────────────────────────────────────
-      # LOS 4 PINS DE HASH DE ABAJO SOLO SON VÁLIDOS CON CANONMATH.
+      # LOS PINS DE HASH DE ABAJO (5 scripts + la constante de la suite) SOLO SON
+      # VÁLIDOS CON CANONMATH.
       #
       # Los hashes canónicos del mundo NO son independientes de la plataforma:
       # MathF.Tanh/Exp/Log/Sin/Cos difieren 1 ULP entre la libm de Windows y la
@@ -81,56 +82,154 @@ jobs:
   # Este job los compila en batch y falla con el primer error.
   #
   # DORMIDO por defecto (`UNITY_CI`): descargar Unity en cada push es caro y
-  # necesita licencia. Para activarlo:
-  #   1. Variable de repositorio  UNITY_CI = true
-  #   2. Secreto de repositorio   UNITY_LICENSE (contenido del .ulf)  — o bien
-  #                               UNITY_SERIAL para activación por serie
-  # El script (`scripts/check-unity-compile.sh`) es independiente: en local
-  # encuentra el editor del Hub por la versión fijada en ProjectVersion.txt.
+  # necesita licencia. Para activarlo hacen falta DOS cosas en
+  # Settings → Secrets and variables → Actions:
+  #
+  #   1. Variable  UNITY_CI = true
+  #   2. UN secreto de licencia, según el tipo de licencia:
+  #
+  #      Personal (gratuita) → UNITY_LICENSE_FILE_BASE64
+  #        `unity license activate --personal` NO sirve en CI: el backend de
+  #        licencias rechaza los tokens de cuenta de servicio para activar
+  #        (lo dice el propio andamiaje de `unity ci init`). Hay que usar el
+  #        archivo de activación offline de una máquina con la licencia ya
+  #        activada, en base64 y en UNA línea:
+  #          Windows  %LOCALAPPDATA%\Unity\licenses\UnityEntitlementLicense.xml
+  #            PowerShell:
+  #              [Convert]::ToBase64String([IO.File]::ReadAllBytes(
+  #                "$env:LOCALAPPDATA\Unity\licenses\UnityEntitlementLicense.xml"))
+  #          Linux    ~/.local/share/unity3d/Unity/Unity_lic.ulf
+  #            bash:  base64 -w0 ~/.local/share/unity3d/Unity/Unity_lic.ulf
+  #        La licencia NO está atada a plataforma ni a versión: activada en
+  #        Windows, vale para compilar en Ubuntu.
+  #
+  #      Pro/Plus → UNITY_LICENSE_SERIAL (XX-XXXX-XXXX-XXXX-XXXX-XXXX)
+  #
+  # Los pasos de abajo salen del andamiaje oficial (`unity ci init --provider
+  # github --dry-run`), no de la intuición: instalar el editor necesita
+  # `--yes --accept-eula` (sin ellos se queda esperando una confirmación que en
+  # CI nunca llega), el runner no trae las librerías de las que depende el
+  # editor aunque sea batch, y la licencia hay que DEVOLVERLA al final para no
+  # filtrar activaciones en runners efímeros.
   # ───────────────────────────────────────────────────────────────────────────
   unity-compile:
     if: vars.UNITY_CI == 'true'
     runs-on: ubuntu-latest
+    env:
+      # El CLI lo lee del entorno: sin esto, cualquier comando que quiera
+      # preguntar algo se queda colgado hasta el timeout del job.
+      UNITY_NON_INTERACTIVE: '1'
+      # Anotaciones de GitHub en el resumen del run en vez de solo en el log.
+      UNITY_FORMAT: github
     steps:
       - uses: actions/checkout@v4
+
+      # Antes de descargar ~5 GB de editor: ¿hay con qué activarlo? Un secreto
+      # que falta debe costar 2 segundos, no 10 minutos.
+      - name: Comprobar los requisitos de activación
+        env:
+          UNITY_LICENSE_SERIAL: ${{ secrets.UNITY_LICENSE_SERIAL }}
+          UNITY_LICENSE_FILE_BASE64: ${{ secrets.UNITY_LICENSE_FILE_BASE64 }}
+        run: |
+          if [[ -n "${UNITY_LICENSE_SERIAL:-}" ]]; then
+            echo "licencia: serial (Pro/Plus)"; exit 0
+          fi
+          if [[ -n "${UNITY_LICENSE_FILE_BASE64:-}" ]]; then
+            echo "licencia: archivo offline (Personal)"; exit 0
+          fi
+          {
+            echo "## Falta la licencia de Unity"
+            echo
+            echo "El job necesita UNO de estos dos secretos (ver el comentario del"
+            echo "job para el detalle de cómo generarlos):"
+            echo
+            echo "- \`UNITY_LICENSE_FILE_BASE64\` — licencia Personal (base64 del"
+            echo "  \`UnityEntitlementLicense.xml\` de una máquina ya activada)"
+            echo "- \`UNITY_LICENSE_SERIAL\` — licencia Pro/Plus"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::define UNITY_LICENSE_FILE_BASE64 o UNITY_LICENSE_SERIAL en Settings → Secrets and variables → Actions"
+          exit 1
 
       - name: Instalar el Unity CLI
         run: |
           curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh \
             | UNITY_CLI_CHANNEL=beta bash
-          # El instalador deja el binario fuera del PATH de esta shell: se
-          # localiza y se publica en GITHUB_PATH para los pasos siguientes.
-          CLI="$(command -v unity || true)"
-          if [[ -z "$CLI" ]]; then
-            CLI="$(find "$HOME" /usr/local/bin -maxdepth 4 -type f -name unity \
-                   -perm -u+x 2>/dev/null | head -n 1)"
-          fi
-          if [[ -z "$CLI" ]]; then
-            echo "::error::no se encontró el binario 'unity' tras instalarlo"; exit 1
-          fi
-          echo "unity => $CLI"
-          echo "$(dirname "$CLI")" >> "$GITHUB_PATH"
+          # El instalador deja el binario en un directorio de usuario, fuera del
+          # PATH de esta shell: se publica para los pasos siguientes.
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # El instalador del editor guarda los archivos comprimidos: una caché aquí
+      # ahorra la descarga entera en cada push.
+      - name: Restaurar la caché de descargas del editor
+        uses: actions/cache@v4
+        with:
+          path: ~/.config/unityhub/downloads
+          key: unity-downloads-6000.6.0f1
 
       - name: Instalar la versión de Unity fijada por el proyecto
         run: |
           VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
             src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
           echo "Instalando Unity $VERSION"
-          unity install "$VERSION"
+          unity install "$VERSION" --yes --accept-eula
+
+      # El editor es una aplicación de escritorio incluso en batch: sin estas
+      # librerías sale antes de imprimir nada útil y el análisis del log daría
+      # un veredicto vacío. Nombres de Ubuntu 24.04 (noble), que es lo que
+      # corresponde a `runs-on: ubuntu-latest`.
+      - name: Instalar las librerías de runtime del editor
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglu1-mesa libgtk-3-0t64 libnss3 \
+            libasound2t64 libgbm1 libdrm2 libxtst6 \
+            libxrandr2 libxcursor1 libxcomposite1 libxdamage1 \
+            libxfixes3 libxi6 libxrender1 libxext6 \
+            libsm6 libice6 libxkbcommon0 libpango-1.0-0 \
+            libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 libatk1.0-0t64 \
+            libatk-bridge2.0-0t64 libcups2t64 libdbus-1-3 libnotify4 \
+            libsecret-1-0
 
       - name: Activar la licencia
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_LICENSE_SERIAL: ${{ secrets.UNITY_LICENSE_SERIAL }}
+          UNITY_LICENSE_FILE_BASE64: ${{ secrets.UNITY_LICENSE_FILE_BASE64 }}
         run: |
-          if [[ -n "$UNITY_SERIAL" ]]; then
-            unity license activate --serial "$UNITY_SERIAL"
-          elif [[ -n "$UNITY_LICENSE" ]]; then
-            printf '%s' "$UNITY_LICENSE" > "$RUNNER_TEMP/Unity_lic.ulf"
-            unity license activate --file "$RUNNER_TEMP/Unity_lic.ulf"
+          if [[ -n "${UNITY_LICENSE_SERIAL:-}" ]]; then
+            unity license activate --serial "$UNITY_LICENSE_SERIAL"
           else
-            echo "::error::define UNITY_SERIAL o UNITY_LICENSE (ver el comentario del job)"; exit 1
+            # base64 → archivo, en $RUNNER_TEMP: nunca queda en el workspace (y
+            # el paso de máscara no hace falta para él porque jamás se imprime).
+            printf '%s' "$UNITY_LICENSE_FILE_BASE64" | base64 -d > "$RUNNER_TEMP/unity-license.ulf"
+            unity license activate --file "$RUNNER_TEMP/unity-license.ulf"
           fi
+          unity license list
+
+      # Falla en segundos si la máquina no puede terminar el trabajo (sin
+      # licencia activable, editor ausente, disco corto, servicios inalcanzables)
+      # en vez de a mitad de la compilación.
+      - name: Preflight
+        run: unity doctor --ci
+
+      - name: Localizar el editor instalado
+        run: |
+          VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
+            src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
+          BASE="$(unity --quiet install-path | tail -n 1)"
+          EDITOR="$BASE/$VERSION/Editor/Unity"
+          if [[ ! -x "$EDITOR" ]]; then
+            echo "::error::el editor no está en $EDITOR (base: $BASE)"
+            ls -la "$BASE" || true
+            exit 1
+          fi
+          echo "editor => $EDITOR"
+          echo "UNITY_EDITOR_BIN=$EDITOR" >> "$GITHUB_ENV"
 
       - name: Compilar el proyecto Unity en batch (falla con cualquier error CS)
-        run: bash scripts/check-unity-compile.sh
+        run: bash scripts/check-unity-compile.sh --unity "$UNITY_EDITOR_BIN"
+
+      # Devolver el asiento aunque el job falle o se cancele: en runners
+      # efímeros, una activación filtrada por run acaba bloqueando la cuenta.
+      - name: Devolver la licencia
+        if: always()
+        run: unity license return --yes || true
