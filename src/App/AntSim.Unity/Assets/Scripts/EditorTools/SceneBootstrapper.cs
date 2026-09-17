@@ -16,8 +16,20 @@ namespace AntSim.Unity.Scripts.EditorTools
     /// </summary>
     public static class SceneBootstrapper
     {
+        /// <summary>Menú: escena con los defaults del proyecto (grid 96, warm-v2 sembrado).</summary>
         [MenuItem("AntSim/Crear escena de juego", priority = 0)]
-        public static void CreateGameScene()
+        public static void CreateGameScene() => CreateGameSceneWith(Streaming.LaunchSettings.Defaults());
+
+        /// <summary>
+        /// Construye la escena COMPLETA con la configuración dada (F5.3): es el
+        /// único camino de montaje, así que lo que inyecta el lanzador (pool,
+        /// grid, colonias, ticks, especie, velocidad) llega de verdad a la
+        /// escena — geometría incluida: suelo, cámara y marcadores de nido se
+        /// dimensionan con el GRID pedido y hay un nido por COLONIA (antes el
+        /// asistente ajustaba el presenter DESPUÉS de montar la escena con grid
+        /// 96, así que elegir grid 256 dejaba el mundo 8× fuera de cámara).
+        /// </summary>
+        public static void CreateGameSceneWith(Streaming.LaunchSettings settings)
         {
             // Asegura que Universal Render Pipeline (URP) esté configurado como pipeline activo
             UrpSetup.EnsureUrpPipelineAsset();
@@ -28,8 +40,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             // es grid × WorldUnits.PerCell (SimConstants.CellSizeUnits = 8), no
             // `grid` — dimensionar la escena con `grid` dejaba el mundo 8× fuera de
             // cámara (bug detectado en el Play pass con el presente vivo).
-            const int GridCells = 96;
-            float world = Streaming.WorldUnits.WorldSize(GridCells); // 768 u para grid 96
+            int gridCells = settings.Grid;
+            float world = Streaming.WorldUnits.WorldSize(gridCells); // 768 u para grid 96
 
             // — Cámara: vista cenital que cubre el mundo ENTERO —
             var camGo = new GameObject("Main Camera");
@@ -111,13 +123,17 @@ namespace AntSim.Unity.Scripts.EditorTools
             // sim, canal A a 30 Hz): primera descarga ≈t3950 y el semáforo pasa
             // a ámbar/verde dentro de la sesión. Para el fixture grande (256²,
             // relevo real) ajustar Grid/Ticks a mano o usar ReplayFile.
-            presenter.Grid = GridCells;
-            presenter.Colonies = 2;
-            presenter.Ticks = 36000;
-            presenter.FrameEvery = 1;
-            presenter.Species = "lasius";
-            presenter.SeedPoolPath = "artifacts/pretrain-warm-v2.antgenome";
-            presenter.Speed = 3f;
+            presenter.Grid = gridCells;
+            presenter.Colonies = settings.Colonies;
+            presenter.Ticks = settings.Ticks;
+            presenter.FrameEvery = settings.FrameEvery;
+            presenter.Species = settings.Species;
+            // PoolPath (ruta absoluta del lanzador) manda; si no, el nombre se
+            // resuelve como el default histórico: artifacts/<nombre>.antgenome.
+            presenter.SeedPoolPath = !string.IsNullOrEmpty(settings.PoolPath)
+                ? settings.PoolPath
+                : (!string.IsNullOrEmpty(settings.Pool) ? PoolToRepoRelative(settings.Pool) : null);
+            presenter.Speed = settings.Speed;
             // Mallas a ESCALA NATURAL (cápsula 2 u × 1 u, esfera 1 u de diámetro):
             // el presenter escala en unidades de mundo, así que pre-escalar aquí
             // solo escondía el número real (una cápsula de 0.25 u que el presenter
@@ -160,9 +176,10 @@ namespace AntSim.Unity.Scripts.EditorTools
             // del color de la colonia (el mismo acento que usa la tarjeta del HUD).
             float nestR = world * 0.022f; // marcador proporcional al mundo
             var moundMat = NewMat(new Color(0.30f, 0.25f, 0.20f), "NestMoundMat");
-            for (int c = 0; c < 2; c++)
+            int nestCount = Mathf.Max(1, settings.Colonies);
+            for (int c = 0; c < nestCount; c++)
             {
-                float nx = world * (c + 1) / 3f;
+                float nx = world * (c + 1) / (nestCount + 1);
                 var mound = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 mound.name = $"NestMound_{c}";
                 mound.transform.position = new Vector3(nx, 0.15f, world * 0.5f);
@@ -175,8 +192,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 nest.transform.position = new Vector3(nx, 0.45f, world * 0.5f);
                 nest.transform.localScale = new Vector3(nestR, 0.3f, nestR);
                 RemoveCollider(nest);
-                nest.GetComponent<Renderer>().sharedMaterial = NewMat(
-                    c == 0 ? AccentColony0 : AccentColony1, $"NestMat{c}");
+                nest.GetComponent<Renderer>().sharedMaterial = NewMat(AccentForColony(c), $"NestMat{c}");
             }
 
             // — Feromonas (F4.5): capa TRANSPARENTE sobre el suelo —
@@ -236,7 +252,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             var cardPanels = new RectTransform[2];
             for (int c = 0; c < 2; c++)
             {
-                var accent = c == 0 ? AccentColony0 : AccentColony1;
+                var accent = AccentForColony(c);
                 // 204 de alto (antes 176) y 216 de paso: los 28 px nuevos son la
                 // banda de la GRÁFICA de reserva (F5.1), que no cabía al lado de
                 // la barra. Sin crecer la tarjeta, el gráfico habría obligado a
@@ -494,6 +510,89 @@ namespace AntSim.Unity.Scripts.EditorTools
                 "I para importar un pool. F para feromonas.");
         }
 
+        // ── Entrada del LANZADOR (F5.3) ────────────────────────────────────
+        // Unity.exe -projectPath … -executeMethod …PlayFromLaunchSettings
+        //           -antsimSettings "<archivo>"
+        // El archivo lo escribe scripts/play-game.ps1 con lo que el usuario
+        // pidió (pool, grid, colonias, ticks, especie, velocidad). Sin archivo
+        // o con errores se cae a los defaults y se dice por consola: nunca se
+        // deja al jugador con un editor a medias sin explicación.
+
+        /// <summary>
+        /// Monta la escena CON la configuración del lanzador y entra en Play.
+        /// Es la entrada que usa <c>play-game.ps1/.bat</c>; con el archivo
+        /// ausente se comporta como «Crear escena + Play» con los defaults.
+        /// </summary>
+        public static void PlayFromLaunchSettings()
+        {
+            var settings = Streaming.LaunchSettings.Defaults();
+            string path = FindLaunchSettingsPath();
+
+            if (!string.IsNullOrEmpty(path) && System.IO.File.Exists(path))
+            {
+                string text = System.IO.File.ReadAllText(path);
+                if (Streaming.LaunchSettings.TryParse(text, out var parsed, out string error))
+                {
+                    settings = parsed;
+                    Debug.Log($"[AntSim] Configuración del lanzador leída de {path}");
+                }
+                else
+                {
+                    Debug.LogError($"[AntSim] Configuración de lanzamiento inválida ({path}): {error}. " +
+                        "Se usan los valores por defecto.");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("[AntSim] Sin archivo de configuración del lanzador " +
+                    "(-antsimSettings <archivo> o Library/antsim-launch.txt): se usan los valores por defecto.");
+            }
+
+            if (!string.IsNullOrEmpty(settings.PoolPath) && !System.IO.File.Exists(settings.PoolPath))
+            {
+                Debug.LogWarning($"[AntSim] El pool indicado no existe ({settings.PoolPath}); " +
+                    "la escena arrancará sin semilla. Revisa la ruta.");
+                settings.PoolPath = "";
+            }
+
+            CreateGameSceneWith(settings);
+            Debug.Log("[AntSim] Lanzador → " + settings.Describe());
+            EditorApplication.EnterPlaymode();
+        }
+
+        /// <summary>Menú equivalente (para probar el camino del lanzador a mano).</summary>
+        [MenuItem("AntSim/Jugar con ajustes del lanzador", priority = 11)]
+        public static void PlayFromLaunchSettingsMenu() => PlayFromLaunchSettings();
+
+        /// <summary>
+        /// Ruta del archivo de configuración: <c>-antsimSettings &lt;ruta&gt;</c> de la
+        /// línea de comandos o, si no, el convenio <c>Library/antsim-launch.txt</c>.
+        /// </summary>
+        private static string FindLaunchSettingsPath()
+        {
+            string[] args = System.Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length - 1; i++)
+                if (string.Equals(args[i], "-antsimSettings", System.StringComparison.OrdinalIgnoreCase))
+                    return args[i + 1];
+
+            string project = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, ".."));
+            return System.IO.Path.Combine(project, "Library", "antsim-launch.txt");
+        }
+
+        /// <summary>
+        /// Nombre de pool → ruta relativa al repo root (el mismo convenio del
+        /// default histórico). Una ruta explícita se respeta tal cual.
+        /// </summary>
+        private static string PoolToRepoRelative(string pool)
+        {
+            if (pool.IndexOf('/') >= 0 || pool.IndexOf('\\') >= 0 || pool.EndsWith(".antgenome"))
+                return pool;
+            return "artifacts/" + pool + ".antgenome";
+        }
+
+        /// <summary>Acento de HUD/nido por colonia (cicla los dos del contrato).</summary>
+        private static Color AccentForColony(int colony) => colony % 2 == 0 ? AccentColony0 : AccentColony1;
+
         // ── Asistente de primera ejecución (Windows-friendly) ──────────────
         // Menú AntSim → Asistente: guía al usuario paso a paso para elegir
         // pool, especie y grid sin tener que editar el inspector a mano.
@@ -641,18 +740,17 @@ namespace AntSim.Unity.Scripts.EditorTools
                     {
                         Close();
                         EditorPrefs.SetBool(PrefKey, true);
-                        CreateGameScene();
-                        // Configurar el presenter
-                        var presenter = Object.FindAnyObjectByType<Presenter.SimPresenterBehaviour>();
-                        if (presenter != null)
-                        {
-                            presenter.Grid = _grid;
-                            presenter.Colonies = _colonies;
-                            string root = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "..", "..", "..", ".."));
-                            string poolPath = System.IO.Path.Combine(root, "artifacts", _pool + ".antgenome");
-                            if (System.IO.File.Exists(poolPath)) presenter.SeedPoolPath = poolPath;
-                            presenter.Species = _species;
-                        }
+                        // El asistente pasa por el MISMO camino que el lanzador
+                        // (F5.3): la escena se monta con el grid y las colonias
+                        // elegidos, no se parchea el presenter a posteriori (eso
+                        // dejaba la geometría en grid 96 mientras el stream
+                        // corría a 256).
+                        var wizardSettings = Streaming.LaunchSettings.Defaults();
+                        wizardSettings.Grid = _grid;
+                        wizardSettings.Colonies = _colonies;
+                        wizardSettings.Species = _species;
+                        wizardSettings.Pool = _pool;
+                        CreateGameSceneWith(wizardSettings);
                         EditorApplication.EnterPlaymode();
                     }
                     if (GUILayout.Button("Atras")) _step = 2;

@@ -262,9 +262,14 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
 El juego tiene un modo visual completo: hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
 
 ```bash
-# Lanzar Unity con la escena lista para Play:
-scripts\play-game.bat        # Windows (CMD/PowerShell)
-bash scripts/play-game.sh    # Linux/macOS (Git Bash tambien vale)
+# Lanzar Unity con la escena lista para Play (los ajustes se inyectan
+# en la escena ANTES de entrar en Play: pool, grid, colonias, ticks,
+# especie, velocidad y frame-every, con geometria acorde al grid):
+scripts\play-game.bat                                   # Windows (CMD)
+.\scripts\play-game.ps1 --grid 256 --species lasius,eciton
+bash scripts/play-game.sh                                # Linux/macOS
+
+# --dry-run imprime los ajustes y el comando sin abrir Unity.
 
 # O abrir el proyecto manualmente en Unity 6000.x:
 #   1. File - Open Project - selecciona src/App/AntSim.Unity
