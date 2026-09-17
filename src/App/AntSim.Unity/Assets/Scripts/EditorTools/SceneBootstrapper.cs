@@ -257,13 +257,18 @@ namespace AntSim.Unity.Scripts.EditorTools
                 // banda de la GRÁFICA de reserva (F5.1), que no cabía al lado de
                 // la barra. Sin crecer la tarjeta, el gráfico habría obligado a
                 // encoger el texto y el pass de aspecto cuenta el desborde.
+                // F5.3ter: la tarjeta crece otra vez (+64: banda de APRENDIZAJE —
+                // curva de fitness por generación 62–88 y sus dos líneas 90–124) y
+                // el paso a 280 para que la segunda tarjeta no pise la primera.
                 var panel = Panel(canvasGo.transform, $"ColonyCard_{c}",
-                    new Vector2(16, -72 - c * 216), new Vector2(440, 204), accent);
+                    new Vector2(16, -72 - c * 280), new Vector2(440, 268), accent);
                 cardPanels[c] = panel;
                 cardTexts[c] = PanelText(panel, "Body", 14, Ink);
                 var cardBodyRt = cardTexts[c].rectTransform;
-                // 62 px de inset inferior: barra de reserva (14–26) y gráfica (32–58).
-                cardBodyRt.offsetMin = new Vector2(cardBodyRt.offsetMin.x, 62f);
+                // 126 px de inset inferior: barra de reserva (14–26), gráfica de
+                // reserva (32–58), curva de aprendizaje (62–88) y sus dos líneas
+                // de texto (90–124).
+                cardBodyRt.offsetMin = new Vector2(cardBodyRt.offsetMin.x, 126f);
             }
 
             // — Barra de estado (arriba, ancho completo) —
@@ -446,6 +451,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             RectTransform toastContainer = CreateToastContainer(canvasGo.transform, hud);
             var stockImages = CreateStockBars(cardPanels, hud, cardTexts.Length);
             CreateSparklines(cardPanels, presenter, cardTexts.Length);
+            CreateLearningPanels(cardPanels, presenter, cardTexts.Length);
             var buttons = CreateNativeButtons(modalRt, dropPanel, hud);
             hud.BindNativeButtons(buttons[0], buttons[1], buttons[2], buttons[3]);
             hud.BindImportPathField(pathField);
@@ -871,6 +877,56 @@ namespace AntSim.Unity.Scripts.EditorTools
                 // ⇒ el modelo reparte la ventana por todo el ancho.
                 spark.Width = 406;
                 spark.Height = 26;
+            }
+        }
+
+        /// <summary>
+        /// F5.3ter — banda de APRENDIZAJE por tarjeta: curva de fitness por
+        /// generación (RawImage con textura generada, como la de reserva) + dos
+        /// líneas de datos. El componente se refresca solo desde el canal C, así
+        /// que el HUD no conoce el aprendizaje: solo lo pinta.
+        /// </summary>
+        private static void CreateLearningPanels(RectTransform[] cardPanels,
+            Presenter.SimPresenterBehaviour presenter, int colonies)
+        {
+            for (int i = 0; i < colonies; i++)
+            {
+                var curveGo = new GameObject($"FitnessCurve_{i}", typeof(RectTransform));
+                curveGo.transform.SetParent(cardPanels[i], false);
+                var crt = (RectTransform)curveGo.transform;
+                crt.anchorMin = new Vector2(0f, 0f);
+                crt.anchorMax = new Vector2(1f, 0f);
+                crt.pivot = new Vector2(0f, 0f);
+                crt.offsetMin = new Vector2(20f, 62f);
+                crt.offsetMax = new Vector2(-14f, 88f);
+                var img = curveGo.AddComponent<UnityEngine.UI.RawImage>();
+                img.raycastTarget = false;
+                img.color = Color.white;
+
+                var textGo = new GameObject($"LearningInfo_{i}", typeof(RectTransform));
+                textGo.transform.SetParent(cardPanels[i], false);
+                var trt = (RectTransform)textGo.transform;
+                trt.anchorMin = new Vector2(0f, 0f);
+                trt.anchorMax = new Vector2(1f, 0f);
+                trt.pivot = new Vector2(0f, 0f);
+                trt.offsetMin = new Vector2(20f, 90f);
+                trt.offsetMax = new Vector2(-14f, 124f);
+                var info = textGo.AddComponent<Text>();
+                info.font = DefaultFont();
+                info.fontSize = 14;
+                info.color = InkDim;
+                info.alignment = TextAnchor.LowerLeft;
+                info.horizontalOverflow = HorizontalWrapMode.Overflow;
+                info.verticalOverflow = VerticalWrapMode.Overflow;
+                info.raycastTarget = false;
+
+                var panel = curveGo.AddComponent<Presenter.LearningPanelBehaviour>();
+                panel.Presenter = presenter;
+                panel.ColonyId = i;
+                panel.Target = img;
+                panel.Info = info;
+                panel.Width = 406;
+                panel.Height = 26;
             }
         }
 
