@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using AntSim.Core.Brain;
 using AntSim.Core.Evolution;
 using AntSim.Core.Sim;
 using AntSim.Core.World;
@@ -175,7 +176,30 @@ public sealed class ArenaEvaluator
         return best;
     }
 
-    private ArenaResult EvaluateTrial(MlpGenome? mlp, NeatGenome? neat)
+    /// <summary>
+    /// F5.3bis — evaluación de una POLÍTICA congelada (benchmark de políticas):
+    /// el mismo protocolo exacto que <see cref="Evaluate(MlpGenome)"/> — misma
+    /// colonia, misma comida, mismos densados, mismo RNG de pruebas — pero TODAS
+    /// las hormigas (fundadoras y cada nacida) llevan el mismo cerebro y ninguna
+    /// realimenta el pool. Así la prueba mide el CEREBRO, no la evolución que
+    /// ocurre durante la prueba: es la condición para poder decir «esta política
+    /// forrajea mejor que aquella».
+    /// </summary>
+    public ArenaResult EvaluatePolicy(IBrain policy)
+    {
+        if (policy is null) throw new ArgumentNullException(nameof(policy));
+
+        ArenaResult best = default;
+        for (int t = 0; t < _trials; t++)
+        {
+            var result = EvaluateTrial(null, null, policy);
+            if (t == 0 || result.Fitness > best.Fitness)
+                best = result;
+        }
+        return best;
+    }
+
+    private ArenaResult EvaluateTrial(MlpGenome? mlp, NeatGenome? neat, IBrain? forced = null)
     {
         var sim = new WorldSim(_seed, EffectiveGridCells, 1);
         var colony = sim.Colonies[0];
@@ -198,7 +222,13 @@ public sealed class ArenaEvaluator
         //   el pool se siembra con el genoma para que la descendencia sean variantes.
         //   MLP: Genome != null ⇒ feedback de pool al morir. NEAT: Genome = null
         //   (solo cerebro) ⇒ la descendencia nace del pool frío de la colonia.
-        if (neat is not null)
+        if (forced is not null)
+        {
+            // Política congelada: mismo cerebro para fundadoras y para la
+            // descendencia, sin Genome ⇒ sin feedback al pool.
+            sim.ForcePolicy(forced);
+        }
+        else if (neat is not null)
         {
             var nb = neat.ToBrain();
             for (int i = 0; i < colony.Adults.Count; i++)

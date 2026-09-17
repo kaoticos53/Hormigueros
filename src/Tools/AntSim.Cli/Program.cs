@@ -54,12 +54,16 @@ internal static class Program
         int ticks = 1200;
         int grid = 96;
         float leafFraction = 0f; // F5.2a.1
+        float? footprintGain = null; // F5.3: ganancia del reflejo de huella CHC
         List<SpeciesDescriptor>? species = null; // F5.2a.2/4
         int colonies = 2;
         int pop = 16;
         int generations = 0; // 0 = usa el tope de cada etapa (30/60/80/100)
         float bandMin = 200f;   // banda de distancia del pretrain (por defecto: la calibrada)
         float bandMax = 260f;
+        int trials = 1;         // F5.3bis: pruebas por semilla en el benchmark de políticas
+        ulong[]? benchSeeds = null;
+        int? arenaCells = null; // celdas del grid de la arena del benchmark (null = 96)
         bool hybrid = false;    // currículo híbrido alternado (200-mid / 200-max por generación)
         bool fullWorld = false; // añade la 4ª etapa mundo-completo (arena 160, 200–700 u)
         string? importPath = null;
@@ -89,8 +93,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets" && mode != "genome-info")
-                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game', 'presets' o 'genome-info'.");
+                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets" && mode != "genome-info" && mode != "bench")
+                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game', 'presets', 'genome-info' o 'bench'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -127,6 +131,18 @@ internal static class Program
                     species = list;
                     break;
                 }
+                case "--footprint":
+                {
+                    // F5.3: ganancia del reflejo de huella CHC (rad/s a plena
+                    // asimetría). 0 apaga el reflejo; la capa se sigue depositando
+                    // (es cutícula, no una decisión), así que sirve de control
+                    // A/B: mismo tráfico, con y sin respuesta.
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out float g)
+                        || g < 0f || g > 20f)
+                        return Fail("--footprint requiere un float en [0,20] (rad/s de giro a plena asimetría; 0 = sin reflejo).");
+                    footprintGain = g;
+                    break;
+                }
                 case "--leaf-fraction":
                     if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out leafFraction)
                         || leafFraction < 0f || leafFraction > 1f)
@@ -149,6 +165,36 @@ internal static class Program
                 case "--warm-start":
                     warmStartPath = Next(args, ref i);
                     break;
+                case "--arena-cells":
+                {
+                    // F5.3bis: banda ancha exige arena grande (el ítem más lejano
+                    // tiene que caber: maxDistance < mitad del lado).
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out int ac) || ac < 16)
+                        return Fail("--arena-cells requiere un entero ≥ 16.");
+                    arenaCells = ac;
+                    break;
+                }
+                case "--trials":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out trials) || trials < 1)
+                        return Fail("--trials requiere un entero ≥ 1 (pruebas por semilla del benchmark de políticas).");
+                    break;
+                case "--seeds":
+                {
+                    // F5.3bis: lista de semillas del benchmark de políticas — es el
+                    // eje del experimento (misma semilla para todas las políticas).
+                    var parts = Next(args, ref i)
+                        .Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length == 0) return Fail("--seeds requiere al menos una semilla.");
+                    var list = new List<ulong>(parts.Length);
+                    foreach (var p in parts)
+                    {
+                        if (!ulong.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out ulong sv))
+                            return Fail($"--seeds: semilla inválida '{p}'.");
+                        list.Add(sv);
+                    }
+                    benchSeeds = list.ToArray();
+                    break;
+                }
                 case "--band-min":
                     if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out bandMin) || bandMin < WorldSim.NestMinSpawnDistance)
                         return Fail($"--band-min requiere un float ≥ {WorldSim.NestMinSpawnDistance}.");
@@ -248,6 +294,22 @@ internal static class Program
             if (mode == "verify")
                 return RunVerify(ticks, loadPath, antlogPath);
 
+            // F5.3: el ajuste del reflejo se aplica sobre COPIAS de la especie (la
+            // estática compartida no se toca). Sin --species el mundo usaría la
+            // estática por defecto, así que se materializa una copia explícita de
+            // Lasius solo cuando hace falta ajustar algo.
+            if (footprintGain.HasValue)
+            {
+                if (species == null)
+                    species = new List<SpeciesDescriptor> { SpeciesDescriptor.LasiusNiger };
+                for (int c = 0; c < species.Count; c++)
+                {
+                    var copy = species[c].Clone();
+                    copy.FootprintRepel = footprintGain.Value;
+                    species[c] = copy;
+                }
+            }
+
             string output = mode switch
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, leafFraction, antlogPath, savePath, saveTick),
@@ -262,6 +324,7 @@ internal static class Program
                     : GenomeImportInfo.Inspect(importPath,
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat),
+                "bench" => PolicyBenchmarkScenario.Run(benchSeeds, bandMin, bandMax, ticks, trials, seedPoolPath, arenaCells),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);
@@ -509,6 +572,7 @@ internal static class Program
             case "food": case "f": kind = PheromoneKind.FoodTrail; return true;
             case "home": case "h": kind = PheromoneKind.Home; return true;
             case "alarm": case "a": kind = PheromoneKind.Alarm; return true;
+            case "footprint": case "fp": kind = PheromoneKind.Footprint; return true; // F5.3: huella CHC
             default: kind = default; return false;
         }
     }
@@ -663,6 +727,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N]");
     }
 }
