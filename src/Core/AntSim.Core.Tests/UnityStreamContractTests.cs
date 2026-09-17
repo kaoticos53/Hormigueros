@@ -391,12 +391,14 @@ namespace AntSim.Core.Tests
             Assert.Contains("muerta (", card);
             Assert.Contains(rec.DeathCause == 0 ? "vejez" : "inanición", card);
 
-            // Contrato del canal A: la muestra del tick de la muerte marca alive=0
-            // y todas las posteriores también (el mundo sigue emitiendo la fila).
-            Assert.All(rec.Samples.Where(s => s.Tick >= rec.DeathTick!.Value),
-                s => Assert.False(s.Alive, "viva tras la muerte en el tick " + s.Tick));
-            var atDeath = rec.Samples.First(s => s.Tick == rec.DeathTick!.Value);
-            Assert.False(atDeath.Alive);
+            // Contrato del canal A (F5.3 rodaja 2): la fila de la hormiga
+            // DESAPARECE en el tick de su muerte — el mundo compacta los
+            // cadáveres al final del Step, así que NO hay muestras posteriores
+            // (ni una alive=false en el tick de la muerte). La muerte en sí la
+            // captura el canal B (arriba: DeathTick + causa).
+            Assert.All(rec.Samples, s =>
+                Assert.True(s.Tick < rec.DeathTick!.Value,
+                    "muestra del canal A en el tick de la muerte o posterior (la fila debe estar compactada): tick " + s.Tick));
 
             // — Caso selección tardía: la muerte de una hormiga NUNCA rastreada
             //    se conserva como expediente (el canal A no emite muertos) —

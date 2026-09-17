@@ -135,10 +135,17 @@ public static class WorldSimSave
             WriteLayer(w, col.HomeLayer);
             WriteLayer(w, col.AlarmLayer);
 
-            w.WriteU32((uint)col.Adults.Count);
+            // F5.3 rodaja 2: SOLO hormigas VIVAS al checkpoint — el mundo ya
+            // compacta las muertas al final de cada Step, así que el save
+            // describe exactamente el mismo conjunto que el hasher.
+            int adultAliveCount = 0;
+            for (int i = 0; i < col.Adults.Count; i++)
+                if (col.Adults[i].Alive) adultAliveCount++;
+            w.WriteU32((uint)adultAliveCount);
             for (int i = 0; i < col.Adults.Count; i++)
             {
                 var a = col.Adults[i];
+                if (!a.Alive) continue;
                 w.WriteU32(a.Id);
                 w.WriteF32(a.X);
                 w.WriteF32(a.Y);

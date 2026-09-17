@@ -34,6 +34,7 @@ public sealed class WorldSim
 
     private readonly ulong _seed;
     private DeterministicRandom _worldRng; // mutable: SpawnItem/Forks avanzan el flujo
+    private double[] _deadFitnessBank = Array.Empty<double>(); // F5.3 rodaja 2: fitness de por vida de las muertas compactadas
     private readonly List<SimEvent> _events = new();
     private readonly List<SimCommand> _pendingCommands = new(); // F4.0: cola de comandos (aplicados en el punto canónico)
     private readonly List<SaveRequest> _saveRequests = new();   // F4.0: peticiones de guardado del último Step
@@ -269,13 +270,21 @@ public sealed class WorldSim
             }
         }
 
-        // F5.3 rodaja 1: compactación SoA lista pero deshabilitada.
-        // La compactación (CompactDeadAnts) es O(n) y elimina hormigas
-        // muertas de Adults. Sin embargo, HashLine() itera Adults.Count
-        // y añade datos de hormigas muertas (Alive=false) al bloque hash;
-        // compactar cambia el conteo y rompe los 6 pines de CI.
-        // Habilitar requiere cambiar HashLine para saltar hormigas muertas
-        // y regenerar TODOS los pines — rodaja 2 de F5.3.
+        // — F5.3 rodaja 2: los muertos NO describen el mundo —
+        // 1) Fitness de las muertas al BANCO: ApplyDeaths ya pagó al pool en el
+        //    tick de la muerte (RecordFitness/CompleteTrial); el banco conserva
+        //    la suma TOTAL de aptitud de por vida para que hasher y arena sigan
+        //    viendo lo mismo sin cadáveres en la lista.
+        // 2) Compactación O(n) al FINAL del tick: todos los consumidores internos
+        //    ya actuaron (ActAllAnts, ApplyDeaths, ColonyController, eclosiones)
+        //    y los consumidores EXTERNOS (hash, telemetría, save, arena) leen
+        //    estado equivalente al de siempre — solo sin muertas.
+        // 3) HashLine añade SOLO hormigas vivas: lista compactada y hash
+        //    describen el mismo conjunto.
+        if (_deadFitnessBank.Length != _colonies.Count)
+            _deadFitnessBank = new double[_colonies.Count];
+        for (int c = 0; c < _colonies.Count; c++)
+            BankAndCompactDeadAnts(_colonies[c], c);
 
         if (Tick % PheromoneUpdateEvery == 0)
         {
@@ -324,25 +333,38 @@ public sealed class WorldSim
         }
     }
 
-    // ─── F5.3 rodaja 1: compactación O(n) de hormigas muertas ──────
-    // Sin SoA: la compactación in-place sobre la lista es O(n) con un solo
-    // pass — writeIdx avanza solo para vivas, y un RemoveRange al final
-    // trunca el excedente. Mucho más rápido que RemoveAll cuando mueren
-    // muchas hormigas por tick (típico en equilibrio). El SoA se usa en
-    // rodaja 2 para NearestItem batch y brujula de dirección.
-    private static void CompactDeadAnts(Colony colony)
+    // ─── F5.3 rodaja 2: bancar fitness de muertas + compactación O(n) ──────
+    // La compactación in-place sobre la lista es O(n) con un solo pass —
+    // writeIdx avanza solo para vivas y un RemoveRange trunca el excedente;
+    // mucho más rápido que iterar cadáveres tick tras tick cuando mueren
+    // muchas hormigas (típico en equilibrio).
+    private void BankAndCompactDeadAnts(Colony colony, int colonyIdx)
     {
         var adults = colony.Adults;
+        double banked = _deadFitnessBank[colonyIdx];
         int writeIdx = 0;
         int len = adults.Count;
         for (int i = 0; i < len; i++)
         {
-            if (adults[i].Alive)
-                adults[writeIdx++] = adults[i];
+            var ant = adults[i];
+            if (ant.Alive)
+                adults[writeIdx++] = ant;
+            else
+                banked += ant.Fitness; // aptitud de por vida al banco (el pool ya cobró)
         }
+        _deadFitnessBank[colonyIdx] = banked;
         if (writeIdx < len)
             adults.RemoveRange(writeIdx, len - writeIdx);
     }
+
+    /// <summary>
+    /// F5.3 rodaja 2: fitness de por vida bancado de las adultas YA compactadas
+    /// de la colonia en la posición <paramref name="colonyIdx"/> de la lista.
+    /// Con esto, «sumar fitness sobre Adults» sigue dando el total de siempre
+    /// (vivas + caídas) aunque los cadáveres ya no estén en la lista.
+    /// </summary>
+    public double DeadFitnessBank(int colonyIdx) =>
+        colonyIdx >= 0 && colonyIdx < _deadFitnessBank.Length ? _deadFitnessBank[colonyIdx] : 0.0;
 
     private void Act(Colony colony, Ant ant)
     {
@@ -850,9 +872,13 @@ public sealed class WorldSim
             for (int i = 0; i < col.Pool.EliteCount; i++)
                 h.AppendDouble(col.Pool.Elite[i].Fitness);
 
+            // F5.3 rodaja 2: SOLO hormigas VIVAS describen el mundo — las
+            // muertas se compactan al final del Step y su fitness de por vida
+            // vive en el banco (el pool lo cobró en el tick de la muerte).
             for (int i = 0; i < col.Adults.Count; i++)
             {
                 var a = col.Adults[i];
+                if (!a.Alive) continue;
                 h.AppendUInt32(a.Id);
                 h.AppendFloat(a.X); h.AppendFloat(a.Y); h.AppendFloat(a.Heading);
                 h.AppendFloat(a.Energy); h.AppendFloat(a.Age); h.AppendFloat(a.LoadValue);
