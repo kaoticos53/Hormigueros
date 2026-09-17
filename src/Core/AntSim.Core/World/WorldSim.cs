@@ -69,6 +69,45 @@ public sealed class WorldSim
     /// no se mueve). La hoja vale 8–14 ep con fragmento ≈ 2.7–3.5 ep.</summary>
     public float LeafFraction { get; set; } = 0f;
 
+    /// <summary>
+    /// F5.3bis — política FIJADA para toda la colonia (ver <see cref="ForcePolicy"/>):
+    /// si no es null, cada hormiga que ECLOSIONE recibe este cerebro en vez de un
+    /// genoma del pool (y sin Genome, así que tampoco realimenta la evolución).
+    ///
+    /// Con null — por defecto — el mundo funciona exactamente como antes: el hook
+    /// no toca el RNG ni el orden de iteración (los pines de hash de CI siguen
+    /// valiendo, hay test).
+    /// </summary>
+    public Brain.IBrain? ForcedPolicy { get; private set; }
+
+    /// <summary>
+    /// Fija la política de TODA la colonia: re-cerebra a las adultas VIVAS
+    /// (fundadoras incluidas — en el constructor ya nacieron con el pool) y deja
+    /// el hook puesto para cada nacida posterior. Con <paramref name="policy"/>
+    /// null desactiva el hook y no toca los cerebros actuales (no se puede
+    /// reconstruir un genoma que ya no existe).
+    ///
+    /// Es el interruptor que convierte una partida en una PRUEBA DE POLÍTICA: el
+    /// benchmark de políticas lo usa para congelar scripted/aleatoria/evolucionada
+    /// y medir el cerebro en vez de la evolución.
+    /// </summary>
+    public void ForcePolicy(Brain.IBrain? policy)
+    {
+        ForcedPolicy = policy;
+        if (policy is null) return;
+        for (int c = 0; c < _colonies.Count; c++)
+        {
+            var adults = _colonies[c].Adults;
+            for (int i = 0; i < adults.Count; i++)
+            {
+                var ant = adults[i];
+                if (!ant.Alive) continue;
+                ant.Genome = null;
+                ant.Brain = policy;
+            }
+        }
+    }
+
     private int DensityScaledTargetItems => (int)MathF.Round(
         TargetItemsDefault * (WorldWidth * WorldHeight) / (96f * SimConstants.CellSizeUnits * 96f * SimConstants.CellSizeUnits));
 
@@ -154,6 +193,7 @@ public sealed class WorldSim
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
             HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
             AlarmLayer = new PheromoneLayer(_gridCells, _gridCells),
+            FootprintLayer = new PheromoneLayer(_gridCells, _gridCells), // F5.3: huella CHC
             ConsumeEma = 1.0f
         };
 
@@ -257,6 +297,17 @@ public sealed class WorldSim
                 var ant = colony.Adults[i];
                 if (ant.Genome != null) continue;
 
+                if (ForcedPolicy != null)
+                {
+                    // Política FIJADA (F5.3bis, benchmark de políticas): la
+                    // descendencia hereda el mismo cerebro en vez de un genoma
+                    // del pool. Sin Genome ⇒ sin realimentación al pool: la
+                    // prueba mide el CEREBRO, no la evolución.
+                    ant.Genome = null;
+                    ant.Brain = ForcedPolicy;
+                    continue;
+                }
+
                 if (colony.Pool.TryNextImmigrant(Tick, out var immigrant))
                 {
                     ant.Genome = immigrant;
@@ -297,6 +348,11 @@ public sealed class WorldSim
                 colony.HomeLayer.Diffuse(0.10f);
                 colony.AlarmLayer.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.Alarm));
                 colony.AlarmLayer.Diffuse(0.10f);
+                // CHC (F5.3): difunde y evapora como las demás, pero con la vida
+                // media larga de la huella de tráfico (240 s) — el rastro de
+                // zonas ya peinadas sobrevive a la visita.
+                colony.FootprintLayer.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.Footprint));
+                colony.FootprintLayer.Diffuse(0.06f);
             }
         }
 
@@ -331,6 +387,36 @@ public sealed class WorldSim
             if (!ant.Alive) continue;
             Act(colony, ant);
         }
+    }
+
+    /// <summary>
+    /// F5.3 — Tropotaxis por huella CHC: reflejo periférico, NO una decisión del
+    /// cerebro (no hay canal de sensor nuevo, así que ningún genoma del pool
+    /// cambia de forma). La diferencia de huella entre las dos antenas empuja el
+    /// giro hacia el lado MENOS pisado.
+    ///
+    /// Es un RATIO, como en la tropotaxis clásica: el desequilibrio lateral va al
+    /// numerador y el propio nivel de huella al denominador. De ahí salen las tres
+    /// propiedades que buscamos: satura donde el sustrato ya está muy pisado (un
+    /// pasillo saturado no empuja sin tope), no empuja nada donde está limpio, y
+    /// con huella simétrica da exactamente 0 (una hormiga sobre el filo de un
+    /// rastro no gira).
+    ///
+    /// Es <c>public</c> para poder fijar su álgebra en los tests (simetría, signo
+    /// y saturación) con una capa pintada a mano, sin depender de que una partida
+    /// entera produzca la geometría deseada.
+    /// </summary>
+    public static void ApplyFootprintRepulsion(Colony colony, Ant ant, SpeciesDescriptor sp, ref AntDecision decision)
+    {
+        if (sp.FootprintRepel <= 0f || sp.QMaxFootprint <= 0f) return;
+
+        float reach = sp.SensorReach * ant.SensorScale;
+        AntSenses.SampleFootprintSides(colony.FootprintLayer, ant, reach, sp.SenseAngle,
+            out float left, out float right);
+
+        float imbalance = right - left;                                  // >0 ⇒ más pisado a la derecha
+        float denom = 1f + sp.FootprintSaturation * MathF.Max(left, right);
+        decision.Steer += sp.FootprintRepel * imbalance / denom;         // positivo = gira a la izquierda
     }
 
     // ─── F5.3 rodaja 2: bancar fitness de muertas + compactación O(n) ──────
@@ -375,6 +461,8 @@ public sealed class WorldSim
             rivals: sp.ContactRadius > 0f && _colonies.Count > 1 ? _colonies : null);
         var decision = AntDecision.Neutral();
         ant.Brain.Evaluate(in sensors, ref decision);
+        // — F5.3: tropotaxis repelente por huella CHC (reflejo periférico) —
+        ApplyFootprintRepulsion(colony, ant, sp, ref decision);
         DecisionValidator.SanitizeAndClamp(in decision, out decision);
 
         // Supervivencia: pequeña recompensa por estar viva cada paso.
@@ -396,6 +484,13 @@ public sealed class WorldSim
         ant.Y = Math.Clamp(ant.Y + CanonMath.Sin(ant.Heading) * v * dt, 0f, WorldHeight);
         ant.LifetimeDistanceExplored += v * dt;
         ant.Energy = Math.Max(0f, ant.Energy - (sp.CostMove * v * dt * metabolismCircadian) / ant.EnergyCapacity);
+
+        // — F5.3: huella CHC pasiva — se deposita POR UNIDAD RECORRIDA, no por
+        //    segundo y sin gasto de energía: es cutícula que se roza, no una
+        //    glándula que se aprieta. Nadie «decide» dejar huella: el tráfico la
+        //    deja, y por eso es la señal honesta de qué zonas ya están peinadas.
+        if (sp.QMaxFootprint > 0f && v > 0f)
+            colony.FootprintLayer.Deposit(Cell(ant.X), Cell(ant.Y), sp.QMaxFootprint * v * dt);
 
         // — F5.2b.1: combate de incursión (después del movimiento, con la pose
         //    final del tick — la condición es GEOMÉTRICA y determinista: sin
@@ -862,9 +957,11 @@ public sealed class WorldSim
             h.AppendUInt64(col.FoodLayer.MutationCount);
             h.AppendUInt64(col.HomeLayer.MutationCount);
             h.AppendUInt64(col.AlarmLayer.MutationCount);
+            h.AppendUInt64(col.FootprintLayer.MutationCount); // F5.3: CHC
             h.AppendFloat(col.FoodLayer.SumOfValues());
             h.AppendFloat(col.HomeLayer.SumOfValues());
             h.AppendFloat(col.AlarmLayer.SumOfValues());
+            h.AppendFloat(col.FootprintLayer.SumOfValues());
 
             // Pool genético: estado relevante para la reproducción.
             h.AppendInt32(col.Pool.EliteCount);
@@ -1057,7 +1154,8 @@ public sealed class WorldSim
             Pool = new GenomePool(rng.Fork(0xA5C3E7B9UL), BrainSizes, seedCount: 0),
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
             HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
-            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells)
+            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells),
+            FootprintLayer = new PheromoneLayer(_gridCells, _gridCells) // F5.3: huella CHC
         };
         _colonies.Add(colony);
         return colony;

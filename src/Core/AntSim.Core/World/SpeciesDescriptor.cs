@@ -24,6 +24,21 @@ public sealed class SpeciesDescriptor
     public float QMaxHome = 0.8f;
     public float QMaxAlarm = 1.6f;
 
+    // — Huella CHC (F5.3): depósito pasivo de tráfico y tropotaxis repelente —
+    // QMaxFootprint se deposita POR UNIDAD RECORRIDA (no por segundo como las
+    // decididas por el cerebro): es tráfico, no una decisión — una hormiga no
+    // «elige» dejar CHC. KinFootprintRepel es la ganancia del reflejo y
+    // FootprintSaturation el término que lo convierte en RATIO (satura donde la
+    // huella es densa en vez de crecer sin tope).
+    // Calibrado con sonda (F5.3): con estos valores una hormiga en una zona de
+    // tráfico medio recibe ~0.3 rad/s de giro (≈15% de Ωmax) — suficiente para
+    // repartir el forrajeo, muy por debajo de lo que necesita el cerebro para
+    // llevar la carga a casa. Con los valores iniciales (0.02 / 0.55 / 6) el
+    // reflejo medía 0.009 rad/s: existía en el hash y no en la conducta.
+    public float QMaxFootprint = 0.08f;      // u por unidad recorrida
+    public float FootprintRepel = 8f;        // rad/s de giro a plena asimetría
+    public float FootprintSaturation = 4f;   // 1/(1 + s·huella): normaliza el reflejo
+
     // — Energía (ep = energy points) —
     public float CostMove = 0.0012f;       // ep por u recorrida
     public float CostDeposit = 0.02f;      // ep por unidad de depósito
@@ -77,6 +92,14 @@ public sealed class SpeciesDescriptor
 
     // — Constantes predefinidas (tabla de la especificación) —
     public static readonly SpeciesDescriptor LasiusNiger = new() { Name = "Lasius niger" };
+
+    /// <summary>
+    /// Copia independiente del descriptor. Sirve para variantes de ajuste (p. ej.
+    /// apagar el reflejo de huella desde el CLI) sin mutar la estática compartida,
+    /// que es de todo el proceso: cambiarla «por un rato» es un bug de concurrencia
+    /// esperando a ocurrir.
+    /// </summary>
+    public SpeciesDescriptor Clone() => (SpeciesDescriptor)MemberwiseClone();
 
     /// <summary>
     /// Recupera una especie predefinida por su nombre (checkpoints .antsave).

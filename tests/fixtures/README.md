@@ -49,3 +49,21 @@ El pool NEAT de cierre (F5.2c rodaja 7) — la entrada del 6º pin de CI
 - **Quién lo consume**: `check-neat-command.sh` (CI), `NeatClosureProbe`
   (suite: siembra de mundo NEAT + canal F con grafo), y cualquier
   `--seed-pool` (el lector v2 acepta v1 y v2).
+
+## `checkpoint-v4.antsave`
+
+Un checkpoint **v4** real, generado por el build ANTERIOR a la huella CHC
+(commit `4509edb`) — la garantía de que la compatibilidad hacia atrás del
+formato no es una promesa del doc sino un archivo que CI carga en cada run.
+
+- **SHA-256**: `e1e2ec47a266508fc4fae194003f9ca687152bd7a2df5b82aa7fe2974360af53`
+- **Contenido**: seed 42, grid 32, 1 colonia (lasius), tick 300, 36139 bytes.
+  Hash v4 original: `35828ac7…`.
+- **Procedencia**: `git worktree add .wt-v4 4509edb` y, desde ahí,
+  `--mode world --seed 42 --ticks 300 --grid 32 --colonies 1
+  --save tests/fixtures/checkpoint-v4.antsave`.
+- **Quién lo consume**: `ChcFootprintTests.Checkpoint_V4_DeUnBuildAnterior…` —
+  el checkpoint v4 carga con la huella a cero (el tráfico anterior no se puede
+  reconstruir; el mundo sigue determinista desde ahí) y **no reproduce su hash
+  v4**: el hash incluye la capa nueva, así que un archivo viejo cambia de hash
+  al cruzar la versión. Eso es esperado y está fijado en el test.

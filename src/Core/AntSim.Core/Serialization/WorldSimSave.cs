@@ -37,7 +37,7 @@ namespace AntSim.Core.Serialization;
 ///     inmigrantes: count u32 · {mismo layout + queuedTick u64}·
 ///     trialsEntered i32 · trialsDiscarded i32 · trialsExpired i32 ·
 ///     rng del pool (s0..s3 u64) — los nacimientos (torneo/crossover/mutación)
-///     food/home/alarm: {w i32 · h i32 · mutationCount u64 · tileVersions u32· · values f32·}·
+///     food/home/alarm[/footprint]: {w i32 · h i32 · mutationCount u64 · tileVersions u32· · values f32·}·
 ///     adultas: count u32 · {id u32 · x/y/heading f32 · energy f32 ·
 ///       energyCapacity f32 · age f32 · lifespan f32 · vigor/speedScale/sensorScale f32 ·
 ///       hasLoad u8 · loadValue f32 · alive u8 · interactCooldown f32 · fitness f64 ·
@@ -48,8 +48,11 @@ namespace AntSim.Core.Serialization;
 public static class WorldSimSave
 {
     /// <summary>v2 (F4.4): añade el flag CloneFromElite por colonia (1 byte al
-    /// final del bloque de colonia). Los checkpoints v1 ya no se cargan.</summary>
-    public const int FormatVersion = 4;
+    /// final del bloque de colonia). Los checkpoints v1 ya no se cargan.
+    /// v4 (F5.2a.2): añade la reserva de hongo. v5 (F5.3): añade la cuarta capa
+    /// de feromona (huella CHC) — los v2–v4 se siguen leyendo y llegan con la
+    /// huella a cero, que es el estado de un mundo donde nadie ha andado aún.</summary>
+    public const int FormatVersion = 5;
     private static readonly byte[] Magic = { (byte)'A', (byte)'N', (byte)'T', (byte)'S', (byte)'A', (byte)'V', (byte)'E', (byte)'1' };
 
     // Recompensas configurables de WorldSim: son parte del estado (la arena
@@ -134,6 +137,7 @@ public static class WorldSimSave
             WriteLayer(w, col.FoodLayer);
             WriteLayer(w, col.HomeLayer);
             WriteLayer(w, col.AlarmLayer);
+            WriteLayer(w, col.FootprintLayer); // v5 (F5.3): huella CHC
 
             // F5.3 rodaja 2: SOLO hormigas VIVAS al checkpoint — el mundo ya
             // compacta las muertas al final de cada Step, así que el save
@@ -324,6 +328,12 @@ public static class WorldSimSave
             ReadLayerInto(r, colony.FoodLayer);
             ReadLayerInto(r, colony.HomeLayer);
             ReadLayerInto(r, colony.AlarmLayer);
+            // v5 (F5.3): la huella CHC solo viaja en los checkpoints nuevos. Un
+            // v2–v4 se carga con la capa recién alocada (cero): el tráfico
+            // anterior no se puede reconstruir, pero el mundo sigue siendo
+            // jugable y determinista a partir de ahí.
+            if (version >= 5)
+                ReadLayerInto(r, colony.FootprintLayer);
 
             // Adultas
             int adultCount = checked((int)r.ReadU32());

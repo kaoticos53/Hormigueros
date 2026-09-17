@@ -249,6 +249,7 @@ public static class GameScenario
         PheromoneKind.FoodTrail => colony.FoodLayer,
         PheromoneKind.Home => colony.HomeLayer,
         PheromoneKind.Alarm => colony.AlarmLayer,
+        PheromoneKind.Footprint => colony.FootprintLayer, // F5.3: huella CHC (canal E)
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "capa sin datos que emitir.")
     };
 
