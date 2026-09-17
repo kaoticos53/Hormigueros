@@ -563,14 +563,26 @@ namespace AntSim.Unity.Scripts.EditorTools
             }
             // Textura 1×1 transparente: nace invisible (lección del Play pass:
             // unlit-transparente sin textura es blanco OPACO).
-            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = name + "_Empty" };
-            tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
-            tex.Apply();
+            //
+            // IDEMPOTENTE: si el asset ya existe se reutiliza SU instancia. Antes
+            // se pasaba por CreateOrReplaceAsset (borrar + crear) en cada pasada y
+            // eso deja referencias muertas: un material que ya apuntaba a la
+            // instancia anterior serializa «m_Texture: {fileID: 0}» en la siguiente
+            // salvada. El caso observado fue el quad de feromonas de la escena
+            // simple; la corrección hermana lleva la misma razón.
+            var emptyPath = $"Assets/Materials/{name}_Empty.asset";
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(emptyPath);
+            if (tex == null)
+            {
+                tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = name + "_Empty" };
+                tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
+                tex.Apply();
+                EnsureMaterialFolder();
+                AssetDatabase.CreateAsset(tex, emptyPath);
+            }
             m.mainTexture = tex;
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
             if (m.HasProperty("_Color")) m.color = Color.white;
-            EnsureMaterialFolder();
-            CreateOrReplaceAsset(tex, $"Assets/Materials/{name}_Empty.asset");
             CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
             return m;
         }
