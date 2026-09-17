@@ -1,6 +1,6 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-16 · HEAD: `7fc89f4` (Windows-first UX) ·
+*Actualizado: 2026-09-17 · HEAD: `53eda0b` (escena regenerada) ·
 suite: 463/463 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -26,16 +26,27 @@ vs scripted vs evolucionada en la misma arena).
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** `v0.6.0` | `fase5-2b-eciton.md` |
 | **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** `v0.7.0` | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** | ✅ `v0.6.1` | `arquitectura.md` §CI |
-| 5.3 | Escala: SoA/ECS, LOD de feromonas, GPU instancing | 🔲 | — |
+| **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje** | 🔄 **5 de 6 rodajas** | — (falta la rodaja 3: LOD + instancing) |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
 
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
 a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
-el 2026-09-15: stream canónico, replay con drops a 3000 y 6000 ticks, la
+el 2026-09-17 (runs 17 y 19, verdes en Linux): stream canónico, replay con
+drops a 3000 y 6000 ticks, la
 partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica (nuevo). **463/463 tests** en Windows Y Linux.
+canónica. **463/463 tests** en Windows Y Linux.
+
+**Gate de Unity en CI — corregido y DORMIDO** — el job `unity-compile`
+compila los MonoBehaviours que `dotnet test` no ve, y hasta hoy nunca había
+corrido: necesita la variable `UNITY_CI` y un secreto de licencia. Estaba
+además mal para una licencia Personal (`unity license activate --personal` no
+sirve en CI: el backend rechaza los tokens de cuenta de servicio), le
+faltaban las librerías de runtime del editor y el `--yes --accept-eula` del
+instalador. Los tres defectos se corrigieron contra el andamiaje oficial de
+Unity (`unity ci init --dry-run`); mientras siga dormido, un `error CS` de
+MonoBehaviour solo lo caza la pasada local.
 
 **NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
 innovation), paridad bit a bit con MLP (`FromMlp`), operadores
@@ -55,7 +66,8 @@ pin CI y su partida canónica.
 terreno terroso, hormigas visibles y orientadas, feromonas por
 colonia/capa (selector F/G), tarjetas con gráfica de reserva, modal de
 importación, vida útil real de fundadoras (240 s), velocidad de replay
-+/= (1→2→4×).
++/= (1→2→4×) y la banda de aprendizaje por tarjeta (curva + cobertura). La
+escena se regeneró con ella el 2026-09-17 (`53eda0b`).
 
 **Unity compila limpio** — 0 errores CS, 0 avisos CS en Unity 6000.6.0f1.
 Canal F NEAT en el inspector (`ActivationViewModel.RenderNeat`
@@ -76,7 +88,11 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.3 rodaja 1 — SoA done**: `AntSoA` (parallel arrays), infraestructura lista.
+1. **F5.3 rodaja 3 — PENDIENTE**: es lo único que queda de la sub-fase. LOD de
+   difusión de feromonas (tiles sucios + presupuesto de subida) y GPU instancing
+   en el presenter; exit de fase: N colonias a 60 fps. Las rodajas 1, 2, 2bis,
+   2ter y 2quater están HECHAS; el detalle de cada una, abajo.
+   **F5.3 rodaja 1 — HECHA**: `AntSoA` (parallel arrays), infraestructura lista.
    **F5.3 rodaja 2 — HECHO (2026-09-17)**: el mundo COMPACTA las adultas muertas al final de cada `Step` (O(n), `BankAndCompactDeadAnts`). Claves del diseño: el fitness de por vida de las muertas va a un BANCO por colonia (el pool ya cobró en el tick de la muerte) que `HashLine`, el save y la arena suman para producir lo mismo que la lista con cadáveres; `HashLine` y los checkpoints solo describen vivas; los registros de shaping de la arena van claveados por `Id` (la posición en la lista ya no es identidad). Pines: solo invasión y NEAT se movieron (hay muertes en sus ventanas de hash); stream/replay/Atta son byte-idénticos. La fila del canal A desaparece en el tick de la muerte (contrato actualizado en `UnityStreamContractTests`): la muerte la captura el canal B.
    **F5.3 rodaja 2bis — HECHO (2026-09-17): huella CHC (4ª capa) y tropotaxis en ratio.**
    La señal NEGATIVA que faltaba, inspirada en [`ideas-externas.md`](ideas-externas.md) §1 (anthill):
@@ -124,6 +140,7 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 | Riesgo | Estado |
 |---|---|
 | NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
+| `error CS` de MonoBehaviours | **abierto** — el job existe y está corregido, pero dormido: hoy lo caza la pasada local, no CI |
 | Feromonas costosas a escala | abierto — RLE resuelve render; la difusión es F5.3 |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools |

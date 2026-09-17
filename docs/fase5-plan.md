@@ -8,6 +8,10 @@ Estado del que parte: Fase 4 cerrada
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
 
+**Estado ACTUAL** (HEAD, suite, rodajas hechas):
+[`estado-proyecto.md`](estado-proyecto.md) — este documento es el plan, no el
+registro de lo hecho.
+
 **La regla que Fase 5 hereda y no puede romper**: todo lo visible sale del
 Core por el stream; toda decisión de mundo deja huella en el hash; el
 determinismo (semilla + comandos ⇒ mundo) es inviolable. Cada hito de abajo
@@ -302,13 +306,13 @@ Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
    - *Eciton* (legionaria): ciclos nómadas y predación. Necesita feromona
      de alarma ofensiva (la capa Alarm ya existe y el canal la puede emitir)
      y objetivos móviles (las otras colonias).
-     **DISEÑO CERRADO** (2026-09-13): [`fase5-2b-eciton.md`](fase5-2b-eciton.md)
+     **CERRADO** (2026-09-14, `v0.6.0`): [`fase5-2b-eciton.md`](fase5-2b-eciton.md)
      — Eciton como ESPECIE que roba (no agente libre): combate en el paso
      de hormiga con `ContactRadius`/`StrikeDamage`/`StealPerStrike` por
      especie, botín como carga que el `Unload` existente convierte en
      inflow, detección por el canal 14 reconvertido (gating por especie),
      Alarm reusada como rastro de incursión, eventos 17–19 en canal B y
-     `.antsave` v4. Implementación en 5 rodajas.
+     `.antsave` v4. Las 5 rodajas HECHAS.
 2. **Depredadores y agresividad inter-colonia** (como agentes libres):
    agentes no-colonia con cerebro propio (el contrato `IBrain`/`MlpBrain` es
    agnóstico del dueño); los eventos de combate entran al canal B como
@@ -318,28 +322,39 @@ Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
 3. **Competencia con apuestas observables**: hoy 2 colonias compiten y el
    semáforo contrasta sembrada vs natural; con especies el picker gana una
    dimensión (¿qué pool resiste a una invasora Eciton?).
-4. **NEAT en vivo** (especificaciones §4, `NEAT (F5)`): genes estructurales
+4. **NEAT en vivo** (especificaciones §4, `NEAT (F5)`) — **CERRADO** (2026-09-15, `v0.7.0`, [`fase5-2c-neat.md`](fase5-2c-neat.md)): genes estructurales
    en `.antgenome` v2 (nodos/conexiones por innovation, orden canónico,
    topes 500/2000), inspector de grafos para topologías no fijas (el
    mini-grafo de F5.0 se generaliza), re-innovación determinista al
    importar. Es el hito más caro y el que más valor le da al modo evolución:
    topologías que EVOLUCIONAN delante del jugador.
 
-**Criterio de cierre**: 3 especies con recetas distintas jugables; una
+**Criterio de cierre — CUMPLIDO con matiz** (2026-09-15): 3 especies con recetas distintas jugables; una
 partida de invasión Eciton vs colonia Atta sembrada con pool propio, con el
-grafo NEAT del mejor cortador visible.
+grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa Lasius (invasión) y presa + pool v2 (NEAT), no una Atta sembrada.
 
 ## 4. Escala y rendimiento (F5.3 — sostenibilidad de todo lo anterior)
 
-- **SoA/ECS del `WorldSim`**: el layout actual (objetos por hormiga) aguanta
-  2 colonias a 60 fps; N colonias y depredadores exigen layout de datos.
-  Migración con pin de hash: los benchmarks y los 3 pines de CI son el
-  arnés de regresión más estricto posible (el mundo NO puede cambiar).
-- **LOD de feromonas**: tiles sucios + presupuesto de subida (el canal E ya
-  emite RLE; el costo real es la capa Core de difusión — LOD por distancia
-  a cámara solo en render).
-- **GPU instancing** en el presenter (`Graphics.DrawMeshInstanced`) y pool
-  por `antId` (ya existe el slot estable del snapshot).
+- **SoA/ECS del `WorldSim` — HECHO (rodaja 1)**: `AntSoA` (arrays paralelos) ya existe; el layout actual (objetos por hormiga) aguanta
+  2 colonias a 60 fps, pero N colonias y depredadores exigen migrar el bucle interior.
+  Migración con pin de hash: los benchmarks y los 6 pines de CI son el
+  arnés de regresión más estricto posible (el mundo NO cambió en las rodajas 1 y 2).
+- **Compactación de muertas — HECHA (rodaja 2)**: el mundo apila las adultas
+  muertas al final de cada `Step` (`BankAndCompactDeadAnts`); el fitness de por
+  vida de las caídas va a un banco por colonia y `HashLine`/los checkpoints solo
+  describen vivas (movió los pines de invasión y NEAT, a propósito).
+- **Huella CHC — HECHA (rodaja 2bis)**: cuarta capa repelente + tropotaxis en
+  ratio, sin canal nuevo y sin invalidar los `.antgenome`; checkpoint v5.
+- **Benchmark de políticas — HECHO (rodaja 2ter)**: aleatoria vs scripted vs
+  evolucionada con política congelada ([`politicas-benchmark.md`](politicas-benchmark.md)).
+- **Curva de aprendizaje y cobertura — HECHAS (rodaja 2quater)**: bloques
+  `learning`/`fitcurve` en el canal C + panel por tarjeta en el HUD.
+- **LOD de feromonas — PENDIENTE (rodaja 3)**: tiles sucios + presupuesto de
+  subida (el canal E ya emite RLE; el costo real es la capa Core de difusión
+  — LOD por distancia a cámara solo en render).
+- **GPU instancing — PENDIENTE (rodaja 3)**: en el presenter
+  (`Graphics.DrawMeshInstanced`) y pool por `antId` (ya existe el slot
+  estable del snapshot).
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
   escena de juego.
 
@@ -355,13 +370,14 @@ grafo NEAT del mejor cortador visible.
 
 ## 6. Riesgos heredados y su estado
 
-| Riesgo | Estado tras Fase 4 |
+| Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 3 pines de hash en CI (fixture, replay 3000, replay 6000) + suite 262 |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 463/463 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
-| Feromonas costosas | abierto: RLE funciona para render; el LOD de difusión es trabajo F5.3 |
-| NEAT estanca la evolución | abierto: empezará con topología MLP fija como red de seguridad (fallback documentado) |
+| Feromonas costosas | abierto: RLE funciona para render y la huella CHC ya añadió una capa; el LOD de difusión es la rodaja 3 de F5.3 |
+| NEAT estanca la evolución | mitigado: topología de respaldo + especiation medida en el pool (`.antgenome` v2, v0.7.0) |
+| `error CS` de MonoBehaviours | abierto: el job `unity-compile` está corregido pero DORMIDO (necesita `UNITY_CI` + licencia); hoy solo lo caza la pasada local |
 
 ## 7. Qué NO es Fase 5
 
@@ -378,9 +394,11 @@ grafo NEAT del mejor cortador visible.
 F5.0  mini-grafo MLP (canal de activaciones opt-in + render headless)   ✅
 F5.1  pulido uGUI (toasts-rect, drag&drop, gráficas, iconos)            ✅ (+5.1bis multi-visor)
 F5.2a Atta: cortar→transportar→hongo (ítems compuestos + hongo)         ✅ CERRADO (2026-09-13)
-F5.2b Eciton + depredadores (Alarm ofensiva, combate en canal B)        ← SIGUIENTE
-F5.2c NEAT v2 (.antgenome v2 + inspector de grafos generalizado)        ~3–4 semanas
-F5.3  SoA/ECS + LOD feromonas + GPU instancing (pin de hash)            ~3 semanas
+F5.2b Eciton + depredadores (Alarm ofensiva, combate en canal B)        ✅ CERRADO (2026-09-14, v0.6.0)
+F5.2c NEAT v2 (.antgenome v2 + inspector de grafos generalizado)        ✅ CERRADO (2026-09-15, v0.7.0)
+F5.3  SoA/ECS + LOD feromonas + GPU instancing (pin de hash)            🔄 rodajas 1, 2, 2bis, 2ter, 2quater HECHAS
+      └ siguiente: rodaja 3 — LOD de difusión de feromonas + GPU instancing
+        (exit de fase: N colonias a 60 fps en la escena de juego)
 ```
 
 Cada hito sale con: tests de hash (si toca el mundo o la telemetría),
