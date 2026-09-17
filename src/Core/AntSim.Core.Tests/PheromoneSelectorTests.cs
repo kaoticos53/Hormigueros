@@ -27,6 +27,7 @@ namespace AntSim.Core.Tests
             Assert.Equal((byte)PheromoneKind.FoodTrail, (byte)PheromoneSelectorModel.Layer.Food);
             Assert.Equal((byte)PheromoneKind.Home, (byte)PheromoneSelectorModel.Layer.Home);
             Assert.Equal((byte)PheromoneKind.Alarm, (byte)PheromoneSelectorModel.Layer.Alarm);
+            Assert.Equal((byte)PheromoneKind.Footprint, (byte)PheromoneSelectorModel.Layer.Footprint);
         }
 
         private static GameStreamParser.TickView UltimoTick(string stream)
@@ -67,11 +68,15 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
-        public void CicloDeCapas_HomeFoodAlarmYVuelve()
+        public void CicloDeCapas_HomeFoodAlarmHuellaYVuelve()
         {
+            // F5.3: la huella CHC entra al final del ciclo — la capa que el HUD
+            // enseñaba antes (home) sigue siendo la primera, así que el recorrido
+            // de siempre no cambia de orden.
             var s = new PheromoneSelectorModel();
             Assert.Equal(PheromoneSelectorModel.Layer.Food, s.CycleLayer());
             Assert.Equal(PheromoneSelectorModel.Layer.Alarm, s.CycleLayer());
+            Assert.Equal(PheromoneSelectorModel.Layer.Footprint, s.CycleLayer());
             Assert.Equal(PheromoneSelectorModel.Layer.Home, s.CycleLayer());
         }
 
@@ -82,13 +87,13 @@ namespace AntSim.Core.Tests
             foreach (var k in new[]
                      {
                          PheromoneSelectorModel.Layer.Home, PheromoneSelectorModel.Layer.Food,
-                         PheromoneSelectorModel.Layer.Alarm
+                         PheromoneSelectorModel.Layer.Alarm, PheromoneSelectorModel.Layer.Footprint
                      })
             {
                 var c = PheromoneSelectorModel.PaletteOf(k);
                 colores.Add((c.R, c.G, c.B));
             }
-            Assert.Equal(3, new HashSet<(float, float, float)>(colores).Count);
+            Assert.Equal(4, new HashSet<(float, float, float)>(colores).Count);
             Assert.Equal(new PheromoneSelectorModel.Rgb(0.90f, 0.35f, 0.32f),
                 PheromoneSelectorModel.PaletteOf(PheromoneSelectorModel.Layer.Alarm));
         }
@@ -164,6 +169,7 @@ namespace AntSim.Core.Tests
             Assert.Equal("home", PheromoneSelectorModel.NameOf(PheromoneSelectorModel.Layer.Home));
             Assert.Equal("food", PheromoneSelectorModel.NameOf(PheromoneSelectorModel.Layer.Food));
             Assert.Equal("alarm", PheromoneSelectorModel.NameOf(PheromoneSelectorModel.Layer.Alarm));
+            Assert.Equal("footprint", PheromoneSelectorModel.NameOf(PheromoneSelectorModel.Layer.Footprint));
             Assert.Equal("?", PheromoneSelectorModel.NameOf((PheromoneSelectorModel.Layer)7));
         }
     }

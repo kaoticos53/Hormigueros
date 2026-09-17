@@ -34,7 +34,8 @@
 ## 2. Feromonas
 
 - Capas **por colonia**: `FoodTrail` (τ½ 10 s, λ 0.0693), `Home` (20 s, 0.0347),
-  `Alarm` (1 s, 0.693), `Territory` (60 s, F5). Índice: `colonyId·LayersPerColony + kind`.
+  `Alarm` (1 s, 0.693), `Territory` (60 s, F5), `Footprint` (huella CHC, 240 s,
+  F5.3). Índice: `colonyId·LayersPerColony + kind`.
 - Celda 8 u; grid por defecto 512×512; tope `Cmax = 1`.
 - **Depósito**: `v = min(v + Q·dt, Cmax)`.
 - **Evaporación** exponencial: `v *= exp(−λ·dt)` (estable, independiente del dt).
@@ -44,6 +45,44 @@
   escritura que cambia una celda incrementa la versión de su tile y el contador
   global de la capa) para el render incremental por tiles sucios.
 - Sonda de olfato de 3 puntos con **bilineal**; la hormiga solo lee capas de su colonia.
+
+### 2bis. Huella CHC (F5.3) — la señal negativa
+
+Las tres capas anteriores son señales **decididas** por el cerebro y todas son
+positivas o de peligro: ninguna desincentiva volver a pisar la misma zona, así
+que el reparto espacial del forrajeo dependía del ruido del cerebro. La huella
+CHC (hidrocarburos cuticulares) es lo contrario y por eso es la cuarta capa:
+
+- **Depósito pasivo**: `Q = Q_max_footprint · v · dt` con `Q_max_footprint` en
+  **u por unidad recorrida** (no por segundo como las decididas) y sin coste de
+  energía: es cutícula que se roza al andar, no una glándula que se aprieta.
+  Nadie «decide» dejar huella ⇒ es la señal honesta de qué zonas ya están peinadas.
+- **Vida larga** (τ½ 240 s): un pasillo saturado sigue siendo poco atractivo en
+  la siguiente visita en vez de evaporarse entre viajes.
+- **Difusión baja** (k 0.06): la huella es local — describe el sustrato pisado, no
+  el campo entero.
+- **Lectura: REFLEJO periférico, no canal de sensor.** `Δsteer = g · (huella_der −
+  huella_izq) / (1 + s · max(huella_der, huella_izq))` con las mismas antenas del
+  olfato (±ángulo, radio de sonda). Es un **ratio**, como la tropotaxis clásica:
+  satura donde el sustrato ya está muy pisado, no empuja nada donde está limpio y
+  con huella simétrica da **exactamente 0** (una hormiga sobre el filo de un
+  rastro no gira).
+- **No añade canales**: los 19 sensores y 6 salidas no cambian ⇒ ningún genoma
+  del pool cambia de forma y los `.antgenome` siguen siendo válidos.
+- **Entra en el hash** (valores, `MutationCount` y suma por colonia) y viaja en el
+  checkpoint **v5**; los v2–v4 se cargan con la capa a cero (el tráfico anterior
+  no se reconstruye, pero el mundo sigue determinista desde ahí).
+- **Calibración** (sonda, 7200 ticks, 1 colonia): con los valores iniciales
+  (0.02 / 0.55 / 6) el reflejo medía 0.009 rad/s — existía en el hash y no en la
+  conducta. Con los actuales (**0.08 u/u / g 8 rad/s / s 4**) mide ~0.33 rad/s
+  (≈15 % de Ω_max) y el efecto es el buscado: las celdas del 5 % más pisado pasan
+  de concentrar el **49 % del tráfico al 23 %**, el máximo por celda baja de 0.98
+  a 0.83 y la colonia **no pierde economía** (stock 41 → 46 al final de la partida).
+- **Control A/B**: `--footprint 0` apaga el reflejo dejando el depósito (misma
+  señal, sin respuesta); `--footprint <g>` fija la ganancia sobre **copias** de la
+  especie, nunca sobre la estática compartida.
+- **Canal E**: la huella se emite con `k = 4` (`--phero-layers 0:footprint`) y el
+  selector del HUD la pinta en violeta apagado (sustrato pisado).
 
 ## 3. `ColonyController` (demografía)
 
@@ -534,11 +573,23 @@ eventos e hitos; exit 0 idéntico / 3 divergencia). Pendiente: `.antmetrics`/
 - Interpolación con **retraso de 1 tick** (latencia [1,2) ticks); sin extrapolación.
 - Pool de hormigas por `antId` (slots estables, reutilización en muerte); GPU
   instancing para escala (F5); animación procedural por desplazamiento.
-- Feromonas: una `RenderTexture` RGBAHalf por colonia (R=Food, G=Home, B=Alarm);
-  subida por tiles de 64×64 con presupuesto de 16 tiles/frame.
+- Feromonas: una `RenderTexture` RGBAHalf por colonia, con el canal clásico
+  (R=Food, G=Home, B=Alarm) y el selector F5.1 eligiendo capa (food/home/alarm/
+  **footprint**, F5.3) con su paleta; subida por tiles de 64×64 con presupuesto
+  de 16 tiles/frame. El canal A queda libre por si conviene empacar la 4ª capa.
 - HUD: tarjeta por colonia (chip de estado por runway, stock, crías, fitness,
   diversidad), gráficas 1 Hz desde `MetricFrame`, controles de simulación,
   inspector de hormiga (19 sensores + 6 decisiones crudas vs validadas + capa
   oculta / grafo NEAT), alertas, biblioteca de cerebros.
+- **Aprendizaje observable (F5.3ter)**: el canal C trae, por colonia, la curva de
+  fitness por GENERACIÓN y la COBERTURA del mundo. «Generación» = nacimientos / 64
+  (capacidad de la élite: tras 64 nacimientos toda la élite ha podido ser
+  reemplazada) — la evolución del mundo es continua, así que la cohorte de
+  nacimiento es la definición operativa. El fitness de una cohorte es la media de
+  TODAS sus hormigas (vivas y caídas: cada una con su valor actual, contabilizado
+  por deltas tick a tick — con solo las vivas se mediría supervivencia). La
+  cobertura sale de la capa de huella CHC (§2bis): celdas con huella &gt; 0 sobre el
+  total, más el radio máximo alcanzado. Telemetría pura: leer no mueve el hash
+  (test de pureza) y el escaneo de la capa ocurre al emitir (1 Hz), nunca por tick.
 - Cambio 2D→3D: cambia solo el adaptador (materiales, rig); los contratos y el HUD
   (screen-space) permanecen intactos.

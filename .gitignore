@@ -24,6 +24,9 @@ TestResults/
 *.antlog
 *.antgenome
 !tests/fixtures/*.antgenome
+# El checkpoint v4 de tests/fixtures es la garantía de compatibilidad hacia
+# atrás del formato: es una ENTRADA de test, no un artefacto de ejecución.
+!tests/fixtures/*.antsave
 *.antmetrics
 *.anttrace
 

@@ -284,14 +284,14 @@ namespace AntSim.Core.Tests
         /// expected). Si falla, el determinismo del mundo se rompió; un cambio
         /// INTENCIONAL se actualiza en ambos sitios con --update y en este test.</summary>
         public const string CanonicalStreamHash =
-            "c9877d0821bc34e08d49c42ac27ba801400538b3682a1e5a543ae492affb2a9a";
+            "ab30f6ce31621418b36740edf744bcc3ef2664d4d7ab6754124f6a6bf6ce4e00";
 
         [Fact]
         public void FixtureHash_ElStreamCanonicoEsByteAByteEstable()
         {
-            // Vida útil (F5.1): BaseLifespan 90→240 s cambia el mundo (las
-            // fundadoras ya no mueren antes de su segundo viaje) y con él los
-            // hashes. Intencional y documentado: pines y fixture al día.
+            // Huella CHC (F5.3): la cuarta capa entra en el hash y su reflejo de
+            // tropotaxis desvía las trayectorias (reparte el tráfico), así que el
+            // mundo cambia de forma intencional y documentada: pines al día.
             string stream = GameScenario.Run(42, ticks: 7200, colonies: 2, grid: 96,
                 frameEvery: 1, seedPoolPath: null, drops: null);
 

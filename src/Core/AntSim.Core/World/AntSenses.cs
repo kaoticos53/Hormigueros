@@ -151,6 +151,22 @@ public static class AntSenses
         return s;
     }
 
+    /// <summary>
+    /// F5.3 — Huella CHC medida en las DOS sondas laterales (las mismas antenas
+    /// que el olfato: ±<paramref name="senseAngle"/> a <paramref name="reach"/>).
+    /// Es lo que lee la tropotaxis repelente de <see cref="WorldSim"/>: el
+    /// gradiente lateral de huella dice de qué lado el sustrato está más peinado.
+    /// Usa CanonMath (Sin/Cos cross-platform bit-exact): alimenta el movimiento.
+    /// </summary>
+    public static void SampleFootprintSides(Pheromone.PheromoneLayer layer, Ant a,
+        float reach, float senseAngle, out float left, out float right)
+    {
+        float angL = a.Heading + senseAngle;
+        float angR = a.Heading - senseAngle;
+        left = Read(layer, a.X + CanonMath.Cos(angL) * reach, a.Y + CanonMath.Sin(angL) * reach);
+        right = Read(layer, a.X + CanonMath.Cos(angR) * reach, a.Y + CanonMath.Sin(angR) * reach);
+    }
+
     /// <summary>Lectura bilineal de una capa en coordenadas de mundo (celda 8 u).</summary>
     private static float Read(Pheromone.PheromoneLayer layer, float worldX, float worldY)
     {

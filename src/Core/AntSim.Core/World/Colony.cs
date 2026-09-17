@@ -38,6 +38,9 @@ public sealed class Colony
     public PheromoneLayer FoodLayer = null!;
     public PheromoneLayer HomeLayer = null!;
     public PheromoneLayer AlarmLayer = null!;
+    // F5.3: huella CHC (hidrocarburos cuticulares) — depósito pasivo de tráfico
+    // que REPELE. Es la única capa negativa: las otras tres atraen o avisan.
+    public PheromoneLayer FootprintLayer = null!;
 
     // — Demografía —
     public List<Ant> Adults = new();

@@ -29,7 +29,7 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>
         /// Capa de feromona tal como viaja en el canal E. Los valores SON el
         /// contrato: coinciden con el ordinal de <c>AntSim.Core.Pheromone.PheromoneKind</c>
-        /// (0 food, 1 home, 2 alarm). Se declara aquí y no se importa del Core a
+        /// (0 food, 1 home, 2 alarm, 4 footprint). Se declara aquí y no se importa del Core a
         /// propósito: la app Unity NO referencia el Core — consume el stream, y esa
         /// frontera es lo que mantiene los modelos puros compilables headless sin
         /// arrastrar la simulación. El test que compara ambos ordinales es el que
@@ -39,12 +39,15 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             Food = 0,
             Home = 1,
-            Alarm = 2
+            Alarm = 2,
+            // F5.3: huella CHC — el ordinal 3 se salta porque en el Core es
+            // Territory (reservado, sin datos): los ordinales SON el contrato.
+            Footprint = 4
         }
 
         /// <summary>Orden de ciclo canónico: la capa que el canal clásico ya enseñaba
         /// (home) primero, para que el comportamiento por defecto no cambie.</summary>
-        private static readonly Layer[] Cycle = { Layer.Home, Layer.Food, Layer.Alarm };
+        private static readonly Layer[] Cycle = { Layer.Home, Layer.Food, Layer.Alarm, Layer.Footprint };
 
         public int Colony { get; private set; }
         public Layer Kind { get; private set; } = Layer.Home;
@@ -61,6 +64,7 @@ namespace AntSim.Unity.Scripts.Streaming
             Layer.Food => "food",
             Layer.Home => "home",
             Layer.Alarm => "alarm",
+            Layer.Footprint => "footprint",
             _ => "?"
         };
 
@@ -71,6 +75,7 @@ namespace AntSim.Unity.Scripts.Streaming
             Layer.Food => new Rgb(0.95f, 0.72f, 0.30f),  // ámbar: comida
             Layer.Home => new Rgb(0.35f, 0.85f, 0.45f),  // verde: casa
             Layer.Alarm => new Rgb(0.90f, 0.35f, 0.32f), // rojo: peligro
+            Layer.Footprint => new Rgb(0.58f, 0.52f, 0.78f), // violeta apagado: sustrato pisado
             _ => new Rgb(0.70f, 0.70f, 0.70f)
         };
 
