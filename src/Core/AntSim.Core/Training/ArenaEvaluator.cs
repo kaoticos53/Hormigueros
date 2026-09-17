@@ -251,12 +251,14 @@ public sealed class ArenaEvaluator
         // Tramo abierto por (colonia, hormiga): posición del pickup sin descargar.
         // Los eventos traen X/Y, así que no hay que consultar el estado del mundo.
         var openCarries = new Dictionary<(int Colony, uint Ant), (float X, float Y)>();
-        // Récords POR HORMIGA: los densados pagan solo en récord nuevo (monótonos,
-        // no explotables: oscilar fuera-dentro-fuera junto a la banda no repite pago).
-        // exploreRecord: máxima distancia alcanzada; homeRecord: mínima distancia
-        // desde el último pickup (MaxValue = sin carga activa).
-        var exploreRecord = new List<float>();
-        var homeRecord = new List<float>();
+        // Récords POR HORMIGA claveados por Id (F5.3 rodaja 2): la compactación
+        // elimina muertas de Adults, así que la posición en la lista YA NO es
+        // identidad — los fundadores se reconocen por su Id, capturado en el
+        // tick 0 y estable durante toda la prueba.
+        var exploreRecord = new Dictionary<uint, float>();
+        var homeRecord = new Dictionary<uint, float>();
+        var founderIds = new HashSet<uint>();
+        bool founderIdsCaptured = false;
         for (int i = 0; i < _tickBudget; i++)
         {
             sim.Step();
@@ -290,11 +292,20 @@ public sealed class ArenaEvaluator
             //     solo bajo el tope de la etapa (acampar en una esquina no premia).
             //   · Homing CON carga: pago por récord de acercamiento al nido desde el
             //     último pickup; la descarga resetea el récord (nuevo ciclo, nuevo pago).
-            for (int a = 0; a < colony.Adults.Count; a++)
+            var colonyAdults = colony.Adults;
+            if (!founderIdsCaptured)
             {
-                var ant = colony.Adults[a];
+                // Tick 0: la lista aún sin compactar contiene a las fundadoras
+                // (posiciones [0, founderCount)) — capturo sus Ids como identidad.
+                for (int a = 0; a < founderCount && a < colonyAdults.Count; a++)
+                    founderIds.Add(colonyAdults[a].Id);
+                founderIdsCaptured = true;
+            }
+            for (int a = 0; a < colonyAdults.Count; a++)
+            {
+                var ant = colonyAdults[a];
                 if (!ant.Alive) continue;
-                while (exploreRecord.Count <= a) { exploreRecord.Add(-1f); homeRecord.Add(float.MaxValue); }
+                bool isFounder = founderIds.Contains(ant.Id);
 
                 float dx = ant.X - colony.NestX;
                 float dy = ant.Y - colony.NestY;
@@ -302,39 +313,41 @@ public sealed class ArenaEvaluator
 
                 if (ant.HasLoad)
                 {
-                    if (homeRecord[a] == float.MaxValue)
+                    if (!homeRecord.TryGetValue(ant.Id, out float rec))
                     {
-                        homeRecord[a] = d; // pickup reciente: referencia inicial
+                        homeRecord[ant.Id] = d; // pickup reciente: referencia inicial
                     }
-                    else if (d < homeRecord[a])
+                    else if (d < rec)
                     {
-                        homeShaping += (homeRecord[a] - d) * HomeShapingPerUnit;
-                        homeRecord[a] = d;
+                        homeShaping += (rec - d) * HomeShapingPerUnit;
+                        homeRecord[ant.Id] = d;
                     }
                 }
                 else
                 {
-                    homeRecord[a] = float.MaxValue; // tras descarga: ciclo nuevo
+                    homeRecord.Remove(ant.Id); // tras descarga: ciclo nuevo
                     // Exploración: SOLO fundadoras (ver founderCount arriba).
-                    if (a >= founderCount) continue;
-                    if (exploreRecord[a] < 0f)
+                    if (!isFounder) continue;
+                    if (!exploreRecord.TryGetValue(ant.Id, out float rec))
                     {
-                        exploreRecord[a] = d; // referencia inicial (posición de nacimiento)
+                        exploreRecord[ant.Id] = d; // referencia inicial (posición de nacimiento)
                     }
-                    else if (d <= _maxDistance && d > exploreRecord[a])
+                    else if (d <= _maxDistance && d > rec)
                     {
-                        exploreShaping += (d - exploreRecord[a]) * ExplorePerUnit;
-                        exploreRecord[a] = d;
+                        exploreShaping += (d - rec) * ExplorePerUnit;
+                        exploreRecord[ant.Id] = d;
                     }
                 }
             }
         }
 
-        // — Fitness de colonia: suma sobre todas las adultas (los muertos conservan
-        //   su aptitud de por vida en la lista) + los densados. —
+        // — Fitness de colonia: suma sobre las adultas VIVAS + el banco de las
+        //   muertas (F5.3 rodaja 2: su aptitud de por vida está bancada por
+        //   WorldSim al compactar) + los densados. —
         double total = 0.0;
         for (int a = 0; a < colony.Adults.Count; a++)
             total += colony.Adults[a].Fitness;
+        total += sim.DeadFitnessBank(0);
         total += homeShaping + exploreShaping + carryLegShaping;
 
         return new ArenaResult(total, pickups, unloads);
