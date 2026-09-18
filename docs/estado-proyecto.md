@@ -138,10 +138,16 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    el rastro** (bloques, no celdas). Y en el render, el presenter agrupa por material y envía lotes de 1023
    instancias, con caída a una llamada por objeto si la plataforma no soporta instancing; el troceo es un modelo
    puro del esqueleto Unity (el Core no viaja a la vista) con contador en vivo (`LastDrawCalls`, presupuesto 32).
-   Exit de F5.3 hasta donde llega el headless (grid 256, 6000 ticks, warm-v2, semilla 42): 1/2/4/8 colonias ⇒
-   0.06/0.12/0.24/0.50 ms por tick (**3 % del frame a 60 fps con 8 colonias**), techo de velocidad ×553/×279/×137/×67
-   y 17 llamadas de dibujo. **Los 6 pines NO se movieron** (el LOD es exacto: el mundo es byte a byte el mismo) y
-   el proyecto Unity compila en batch con 0 errores y 0 avisos. **480/480 tests.**
+   Exit de F5.3 (grid 256, 6000 ticks, warm-v2, semilla 42): 1/2/4/8 colonias ⇒
+   0.06/0.12/0.24/0.50 ms por tick (**3 % del frame a 60 fps con 8 colonias**), techo de velocidad ×553/×279/×137/×67.
+   Y el lado de la VISTA, medido en el editor con `scripts/perf-scene.sh` (4 vistas × 2 colonias = 8 colonias en pantalla,
+   grid 256): **0.51 ms por frame** en la fase estable, **19 llamadas de dibujo** (todas instanciadas, 0 de respaldo) con
+   292 hormigas y 684 ítems en pantalla. La sonda destapó **dos defectos reales**: `DrawMeshInstanced` LANZA si el
+   material no tiene `enableInstancing` (los del bootstrapper no lo tenían: el tablero se quedaba SIN HORMIGAS, con una
+   excepción por frame y 0 draw calls) — arreglado en los dos bootstrappers y con activación defensiva + contadores en
+   el presenter; y la configuración de la sonda en statics se perdía en el reload de Play (movida a `SessionState`).
+   **Los 6 pines NO se movieron** (el LOD es exacto: el mundo es byte a byte el mismo) y el proyecto Unity compila en
+   batch con 0 errores y 0 avisos. **480/480 tests.**
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
@@ -158,7 +164,7 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 | NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
 | `error CS` de MonoBehaviours | **abierto** — el job existe y está corregido, pero dormido: hoy lo caza la pasada local, no CI |
 | Feromonas costosas a escala | **mitigado (F5.3 rodaja 3)** — LOD exacto: 12–14 % del grid visitado en un mundo forrajeado; el RLE ya resolvía el envío del canal E |
-| Framerate real de Unity a N colonias | abierto — el Core está medido (3 % del frame con 8 colonias) y el envío bajó a ~17 llamadas, pero los fps los mide el editor |
+| Framerate real de Unity a N colonias | **medido en batch (F5.3 rodaja 3)** — 8 colonias: 0.51 ms/frame en la vista y 19 llamadas (todas instanciadas). Falta la medida con presentación a pantalla (Play pass interactivo) |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools |
 | Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta |

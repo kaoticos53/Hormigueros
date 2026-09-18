@@ -141,19 +141,71 @@ Lectura honesta de la tabla:
   (800 hormigas por vista con 4 materiales), son **4 por vista** frente a **800**
   de la línea base — el test lo fija (`instanciado × 100 < base`).
 
+### 4.3 La VISTA medida en el editor (Play pass)
+
+`bash scripts/perf-scene.sh` monta la escena del multi-visor con **4 vistas × 2
+colonias = 8 colonias en pantalla** en el grid real del modo juego (256), entra en
+Play en batch y muestrea una vez por segundo: frames/s reales, `LastDrawCalls`,
+hormigas e ítems por vista. Corrida de 40 s, boost ×10 (grid 256², 12 000 ticks):
+
+| medida | valor |
+|---|---|
+| frames/s, fase ESTABLE (30 muestras) | **1 964–1 994** → **0,51 ms/frame** |
+| frames/s, peor muestra | 292 → **3,42 ms/frame** (arranque del stream, no dibujo) |
+| llamadas de dibujo (4 vistas) | **19** — peor vista 5 (presupuesto 32/vista) |
+| llamadas instanciadas / de respaldo | **1 121 667 / 0** |
+| carga final en pantalla | **292 hormigas + 684 ítems** (73 hormigas por vista) |
+| stream agotado | t≈9 s (tick 12 000; el CLI va muy por delante de la vista) |
+| bucle del jugador | real (no hubo que empujarlo) |
+
+Lectura: con las 8 colonias dibujándose, la vista gasta **medio milisegundo de CPU
+por frame** — un 3 % del presupuesto de 16,6 ms a 60 fps — y la peor racha de la
+corrida (3,4 ms) NO es de dibujo: es el arranque del stream (los cuatro procesos
+del CLI y el llenado del búfer, con 0 hormigas todavía en pantalla). El valor es
+reproducible: dos corridas dieron 1 963 y 1 994 frames/s con el mundo idéntico
+(292 hormigas, 684 ítems, 19 llamadas).
+
+**Qué es y qué no es este número.** Es el coste de *producir* frames en batch:
+sin vsync, sin presentación a pantalla y con `Time.captureDeltaTime` fijo (1/30 s),
+de modo que mide el camino de CPU —parseo + `DrawMeshInstanced` + el contador—, no
+los fotogramas que verá el jugador con la pantalla refrescando. Se publica como
+cota, y por eso el criterio de salida se lee con las dos piezas juntas: **el Core
+cuesta 0,50 ms/tick con 8 colonias y la vista 0,51 ms/frame**.
+
+### 4.4 Dos defectos reales que el medidor destapó
+
+1. **El instancing dejaba el tablero SIN HORMIGAS.** `Graphics.DrawMeshInstanced`
+   *lanza* `InvalidOperationException: Material needs to enable instancing` si el
+   material no lo tiene activado — y los materiales de la escena los crea el
+   bootstrapper sin esa marca. La excepción abortaba el resto del `Draw`, así que
+   **cada frame** moría con 20 hormigas en pantalla y 0 llamadas de dibujo. Es el
+   mismo síntoma que reportó el jugador en su día («no se ven hormigas»), con otra
+   causa. Arreglado en los dos bootstrappers (instancing por construcción) y en el
+   presenter (activación defensiva, lista negra por material con caída a una
+   llamada por objeto, y contadores `LastInstancedCalls`/`LastFallbackCalls`). El
+   medidor ahora **falla** si hay llamadas de dibujo pero ninguna instanciada.
+2. **El informe se escribía en una ruta vacía.** `Path` «Invalid path»: la
+   configuración de la sonda vivía en statics y **entrar en Play recarga el
+   dominio**, así que los valores volvían al inicializador. Movida a
+   `SessionState` — exactamente el defecto que la sonda del multi-visor ya había
+   documentado y que aquí volvió a morder por copiar el patrón a medias.
+
+Los dos se destaparon porque la sonda **falla en vez de reportar**: su guard de
+«medición vacía» (0 hormigas o 0 llamadas con el mundo en marcha) y el de
+«instanciadas = 0» convierten un verde falso en un rojo.
+
 **Criterio de salida de F5.3** («N colonias estables a 60 fps en la escena de
-juego»): medido hasta donde la medición headless llega — **8 colonias en grid 256
-cuestan el 3 % del frame en el Core y 17 llamadas de dibujo** (contador en vivo del
-presenter, presupuesto 32). Lo que **no** está medido aquí es el framerate real de
-Unity: eso exige el editor y el gate de píxeles del Play pass.
+juego»): con 8 colonias, el Core cuesta **0,50 ms por tick** (3 % de un frame) y
+la vista **0,51 ms por frame** con 19 llamadas de dibujo, todas instanciadas. Las
+dos piezas están medidas; lo que sigue sin medir es el framerate con presentación
+real a pantalla (el Play pass interactivo) y el gate de píxeles.
 
 ## 5. Qué NO demuestra esta rodaja
 
-- **Los fps de Unity.** El Core se mide headless y el render se mide como plan
-  (lotes) y contador (llamadas), no como tiempo de GPU. El número de 60 fps que
-  cierra el criterio es una **cota**: el presupuesto de CPU de un frame lo consume
-  el Core en un 3 %, y el envío de geometría bajó de cientos de llamadas a una
-  docena. La medida directa sigue pendiente del Play pass en el editor.
+- **Los fps con presentación real.** Lo medido es el coste de producir frames en
+  batch (sin vsync ni swap): 0,51 ms/frame con 8 colonias. Eso es una **cota** de
+  CPU, no el framerate que verá el jugador — el tiempo de GPU y de presentación no
+  está medido, y el Play pass interactivo sigue pendiente.
 - **El provecho del canal E.** El stream ya emitía RLE de celdas no nulas, así que
   el LOD **no** cambia lo que viaja al presenter; cambia el coste de la difusión
   en el Core. Son dos ahorros distintos y conviene no confundirlos.
@@ -169,5 +221,7 @@ Unity: eso exige el editor y el gate de píxeles del Play pass.
   mundo no se movió — stream canónico, replay con drops, Atta, invasión y NEAT.
 - **El proyecto Unity compila en batch con 0 errores y 0 avisos** con el presenter
   instanciado (`scripts/check-unity-compile.sh`).
-- **Cómo re-medir**: `--mode scale` (tabla), `scripts/check-*.sh` (pines),
-  `bash scripts/check-unity-compile.sh` (MonoBehaviours).
+- **Cómo re-medir**: `--mode scale` (Core), `bash scripts/perf-scene.sh` (la
+  vista: frames/s y draw calls con 8 colonias; guarda el informe en
+  `artifacts/perf-scene.json` y conserva el log si falla), `scripts/check-*.sh`
+  (los 6 pines), `bash scripts/check-unity-compile.sh` (MonoBehaviours).

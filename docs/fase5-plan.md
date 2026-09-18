@@ -361,12 +361,19 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   caída al camino de una llamada por objeto si la plataforma no lo soporta. El
   troceo vive en un modelo puro del esqueleto Unity
   (`Streaming/InstancedDrawPlan.cs`) compilado en la suite headless, y hay
-  contador en vivo (`LastDrawCalls`, presupuesto 32).
+  contador en vivo (`LastDrawCalls`, presupuesto 32). Medido en el editor con
+  `scripts/perf-scene.sh` (8 colonias en pantalla): **0.51 ms/frame** y 19
+  llamadas, todas instanciadas. La sonda destapó un defecto real —
+  `DrawMeshInstanced` lanza si el material no trae `enableInstancing` y la escena
+  se quedaba sin hormigas —, corregido en los bootstrappers y con respaldo en el
+  presenter.
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
-  escena de juego. **Medido hasta donde llega el headless**: 8 colonias en
-  grid 256 consumen el **3 %** del presupuesto de un frame a 60 fps en el Core
-  y **17 llamadas de dibujo**; el framerate real de Unity sigue pendiente del
-  Play pass en el editor. Detalle y cifras: [`fase5-3-escala.md`](fase5-3-escala.md).
+  escena de juego. **Medido en las dos piezas**: el Core cuesta **0,50 ms por
+  tick** con 8 colonias en grid 256 (3 % de un frame a 60 fps) y la VISTA **0,51
+  ms por frame** con **19 llamadas de dibujo** (4 vistas × 2 colonias, todas
+  instanciadas). Lo que falta es la medida con presentación a pantalla y el gate
+  de píxeles del Play pass interactivo. Detalle y cifras:
+  [`fase5-3-escala.md`](fase5-3-escala.md).
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)
 
