@@ -494,11 +494,20 @@ namespace AntSim.Unity.Scripts.EditorTools
             AssetDatabase.CreateAsset(asset, path);
         }
 
+        /// <summary>
+        /// Registra la escena del multi-visor en build settings SIN ponerse la
+        /// primera: la primera escena de la lista es la que arranca un player, y
+        /// esa es la del JUEGO (la registra <c>SceneBootstrapper</c>). Con
+        /// <c>Insert(0)</c> —como estaba— regenerar el multi-visor cambiaba en
+        /// silencio la escena de arranque: lo destapó el medidor de rendimiento, que
+        /// regenera esta escena y dejó `EditorBuildSettings` con MultiSim delante de
+        /// Game. Se AÑADE al final, que es el sitio de una escena auxiliar.
+        /// </summary>
         private static void RegisterInBuildSettings(string scenePath)
         {
             var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
             if (scenes.Exists(s => s.path == scenePath)) return;
-            scenes.Insert(0, new EditorBuildSettingsScene(scenePath, true));
+            scenes.Add(new EditorBuildSettingsScene(scenePath, true));
             EditorBuildSettings.scenes = scenes.ToArray();
         }
 
