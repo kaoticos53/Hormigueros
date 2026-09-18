@@ -45,7 +45,13 @@ salvo donde se dice:
 - **Medidor de escala** (`--mode scale`): ms/tick, porcentaje del presupuesto de
   un frame a 60 fps, techo de velocidad y trabajo de feromonas por número de
   colonias. En grid 256 con 6000 ticks: **1/2/4/8 colonias ⇒ 0.06/0.12/0.24/0.50
-  ms por tick**, el 3 % del frame a 60 fps con 8 colonias, 17 llamadas de dibujo.
+  ms por tick**, el 3 % del frame a 60 fps con 8 colonias.
+- **Medidor de la vista** (`scripts/perf-scene.sh`): monta la escena con **8
+  colonias en pantalla** (4 vistas × 2) en grid 256, entra en Play en batch y mide
+  frames/s y `LastDrawCalls` por vista. Resultado: **0.51 ms por frame** en la
+  fase estable y **19 llamadas de dibujo, todas instanciadas** con 292 hormigas y
+  684 ítems en pantalla. Destapó un defecto real que dejaba el tablero sin
+  hormigas (`DrawMeshInstanced` exige `enableInstancing` en el material).
 - **Huella CHC (rodaja 2bis)**: cuarta capa repelente + tropotaxis en ratio — la
   señal negativa que faltaba, sin canal nuevo y sin invalidar los `.antgenome`.
 - **Benchmark de políticas (rodaja 2ter)**: aleatoria vs scripted vs evolucionada

@@ -313,6 +313,19 @@ bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
 bash scripts/playpass-live.sh --selftest      # los tres analizadores, sin editor
 ```
 
+Aparte de los bloques, hay un **medidor de rendimiento de la escena** (F5.3
+rodaja 3) que no comprueba aspecto sino coste: monta la escena del multi-visor con
+4 vistas × 2 colonias = 8 colonias en pantalla, en el grid del modo juego, entra en
+Play en batch y publica frames/s, `LastDrawCalls` y carga dibujada por vista. Es el
+que destapó el `enableInstancing` que dejaba el tablero sin hormigas — la clase de
+defecto que ninguna muestra de estado ve:
+
+```bash
+bash scripts/perf-scene.sh                    # 40 s, 8 colonias, grid 256
+bash scripts/perf-scene.sh --seconds 20 --boost 6
+bash scripts/perf-scene.sh --selftest         # el analizador, sin editor
+```
+
 El bloque de aspecto guarda tres artefactos para poder revisarlos sin volver a
 jugar: `artifacts/playpass-visual.txt` (en vivo), `playpass-visual-edit.txt` (al
 abrir la escena) y `playpass-scene.txt` (materiales, rects y desbordes).
