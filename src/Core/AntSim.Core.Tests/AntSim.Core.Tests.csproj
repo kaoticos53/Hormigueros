@@ -43,6 +43,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/ColonySparklineModel.cs" Link="UnityPure/ColonySparklineModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/LearningPanelModel.cs" Link="UnityPure/LearningPanelModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/SpeedControlModel.cs" Link="UnityPure/SpeedControlModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/InstancedDrawPlan.cs" Link="UnityPure/InstancedDrawPlan.cs" />
   </ItemGroup>
 
 </Project>
