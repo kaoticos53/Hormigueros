@@ -31,6 +31,11 @@ namespace AntSim.Cli;
 ///   evolve   — mundo con neuroevolución (Fase 2): pool élite, fitness al morir,
 ///              inmigración con cuarentena; con --import encola genomas externos y
 ///              con --export escribe la élite final.
+///   scale    — medidor de ESCALA (F5.3 rodaja 3): corre el mundo con 1/2/4/8
+///              colonias (--colony-counts) y publica ms/tick, el porcentaje del
+///              presupuesto de un frame a 60 fps, el trabajo de feromonas por tick
+///              con el LOD frente al grid completo y las llamadas de dibujo del
+///              plan instanciado. Es la evidencia del criterio de salida de F5.3.
 ///   pretrain — pre-entrenamiento headless (Fase 3): currículo por etapas sobre la
 ///              arena de WorldSim hasta alcanzar competencia mínima (ida-vuelta con
 ///              comida); con --export escribe la población entrenada y con
@@ -64,6 +69,7 @@ internal static class Program
         int trials = 1;         // F5.3bis: pruebas por semilla en el benchmark de políticas
         ulong[]? benchSeeds = null;
         int? arenaCells = null; // celdas del grid de la arena del benchmark (null = 96)
+        int[]? scaleColonyCounts = null; // F5.3 rodaja 3: colonias del medidor de escala
         bool hybrid = false;    // currículo híbrido alternado (200-mid / 200-max por generación)
         bool fullWorld = false; // añade la 4ª etapa mundo-completo (arena 160, 200–700 u)
         string? importPath = null;
@@ -93,8 +99,8 @@ internal static class Program
                     return 0;
                 case "--mode":
                     mode = Next(args, ref i);
-                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets" && mode != "genome-info" && mode != "bench")
-                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game', 'presets', 'genome-info' o 'bench'.");
+                if (mode != "micro" && mode != "world" && mode != "evolve" && mode != "pretrain" && mode != "verify" && mode != "game" && mode != "presets" && mode != "genome-info" && mode != "bench" && mode != "scale")
+                    return Fail("--mode debe ser 'micro', 'world', 'evolve', 'pretrain', 'verify', 'game', 'presets', 'genome-info', 'bench' o 'scale'.");
                     break;
                 case "--seed":
                     if (!ulong.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out seed))
@@ -193,6 +199,24 @@ internal static class Program
                         list.Add(sv);
                     }
                     benchSeeds = list.ToArray();
+                    break;
+                }
+                case "--colony-counts":
+                {
+                    // F5.3 rodaja 3: eje del medidor de escala (cuántas colonias a
+                    // la vez). Lista explícita: la pregunta es cómo escala, no un
+                    // número suelto.
+                    var parts = Next(args, ref i)
+                        .Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length == 0) return Fail("--colony-counts requiere al menos un número de colonias.");
+                    var list = new List<int>(parts.Length);
+                    foreach (var p in parts)
+                    {
+                        if (!int.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out int cv) || cv < 1)
+                            return Fail($"--colony-counts: valor inválido '{p}' (entero ≥ 1).");
+                        list.Add(cv);
+                    }
+                    scaleColonyCounts = list.ToArray();
                     break;
                 }
                 case "--band-min":
@@ -325,6 +349,7 @@ internal static class Program
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat),
                 "bench" => PolicyBenchmarkScenario.Run(benchSeeds, bandMin, bandMax, ticks, trials, seedPoolPath, arenaCells),
+                "scale" => ScaleScenario.Run(grid, ticks, scaleColonyCounts, seed, seedPoolPath),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);
