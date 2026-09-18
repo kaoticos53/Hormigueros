@@ -102,13 +102,42 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// <summary>Monta la escena de N vistas. `pools` null = autodetección
         /// desde artifacts/ (una por vista, en orden; las vistas sobrantes sin
         /// pool). Lanza excepción con mensaje claro si N no está en 1..4.</summary>
+        /// <summary>Escena del MEDIDOR DE RENDIMIENTO (F5.3 rodaja 3): las CUATRO
+        /// vistas con los pools reales de la cadena Fase 3ter, en el grid del modo
+        /// juego (256) y sin reproducción de archivo — cada vista lanza su CLI, que
+        /// es como juega el jugador. Son **8 colonias en pantalla** (4 × 2) y la
+        /// carga de trabajo del mundo real, que es lo que hay que medir para el
+        /// criterio de salida de la sub-fase. Ejecutable en batch:
+        /// <c>-executeMethod …MultiSimBootstrapper.CreateMultiSimPerfScene</c>.</summary>
+        public static void CreateMultiSimPerfScene() => CreateMultiSimPerfScene(PerfGridCells);
+
+        /// <summary>Grid del medidor de rendimiento (el del modo juego).</summary>
+        public const int PerfGridCells = 256;
+
+        /// <summary>Horizonte del medidor: 12 000 ticks bastan para un mundo
+        /// forrajeado (~200 hormigas por colonia) y mantienen el búfer de las
+        /// cuatro vistas dentro de un orden de magnitud razonable.</summary>
+        public const int PerfTicks = 12000;
+
+        /// <summary>Canal A cada 5 ticks en el medidor: el COSTE de pintar depende de
+        /// las hormigas visibles, no de la frecuencia del muestreo, y con 4 streams a
+        /// 256² el canal cada tick multiplicaría por 5 la memoria del búfer.</summary>
+        public const int PerfFrameEvery = 5;
+
+        public static void CreateMultiSimPerfScene(int gridCells)
+        {
+            CreateMultiSimScene(views: 4, baseSeed: 42, pools: null, replayFiles: null,
+                gridCells: gridCells, frameEvery: PerfFrameEvery, ticks: PerfTicks);
+        }
+
         public static void CreateMultiSimScene(int views, ulong baseSeed,
-            IReadOnlyList<string?>? pools = null, IReadOnlyList<string?>? replayFiles = null)
+            IReadOnlyList<string?>? pools = null, IReadOnlyList<string?>? replayFiles = null,
+            int gridCells = GridCells, int frameEvery = 2, int ticks = 36000)
         {
             var layout = MultiViewportModel.Layout(views);   // valida 1..4
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            float world = WorldUnits.WorldSize(GridCells);
+            float world = WorldUnits.WorldSize(gridCells);
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
@@ -145,7 +174,8 @@ namespace AntSim.Unity.Scripts.EditorTools
                 var v = layout[i];
                 string? replay = replayFiles != null && i < replayFiles.Count
                     ? replayFiles[i] : null;
-                presenters[i] = BuildView(v, world, baseSeed + (ulong)i, viewPools[i], replay);
+                presenters[i] = BuildView(v, world, baseSeed + (ulong)i, viewPools[i], replay,
+                    gridCells, frameEvery, ticks);
             }
 
             // — HUD común: rótulo + tarjeta compacta por vista —
@@ -192,7 +222,8 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// <summary>Una vista: cámara con rect, mundo en su capa, presenter.
         /// Devuelve el presenter para que el HUD de la vista se le conecte.</summary>
         private static Presenter.SimPresenterBehaviour BuildView(MultiViewportModel.View v,
-            float world, ulong seed, string? pool, string? replayFile = null)
+            float world, ulong seed, string? pool, string? replayFile = null,
+            int gridCells = GridCells, int frameEvery = 2, int ticks = 36000)
         {
             int layer = MultiViewportModel.RenderLayer(v.Index);
 
@@ -275,12 +306,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             var presenterGo = new GameObject($"SimPresenter_V{v.Index}");
             var presenter = presenterGo.AddComponent<Presenter.SimPresenterBehaviour>();
             presenter.CliPath = "build/antsim";
-            presenter.Grid = GridCells;
+            presenter.Grid = gridCells;
             presenter.Colonies = 2;
             // Las N partidas comparten horizonte (7200 ticks); velocidad por
             // vista con +/= (SpeedBoost) o el Speed del inspector.
-            presenter.Ticks = 36000;
-            presenter.FrameEvery = 2;   // 15 Hz de canal A por vista: N streams van finos
+            presenter.Ticks = ticks;
+            presenter.FrameEvery = frameEvery;   // 15 Hz de canal A por vista: N streams van finos
             presenter.Seed = seed;
             presenter.SeedPoolPath = pool;
             presenter.ReplayFile = replayFile; // smoke: reproducir archivo, no CLI
@@ -515,6 +546,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (sh == null) sh = Shader.Find("Standard");
 
             var m = new Material(sh!) { name = name };
+            // Instancing por construcción (F5.3 rodaja 3): el presenter dibuja los
+            // actores con Graphics.DrawMeshInstanced y ese API LANZA si el material
+            // no lo tiene activado. Dejarlo al presenter era frágil: la escena
+            // montada por el bootstrapper se quedaba sin hormigas con una excepción
+            // por frame (defecto destapado por el medidor de rendimiento).
+            m.enableInstancing = true;
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             m.color = c;
