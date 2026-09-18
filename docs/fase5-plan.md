@@ -349,14 +349,24 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   evolucionada con política congelada ([`politicas-benchmark.md`](politicas-benchmark.md)).
 - **Curva de aprendizaje y cobertura — HECHAS (rodaja 2quater)**: bloques
   `learning`/`fitcurve` en el canal C + panel por tarjeta en el HUD.
-- **LOD de feromonas — PENDIENTE (rodaja 3)**: tiles sucios + presupuesto de
-  subida (el canal E ya emite RLE; el costo real es la capa Core de difusión
-  — LOD por distancia a cámara solo en render).
-- **GPU instancing — PENDIENTE (rodaja 3)**: en el presenter
-  (`Graphics.DrawMeshInstanced`) y pool por `antId` (ya existe el slot
-  estable del snapshot).
+- **LOD de feromonas — HECHO (rodaja 3)**: LOD **exacto** por bloques con
+  soporte (16×16) en `PheromoneLayer`: la difusión del proyecto nunca llena una
+  celda nula, así que las nulas no pueden cambiar y visitarlas era trabajo puro.
+  La equivalencia se demuestra celda a celda contra la implementación de
+  referencia a grid completo, y los 6 pines no se movieron (el mundo es el
+  mismo). Medido: 12–14 % del grid visitado en un mundo forrajeado (1.2 % en un
+  mundo casi limpio) — el ahorro se encoge según se extiende el rastro.
+- **GPU instancing — HECHO (rodaja 3)**: el presenter agrupa por material y
+  envía lotes de hasta 1023 instancias (`Graphics.DrawMeshInstanced`), con
+  caída al camino de una llamada por objeto si la plataforma no lo soporta. El
+  troceo vive en un modelo puro del esqueleto Unity
+  (`Streaming/InstancedDrawPlan.cs`) compilado en la suite headless, y hay
+  contador en vivo (`LastDrawCalls`, presupuesto 32).
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
-  escena de juego.
+  escena de juego. **Medido hasta donde llega el headless**: 8 colonias en
+  grid 256 consumen el **3 %** del presupuesto de un frame a 60 fps en el Core
+  y **17 llamadas de dibujo**; el framerate real de Unity sigue pendiente del
+  Play pass en el editor. Detalle y cifras: [`fase5-3-escala.md`](fase5-3-escala.md).
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)
 
