@@ -21,6 +21,15 @@
 # corrida, borrándola al salir (trap), para no dejar un script suelto que Unity
 # compile siempre. El `.meta` que genera Unity se borra igual.
 #
+# LO QUE DEJA EN EL ÁRBOL (importante). La corrida monta la escena del multi-visor
+# con el bootstrapper, así que REGENERA `Assets/Scenes/MultiSim.unity` y sus
+# materiales: son artefactos generados y quedan «modificados» con contenido
+# canónicamente idéntico (los ids locales y el orden de los documentos son de cada
+# sesión de Unity — byte-idéntico no es alcanzable, ya está medido y documentado).
+# Para dejar el árbol limpio tras medir:
+#   git checkout -- src/App/AntSim.Unity/Assets/Materials \
+#                   src/App/AntSim.Unity/Assets/Scenes/MultiSim.unity
+#
 # Uso:
 #   scripts/perf-scene.sh                        # 45 s, boost ×10, grid 256
 #   scripts/perf-scene.sh --seconds 30 --boost 6

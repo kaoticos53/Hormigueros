@@ -225,3 +225,8 @@ real a pantalla (el Play pass interactivo) y el gate de píxeles.
   vista: frames/s y draw calls con 8 colonias; guarda el informe en
   `artifacts/perf-scene.json` y conserva el log si falla), `scripts/check-*.sh`
   (los 6 pines), `bash scripts/check-unity-compile.sh` (MonoBehaviours).
+- **Ojo con lo que deja en el árbol**: el medidor monta la escena con el
+  bootstrapper, así que regenera `MultiSim.unity` y sus materiales. Son artefactos
+  generados y el contenido queda canónicamente idéntico (ids locales y orden son
+  de cada sesión de Unity), pero el `git status` sale con ~60 ficheros: el script
+  lo avisa y deja el comando para dejarlo limpio.
