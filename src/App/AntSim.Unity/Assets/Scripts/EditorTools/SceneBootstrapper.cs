@@ -1520,6 +1520,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (sh == null) sh = Shader.Find("Standard");
 
             var m = new Material(sh!) { name = name };
+            // Instancing por construcción (F5.3 rodaja 3): el presenter dibuja
+            // hormigas e ítems con Graphics.DrawMeshInstanced, que LANZA si el
+            // material no lo tiene activado — y esa excepción aborta el dibujo (la
+            // escena se quedaba sin hormigas). El presenter además lo activa
+            // defensivamente, pero los materiales de la escena lo traen de fábrica.
+            m.enableInstancing = true;
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             m.color = c;

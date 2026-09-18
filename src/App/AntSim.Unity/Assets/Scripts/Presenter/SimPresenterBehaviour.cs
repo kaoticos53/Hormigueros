@@ -114,6 +114,16 @@ namespace AntSim.Unity.Scripts.Presenter
 
         public bool DrawingBeyondBudget => LastDrawCalls > DrawCallBudget;
 
+        /// <summary>Llamadas emitidas por el camino INSTANCIADO en la última
+        /// presentación. Con hormigas en pantalla, 0 significa que el dibujo NO
+        /// está pasando por instancing — el medidor de rendimiento lo usa como
+        /// aserción para no dar por buena una escena que no pintó nada.</summary>
+        public int LastInstancedCalls { get; private set; }
+
+        /// <summary>Llamadas emitidas por el camino de una por objeto (materiales
+        /// cuyo shader no soporta instancing, o plataformas sin soporte).</summary>
+        public int LastFallbackCalls { get; private set; }
+
         private readonly InstanceSlotDrawer _drawer = new();
 
         /// <summary>
@@ -402,6 +412,8 @@ namespace AntSim.Unity.Scripts.Presenter
             float lift = ActorLift > 0f ? ActorLift : world * 0.0008f;
             bool instancing = UseInstancing && SystemInfo.supportsInstancing;
             LastDrawCalls = 0;
+            LastInstancedCalls = 0;
+            LastFallbackCalls = 0;
 
             if (AntMesh != null && AntMaterial != null)
             {
@@ -500,6 +512,9 @@ namespace AntSim.Unity.Scripts.Presenter
                 }
                 LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
             }
+
+            LastInstancedCalls = _drawer.InstancedCalls;
+            LastFallbackCalls = _drawer.FallbackCalls;
         }
 
         /// <summary>
@@ -515,6 +530,13 @@ namespace AntSim.Unity.Scripts.Presenter
             private readonly List<List<Matrix4x4>> _matrices = new();
             private readonly Dictionary<Material, int> _slotOf = new();
             private readonly Matrix4x4[] _buffer = new Matrix4x4[Streaming.InstancedDrawPlan.BatchLimit];
+            private readonly HashSet<Material> _cannotInstance = new();
+
+            /// <summary>Llamadas por lotes emitidas (camino instanciado).</summary>
+            public int InstancedCalls { get; private set; }
+
+            /// <summary>Llamadas por objeto emitidas (camino de respaldo).</summary>
+            public int FallbackCalls { get; private set; }
 
             public void Clear()
             {
@@ -547,28 +569,74 @@ namespace AntSim.Unity.Scripts.Presenter
                     int total = matrices.Count;
                     if (total == 0) continue;
 
-                    if (!instancing)
+                    // Un material solo entra al camino instanciado si de verdad
+                    // puede: `DrawMeshInstanced` LANZA si `enableInstancing` está
+                    // apagado, y esa excepción aborta el resto del dibujo (el
+                    // tablero se queda sin hormigas). Fue un defecto REAL,
+                    // destapado por el medidor de rendimiento.
+                    if (!instancing || _cannotInstance.Contains(material) || !EnsureInstancing(material))
                     {
                         for (int i = 0; i < total; i++)
                         {
                             Graphics.DrawMesh(mesh, matrices[i], material, layer);
                             calls++;
+                            FallbackCalls++;
                         }
                         continue;
                     }
 
                     int batches = Streaming.InstancedDrawPlan.Batches(total);
-                    for (int b = 0; b < batches; b++)
+                    int callsBefore = calls;
+                    int instancedBefore = InstancedCalls;
+                    try
                     {
-                        int start = Streaming.InstancedDrawPlan.BatchStart(b);
-                        int size = Streaming.InstancedDrawPlan.BatchSize(total, b);
-                        for (int i = 0; i < size; i++) _buffer[i] = matrices[start + i];
-                        Graphics.DrawMeshInstanced(mesh, 0, material, _buffer, size, null,
-                            ShadowCastingMode.Off, false, layer);
-                        calls++;
+                        for (int b = 0; b < batches; b++)
+                        {
+                            int start = Streaming.InstancedDrawPlan.BatchStart(b);
+                            int size = Streaming.InstancedDrawPlan.BatchSize(total, b);
+                            for (int i = 0; i < size; i++) _buffer[i] = matrices[start + i];
+                            Graphics.DrawMeshInstanced(mesh, 0, material, _buffer, size, null,
+                                ShadowCastingMode.Off, false, layer);
+                            calls++;
+                            InstancedCalls++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Shader sin soporte de instancing (o un driver que lo
+                        // rechaza): ese material queda en la lista negra y se
+                        // dibuja por objeto. El dibujo CORRECTO manda sobre la
+                        // optimización, y el aviso sale una sola vez por material.
+                        // Los contadores vuelven atrás: un lote que lanzó no se
+                        // cuenta como dibujado (la Contabilidad tiene que decir la
+                        // verdad, o el medidor daría por bueno un frame a medias).
+                        _cannotInstance.Add(material);
+                        calls = callsBefore;
+                        InstancedCalls = instancedBefore;
+                        Debug.LogWarning($"[presenter] {material.name}: DrawMeshInstanced rechazado ({ex.Message}); " +
+                                         "se dibuja por objeto");
+                        for (int i = 0; i < total; i++)
+                        {
+                            Graphics.DrawMesh(mesh, matrices[i], material, layer);
+                            calls++;
+                            FallbackCalls++;
+                        }
                     }
                 }
                 return calls;
+            }
+
+            /// <summary>
+            /// Activa `enableInstancing` en el material la primera vez (los
+            /// materiales de la escena ya lo traen activado por construcción: ver
+            /// `NewFlatMat` de los bootstrappers). Devuelve false si el material
+            /// no lo soporta, para que su lote caiga al camino por objeto.
+            /// </summary>
+            private static bool EnsureInstancing(Material material)
+            {
+                if (material.enableInstancing) return true;
+                material.enableInstancing = true;
+                return material.enableInstancing;
             }
         }
     }
