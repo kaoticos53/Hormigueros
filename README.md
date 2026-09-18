@@ -19,10 +19,42 @@ y [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md) para el resumen de cier
 [`docs/fase4-hud-contrato.md`](docs/fase4-hud-contrato.md) para el contrato de datos del HUD (F4.2)
 y [`docs/fase4-resumen.md`](docs/fase4-resumen.md) para el resumen de cierre de la Fase 4
 (junto con [`docs/fase3ter-resumen.md`](docs/fase3ter-resumen.md): arranque en frío, salud del relevo y jerarquía de pools),
-y [`docs/fase5-plan.md`](docs/fase5-plan.md) para el plan de la Fase 5 (realismo, especies y escala).
+y [`docs/fase5-plan.md`](docs/fase5-plan.md) para el plan de la Fase 5 (realismo, especies y escala),
+con [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md) para el cierre de la escala (LOD de difusión e instancing, medidos).
 Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.md).
 
 ## Notas de versión
+
+### F5.3 — Escala: el mundo deja de costar lo mismo (rodajas 1–3, sin tag todavía)
+
+La sub-fase que hace sostenible todo lo anterior: el mismo mundo, con menos
+trabajo por tick y por frame. Cinco rodajas, ninguna de ellas cambia el mundo
+salvo donde se dice:
+
+- **LOD de difusión EXACTO (rodaja 3)**: la difusión nunca llena una celda nula
+  (régimen original del proyecto), así que las nulas no pueden cambiar y
+  visitarlas era trabajo puro. `PheromoneLayer` mantiene el soporte por bloques
+  de 16×16 y recorre solo esos. La equivalencia se demuestra **celda a celda**
+  contra una capa de referencia a grid completo, y los 6 pines de hash **no se
+  movieron**: el mundo es el mismo byte a byte. Medido: 12–14 % del grid visitado
+  en un mundo forrajeado (1.2 % en uno casi limpio).
+- **GPU instancing (rodaja 3)**: el presenter agrupa por material y envía lotes
+  de hasta 1023 instancias en vez de una llamada por hormiga/ítem/mordisco, con
+  caída al camino por objeto si la plataforma no lo soporta. Contador en vivo
+  (`LastDrawCalls`, presupuesto 32).
+- **Medidor de escala** (`--mode scale`): ms/tick, porcentaje del presupuesto de
+  un frame a 60 fps, techo de velocidad y trabajo de feromonas por número de
+  colonias. En grid 256 con 6000 ticks: **1/2/4/8 colonias ⇒ 0.06/0.12/0.24/0.50
+  ms por tick**, el 3 % del frame a 60 fps con 8 colonias, 17 llamadas de dibujo.
+- **Huella CHC (rodaja 2bis)**: cuarta capa repelente + tropotaxis en ratio — la
+  señal negativa que faltaba, sin canal nuevo y sin invalidar los `.antgenome`.
+- **Benchmark de políticas (rodaja 2ter)**: aleatoria vs scripted vs evolucionada
+  en la misma arena ([`docs/politicas-benchmark.md`](docs/politicas-benchmark.md)).
+- **Curva de aprendizaje y cobertura (rodaja 2quater)**: dos bloques nuevos en el
+  canal C y panel por tarjeta en el HUD.
+
+`480/480` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
+errores ni avisos. Detalle: [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md).
 
 ### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
 
@@ -166,8 +198,9 @@ criterio de cierre verificado en vivo y headless:
   `Unload` de siempre, eventos 17–19 en canal B, `DeathCause.Combat`,
   alarma inyectada en la capa de la víctima), transferencia warm-v2 →
   cuerpo Eciton validada por sonda. Sensor dirigido y balance: en curso.
-- CI con **4 pins de hash** (stream canónico, replay 3000/6000 con drops,
-  partida Atta) y compilación batch de Unity; `305/305` tests verdes.
+- CI con pins de hash (stream canónico, replay 3000/6000 con drops, partida
+  Atta) y compilación batch de Unity. *(Cuando se escribió esta nota eran 4
+  pines y 305 tests; hoy son **6 pines** —+invasión, +NEAT— y **480/480 tests**.)*
 - Detalles: [`docs/fase5-plan.md`](docs/fase5-plan.md) ·
   [`docs/fase5-2a-atta.md`](docs/fase5-2a-atta.md) ·
   [`docs/fase5-2b-eciton.md`](docs/fase5-2b-eciton.md) ·

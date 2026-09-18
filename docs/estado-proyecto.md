@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-17 · HEAD: `53eda0b` (escena regenerada) ·
-suite: 463/463 (Windows y Linux) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+*Actualizado: 2026-09-18 · HEAD: `0485071` + la rodaja 3 de F5.3 (working tree) ·
+suite: 480/480 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -26,7 +26,7 @@ vs scripted vs evolucionada en la misma arena).
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** `v0.6.0` | `fase5-2b-eciton.md` |
 | **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** `v0.7.0` | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** | ✅ `v0.6.1` | `arquitectura.md` §CI |
-| **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje** | 🔄 **5 de 6 rodajas** | — (falta la rodaja 3: LOD + instancing) |
+| **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje, LOD + instancing** | ✅ **rodajas 1–3 HECHAS** (exit medido hasta el Core) | `fase5-3-escala.md` |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
 
 ## Lo que ya funciona (verificado, no prometido)
@@ -36,7 +36,8 @@ a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
 el 2026-09-17 (runs 17 y 19, verdes en Linux): stream canónico, replay con
 drops a 3000 y 6000 ticks, la
 partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica. **463/463 tests** en Windows Y Linux.
+canónica. **480/480 tests** en Windows (y los 5 scripts de pin verificados en
+Linux en el último push; la suite corre en las dos plataformas en CI).
 
 **Gate de Unity en CI — corregido y DORMIDO** — el job `unity-compile`
 compila los MonoBehaviours que `dotnet test` no ve, y hasta hoy nunca había
@@ -88,10 +89,11 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 
 ## Lo que queda (en orden de dependencia)
 
-1. **F5.3 rodaja 3 — PENDIENTE**: es lo único que queda de la sub-fase. LOD de
-   difusión de feromonas (tiles sucios + presupuesto de subida) y GPU instancing
-   en el presenter; exit de fase: N colonias a 60 fps. Las rodajas 1, 2, 2bis,
-   2ter y 2quater están HECHAS; el detalle de cada una, abajo.
+1. **Lo que queda** (ya no es una rodaja de F5.3: esa sub-fase está cerrada). El
+   detalle de las rodajas está abajo; ahora mismo los cabos sueltos son la
+   medida de fps REALES en el editor (el exit de F5.3 está medido hasta el Core:
+   8 colonias = 3 % del frame + 17 llamadas de dibujo), la deuda menor de F5.1 y
+   el gate de Unity en CI, que sigue dormido tras la variable `UNITY_CI`.
    **F5.3 rodaja 1 — HECHA**: `AntSoA` (parallel arrays), infraestructura lista.
    **F5.3 rodaja 2 — HECHO (2026-09-17)**: el mundo COMPACTA las adultas muertas al final de cada `Step` (O(n), `BankAndCompactDeadAnts`). Claves del diseño: el fitness de por vida de las muertas va a un BANCO por colonia (el pool ya cobró en el tick de la muerte) que `HashLine`, el save y la arena suman para producir lo mismo que la lista con cadáveres; `HashLine` y los checkpoints solo describen vivas; los registros de shaping de la arena van claveados por `Id` (la posición en la lista ya no es identidad). Pines: solo invasión y NEAT se movieron (hay muertes en sus ventanas de hash); stream/replay/Atta son byte-idénticos. La fila del canal A desaparece en el tick de la muerte (contrato actualizado en `UnityStreamContractTests`): la muerte la captura el canal B.
    **F5.3 rodaja 2bis — HECHO (2026-09-17): huella CHC (4ª capa) y tropotaxis en ratio.**
@@ -125,7 +127,21 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    Unity compila en batch sin avisos. Evidencia: en 9000 ticks la colonia sembrada con warm-v2 conoce
    **2148/9216 celdas (23.3 %)** con fitness medio 4.7, y la fría 728 (7.9 %) con 1.8 — la diferencia de
    aprendizaje se ve en el HUD. **463/463 tests**.
-   **F5.3 rodaja 3 pendiente**: LOD de difusión de feromonas, GPU instancing en el presenter. Exit: N colonias a 60 fps.
+   **F5.3 rodaja 3 — HECHO (2026-09-18): LOD de difusión EXACTO e instancing ([`fase5-3-escala.md`](fase5-3-escala.md)).**
+   El LOD no aproxima: la difusión del proyecto nunca llena una celda nula (régimen original, no de esta
+   rodaja), así que las nulas no pueden cambiar y visitarlas era trabajo puro. `PheromoneLayer` mantiene un
+   contador de celdas no nulas por BLOQUE de 16×16 y arma con ellos las regiones a visitar; el checkpoint
+   DERIVA el soporte de los valores (`RebuildSupport`). La equivalencia se demuestra celda a celda contra una
+   capa gemela con `LodEnabled = false` (implementación de referencia) sobre 400 operaciones aleatorias — el
+   primer intento del test comparaba dos secuencias distintas y hay una nota en él sobre eso. Medido: 12–14 %
+   del grid visitado en un mundo forrajeado, 1.2 % en uno casi limpio — **el ahorro se encoge según se extiende
+   el rastro** (bloques, no celdas). Y en el render, el presenter agrupa por material y envía lotes de 1023
+   instancias, con caída a una llamada por objeto si la plataforma no soporta instancing; el troceo es un modelo
+   puro del esqueleto Unity (el Core no viaja a la vista) con contador en vivo (`LastDrawCalls`, presupuesto 32).
+   Exit de F5.3 hasta donde llega el headless (grid 256, 6000 ticks, warm-v2, semilla 42): 1/2/4/8 colonias ⇒
+   0.06/0.12/0.24/0.50 ms por tick (**3 % del frame a 60 fps con 8 colonias**), techo de velocidad ×553/×279/×137/×67
+   y 17 llamadas de dibujo. **Los 6 pines NO se movieron** (el LOD es exacto: el mundo es byte a byte el mismo) y
+   el proyecto Unity compila en batch con 0 errores y 0 avisos. **480/480 tests.**
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
@@ -141,7 +157,8 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 |---|---|
 | NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
 | `error CS` de MonoBehaviours | **abierto** — el job existe y está corregido, pero dormido: hoy lo caza la pasada local, no CI |
-| Feromonas costosas a escala | abierto — RLE resuelve render; la difusión es F5.3 |
+| Feromonas costosas a escala | **mitigado (F5.3 rodaja 3)** — LOD exacto: 12–14 % del grid visitado en un mundo forrajeado; el RLE ya resolvía el envío del canal E |
+| Framerate real de Unity a N colonias | abierto — el Core está medido (3 % del frame con 8 colonias) y el envío bajó a ~17 llamadas, pero los fps los mide el editor |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools |
 | Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta |

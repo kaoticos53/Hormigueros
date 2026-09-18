@@ -44,6 +44,21 @@
 - Actualización por **región activa**; versionado por **tiles de 64×64** (cada
   escritura que cambia una celda incrementa la versión de su tile y el contador
   global de la capa) para el render incremental por tiles sucios.
+- **LOD de difusión (F5.3 rodaja 3)** — la «región activa» son ahora **bloques de
+  16×16** con contador de celdas no nulas: una celda nula nunca se llena al
+  difundir (comportamiento original de la difusión, del que dependen genomas,
+  arena y los 6 pines), así que las celdas nulas no pueden cambiar y evaporar y
+  difundir recorren solo los bloques con soporte. Es **exacto**: se verifica
+  celda a celda contra la implementación a grid completo (capa con
+  `LodEnabled = false`, solo para verificación) y los pines de hash no se mueven.
+  El soporte es un ÍNDICE del estado, no estado: al cargar un checkpoint se
+  deriva de los valores (`RebuildSupport`). Telemetría: `NonZeroCells`,
+  `ActiveBlocks`, `ActiveRegionCells`. `SumOfValues()` (hash) sigue recorriendo el
+  grid completo a propósito — el orden de acumulación de floats es parte del hash.
+- **Dibujo instanciado (F5.3 rodaja 3)**: el presenter agrupa por material y envía
+  lotes de hasta 1023 instancias (`Graphics.DrawMeshInstanced`), con caída a una
+  llamada por objeto si la plataforma no lo soporta. El troceo es un modelo puro
+  del esqueleto Unity (`Streaming/InstancedDrawPlan`), verificado headless.
 - Sonda de olfato de 3 puntos con **bilineal**; la hormiga solo lee capas de su colonia.
 
 ### 2bis. Huella CHC (F5.3) — la señal negativa
