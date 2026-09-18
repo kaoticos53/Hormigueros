@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace AntSim.Unity.Scripts.Presenter
 {
@@ -7,7 +9,15 @@ namespace AntSim.Unity.Scripts.Presenter
     /// Ancla Unity del presenter (F4.1 — esqueleto). Todo el trabajo real vive en
     /// clases puras (GameStreamParser/GameStreamPresenter): este componente solo
     /// bombea el stream, muestrea el estado interpolado cada frame y lo dibuja
-    /// con <c>Graphics.DrawMesh</c> (pool implícito, sin GameObject por hormiga).
+    /// (pool implícito, sin GameObject por hormiga).
+    ///
+    /// DIBUJO INSTANCIADO (F5.3 rodaja 3): las hormigas y los ítems se agrupan por
+    /// material y se dibujan con <c>Graphics.DrawMeshInstanced</c> en lotes de
+    /// hasta 1023 instancias (<see cref="InstancedDrawPlan"/>, el límite del
+    /// motor). Antes era una llamada por hormiga: con el multi-visor (4 vistas) y
+    /// cientos de hormigas por vista, el coste de CPU lo dominaba el envío, no el
+    /// mundo. Si la plataforma no soporta instancing se cae al camino de una
+    /// llamada por objeto — el mismo dibujo, más lento.
     /// Pausa/velocidad escalan el consumo del stream, nunca la física (fija a 30 Hz).
     /// </summary>
     public sealed class SimPresenterBehaviour : MonoBehaviour
@@ -84,6 +94,27 @@ namespace AntSim.Unity.Scripts.Presenter
 
         [Tooltip("Capa de render de ESTA vista (F5.1bis multi-visor): los DrawMesh van a esa capa y la cámara con la máscara correspondiente solo ve su mundo. 0 = Default (escena de una vista, compatible con todo lo anterior). Los suelos/nidos del multi-visor se crean en la MISMA capa, así que la máscara de la cámara completa la separación.")]
         public int RenderLayer = 0;
+
+        [Tooltip("Dibujo INSTANCIADO (F5.3 rodaja 3): agrupa por material y dibuja por lotes con Graphics.DrawMeshInstanced. Apágalo para volver a una llamada por objeto (depuración, o una plataforma sin instancing — en ese caso también se cae solo).")]
+        public bool UseInstancing = true;
+
+        /// <summary>Llamadas de dibujo de la última presentación (hormigas + ítems).
+        /// Es la cifra que verifica el ahorro del instancing en vivo, sin espejo ni
+        /// píxeles: la sonda de smoke la lee del componente.
+        /// <see cref="DrawingBeyondBudget"/> avisa si el presupuesto se sale de lo
+        /// esperado para 60 fps.</summary>
+        public int LastDrawCalls { get; private set; }
+
+        /// <summary>Presupuesto de llamadas de dibujo por vista y frame. Con el
+        /// instancing, dos colonias con cuatro materiales y varioscientos de
+        /// hormigas caben en menos de una docena; el aviso salta si el camino
+        /// instanciado deja de estar en uso (o si la escena creció sin que nadie
+        /// lo mirara).</summary>
+        public const int DrawCallBudget = 32;
+
+        public bool DrawingBeyondBudget => LastDrawCalls > DrawCallBudget;
+
+        private readonly InstanceSlotDrawer _drawer = new();
 
         /// <summary>
         /// LONGITUD de la hormiga en unidades de mundo (no un factor de escala:
@@ -369,6 +400,8 @@ namespace AntSim.Unity.Scripts.Presenter
             float antS = EffectiveAntScale;
             float itemS = EffectiveItemScale;
             float lift = ActorLift > 0f ? ActorLift : world * 0.0008f;
+            bool instancing = UseInstancing && SystemInfo.supportsInstancing;
+            LastDrawCalls = 0;
 
             if (AntMesh != null && AntMaterial != null)
             {
@@ -382,6 +415,7 @@ namespace AntSim.Unity.Scripts.Presenter
                 // Las portadoras son algo mayores: el relevo se lee sin HUD.
                 const float carrierBoost = 1.25f;
                 int layer = RenderLayer > 0 ? RenderLayer : 0;
+                _drawer.Clear();
                 foreach (var a in state.Ants)
                 {
                     if (!a.Alive) continue;
@@ -407,9 +441,11 @@ namespace AntSim.Unity.Scripts.Presenter
                     }
                     if (mat == null) mat = AntMaterial;
 
-                    var mtx = Matrix4x4.TRS(pos, rot, scale);
-                    Graphics.DrawMesh(AntMesh, mtx, mat, layer);
+                    // Se ACUMULA por material; el envío (lotes instanciados o una
+                    // llamada por hormiga) lo decide el agrupador al final.
+                    _drawer.Add(mat, Matrix4x4.TRS(pos, rot, scale));
                 }
+                LastDrawCalls += _drawer.Draw(AntMesh, layer, instancing);
             }
 
             if (ItemMesh != null && ItemMaterial != null)
@@ -420,6 +456,7 @@ namespace AntSim.Unity.Scripts.Presenter
                 // y mordiscos visibles — pequeñas esferas marrones en la superficie
                 // que representan los cortes consumidos (CutsInitial - CutsLeft).
                 int layer = RenderLayer > 0 ? RenderLayer : 0;
+                _drawer.Clear();
                 foreach (var it in state.Items)
                 {
                     var pos = new Vector3(it.X, lift * 0.7f, it.Y);
@@ -430,8 +467,7 @@ namespace AntSim.Unity.Scripts.Presenter
                         // Hoja: esfera achatada (más plana que un ítem simple)
                         // para insinuar la forma de hoja.
                         var leafScale = new Vector3(s * 1.1f, s * 0.5f, s * 1.1f);
-                        var mtx = Matrix4x4.TRS(pos, Quaternion.identity, leafScale);
-                        Graphics.DrawMesh(ItemMesh, mtx, LeafMaterial, layer);
+                        _drawer.Add(LeafMaterial, Matrix4x4.TRS(pos, Quaternion.identity, leafScale));
 
                         // Mordiscos: pequeñas esferas marrones en los bordes.
                         // Cada corte consumido (CutsInitial - CutsLeft) se representa
@@ -452,17 +488,87 @@ namespace AntSim.Unity.Scripts.Presenter
                                 var bitePos = new Vector3(bx, by, bz);
                                 var biteMtx = Matrix4x4.TRS(bitePos, Quaternion.identity,
                                     Vector3.one * biteRadius);
-                                Graphics.DrawMesh(ItemMesh, biteMtx, BiteMaterial, layer);
+                                _drawer.Add(BiteMaterial, biteMtx);
                             }
                         }
                     }
                     else
                     {
                         // Ítem simple: esfera tal cual.
-                        var mtx = Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s);
-                        Graphics.DrawMesh(ItemMesh, mtx, ItemMaterial, layer);
+                        _drawer.Add(ItemMaterial, Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s));
                     }
                 }
+                LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
+            }
+        }
+
+        /// <summary>
+        /// Agrupa matrices POR MATERIAL y las envía por lotes. Reutiliza todos sus
+        /// búferes (el camino de render no debe generar basura por frame) y el orden
+        /// de los materiales —y por tanto el de los lotes— es el de primera
+        /// aparición en el frame, que es determinista porque el orden de las
+        /// hormigas sale del stream.
+        /// </summary>
+        private sealed class InstanceSlotDrawer
+        {
+            private readonly List<Material> _materials = new();
+            private readonly List<List<Matrix4x4>> _matrices = new();
+            private readonly Dictionary<Material, int> _slotOf = new();
+            private readonly Matrix4x4[] _buffer = new Matrix4x4[Streaming.InstancedDrawPlan.BatchLimit];
+
+            public void Clear()
+            {
+                for (int i = 0; i < _matrices.Count; i++) _matrices[i].Clear();
+                _materials.Clear();
+                _matrices.Clear();
+                _slotOf.Clear();
+            }
+
+            public void Add(Material material, in Matrix4x4 matrix)
+            {
+                if (!_slotOf.TryGetValue(material, out int slot))
+                {
+                    slot = _materials.Count;
+                    _slotOf[material] = slot;
+                    _materials.Add(material);
+                    _matrices.Add(new List<Matrix4x4>());
+                }
+                _matrices[slot].Add(matrix);
+            }
+
+            /// <summary>Número de llamadas de dibujo emitidas.</summary>
+            public int Draw(Mesh mesh, int layer, bool instancing)
+            {
+                int calls = 0;
+                for (int slot = 0; slot < _materials.Count; slot++)
+                {
+                    var material = _materials[slot];
+                    var matrices = _matrices[slot];
+                    int total = matrices.Count;
+                    if (total == 0) continue;
+
+                    if (!instancing)
+                    {
+                        for (int i = 0; i < total; i++)
+                        {
+                            Graphics.DrawMesh(mesh, matrices[i], material, layer);
+                            calls++;
+                        }
+                        continue;
+                    }
+
+                    int batches = Streaming.InstancedDrawPlan.Batches(total);
+                    for (int b = 0; b < batches; b++)
+                    {
+                        int start = Streaming.InstancedDrawPlan.BatchStart(b);
+                        int size = Streaming.InstancedDrawPlan.BatchSize(total, b);
+                        for (int i = 0; i < size; i++) _buffer[i] = matrices[start + i];
+                        Graphics.DrawMeshInstanced(mesh, 0, material, _buffer, size, null,
+                            ShadowCastingMode.Off, false, layer);
+                        calls++;
+                    }
+                }
+                return calls;
             }
         }
     }
