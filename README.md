@@ -31,13 +31,15 @@ La sub-fase que hace sostenible todo lo anterior: el mismo mundo, con menos
 trabajo por tick y por frame. Cinco rodajas, ninguna de ellas cambia el mundo
 salvo donde se dice:
 
-- **LOD de difusión EXACTO (rodaja 3)**: la difusión nunca llena una celda nula
-  (régimen original del proyecto), así que las nulas no pueden cambiar y
-  visitarlas era trabajo puro. `PheromoneLayer` mantiene el soporte por bloques
-  de 16×16 y recorre solo esos. La equivalencia se demuestra **celda a celda**
-  contra una capa de referencia a grid completo, y los 6 pines de hash **no se
-  movieron**: el mundo es el mismo byte a byte. Medido: 12–14 % del grid visitado
-  en un mundo forrajeado (1.2 % en uno casi limpio).
+- **LOD de difusión EXACTO (rodajas 3 y 3bis)**: la difusión nunca llena una
+  celda nula (régimen original del proyecto), así que las nulas no pueden cambiar
+  y visitarlas era trabajo puro. `PheromoneLayer` mantiene el soporte por bloques
+  de **8×8** (el lado se fija por capa) y recorre solo esos. La equivalencia se
+  demuestra **celda a celda** contra una capa de referencia a grid completo, y los
+  6 pines de hash **no se movieron**: el mundo es el mismo byte a byte. Medido:
+  7.8–8.7 % del grid visitado en un mundo forrajeado. El lado del bloque no es un
+  número a ojo: `--mode scale --lod-blocks` publica el equilibrio entre celdas
+  ahorradas y coste de reconstruir la lista (`docs/fase5-3-escala.md` §4.6).
 - **GPU instancing (rodaja 3)**: el presenter agrupa por material y envía lotes
   de hasta 1023 instancias en vez de una llamada por hormiga/ítem/mordisco, con
   caída al camino por objeto si la plataforma no lo soporta. Contador en vivo
@@ -47,11 +49,14 @@ salvo donde se dice:
   colonias. En grid 256 con 6000 ticks: **1/2/4/8 colonias ⇒ 0.06/0.12/0.24/0.50
   ms por tick**, el 3 % del frame a 60 fps con 8 colonias.
 - **Medidor de la vista** (`scripts/perf-scene.sh`): monta la escena con **8
-  colonias en pantalla** (4 vistas × 2) en grid 256, entra en Play en batch y mide
-  frames/s y `LastDrawCalls` por vista. Resultado: **0.51 ms por frame** en la
-  fase estable y **19 llamadas de dibujo, todas instanciadas** con 292 hormigas y
-  684 ítems en pantalla. Destapó un defecto real que dejaba el tablero sin
-  hormigas (`DrawMeshInstanced` exige `enableInstancing` en el material).
+  colonias en pantalla** (4 vistas × 2) en grid 256, entra en Play y mide
+  frames/s y `LastDrawCalls` por vista. Dos modos: en batch da **0.51 ms por
+  frame** (el coste de producir frames) y con `--live` —el Play pass real, editor
+  con ventana, bucle y presentación de verdad— **2.44 ms por frame** (15 % del
+  presupuesto a 60 fps), en ambos casos con **19 llamadas de dibujo, todas
+  instanciadas** y 292 hormigas + 684 ítems en pantalla. Destapó un defecto real
+  que dejaba el tablero sin hormigas (`DrawMeshInstanced` exige
+  `enableInstancing` en el material).
 - **Huella CHC (rodaja 2bis)**: cuarta capa repelente + tropotaxis en ratio — la
   señal negativa que faltaba, sin canal nuevo y sin invalidar los `.antgenome`.
 - **Benchmark de políticas (rodaja 2ter)**: aleatoria vs scripted vs evolucionada
@@ -59,7 +64,7 @@ salvo donde se dice:
 - **Curva de aprendizaje y cobertura (rodaja 2quater)**: dos bloques nuevos en el
   canal C y panel por tarjeta en el HUD.
 
-`480/480` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
+`496/496` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
 errores ni avisos. Detalle: [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md).
 
 ### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
@@ -206,7 +211,7 @@ criterio de cierre verificado en vivo y headless:
   cuerpo Eciton validada por sonda. Sensor dirigido y balance: en curso.
 - CI con pins de hash (stream canónico, replay 3000/6000 con drops, partida
   Atta) y compilación batch de Unity. *(Cuando se escribió esta nota eran 4
-  pines y 305 tests; hoy son **6 pines** —+invasión, +NEAT— y **480/480 tests**.)*
+  pines y 305 tests; hoy son **6 pines** —+invasión, +NEAT— y **496/496 tests**.)*
 - Detalles: [`docs/fase5-plan.md`](docs/fase5-plan.md) ·
   [`docs/fase5-2a-atta.md`](docs/fase5-2a-atta.md) ·
   [`docs/fase5-2b-eciton.md`](docs/fase5-2b-eciton.md) ·
