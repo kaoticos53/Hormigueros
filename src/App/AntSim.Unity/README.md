@@ -291,6 +291,11 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   encendido —`PlayerBuild` lo **restaura** al terminar, para no dejar
   `ProjectSettings` cambiado— y corre el player con el vsync apagado, de donde sale
   el `FrameTimingManager` (`docs/fase5-3-escala.md` §4.8).
+- **El player no es el sistema.** El mundo lo simula el CLI en otro proceso, y su CPU
+  no aparece en ningún tiempo de frame: `bash scripts/player-perf.sh --system` añade esa
+  pata (la lee del proceso hijo que este assembly lanza, `StreamSource.CliCpuMs`) con el
+  vsync apagado y un calentamiento de 2 s, para que la fase de simulación caiga dentro
+  de la ventana (`docs/fase5-3-escala.md` §4.9).
 
 Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
 juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La

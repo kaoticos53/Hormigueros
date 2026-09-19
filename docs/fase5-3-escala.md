@@ -476,9 +476,8 @@ Lectura de los números, sin adornos:
 
 **Qué NO dice este número.** El coste medido es el del **player**, que lee el stream y
 dibuja; la simulación del mundo corre en **otro proceso** (el CLI, que es quien emite el
-stream). El coste del sistema completo es la suma de los dos y no está cronometrado. Los
-tiempos de GPU los declara el backend (D3D11) y no se han verificado por otra vía, y
-todo esto es de **una máquina** (la del repo).
+stream). Ese coste es el de §4.9. Los tiempos de GPU los declara el backend (D3D11) y no
+se han verificado por otra vía, y todo esto es de **una máquina** (la del repo).
 
 **El modelo es puro y está probado.** El resumen (medianas, fracción del presupuesto,
 margen y clasificación de cuello de botella) vive en `FrameCost`, sin UnityEngine, con
@@ -486,6 +485,85 @@ margen y clasificación de cuello de botella) vive en `FrameCost`, sin UnityEngi
 clasificación es la del ejemplo oficial de `FrameTiming`, con sus umbrales. Dos de las
 pruebas son los casos que cambian la decisión: sin tiempos de GPU lo declara
 (`indeterminado`) en vez de inventar, y un coste por encima del presupuesto suspende.
+
+### 4.9 El coste del SISTEMA COMPLETO (6ª pieza del criterio)
+
+El número de §4.8 es el del **player**. Pero el mundo lo simula **otro proceso**: el CLI
+que emite el stream. Y no es un detalle contable — la simulación compite por los mismos
+núcleos y, como se ve abajo, es **el 97 % de la CPU que el sistema gasta** para que un
+frame exista. `bash scripts/player-perf.sh --system` la mide.
+
+#### El montaje tuvo que cambiar por lo que la primera corrida enseñó
+
+La primera versión subió el horizonte a 200 000 ticks «para que el CLI siguiera
+simulando durante toda la ventana». Resultado: **cero datos**. Este CLI simula el
+horizonte entero y **escribe el stream cuando termina**, así que con un mundo 17× más
+largo no llegó a emitir ni una línea en 42 s; la sonda lo detectó (0 ticks, 0 hormigas,
+0 draw calls) y suspendió con salida **10** en vez de publicar un verde vacío. Lo que
+hace falta es lo contrario: que la ventana **contenga las dos fases**, y para eso el
+calentamiento baja a **2 s** y el horizonte se queda en el del criterio (12 000 ticks).
+
+Y eso destapó el defecto de fondo del diseño de la medida: **la CPU del CLI y la entrega
+de ticks están desacopladas**. En la corrida de abajo, de los 9,7 s de CPU del hijo, **6 s
+ya estaban gastados a los 2 s**, cuando el player no había recibido ni un tick; el resto se
+consumió entregándolos (con la tubería y el parseo como cuello). Emparejar CPU y ticks
+**por ventana** daba **0,016 ms/tick** en vez de los 0,2 reales — un número 12× barato que
+habría parecido perfectamente razonable. Por eso el precio del tick se mide como el
+**agregado de la vida entera del hijo** (toda su CPU entre todos los ticks que simuló) y
+la corrida exige que el CLI **termine su horizonte dentro de la ventana**: si no, su CPU
+es parcial y el cociente mentiría.
+
+#### La medida
+
+Medido el 2026-09-19, Unity 6000.6.0f1, backend Mono2x, MISMO montaje que §4.7/§4.8
+(4 vistas × 2 colonias, grid 256, boost ×10, 292 hormigas y 684 ítems en pantalla, tick
+12 000), vsync apagado, 2 s de calentamiento + 30 s de ventana, 30/30 muestras con la
+ventana en primer plano (informe: `artifacts/perf-player-system.json`):
+
+| medida | valor |
+|---|---|
+| **pata del player** (mundo cargado) | **1,116 ms/frame** = **6,7 %** del presupuesto de 16,667 ms (margen ×14,9) |
+| CPU del CLI (las 4 vistas, toda su vida) | **9 671,875 ms** — 2 343,8 · 2 484,4 · 2 390,6 · 2 453,1 ms |
+| ticks simulados | **48 000** (4 × 12 000) · CLI **terminado dentro de la corrida** |
+| **precio del tick** | **0,201 ms/tick** |
+| ticks que avanza un frame al reloj del juego | **200** (4 vistas × 50) |
+| **pata del mundo** | **40,299 ms/frame** |
+| **SISTEMA** | **41,415 ms/frame agregados = 2,485 núcleos** al reloj del juego |
+| qué parte es el mundo | **97,3 %** del sistema |
+| fases de la corrida | **9** ventanas simulando · **22** con el mundo en pantalla · **2** de solape |
+| agregado de la corrida (las dos fases mezcladas) | 1,463 ms/frame |
+| frames/s sin vsync (mediana) | 786,9 |
+| puerta de píxeles | **verde en las 4 vistas** |
+| vsync | efectivo 0 (el del proyecto es 1) |
+
+Y la comprobación que hace creíble la proyección, con el mismo binario y los mismos
+argumentos, en solitario: **12 000 ticks en 2,09 s de pared con 1,98 s de CPU** =
+0,165 ms/tick, es decir **6 047 ticks/s de un núcleo**. El reloj del juego pide 3 000
+ticks/s por vista, así que la proyección es **alcanzable**: lo que cuesta no es imposible,
+es 2,5 núcleos. (La corrida en pareja sale un 22 % más caro por tick que en solitario:
+contención y tubería.)
+
+#### Cómo se lee, porque son dos cosas distintas
+
+- **El lado de los fps es la pata del player**: 1,116 ms de 16,667 → la vista va
+  sobrada (×14,9). Coincide con §4.8 (1,294 ms) dentro del ruido entre corridas, y la
+  diferencia se explica porque esa corrida tenía el mundo cargado durante toda la
+  ventana y ésta solo en 22 de 29 muestras.
+- **El lado del mundo es un coste AGREGADO**: 41,4 ms de CPU por frame. **No** es una
+  latencia de frame —la simulación corre en otros procesos y se reparte entre
+  núcleos—, así que no se compara contra los 16,667 ms de un frame sino contra
+  **núcleos**: 41,415 / 16,667 = **2,485 núcleos** sostenidos al ritmo del juego. Ese es
+  el número que dice cuántas vistas o colonias caben en una máquina.
+- **Y por eso la pieza publica las dos patas por separado**: la del player decide si se
+  cumplen los 60 fps, la del mundo decide cuánto juego cabe. Juntarlas en un solo «coste
+  del sistema» habría escondido justo lo que se acaba de aprender.
+
+**El modelo es puro y está probado.** El resumen vive en `FrameCost` (sin UnityEngine),
+con **10 tests headless** que fijan las decisiones de arriba: el precio del tick es el
+agregado y no la mediana de ventanas (con el caso real de este apartado como prueba), un
+frame de tablero **vacío** no es un frame del juego, sin el CLI **terminado** el precio
+por tick no vale, y sin alguna de las dos patas el resumen **no se declara medido** — el
+falso verde que esta pieza existe para no cometer.
 
 #### Un artefacto commiteado que iba por detrás del generador
 
@@ -523,12 +601,14 @@ rojo** sobre los materiales de HEAD antes del arreglo.
 
 ## 5. Qué NO demuestra esta rodaja
 
-- **El coste del frame ya NO es una incógnita** (§4.8: **1,294 ms de CPU por frame**,
-  7,8 % del presupuesto de 60 fps, y 0,127 ms de GPU). Lo que sigue sin medir es más
-  estrecho y conviene decirlo con precisión: ese coste es el del **player**, y el mundo
-  (la simulación) corre en un **proceso aparte** —el CLI—, así que el coste del sistema
-  completo no está cronometrado; los tiempos de GPU los declara el backend y no se han
-  verificado por otra vía; y todo es de **una máquina**.
+- **El coste ya NO es una incógnita, ni el del player ni el del sistema** (§4.8:
+  **1,294 ms de CPU por frame** del player, 7,8 % del presupuesto, y 0,127 ms de GPU;
+  §4.9: **0,201 ms/tick** de simulación, **41,4 ms/frame agregados = 2,485 núcleos** al
+  reloj del juego, con el 97,3 % de la CPU del sistema en el mundo). Lo que sigue sin
+  medir es más estrecho: los tiempos de GPU los declara el backend y no se han verificado
+  por otra vía; el precio del tick depende del **tamaño del mundo** (aquí 2 colonias por
+  vista, ~150 hormigas) y no se ha barrido con 4 u 8 colonias por vista; y todo es de
+  **una máquina** y de una sesión de medida.
 - **El provecho del canal E.** El stream ya emitía RLE de celdas no nulas, así que
   el LOD **no** cambia lo que viaja al presenter; cambia el coste de la difusión
   en el Core. Son dos ahorros distintos y conviene no confundirlos.
@@ -539,15 +619,18 @@ rojo** sobre los materiales de HEAD antes del arreglo.
 
 ## 6. Verificación
 
-- **526/526 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
-  píxeles `FrameGate`, 12 del modelo de coste por frame `FrameCost`, 5 del ancla de rutas
-  del player y 2 de la guarda de los materiales de feromonas).
-- **El criterio de salida de la fase, cerrado con CINCO piezas**: **Core 0,47 ms/tick**
+- **536/536 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
+  píxeles `FrameGate`, 12 del modelo de coste por frame `FrameCost`, 10 del coste del
+  sistema `SystemCost`, 5 del ancla de rutas del player y 2 de la guarda de los materiales
+  de feromonas).
+- **El criterio de salida de la fase, cerrado con SEIS piezas**: **Core 0,47 ms/tick**
   (8 colonias, grid 256) · **vista 0,51 ms/frame** en batch · **2,44 ms/frame** con
   presentación en el editor · **el build presentado al refresco** (59,997 fps sobre un
   monitor de 59,997 Hz, con la puerta de píxeles verde en las cuatro vistas y 19
   llamadas de dibujo, §4.7) · **el coste por frame DENTRO del build** (1,294 ms de CPU y
-  0,127 ms de GPU, 7,8 % del presupuesto, §4.8).
+  0,127 ms de GPU, 7,8 % del presupuesto, §4.8) · **el coste del SISTEMA COMPLETO**
+  (0,201 ms/tick de simulación, 41,4 ms/frame agregados = **2,485 núcleos** al reloj del
+  juego, con la pata del player en 1,116 ms = 6,7 % del presupuesto, §4.9).
 - **Los 6 pines de hash pasan sin regenerarse**: el LOD es exacto, así que el
   mundo no se movió — stream canónico, replay con drops, Atta, invasión y NEAT.
 - **El proyecto Unity compila en batch con 0 errores y 0 avisos** con el presenter
@@ -570,8 +653,17 @@ rojo** sobre los materiales de HEAD antes del arreglo.
   `bash scripts/player-perf.sh --cpu` (informe `artifacts/perf-player-cpu.json`) es el
   modo simétrico: apaga el vsync para medir el **coste**, y por eso allí el vsync
   apagado es el requisito y sale **8** si no llegó a apagarse y **9** si el build no
-  trae tiempos de frame. Los dos informes son ficheros distintos a propósito: con un
-  solo nombre, la segunda corrida borraría la evidencia de la primera.
+  trae tiempos de frame. Los informes son ficheros distintos a propósito: con un
+  solo nombre, la corrida siguiente borraría la evidencia de la anterior.
+- **El coste del sistema se mide con `bash scripts/player-perf.sh --system`** (informe
+  `artifacts/perf-player-system.json`), que añade la pata del CLI al modo coste y baja el
+  calentamiento a 2 s para que la fase de simulación caiga **dentro** de la ventana:
+  con los 12 s del criterio el mundo se termina durante el calentamiento y lo que se
+  mediría es un player solo. Sale **10** si falta alguna de las dos fases (el CLI no
+  terminó su horizonte, o el mundo no llegó a la pantalla), y `--ticks` /`--warmup`
+  ajustan el montaje. Los dos modos exigen el vsync apagado, y las guardas inversas
+  (7/8/9/10) existen porque cada corrida mide una cosa distinta y publicar una con el
+  nombre de otra es el error que estos scripts existen para no cometer.
 - **El Play pass del editor ya no se puede conducir**: los bloques 3, 4 y 5 de
   `playpass-live.sh` necesitan `com.unity.pipeline`, que salió del manifest en la poda
   de paquetes (`unity command editor_status` responde «No Pipeline instance found»). La

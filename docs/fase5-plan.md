@@ -386,16 +386,24 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   principal 1,272 · hilo de render 0,277 · espera en Present 0,003) y **0,127 ms de
   GPU**, con **683,7 fps de techo sin vsync** = **7,8 % del presupuesto de 60 fps**.
   El resumen es un modelo puro (`FrameCost`, +12 tests headless).
+- **Coste del SISTEMA COMPLETO — HECHO (rodaja 3quinquies)**: el número anterior es el
+  del player, y el mundo lo simula el **CLI en otro proceso**. `scripts/player-perf.sh
+  --system` mide esa pata (CPU del proceso hijo, agregada sobre su vida entera) con una
+  ventana que contiene las DOS fases. Medido: **pata del player 1,116 ms/frame (6,7 %
+  del presupuesto)** y **pata del mundo 0,201 ms/tick** → **41,415 ms/frame agregados =
+  2,485 núcleos** al reloj del juego, con el **97,3 % de la CPU del sistema** en el
+  mundo. Modelo puro `SystemCost` (+10 tests headless).
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
-  escena de juego. **CUMPLIDO y medido en cinco piezas**: el Core cuesta **0,47 ms por
+  escena de juego. **CUMPLIDO y medido en seis piezas**: el Core cuesta **0,47 ms por
   tick** con 8 colonias en grid 256 (2.8 % de un frame a 60 fps), la VISTA **0,51
   ms por frame** en batch y **2,44 ms por frame** en el Play pass con ventana
   (`--live`), con **19 llamadas de dibujo** (4 vistas × 2 colonias, todas
   instanciadas), el **build de jugador entrega al refresco del monitor** con la
-  puerta de píxeles en verde, y el **coste por frame dentro del build es 1,294 ms de
-  CPU (7,8 % del presupuesto) y 0,127 ms de GPU**. Lo que sigue sin medir: el coste
-  del SISTEMA completo (la simulación corre en el proceso del CLI, aparte del player) y
-  una segunda máquina. Detalle y
+  puerta de píxeles en verde, el **coste por frame dentro del build es 1,294 ms de
+  CPU (7,8 % del presupuesto) y 0,127 ms de GPU**, y el **sistema completo (player +
+  simulación del CLI) cuesta 2,485 núcleos al reloj del juego**, con la vista en 1,116
+  ms/frame. Lo que sigue sin medir: el precio del tick con más colonias por vista (el
+  barrido está en 2), los tiempos de GPU por otra vía y una segunda máquina. Detalle y
   cifras: [`fase5-3-escala.md`](fase5-3-escala.md).
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)

@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-19 · HEAD: `d38220b` + la guarda de los materiales de feromonas (working tree) ·
-suite: 526/526 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+*Actualizado: 2026-09-19 · HEAD: `150c18c` + el coste del SISTEMA COMPLETO (working tree) ·
+suite: 536/536 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -173,6 +173,22 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    vsync** (1,463 ms/frame producidos) = **7,8 % del presupuesto de 60 fps** y ×12,9 de margen; puerta de píxeles verde
    en las 4 vistas. El resumen es un modelo PURO (`FrameCost`, sin UnityEngine) con **12 tests headless**. **526/526
    tests · los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player-cpu.json`.
+   **F5.3 rodaja 3quinquies — HECHO (2026-09-19): el coste del SISTEMA COMPLETO (6ª pieza del criterio).**
+   El número de la pieza anterior es el del **player**; el mundo lo simula el **CLI en otro proceso**, y esa pata no
+   aparece en ningún tiempo de frame. `scripts/player-perf.sh --system` la mide: vsync apagado, calentamiento de 2 s
+   (para que la fase de simulación caiga DENTRO de la ventana) y la CPU del proceso hijo leída en el mismo instante de
+   muestreo. La primera corrida de este apartado subió el horizonte a 200 000 ticks «para que el CLI trabajara toda la
+   ventana» y dio **cero datos** — este CLI simula el horizonte entero y escribe el stream al terminar—; la sonda lo
+   detectó y suspendió con salida **10** en vez de publicar un verde vacío. Y al medir bien se destapó el defecto de
+   fondo: **la CPU del CLI y la entrega de ticks están desacopladas** (6 s de los 9,7 s de CPU del hijo ya gastados a los
+   2 s, cuando el player no había recibido ni un tick), así que emparejarlas por ventana daba **0,016 ms/tick** en vez de
+   los 0,2 reales; el precio del tick es el **agregado de la vida entera del hijo** y la corrida exige que el CLI
+   **termine su horizonte dentro de la ventana**. Medido (mismo build y régimen que §4.7/§4.8, 292 hormigas + 684 ítems,
+   tick 12 000): **pata del player 1,116 ms/frame = 6,7 % del presupuesto** (margen ×14,9) y **pata del mundo 0,201
+   ms/tick** (9 671,875 ms de CPU del CLI / 48 000 ticks) → con **200 ticks/frame** al reloj del juego, **41,415
+   ms/frame agregados = 2,485 núcleos**, con el mundo siendo el **97,3 % de la CPU del sistema**; 9 ventanas simulando ·
+   22 con el mundo en pantalla · 2 de solape. El modelo puro gana **10 tests headless** (`SystemCost`). **536/536 tests ·
+   los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player-system.json`.
    **Artefacto commiteado por detrás del generador — CORREGIDO (2026-09-19):** cuatro de los cinco materiales de
    feromonas tenían `_BaseMap` **sin textura** (`fileID: 0`), que con el material transparente y `_BaseColor` blanco
    significa **quad blanco OPACO tapando el tablero** mientras no llega ningún frame de feromonas (el defecto del Play

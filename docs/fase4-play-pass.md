@@ -302,7 +302,9 @@ La verificación visual end-to-end de hoy es la del **player**
 (`bash scripts/player-perf.sh`): mide el framerate presentado y pasa la misma
 puerta de píxeles por vista sobre frames reales. Con `--cpu` la misma corrida apaga
 el vsync y mide el **coste por frame** dentro del build (con el `FrameTimingManager`),
-que es el número que el vsync esconde.
+que es el número que el vsync esconde; con `--system` añade la pata del CLI —la
+simulación, que corre en otro proceso— y publica el coste del SISTEMA COMPLETO
+(`docs/fase5-3-escala.md` §4.9).
 
 ### Cómo reproducir el pass automático
 
