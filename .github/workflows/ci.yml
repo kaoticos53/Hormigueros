@@ -9,10 +9,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # checkout v5 y setup-dotnet v5 corren en Node 24: con v4 el runner avisa
+      # en cada run de que Node 20 está deprecado y los fuerza a Node 24.
+      - uses: actions/checkout@v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
 
@@ -144,7 +146,7 @@ jobs:
       # Anotaciones de GitHub en el resumen del run en vez de solo en el log.
       UNITY_FORMAT: github
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Antes de descargar ~5 GB de editor: ¿hay con qué activarlo? Un secreto
       # que falta debe costar 2 segundos, no 10 minutos.
