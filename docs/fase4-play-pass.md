@@ -316,15 +316,24 @@ bash scripts/playpass-live.sh --selftest      # los tres analizadores, sin edito
 Aparte de los bloques, hay un **medidor de rendimiento de la escena** (F5.3
 rodaja 3) que no comprueba aspecto sino coste: monta la escena del multi-visor con
 4 vistas × 2 colonias = 8 colonias en pantalla, en el grid del modo juego, entra en
-Play en batch y publica frames/s, `LastDrawCalls` y carga dibujada por vista. Es el
-que destapó el `enableInstancing` que dejaba el tablero sin hormigas — la clase de
-defecto que ninguna muestra de estado ve:
+Play y publica frames/s, `LastDrawCalls` y carga dibujada por vista. Tiene dos
+modos, y conviene no confundirlos: **batch** (por defecto) mide el coste de
+producir frames; **`--live`** abre el editor con ventana y mide el Play pass real
+(bucle y presentación del jugador). Es el que destapó el `enableInstancing` que
+dejaba el tablero sin hormigas — la clase de defecto que ninguna muestra de
+estado ve:
 
 ```bash
-bash scripts/perf-scene.sh                    # 40 s, 8 colonias, grid 256
+bash scripts/perf-scene.sh                    # 40 s, 8 colonias, grid 256 (batch)
+bash scripts/perf-scene.sh --live              # el Play pass real (editor con ventana)
+bash scripts/perf-scene.sh --live --vsync      # …respetando el vsync del proyecto
 bash scripts/perf-scene.sh --seconds 20 --boost 6
 bash scripts/perf-scene.sh --selftest         # el analizador, sin editor
 ```
+
+En modo `--live` el editor se abre de verdad y se cierra solo cuando la sonda
+termina (si se cuelga, el script lo mata tras el límite); el informe va a
+`artifacts/perf-scene-live.json` para no pisar el de batch.
 
 El bloque de aspecto guarda tres artefactos para poder revisarlos sin volver a
 jugar: `artifacts/playpass-visual.txt` (en vivo), `playpass-visual-edit.txt` (al

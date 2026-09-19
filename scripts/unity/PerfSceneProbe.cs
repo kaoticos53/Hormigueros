@@ -24,12 +24,23 @@ namespace AntSim.Unity.Scripts.EditorTools
     ///
     /// POR QUÉ ASÍ. El criterio de salida de F5.3 es «N colonias estables a 60 fps
     /// en la escena de juego» y el Core ya está medido headless (`--mode scale`);
-    /// lo que falta es el lado de la VISTA. En batch el bucle del jugador puede
-    /// quedar congelado (defecto conocido de un Library frío), así que la sonda
-    /// empuja el bucle Y lo dice en el reporte: `bucle=real` o `bucle=empujado`.
-    /// Con captura de dt (1/30 s) el avance de la reproducción por frame es
-    /// determinista, así que frames/s mide de verdad el coste de pintar — no una
-    /// carrera contra el reloj de la simulación.
+    /// lo que falta es el lado de la VISTA. La sonda corre en DOS modos, y la
+    /// diferencia entre ellos es todo:
+    ///
+    ///   · **batch** (`-batchmode`): sin presentación, con `captureDeltaTime` fijo
+    ///     (1/30 s) y empujando el bucle del jugador si el editor lo deja
+    ///     congelado (defecto conocido de un Library frío). Mide el COSTE de
+    ///     producir frames — es comparable con `--mode scale` del Core.
+    ///   · **ventana** (Play pass: el editor normal, sin `-batchmode`): el bucle y
+    ///     la presentación son REALES, así que lo que se lee es el framerate que ve
+    ///     el jugador. Con `ANTSIM_PERF_VSYNC=1` se respeta el vsync del proyecto y
+    ///     el número sale con el techo de la pantalla; apagado (por defecto) el
+    ///     coste del frame queda al descubierto.
+    ///
+    /// En los dos modos, la sonda empuja el bucle SOLO si hace falta y lo dice en el
+    /// reporte (`bucle=real` / `bucle=empujado`), y anota si la ventana tenía el
+    /// foco en cada muestra: en modo ventana, un editor en segundo plano puede bajar
+    /// su tasa por el sistema operativo, y eso no es coste del juego.
     ///
     /// NO es una foto: las muestras se acumulan hasta la ventana y el reporte
     /// publica la MEDIANA y el peor caso, porque un frame lento aislado no es un
@@ -38,8 +49,8 @@ namespace AntSim.Unity.Scripts.EditorTools
     /// Entrada batch: <c>-executeMethod …PerfSceneProbe.RunPerf</c>.
     /// Variables de entorno: <c>ANTSIM_PERF_SECONDS</c> (def. 45),
     /// <c>ANTSIM_PERF_BOOST</c> (def. 10 = ×10 del control de velocidad),
-    /// <c>ANTSIM_PERF_GRID</c> (def. 256), <c>ANTSIM_PERF_OUT</c> (def.
-    /// artifacts/perf-scene.json).
+    /// <c>ANTSIM_PERF_GRID</c> (def. 256), <c>ANTSIM_PERF_VSYNC</c> (def. 0 = apagado),
+    /// <c>ANTSIM_PERF_OUT</c> (def. artifacts/perf-scene.json).
     ///
     /// Salida: 0 si MIDIÓ algo real (hay muestras, hay hormigas y hay dibujo), 1
     /// si el montaje está muerto (una corrida verde sobre una escena vacía sería
@@ -57,6 +68,8 @@ namespace AntSim.Unity.Scripts.EditorTools
         private static double _lastSampleTime;
         private static int _lastSampleFrames;
         private static bool _playerLoopPushed;
+        private static bool _vsync;
+        private static bool _batch;
         private static float _windowSeconds = 45f;
         private static float _boost = 10f;
         private static int _grid = 256;
@@ -75,10 +88,14 @@ namespace AntSim.Unity.Scripts.EditorTools
             public readonly bool AnyBeyondBudget;
             public readonly int InstancedCalls;
             public readonly int FallbackCalls;
+            /// <summary>¿La ventana del editor tenía el FOCO en esta muestra? Solo se
+            /// mira en modo ventana: un editor en segundo plano puede bajar su tasa de
+            /// frames por el sistema operativo, y eso no es coste del juego.</summary>
+            public readonly bool Focused;
 
             public Sample(double seconds, double fps, int drawCallsTotal, int drawCallsMax,
                 int antsTotal, int itemsTotal, ulong tick, bool anyBeyondBudget,
-                int instancedCalls, int fallbackCalls)
+                int instancedCalls, int fallbackCalls, bool focused)
             {
                 Seconds = seconds;
                 Fps = fps;
@@ -90,6 +107,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 AnyBeyondBudget = anyBeyondBudget;
                 InstancedCalls = instancedCalls;
                 FallbackCalls = fallbackCalls;
+                Focused = focused;
             }
         }
 
@@ -99,6 +117,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             _windowSeconds = EnvFloat("ANTSIM_PERF_SECONDS", 45f);
             _boost = EnvFloat("ANTSIM_PERF_BOOST", 10f);
             _grid = (int)EnvFloat("ANTSIM_PERF_GRID", MultiSimBootstrapper.PerfGridCells);
+            // VSYNC: por defecto la sonda lo APAGA, para medir el COSTE de producir
+            // frames (comparable con la corrida en batch). Con ANTSIM_PERF_VSYNC=1 se
+            // RESPETA el del proyecto, y entonces lo que se lee es el framerate
+            // PRESENTADO —el que ve el jugador—, con el techo de la pantalla.
+            _vsync = EnvFloat("ANTSIM_PERF_VSYNC", 0f) > 0f;
+            _batch = Application.isBatchMode;
             string? repo = RepoRoot();
             _outPath = Environment.GetEnvironmentVariable("ANTSIM_PERF_OUT") ?? "";
             if (string.IsNullOrEmpty(_outPath))
@@ -115,8 +139,11 @@ namespace AntSim.Unity.Scripts.EditorTools
             SessionState.SetFloat("Perf.Seconds", _windowSeconds);
             SessionState.SetInt("Perf.Grid", _grid);
             SessionState.SetString("Perf.Out", _outPath);
+            SessionState.SetBool("Perf.Vsync", _vsync);
+            SessionState.SetBool("Perf.Batch", _batch);
             Debug.Log($"{Tag} escena: {ViewCount} vistas × 2 colonias = {ViewCount * 2} colonias · " +
-                      $"grid {_grid}² · ventana {_windowSeconds:0}s · boost ×{_boost:0.#}");
+                      $"grid {_grid}² · ventana {_windowSeconds:0}s · boost ×{_boost:0.#} · " +
+                      $"modo={(_batch ? "batch" : "ventana")} · vsync={(_vsync ? "proyecto" : "apagado")}");
             _enteringPlay = true;
             EditorApplication.update += EnterPlayWhenReady;
         }
@@ -165,6 +192,16 @@ namespace AntSim.Unity.Scripts.EditorTools
                 _windowSeconds = SessionState.GetFloat("Perf.Seconds", _windowSeconds);
                 _grid = SessionState.GetInt("Perf.Grid", _grid);
                 _outPath = SessionState.GetString("Perf.Out", _outPath);
+                _vsync = SessionState.GetBool("Perf.Vsync", _vsync);
+                _batch = SessionState.GetBool("Perf.Batch", _batch);
+                if (!_vsync)
+                {
+                    // Apagar vsync es lo que hace COMPARABLE esta corrida con la de
+                    // batch: sin eso el techo lo pone la pantalla (60 Hz) y el coste
+                    // real del frame queda escondido por debajo.
+                    QualitySettings.vSyncCount = 0;
+                    Application.targetFrameRate = -1;
+                }
                 _deadline = EditorApplication.timeSinceStartup + _windowSeconds;
                 _lastSampleTime = EditorApplication.timeSinceStartup;
                 _lastSampleFrames = 0;
@@ -217,7 +254,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             double dt = now - _lastSampleTime;
             double fps = dt > 0 ? (_frames - _lastSampleFrames) / dt : 0;
             _samples.Add(new Sample(now - (_deadline - _windowSeconds), fps, drawCalls, drawCallsMax,
-                ants, items, tick, beyond, instanced, fallback));
+                ants, items, tick, beyond, instanced, fallback, Application.isFocused));
         }
 
         private static int Report()
@@ -239,6 +276,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             // Estado final: es el frame más cargado de la corrida (el mundo crece)
             var last = _samples[_samples.Count - 1];
 
+            Debug.Log($"{Tag} condiciones: modo={(_batch ? "batch (sin presentación)" : "ventana (Play pass, con presentación)")} · " +
+                      $"vsync={(_vsync ? "proyecto" : "apagado por la sonda")} · targetFrameRate={Application.targetFrameRate} · " +
+                      $"pantalla={Screen.width}×{Screen.height} · con foco={FocusedSamples()}/{_samples.Count} muestras");
             Debug.Log($"{Tag} bucle={(_playerLoopPushed ? "empujado por la sonda" : "real")} · " +
                       $"frames={_frames} · muestras={_samples.Count} · tick final={last.Tick}");
             Debug.Log($"{Tag} frames/s: mediana={median:0.#} · p10={p10:0.#} · peor={worst:0.#} · mejor={best:0.#}");
@@ -286,6 +326,17 @@ namespace AntSim.Unity.Scripts.EditorTools
             Debug.Log($"{Tag} ✓ medido: {last.AntsTotal} hormigas, {last.DrawCallsTotal} draw calls, " +
                       $"mediana {median:0.#} frames/s");
             return 0;
+        }
+
+        /// <summary>Cuántas muestras se tomaron con la ventana del editor en
+        /// primer plano. En modo ventana es la lectura que distingue «el juego
+        /// cuesta esto» de «el sistema operativo dejó el editor en segundo
+        /// plano»: sin ella, un framerate bajo no se puede atribuir.</summary>
+        private static int FocusedSamples()
+        {
+            int n = 0;
+            foreach (var s in _samples) if (s.Focused) n++;
+            return n;
         }
 
         /// <summary>Frames/s de la fase ESTABLE: las muestras posteriores a la
@@ -340,6 +391,12 @@ namespace AntSim.Unity.Scripts.EditorTools
                 sb.Append("  \"colonies\": ").Append(ViewCount * 2).Append(",\n");
                 sb.Append("  \"grid\": ").Append(_grid).Append(",\n");
                 sb.Append("  \"boost\": ").Append(_boost.ToString("0.#", CultureInfo.InvariantCulture)).Append(",\n");
+                sb.Append("  \"mode\": \"").Append(_batch ? "batch" : "window").Append("\",\n");
+                sb.Append("  \"vSync\": ").Append(_vsync ? "true" : "false").Append(",\n");
+                sb.Append("  \"targetFrameRate\": ").Append(Application.targetFrameRate).Append(",\n");
+                sb.Append("  \"screenWidth\": ").Append(Screen.width).Append(",\n");
+                sb.Append("  \"screenHeight\": ").Append(Screen.height).Append(",\n");
+                sb.Append("  \"focusedSamples\": ").Append(FocusedSamples()).Append(",\n");
                 sb.Append("  \"windowSeconds\": ").Append(_windowSeconds.ToString("0.#", CultureInfo.InvariantCulture)).Append(",\n");
                 sb.Append("  \"playerLoopPushed\": ").Append(_playerLoopPushed ? "true" : "false").Append(",\n");
                 sb.Append("  \"frames\": ").Append(_frames).Append(",\n");
@@ -371,6 +428,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                       .Append(", \"fps\": ").Append(s.Fps.ToString("0.#", CultureInfo.InvariantCulture))
                       .Append(", \"drawCalls\": ").Append(s.DrawCallsTotal)
                       .Append(", \"ants\": ").Append(s.AntsTotal)
+                      .Append(", \"focused\": ").Append(s.Focused ? "true" : "false")
                       .Append(", \"tick\": ").Append(s.Tick).Append('}');
                 }
                 sb.Append("\n  ]\n}\n");
