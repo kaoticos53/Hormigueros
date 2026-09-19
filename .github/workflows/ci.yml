@@ -63,6 +63,28 @@ jobs:
       - name: Neat hash check (invasión con pool v2 — cierre F5.2c)
         run: bash scripts/check-neat-command.sh
 
+      # El analizador del barrido de costes (F5.3 §4.10) es la evidencia de
+      # cuánto juego cabe y de dónde está el coste fijo, así que se verifica en
+      # cada push y no solo a mano. NO necesita editor: `--selftest` sale ANTES
+      # de tocar Unity (y de construir nada), así que es un paso de segundos que
+      # no depende de `UNITY_CI` ni de licencia. Lo que comprueba, con las
+      # cifras reales de la medición: la fila medida, la sublinealidad de los
+      # núcleos por colonia, que un punto sin medir se declare, el intercepto
+      # (1,507) y el marginal (0,1187) del ajuste, la predicción del punto menor
+      # cuando se ajusta sin él (2,039) y que con un solo punto diga que no hay
+      # ajuste en vez de inventar una recta.
+      - name: Selftest del barrido de costes (ajuste fijo/marginal, sin editor)
+        run: |
+          # QUÉ awk HAY EN EL RUNNER. El barrido usa funciones de awk propias y
+          # gawk y mawk no son la misma cosa, así que se publica cuál se usó — en
+          # el log y como ANOTACIÓN (el log del job pide token; la anotación se
+          # lee del run sin autenticarse, y así el dato no depende de un log).
+          AWK_PATH="$(command -v awk)"
+          AWK_IMPL="$(awk -W version 2>&1 | head -n 1)"
+          echo "awk => $AWK_PATH — $AWK_IMPL"
+          echo "::notice title=awk del runner::${AWK_PATH} — ${AWK_IMPL}"
+          bash scripts/system-sweep.sh --selftest
+
       - name: Selftest del analizador de compilación de Unity (sin editor)
         run: bash scripts/check-unity-compile.sh --selftest
 

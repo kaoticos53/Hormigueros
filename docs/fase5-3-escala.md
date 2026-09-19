@@ -785,7 +785,10 @@ esa escala, así que esos saltos son señal.
   analizador **y el ajuste** (intercepto y marginal de los cuatro puntos medidos, la
   predicción del punto menor cuando se ajusta sin él, y que con un solo punto **declare** que
   no hay ajuste). `--reuse` reconstruye la tabla y el ajuste de los informes ya guardados,
-  sin gastar un arranque del editor.
+  sin gastar un arranque del editor. **Y ese selftest corre en CI** (paso del job `test`,
+  tras los pines): no necesita editor —sale antes de tocar Unity— así que la prueba del
+  ajuste ya no depende de que alguien la lance a mano. Verificado con **gawk y con mawk**
+  (el `awk` por defecto de los runners de Ubuntu).
 - **Los 6 pines de hash pasan sin regenerarse**: el LOD es exacto, así que el
   mundo no se movió — stream canónico, replay con drops, Atta, invasión y NEAT.
 - **El proyecto Unity compila en batch con 0 errores y 0 avisos** con el presenter
