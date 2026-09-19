@@ -3,9 +3,10 @@ Montaje: 4 vistas · grid 256 · horizonte 12000 ticks · boost ×10 · vsync ap
 Presupuesto de núcleos para «caben»: 28 (los de esta máquina si no se pasa --cores)
 
 colonias  ms/tick      mundo ms/fr    player ms/fr     núcleos    núcleos/colonia caben(=28)  
-2         0.1970       39.323         1.129            2.427       0.3034           92          
-4         0.2800       55.990         1.219            3.433       0.2146           130         
-8         0.4300       86.068         1.491            5.254       0.1642           171         
+1         0.1550       31.055         1.064            1.927       0.4818           58          
+2         0.2020       40.495         1.105            2.496       0.3120           90          
+4         0.2810       56.185         1.206            3.443       0.2152           130         
+8         0.4330       86.589         1.488            5.285       0.1652           170         
 
 Columnas: la pata del MUNDO (ms/tick, y esos ticks costeados a 200 ticks/frame),
 la pata de la VISTA (player ms/frame) y las dos juntas en núcleos al reloj del juego.
@@ -15,4 +16,25 @@ repartible entre procesos: se compara con núcleos, no con la latencia de un fra
 simultáneas caben en ese presupuesto al ritmo del juego (boost ×10).
 
 Informes crudos de cada punto: artifacts/system-c<N>.json
-Generado: 2026-09-19 16:28
+
+Ajuste por mínimos cuadrados de los puntos MEDIDOS (n = vistas × colonias por vista)
+  núcleos = 1.507 + 0.1187 × n          (residuo máximo 2.8 %)
+  ms/tick = 0.1203 + 0.00983 × n   (residuo máximo 2.9 %)
+
+  FIJO (no depende de las colonias): 1.507 núcleos
+  MARGINAL: 0.1187 núcleos por colonia (0.00983 ms/tick, o sea 8.2 % del tick)
+  «núcleos por colonia» = MARGINAL + FIJO/n: la curva por colonia ES esa
+  amortización del fijo, no una ley aparte:
+    n    medido     modelo     desvío   medido/colonia modelo/colonia
+    4    1.927      1.982          -2.8 %  0.4818       0.4954    
+    8    2.496      2.457          +1.6 %  0.3120       0.3071    
+    16   3.443      3.406          +1.1 %  0.2152       0.2129    
+    32   5.285      5.306          -0.4 %  0.1652       0.1658    
+
+  A la prueba: el ajuste SIN el punto menor (n=4) predice 2.039 y el medido es 1.927 (-5.5 %)
+
+  El ajuste es una INTERPRETACIÓN de la tabla; lo medido es la tabla. Con cuatro
+  vistas fijas, el fijo es CONSTANTE respecto a las colonias, pero este barrido
+  NO separa «fijo por mundo» de «fijo por montaje»: eso pide barrer las VISTAS.
+
+Generado: 2026-09-19 18:34
