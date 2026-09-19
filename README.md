@@ -416,8 +416,9 @@ necesita licencia. Tiene dos puertas:
 - **a mano, UNA pasada** — `workflow_dispatch` (Actions → CI → «Run workflow»),
   con el input `unity`:
   - `unity: cache` → ejercita **solo el paso del caché** `actions/cache@v5`
-    (segundos, sin licencia y sin descargar el editor). Usa una clave de sonda
-    para no ocupar la clave real, que solo se toca en `full`.
+    (segundos: sin licencia, sin descargar el editor y **saltando el job `test`**,
+    que es el caro). Usa una clave de sonda para no ocupar la clave real, que
+    solo se toca en `full`.
   - `unity: full` → el job completo: instala ~5 GB de editor, activa licencia,
     compila y devuelve la licencia.
   - `unity: none` (por defecto) → el dispatch corre solo el job `test`.

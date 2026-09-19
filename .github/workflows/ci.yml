@@ -15,9 +15,10 @@ on:
   #
   #   none   (por defecto) → solo corre el job `test`, igual que un push.
   #   cache  → corre SOLO el paso del caché `actions/cache@v5` (más un mkdir
-  #            del directorio que va a cachear). Segundos, sin licencia y sin
-  #            descargar el editor: es la prueba de que el paso del caché
-  #            funciona en el runner. Usa una clave de SONDA (ver el paso).
+  #            del directorio que va a cachear) y SALTA el job `test`, que es
+  #            el caro: segundos en total, sin licencia y sin descargar el
+  #            editor. Es la prueba de que el paso del caché funciona en el
+  #            runner. Usa una clave de SONDA (ver el paso).
   #   full   → el job COMPLETO: instala el CLI y ~5 GB de editor, activa
   #            licencia, compila en batch y devuelve la licencia. Necesita los
   #            secretos de licencia (ver el comentario del job); sin ellos falla
@@ -45,7 +46,14 @@ on:
         default: none
 
 jobs:
+  # El `test` es la suite headless y los seis pines: el trabajo caro del
+  # workflow. No aporta nada cuando un dispatch solo quiere ejercitar el paso
+  # del caché, así que en ese alcance se salta — y el ejercicio entero pasa de
+  # ~7 min a ~15 s. En push, PR y en los otros dispatches corre como siempre.
   test:
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      || inputs.unity != 'cache'
     runs-on: ubuntu-latest
     steps:
       # checkout v5 y setup-dotnet v5 corren en Node 24: con v4 el runner avisa
