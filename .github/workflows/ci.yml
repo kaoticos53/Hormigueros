@@ -184,8 +184,12 @@ jobs:
 
       # El instalador del editor guarda los archivos comprimidos: una caché aquí
       # ahorra la descarga entera en cada push.
+      # v5 es el mismo caché con el runtime nuevo (Node 24): el único cambio del
+      # salto es la versión de Node. Se sube aquí también porque este job, hoy
+      # saltado por `UNITY_CI`, es el único que quedaría emitiendo el aviso de
+      # Node 20 el día que se active.
       - name: Restaurar la caché de descargas del editor
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.config/unityhub/downloads
           key: unity-downloads-6000.6.0f1
