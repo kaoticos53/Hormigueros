@@ -296,6 +296,12 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   pata (la lee del proceso hijo que este assembly lanza, `StreamSource.CliCpuMs`) con el
   vsync apagado y un calentamiento de 2 s, para que la fase de simulación caiga dentro
   de la ventana (`docs/fase5-3-escala.md` §4.9).
+- **Cuántas colonias caben se mide moviendo las colonias por vista.** El coste del mundo
+  depende de cuántas simula cada vista, así que el montaje la declara hacia fuera: el
+  bootstrapper (`CreateMultiSimPerfScene(grid, ticks, coloniesPerView)`), el build
+  (`ANTSIM_PERF_COLONIES`) y el medidor (`--colonies N`) llevan el mismo número, y el
+  informe del player publica `coloniesPerView` para que no haya que adivinarlo. El
+  barrido completo es `bash scripts/system-sweep.sh` (`docs/fase5-3-escala.md` §4.10).
 
 Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
 juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La
