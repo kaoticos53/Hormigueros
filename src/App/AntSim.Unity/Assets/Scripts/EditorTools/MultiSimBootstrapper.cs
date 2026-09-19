@@ -133,14 +133,27 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// criterio el mundo se acaba en el calentamiento y lo que se mediría sería un
         /// player solo (la sonda lo detecta y suspende, pero mejor no llegar ahí).</summary>
         public static void CreateMultiSimPerfScene(int gridCells, int ticks)
+            => CreateMultiSimPerfScene(gridCells, ticks, PerfColoniesPerView);
+
+        /// <summary>Colonias por vista del medidor: el caso de carga del criterio.
+        /// El barrido del precio del tick (F5.3, §4.10) lo mueve para saber cuántas
+        /// colonias caben en los núcleos que el sistema consume.</summary>
+        public const int PerfColoniesPerView = 2;
+
+        /// <summary>El medidor con las tres magnitudes explícitas: grid, horizonte y
+        /// colonias por vista. Las tres cambian el COSTE del mundo (que es lo que se
+        /// mide), así que las tres tienen que poder declararse desde fuera.</summary>
+        public static void CreateMultiSimPerfScene(int gridCells, int ticks, int coloniesPerView)
         {
             CreateMultiSimScene(views: 4, baseSeed: 42, pools: null, replayFiles: null,
-                gridCells: gridCells, frameEvery: PerfFrameEvery, ticks: ticks);
+                gridCells: gridCells, frameEvery: PerfFrameEvery, ticks: ticks,
+                coloniesPerView: coloniesPerView);
         }
 
         public static void CreateMultiSimScene(int views, ulong baseSeed,
             IReadOnlyList<string?>? pools = null, IReadOnlyList<string?>? replayFiles = null,
-            int gridCells = GridCells, int frameEvery = 2, int ticks = 36000)
+            int gridCells = GridCells, int frameEvery = 2, int ticks = 36000,
+            int coloniesPerView = 2)
         {
             var layout = MultiViewportModel.Layout(views);   // valida 1..4
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
@@ -183,7 +196,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 string? replay = replayFiles != null && i < replayFiles.Count
                     ? replayFiles[i] : null;
                 presenters[i] = BuildView(v, world, baseSeed + (ulong)i, viewPools[i], replay,
-                    gridCells, frameEvery, ticks);
+                    gridCells, frameEvery, ticks, coloniesPerView);
             }
 
             // — HUD común: rótulo + tarjeta compacta por vista —
@@ -231,7 +244,8 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// Devuelve el presenter para que el HUD de la vista se le conecte.</summary>
         private static Presenter.SimPresenterBehaviour BuildView(MultiViewportModel.View v,
             float world, ulong seed, string? pool, string? replayFile = null,
-            int gridCells = GridCells, int frameEvery = 2, int ticks = 36000)
+            int gridCells = GridCells, int frameEvery = 2, int ticks = 36000,
+            int coloniesPerView = 2)
         {
             int layer = MultiViewportModel.RenderLayer(v.Index);
 
@@ -279,9 +293,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             var moundMat = NewFlatMat(new Color(0.30f, 0.25f, 0.20f), $"NestMoundMat_V{v.Index}");
             var accent0 = new Color(0.93f, 0.45f, 0.35f);
             var accent1 = new Color(0.42f, 0.63f, 0.95f);
-            for (int c = 0; c < 2; c++)
+            // Los nidos van donde los pone el MUNDO (el barrido de colonias de §4.10
+            // mueve cuántas hay): `WorldSim.CreateColony` usa
+            // WorldWidth × (id+1)/(colonyCount+1) sobre la línea media, y con 2
+            // colonias eso es exactamente 1/3 y 2/3 — el mismo sitio de siempre.
+            for (int c = 0; c < coloniesPerView; c++)
             {
-                float nx = world * (c + 1) / 3f;
+                float nx = world * (c + 1) / (coloniesPerView + 1);
                 var mound = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 mound.name = $"NestMound_V{v.Index}_{c}";
                 SetLayerRecursive(mound, layer);
@@ -296,8 +314,11 @@ namespace AntSim.Unity.Scripts.EditorTools
                 nest.transform.position = new Vector3(nx, 0.45f, world * 0.5f);
                 nest.transform.localScale = new Vector3(nestR, 0.3f, nestR);
                 DestroyCollider(nest);
+                // Dos acentos alternos: con más colonias no hay un color por colonia
+                // (y el presenter solo reparte dos materiales por colonia), así que la
+                // decoración alterna en vez de inventar una paleta nueva.
                 nest.GetComponent<Renderer>().sharedMaterial =
-                    NewFlatMat(c == 0 ? accent0 : accent1, $"NestMat_V{v.Index}_{c}");
+                    NewFlatMat(c % 2 == 0 ? accent0 : accent1, $"NestMat_V{v.Index}_{c}");
             }
 
             // — Feromonas de la vista (misma receta que la escena simple) —
@@ -315,7 +336,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             var presenter = presenterGo.AddComponent<Presenter.SimPresenterBehaviour>();
             presenter.CliPath = "build/antsim";
             presenter.Grid = gridCells;
-            presenter.Colonies = 2;
+            presenter.Colonies = coloniesPerView;
             // Las N partidas comparten horizonte (7200 ticks); velocidad por
             // vista con +/= (SpeedBoost) o el Speed del inspector.
             presenter.Ticks = ticks;

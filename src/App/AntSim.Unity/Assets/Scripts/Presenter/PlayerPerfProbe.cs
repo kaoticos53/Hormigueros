@@ -664,6 +664,12 @@ namespace AntSim.Unity.Scripts.Presenter
                 sb.Append("  \"warmupSeconds\": ").Append(F(_warmup)).Append(",\n");
                 sb.Append("  \"boost\": ").Append(F(_boost)).Append(",\n");
                 sb.Append("  \"views\": ").Append(gates.Count).Append(",\n");
+                // Las colonias POR VISTA del montaje: es lo que el barrido del precio
+                // del tick mueve (F5.3 §4.10), y sin declararlo el informe no se puede
+                // leer (el coste del mundo depende de cuántas colonias simula).
+                var colonies = Presenters();
+                sb.Append("  \"coloniesPerView\": ")
+                  .Append(colonies.Length > 0 ? colonies[0].Colonies : 0).Append(",\n");
                 sb.Append("  \"focusedSamples\": ").Append(Focused()).Append(",\n");
                 sb.Append("  \"samples\": ").Append(_samples.Count).Append(",\n");
                 sb.Append("  \"frames\": ").Append(_frames).Append(",\n");

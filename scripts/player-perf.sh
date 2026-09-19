@@ -59,6 +59,7 @@
 #   scripts/player-perf.sh --cpu               # ídem, sin vsync: el COSTE por frame
 #   scripts/player-perf.sh --system            # + la pata del CLI: el coste del SISTEMA
 #   scripts/player-perf.sh --system --ticks 6000 --warmup 1
+#   scripts/player-perf.sh --system --colonies 8   # más colonias por vista (más mundo)
 #   scripts/player-perf.sh --skip-build        # reusa el player ya construido
 #   scripts/player-perf.sh --log FICHERO       # solo analiza el log de una corrida
 #   scripts/player-perf.sh --selftest          # verifica el analizador (sin Unity)
@@ -96,6 +97,8 @@ WARMUP_DEFAULT=12
 WARMUP_SYSTEM=2
 BOOST=10
 GRID=256
+# Colonias por vista del montaje: el coste del mundo depende de esta (F5.3 §4.10).
+COLONIES=2
 SKIP_BUILD=0
 LOG=""
 ANALYZE_ONLY=0
@@ -119,6 +122,7 @@ while [[ $# -gt 0 ]]; do
     --warmup)      WARMUP="$2"; shift 2 ;;
     --boost)       BOOST="$2"; shift 2 ;;
     --grid)        GRID="$2"; shift 2 ;;
+    --colonies)    COLONIES="$2"; shift 2 ;;
     --cpu)         CPU_MODE=1; REPORT="$REPORT_CPU"; shift ;;
     --system)      CPU_MODE=1; SYSTEM_MODE=1; REPORT="$REPORT_SYSTEM"; shift ;;
     --ticks)       TICKS="$2"; shift 2 ;;
@@ -219,8 +223,8 @@ if [[ $SELFTEST -eq 1 ]]; then
   done
   # Las claves del modo SISTEMA: es lo que publica la 6ª pieza del criterio, y su
   # guarda (salida 10) depende de que el extractor las lea bien.
-  printf '{\n  "mode": "player-system",\n  "systemMeasured": true,\n  "systemPlayerFits": true,\n  "cliMsPerTick": 0.203,\n  "cliCompleted": true,\n  "systemMsPerFrame": 41.7,\n  "systemCores": 2.502,\n  "systemSimWindows": 10,\n  "systemLoadedWindows": 21,\n  "systemOverlapWindows": 0,\n  "systemWindows": 29,\n  "systemVerdict": "cabe: el frame del player deja margen"\n}\n' > "$tmp/sistema.json"
-  for kv in "systemMeasured=true" "cliMsPerTick=0.203" "systemCores=2.502" "cliCompleted=true"; do
+  printf '{\n  "mode": "player-system",\n  "systemMeasured": true,\n  "systemPlayerFits": true,\n  "coloniesPerView": 8,\n  "cliMsPerTick": 0.203,\n  "cliCompleted": true,\n  "systemMsPerFrame": 41.7,\n  "systemCores": 2.502,\n  "systemSimWindows": 10,\n  "systemLoadedWindows": 21,\n  "systemOverlapWindows": 0,\n  "systemWindows": 29,\n  "systemVerdict": "cabe: el frame del player deja margen"\n}\n' > "$tmp/sistema.json"
+  for kv in "systemMeasured=true" "cliMsPerTick=0.203" "systemCores=2.502" "coloniesPerView=8"; do
     k="${kv%%=*}"; want="${kv#*=}"
     got="$(jget "$tmp/sistema.json" "$k")"
     if [[ "$got" != "$want" ]]; then echo "✗ selftest: jget $k dio «$got» (esperado $want)" >&2; fails=1; fi
@@ -278,7 +282,7 @@ trap cleanup EXIT
 
 if [[ $SKIP_BUILD -eq 0 ]]; then
   log "▶ Build del player: $PLAYER"
-  log "   escena:   Assets/Scenes/MultiSim.unity · grid $GRID · 4 vistas × 2 colonias · horizonte $TICKS ticks"
+  log "   escena:   Assets/Scenes/MultiSim.unity · grid $GRID · 4 vistas × $COLONIES colonias · horizonte $TICKS ticks"
   log "   modo:     $([[ $SYSTEM_MODE -eq 1 ]] && echo 'COSTE DEL SISTEMA (player + CLI, vsync apagado, tiempos de frame encendidos)' || { [[ $CPU_MODE -eq 1 ]] && echo 'COSTE por frame (vsync apagado, tiempos de frame encendidos)' || echo 'framerate PRESENTADO (vsync del monitor)'; })"
   log "   editor:   $UNITY"
   set +e
@@ -288,6 +292,7 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
   # (que exige la línea de cierre) lo detecta.
   MSYS_NO_PATHCONV=1 ANTSIM_PERF_GRID="$GRID" \
     ANTSIM_PERF_TICKS="$TICKS" \
+    ANTSIM_PERF_COLONIES="$COLONIES" \
     ANTSIM_PERF_FRAME_TIMING="$CPU_MODE" \
     timeout 900 "$UNITY" -batchmode -quit -nographics \
       -projectPath "$(winpath "$PROJECT")" \
