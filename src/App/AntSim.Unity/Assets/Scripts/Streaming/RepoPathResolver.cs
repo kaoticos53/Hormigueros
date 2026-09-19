@@ -23,6 +23,11 @@ namespace AntSim.Unity.Scripts.Streaming
         /// la raíz del repo: src/App/AntSim.Unity → src/App → src → root.</summary>
         public const int ProjectDepthFromRepoRoot = 3;
 
+        /// <summary>Marcador del repo root: la carpeta del CLI. Es el mismo que
+        /// usa la sonda de rendimiento, y NO un README.md (el proyecto Unity
+        /// tiene el suyo: con ese marcador el ancla caía dentro del proyecto).</summary>
+        public static readonly string[] RepoMarker = { "src", "Tools", "AntSim.Cli" };
+
         /// <summary>
         /// Ancla del repo root derivada de la carpeta del proyecto Unity
         /// (p. ej. Application.dataPath = …/src/App/AntSim.Unity/Assets).
@@ -42,6 +47,51 @@ namespace AntSim.Unity.Scripts.Streaming
                         Directory.GetParent(
                             Directory.GetParent(proj)!.FullName)!.FullName)!.FullName;
             return null; // proyecto movido/renombrado: sin ancla, solo cwd
+        }
+
+        /// <summary>
+        /// Raíz del repo buscando la CARPETA DEL CLI subiendo desde
+        /// <paramref name="startDir"/> (máx. <paramref name="maxUp"/> niveles).
+        /// Sirve para el caso que el ancla del proyecto no cubre: un PLAYER
+        /// empaquetado, donde <c>Application.dataPath</c> es
+        /// <c>&lt;build&gt;/&lt;Nombre&gt;_Data</c> y no contiene el layout
+        /// <c>src/App/…</c>. Devuelve null si no encuentra el marcador (build
+        /// fuera del repo): el llamador se queda con el cwd.
+        /// </summary>
+        public static string? RepoRootByMarker(string? startDir, int maxUp = 6)
+        {
+            if (string.IsNullOrEmpty(startDir)) return null;
+            var dir = new DirectoryInfo(startDir);
+            for (int i = 0; dir != null && i <= maxUp; i++, dir = dir.Parent)
+                if (Directory.Exists(Path.Combine(dir.FullName, RepoMarker[0], RepoMarker[1], RepoMarker[2])))
+                    return dir.FullName;
+            return null;
+        }
+
+        /// <summary>
+        /// Ancla del repo root para cualquiera de los dos mundos en los que corre
+        /// la vista:
+        ///   · **editor** — <c>Application.dataPath</c> = <c>&lt;proj&gt;/Assets</c>:
+        ///     el layout del proyecto (subir tres niveles).
+        ///   · **player empaquetado** — <c>dataPath</c> = <c>&lt;build&gt;/&lt;Nombre&gt;_Data</c>:
+        ///     subir desde la carpeta del build hasta el marcador del repo.
+        /// Un player lanzado desde fuera del repo (doble clic en un build
+        /// exportado) no tiene ancla: se queda con el cwd, que es el
+        /// comportamiento anterior.
+        /// </summary>
+        public static string? RepoRootFromDataPath(string? dataPath)
+        {
+            string? fromProject = RepoRootFromProjectPath(dataPath);
+            if (fromProject != null) return fromProject;
+            if (string.IsNullOrEmpty(dataPath)) return null;
+
+            string start = dataPath;
+            if (start.EndsWith("_Data", StringComparison.OrdinalIgnoreCase))
+            {
+                var parent = Directory.GetParent(start);
+                if (parent != null) start = parent.FullName;
+            }
+            return RepoRootByMarker(start);
         }
 
         /// <summary>

@@ -92,6 +92,58 @@ namespace AntSim.Core.Tests
                 RepoPathResolver.Resolve("local.bin", baseDir: _proj, repoRoot: null));
         }
 
+        // ── F5.3: ancla para el PLAYER empaquetado ─────────────────────────────
+        // En un build, Application.dataPath es <build>/<Nombre>_Data y NO contiene
+        // el layout src/App/…: sin esta segunda vía, el juego empaquetado se
+        // quedaba sin ancla y no encontraba el CLI ni el pool (solo resolvía
+        // contra el cwd, así que funcionaba lanzándolo desde la raíz del repo y
+        // fallaba con doble clic).
+
+        [Fact]
+        public void RepoRootByMarker_BuildDentroDelRepo_EncuentraLaRaiz()
+        {
+            Directory.CreateDirectory(Path.Combine(_repo, "src", "Tools", "AntSim.Cli"));
+            string build = Path.Combine(_repo, "build", "player");
+            Directory.CreateDirectory(build);
+
+            Assert.Equal(_repo, RepoPathResolver.RepoRootByMarker(build));
+            Assert.Equal(_repo, RepoPathResolver.RepoRootByMarker(Path.Combine(build, "AntSim_Data")));
+        }
+
+        [Fact]
+        public void RepoRootByMarker_SinMarcador_Null()
+        {
+            string outside = Path.Combine(_tmp, "exportado", "AntSim_Data");
+            Directory.CreateDirectory(outside);
+            Assert.Null(RepoPathResolver.RepoRootByMarker(outside));
+            Assert.Null(RepoPathResolver.RepoRootByMarker(null));
+            Assert.Null(RepoPathResolver.RepoRootByMarker(""));
+        }
+
+        [Fact]
+        public void RepoRootFromDataPath_PlayerEmpaquetado_SubeDesdeElBuild()
+        {
+            Directory.CreateDirectory(Path.Combine(_repo, "src", "Tools", "AntSim.Cli"));
+            string data = Path.Combine(_repo, "build", "player", "AntSim_Data");
+            Directory.CreateDirectory(data);
+
+            Assert.Equal(_repo, RepoPathResolver.RepoRootFromDataPath(data));
+        }
+
+        [Fact]
+        public void RepoRootFromDataPath_Editor_SigueSiendoElLayoutDelProyecto()
+        {
+            Assert.Equal(_repo, RepoPathResolver.RepoRootFromDataPath(Path.Combine(_proj, "Assets")));
+        }
+
+        [Fact]
+        public void RepoRootFromDataPath_BuildExportadoFueraDelRepo_Null()
+        {
+            string data = Path.Combine(_tmp, "exportado", "AntSim_Data");
+            Directory.CreateDirectory(data);
+            Assert.Null(RepoPathResolver.RepoRootFromDataPath(data));
+        }
+
         [Fact]
         public void ResolveExecutable_SufijoExe_EnWindows()
         {

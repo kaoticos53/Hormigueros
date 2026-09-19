@@ -69,7 +69,7 @@ namespace AntSim.Unity.Scripts.Presenter
             }
             // Play-pass: misma resolución de rutas que el presenter — el CLI
             // relativo al repo root y el .antgenome también (cwd del editor ≠ repo).
-            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromProjectPath(
+            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromDataPath(
                 UnityEngine.Application.dataPath);
             var source = new Streaming.StreamSource(CliPath, repoRoot);
             string importPath = Streaming.RepoPathResolver.Resolve(GenomePath, baseDir: null, repoRoot);
