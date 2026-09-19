@@ -79,9 +79,11 @@ se dice:
 - **Curva de aprendizaje y cobertura (rodaja 2quater)**: dos bloques nuevos en el
   canal C y panel por tarjeta en el HUD.
 
-`512/512` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
+`526/526` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
 errores ni avisos. Criterio de la fase —«N colonias estables a 60 fps»— **medido y
-cumplido en un build de jugador**. Detalle: [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md).
+cumplido en un build de jugador**, con el coste por frame del build medido aparte
+(**1,294 ms de CPU**, 7,8 % del presupuesto). Detalle:
+[`docs/fase5-3-escala.md`](docs/fase5-3-escala.md).
 
 ### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
 

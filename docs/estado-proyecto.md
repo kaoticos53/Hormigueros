@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-19 · HEAD: `920be47` + el cierre de F5.3 con build de jugador (working tree) ·
-suite: 512/512 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+*Actualizado: 2026-09-19 · HEAD: `d38220b` + la guarda de los materiales de feromonas (working tree) ·
+suite: 526/526 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -171,8 +171,16 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    2 colonias, grid 256, boost ×10, 292 hormigas + 684 ítems, tick 12 000): **1,294 ms de CPU por frame** (hilo
    principal 1,272 · hilo de render 0,277 · espera en Present 0,003) y **0,127 ms de GPU**, con **683,7 fps de techo sin
    vsync** (1,463 ms/frame producidos) = **7,8 % del presupuesto de 60 fps** y ×12,9 de margen; puerta de píxeles verde
-   en las 4 vistas. El resumen es un modelo PURO (`FrameCost`, sin UnityEngine) con **12 tests headless**. **524/524
+   en las 4 vistas. El resumen es un modelo PURO (`FrameCost`, sin UnityEngine) con **12 tests headless**. **526/526
    tests · los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player-cpu.json`.
+   **Artefacto commiteado por detrás del generador — CORREGIDO (2026-09-19):** cuatro de los cinco materiales de
+   feromonas tenían `_BaseMap` **sin textura** (`fileID: 0`), que con el material transparente y `_BaseColor` blanco
+   significa **quad blanco OPACO tapando el tablero** mientras no llega ningún frame de feromonas (el defecto del Play
+   pass de F5.1 por la puerta de atrás). El generador sí escribía la referencia: tres generaciones independientes —una
+   de ellas borrando la textura de reposo para forzarla en la misma pasada— dan el material canónicamente idéntico. Los
+   cuatro materiales quedan con su referencia (7 líneas) y **2 tests headless** (`PheromoneMaterialGuardTests`, en rojo
+   sobre los materiales de HEAD antes del arreglo) impiden que vuelva en silencio: referencia presente, guía existente y
+   textura 1×1 RGBA32 `ffffff00` (invisible).
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome` —del editor, ya guardado—,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
