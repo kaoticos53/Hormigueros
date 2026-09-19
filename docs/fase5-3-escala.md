@@ -5,7 +5,9 @@ estado consolidado: [`estado-proyecto.md`](estado-proyecto.md).
 
 Es la última rodaja de F5.3 y la que cierra su criterio de salida. Aquí están las
 dos piezas, la prueba de que ninguna de las dos cambia el mundo y las cifras con
-las que se juzga (incluidas las que no son bonitas).
+las que se juzga (incluidas las que no son bonitas). Al final, §4.7 y §4.8 cierran
+el criterio con las cinco lecturas: Core, vista en batch, vista con presentación,
+framerate presentado del build y **coste por frame dentro del build**.
 
 ## 1. El problema, medido antes de tocar nada
 
@@ -334,12 +336,12 @@ completo una vez, con el bloque que sea). Lo que la tabla mide es el TICK, que e
 donde está el presupuesto.
 
 **Criterio de salida de F5.3** («N colonias estables a 60 fps en la escena de
-juego»), con todas las piezas ya medidas: con 8 colonias, el Core cuesta **0,47 ms
-por tick** (2,8 % de un frame a 60 fps, con el bloque 8), la vista en batch **0,51
-ms por frame** y la vista con ventana —bucle y presentación reales— **2,44 ms por
-frame** (15 % del presupuesto), con **19 llamadas de dibujo** por frame y todas
-instanciadas. Lo que sigue sin medir es un **build de jugador** (el framerate con
-el vsync del monitor aplicado, fuera del editor) y el gate de píxeles.
+juego»): con 8 colonias, el Core cuesta **0,47 ms por tick** (2,8 % de un frame a 60
+fps, con el bloque 8), la vista en batch **0,51 ms por frame** y la vista con ventana
+—bucle y presentación reales— **2,44 ms por frame** (15 % del presupuesto), con **19
+llamadas de dibujo** por frame y todas instanciadas. Las dos lecturas que faltaban
+aquí —el **build de jugador** con el vsync del monitor y su **coste por frame dentro
+del build**— están en §4.7 y §4.8.
 
 ### 4.7 El build de jugador: el framerate PRESENTADO y la puerta de píxeles
 
@@ -352,24 +354,27 @@ un BUILD, que entrega frames a la pantalla con siguiente frame vecino.
 (escena del multi-visor, 4 vistas × 2 colonias, grid 256 — `PlayerBuild` en el editor)
 y lo ejecuta con la sonda del player, que muestrea frames/s y pasa la PUERTA DE
 PÍXELES **por vista**. Medido el 2026-09-19, Unity 6000.6.0f1, backend Mono2x, build de
-99 MB en 18 s, ventana 1280×720, 12 s de calentamiento + 30 s de ventana, 30/30
-muestras con la ventana en primer plano (informe: `artifacts/perf-player.json`):
+99 MB (18 s el primer build, 9 s el de §4.8), ventana 1280×720, 12 s de calentamiento +
+30 s de ventana, 30/30 muestras con la ventana en primer plano (informe:
+`artifacts/perf-player.json`, re-medido en la misma sesión que §4.8 — mismo build, sin
+los estadísticos de tiempos de frame — con el mismo resultado):
 
 | medida | valor |
 |---|---|
-| frames/s (mediana) | **59,99** |
-| peor muestra / mejor | 55,6 / 60,0 |
-| intervalo presentado | 16,67 ms/frame |
+| frames/s (mediana) | **59,997** |
+| peor muestra / mejor | 55,9 / 60,1 |
+| intervalo presentado | 16,668 ms/frame |
 | refresco del monitor | 59,997 Hz · `vSyncCount`=1 · `targetFrameRate`=−1 |
 | **presentado al refresco** | **sí** (dentro del 5 %) |
-| llamadas de dibujo | 19, **todas instanciadas** (37 317 instancias, 0 de respaldo) |
+| llamadas de dibujo | 19, **todas instanciadas** (37 172 instancias, 0 de respaldo) |
 | carga final | 292 hormigas y 684 ítems · tick 12 000 |
 | puerta de píxeles | **verde en las 4 vistas** (antPx 132–160 · portadoras 34–76 · ítems 189–213 · suelo tierra 0,42:0,329:0,231) |
 
 Lo que dice el número: el build **entrega al refresco del monitor** con el mundo
 cargado — el techo de 60 fps lo pone la pantalla, no el juego. Lo que **no** dice: el
-COSTE del frame en el build. La única medida de coste con presentación sigue siendo la
-del editor (§4.4, 2,44 ms/frame) y el desglose de GPU no está hecho.
+COSTE del frame en el build; con el vsync entregando al refresco, el coste queda tapado
+por construcción. Eso lo mide §4.8, que apaga el vsync justo para que la pantalla deje
+de taparlo.
 
 La puerta mira PÍXELES, y en un player no hay PNG posible (ver defecto 2), así que cada
 vista deja además su frame en una **mosaica de caracteres** (24×10, del frame real de
@@ -418,12 +423,78 @@ reales medidos aquí:
 - **El fondo hay que declararlo.** El fondo del multi-visor (56,45,33) dista 12 del tono
   de hormiga: si no está en la paleta, cada píxel de fondo se cuenta como hormiga.
 
+### 4.8 El COSTE por frame dentro del build (5ª pieza del criterio)
+
+El framerate presentado (§4.7) tiene un problema de fondo: **con el vsync entregando al
+refresco del monitor, 60 fps es el techo de la PANTALLA**, no del juego. Un build que
+presenta a 59,997 fps no dice si produce frames en 16 ms o si los tendría listos en 2. La
+única forma de publicar el coste es medirlo donde el juego no espera a nadie: dentro del
+player, con el vsync apagado, y cronometrando la CPU desde dentro.
+
+`bash scripts/player-perf.sh --cpu` hace eso: construye el player con los estadísticos
+de tiempos de frame encendidos (`enableFrameTimingStats`, que `PlayerBuild` enciende
+sólo para esta corrida y **restaura al terminar** — es un ajuste que vive en
+`ProjectSettings` y no debe quedar cambiado) y lo ejecuta con `-antsimPerfNoVsync 1`. La
+sonda lee el `FrameTimingManager` **frame a frame** (26 774 frames con dato de 26 778) y
+resume cada ventana con la MEDIANA —una recolección de basura no debe mover el número
+publicado—. Medido el 2026-09-19, Unity 6000.6.0f1, backend Mono2x, MISMO build y mismo
+régimen que §4.7 (4 vistas × 2 colonias, grid 256, boost ×10, 292 hormigas y 684 ítems
+en pantalla, tick 12 000), 12 s de calentamiento + 30 s de ventana, 30/30 muestras con
+la ventana en primer plano (informe: `artifacts/perf-player-cpu.json`):
+
+| medida | valor |
+|---|---|
+| frames/s sin vsync (mediana) | **683,7** (peor 518,7 · mejor 717,2) |
+| ms por frame producidos | **1,463** |
+| **CPU por frame** (`cpuFrameTime`) | **1,294 ms** (mín 1,248 · máx 1,661) |
+| … hilo principal (`cpuMainThreadFrameTime`) | 1,272 ms |
+| … hilo de render (`cpuRenderThreadFrameTime`) | 0,277 ms |
+| espera en Present | 0,003 ms |
+| GPU por frame (`gpuFrameTime`) | 0,127 ms (mín 0,061 · máx 0,132) |
+| **% del presupuesto de 16,667 ms** | **7,8 %** de CPU (8,8 % contando el intervalo producido) |
+| margen sobre el presupuesto | **×12,9** (la CPU sola cabría a 773 fps) |
+| cuello de botella (clasificación de Unity) | **CPU** |
+| vsync | efectivo 0 (el del proyecto es 1) · `syncInterval`=1 (ver nota) |
+| puerta de píxeles | **verde en las 4 vistas** |
+
+Lectura de los números, sin adornos:
+
+- **El coste es una fracción del presupuesto.** 1,294 ms de CPU por frame contra los
+  16,667 ms de 60 fps: **7,8 %**. El intervalo realmente producido (1,463 ms/frame) es
+  un 13 % mayor que el `cpuFrameTime` —diferencia de dónde empieza y acaba cada
+  ventana de medida— y aun así son **8,8 %**. Publico las dos y uso la conservadora.
+- **El techo medido es 683,7 fps** con el mundo cargado. Es decir: sin el vsync, el
+  build tendría margen para ~11,4 veces los 60 fps del criterio.
+- **La GPU no es el cuello** (0,127 ms), pero la clasificación «CPU» de Unity aquí es
+  casi formal: con 1,3 ms de frame total, lo que dice es que el hilo principal está más
+  cerca del total que la GPU, no que la CPU esté apretada. Lo que importa es que ambas
+  cifras están muy por debajo del presupuesto.
+- **La espera en Present es 0,003 ms**, que es la prueba de que el vsync estaba de
+  verdad apagado (si no, la espera se comería los ~15 ms que faltan hasta el refresco).
+  Ojo con un detalle de la API: `FrameTiming.syncInterval` sigue reportando **1**, así
+  que ese campo NO sirve como evidencia aquí; la prueba son la espera y los 683 fps.
+
+**Qué NO dice este número.** El coste medido es el del **player**, que lee el stream y
+dibuja; la simulación del mundo corre en **otro proceso** (el CLI, que es quien emite el
+stream). El coste del sistema completo es la suma de los dos y no está cronometrado. Los
+tiempos de GPU los declara el backend (D3D11) y no se han verificado por otra vía, y
+todo esto es de **una máquina** (la del repo).
+
+**El modelo es puro y está probado.** El resumen (medianas, fracción del presupuesto,
+margen y clasificación de cuello de botella) vive en `FrameCost`, sin UnityEngine, con
+**12 tests headless**: la mediana ignora los ceros (un frame sin dato no costó 0 ms) y la
+clasificación es la del ejemplo oficial de `FrameTiming`, con sus umbrales. Dos de las
+pruebas son los casos que cambian la decisión: sin tiempos de GPU lo declara
+(`indeterminado`) en vez de inventar, y un coste por encima del presupuesto suspende.
+
 ## 5. Qué NO demuestra esta rodaja
 
-- **El coste del frame en un build.** El build entrega al refresco (§4.7), pero con
-  vsync eso es lo que dice el monitor: el trabajo por frame sigue medido solo dentro del
-  editor (**0,51 ms/frame** en batch, §4.3, y **2,44 ms/frame** con presentación,
-  §4.4). El tiempo de GPU no está desglosado.
+- **El coste del frame ya NO es una incógnita** (§4.8: **1,294 ms de CPU por frame**,
+  7,8 % del presupuesto de 60 fps, y 0,127 ms de GPU). Lo que sigue sin medir es más
+  estrecho y conviene decirlo con precisión: ese coste es el del **player**, y el mundo
+  (la simulación) corre en un **proceso aparte** —el CLI—, así que el coste del sistema
+  completo no está cronometrado; los tiempos de GPU los declara el backend y no se han
+  verificado por otra vía; y todo es de **una máquina**.
 - **El provecho del canal E.** El stream ya emitía RLE de celdas no nulas, así que
   el LOD **no** cambia lo que viaja al presenter; cambia el coste de la difusión
   en el Core. Son dos ahorros distintos y conviene no confundirlos.
@@ -434,13 +505,15 @@ reales medidos aquí:
 
 ## 6. Verificación
 
-- **512/512 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
-  píxeles `FrameGate` y 5 del ancla de rutas del player).
-- **El criterio de salida de la fase, cerrado**: el build entrega **59,99 fps con el
-  refresco del monitor a 59,997 Hz** y la puerta de píxeles pasa en las cuatro vistas
-  (§4.7). Las tres piezas medidas quedan así: **Core 0,47 ms/tick** (8 colonias, grid
-  256), **vista 0,51 ms/frame** en batch y **2,44 ms/frame** con presentación en el
-  editor, y **el build presentado al refresco** con 19 llamadas de dibujo.
+- **524/524 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
+  píxeles `FrameGate`, 12 del modelo de coste por frame `FrameCost` y 5 del ancla de
+  rutas del player).
+- **El criterio de salida de la fase, cerrado con CINCO piezas**: **Core 0,47 ms/tick**
+  (8 colonias, grid 256) · **vista 0,51 ms/frame** en batch · **2,44 ms/frame** con
+  presentación en el editor · **el build presentado al refresco** (59,997 fps sobre un
+  monitor de 59,997 Hz, con la puerta de píxeles verde en las cuatro vistas y 19
+  llamadas de dibujo, §4.7) · **el coste por frame DENTRO del build** (1,294 ms de CPU y
+  0,127 ms de GPU, 7,8 % del presupuesto, §4.8).
 - **Los 6 pines de hash pasan sin regenerarse**: el LOD es exacto, así que el
   mundo no se movió — stream canónico, replay con drops, Atta, invasión y NEAT.
 - **El proyecto Unity compila en batch con 0 errores y 0 avisos** con el presenter
@@ -454,12 +527,17 @@ reales medidos aquí:
   `artifacts/perf-scene-live.json` — y conserva el log si falla. Los analizadores se
   verifican sin editor con `bash scripts/perf-scene.sh --selftest`; los 6 pines, con
   `scripts/check-*.sh`, y los MonoBehaviours, con `bash scripts/check-unity-compile.sh`.
-- **El criterio de la fase se mide con un comando**: `bash scripts/player-perf.sh`
+- **El criterio de la fase se mide con dos comandos**: `bash scripts/player-perf.sh`
   (build + sonda del player + puerta de píxeles; informe `artifacts/perf-player.json`,
-  y `--skip-build` para reusar el build y `--selftest` para verificar el analizador sin
-  Unity). Sale **7** si el vsync del proyecto está apagado: sin vsync, esa corrida mide
-  coste y no refresco presentado, y darle el número por bueno sería el error que el
-  script existe para no cometer.
+  y `--skip-build` para reusar el build, `--selftest` para verificar el analizador sin
+  Unity y `--log` para reanalizar una corrida). Sale **7** si el vsync del proyecto está
+  apagado: sin vsync, esa corrida mide coste y no refresco presentado, y darle el número
+  por bueno sería el error que el script existe para no cometer.
+  `bash scripts/player-perf.sh --cpu` (informe `artifacts/perf-player-cpu.json`) es el
+  modo simétrico: apaga el vsync para medir el **coste**, y por eso allí el vsync
+  apagado es el requisito y sale **8** si no llegó a apagarse y **9** si el build no
+  trae tiempos de frame. Los dos informes son ficheros distintos a propósito: con un
+  solo nombre, la segunda corrida borraría la evidencia de la primera.
 - **El Play pass del editor ya no se puede conducir**: los bloques 3, 4 y 5 de
   `playpass-live.sh` necesitan `com.unity.pipeline`, que salió del manifest en la poda
   de paquetes (`unity command editor_status` responde «No Pipeline instance found»). La

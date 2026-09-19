@@ -163,6 +163,16 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    la poda— y la puerta medía con `AntMaterial` cuando el multi-visor pinta con `ColonyAntMaterials` (antPx=0 con 292
    hormigas dibujadas). La puerta es ahora UNA implementación pura (`FrameGate`) con 11 tests headless, compartida por
    el editor y el player. **512/512 tests · los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player.json`.
+   **F5.3 rodaja 3quater — HECHO (2026-09-19): el COSTE por frame dentro del build (5ª pieza del criterio).**
+   El framerate presentado lo pone la pantalla: con el vsync entregando al refresco, el coste del frame queda tapado.
+   `scripts/player-perf.sh --cpu` apaga el vsync, construye el player con los estadísticos de tiempos de frame
+   (`enableFrameTimingStats`, que `PlayerBuild` enciende sólo para esa corrida y restaura al terminar) y la sonda
+   cronometra el `FrameTimingManager` frame a frame. Medido con el mismo build y el mismo régimen que §4.7 (4 vistas ×
+   2 colonias, grid 256, boost ×10, 292 hormigas + 684 ítems, tick 12 000): **1,294 ms de CPU por frame** (hilo
+   principal 1,272 · hilo de render 0,277 · espera en Present 0,003) y **0,127 ms de GPU**, con **683,7 fps de techo sin
+   vsync** (1,463 ms/frame producidos) = **7,8 % del presupuesto de 60 fps** y ×12,9 de margen; puerta de píxeles verde
+   en las 4 vistas. El resumen es un modelo PURO (`FrameCost`, sin UnityEngine) con **12 tests headless**. **524/524
+   tests · los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player-cpu.json`.
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome` —del editor, ya guardado—,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de

@@ -285,6 +285,12 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   comportamiento neutro (`IsDragHovering => false`) para que la vista no cambie.
   El build se comprueba con `bash scripts/player-perf.sh` (construye el player) o
   `bash scripts/check-unity-compile.sh` (compilación en batch, más rápida).
+- **Medir el COSTE por frame del build necesita `enableFrameTimingStats`.** Con el
+  vsync entregando al refresco, el coste del frame queda tapado (60 fps es el techo
+  del monitor): `bash scripts/player-perf.sh --cpu` construye con ese ajuste
+  encendido —`PlayerBuild` lo **restaura** al terminar, para no dejar
+  `ProjectSettings` cambiado— y corre el player con el vsync apagado, de donde sale
+  el `FrameTimingManager` (`docs/fase5-3-escala.md` §4.8).
 
 Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
 juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La
