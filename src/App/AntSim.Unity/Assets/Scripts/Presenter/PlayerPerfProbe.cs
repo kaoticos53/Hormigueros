@@ -39,6 +39,14 @@ namespace AntSim.Unity.Scripts.Presenter
     ///                             El vsync DEL PROYECTO se registra aparte
     ///                             (`projectVSyncCount`): la corrida lo apaga, y eso
     ///                             no debe leerse como que el proyecto lo tenía así.
+    ///   -antsimPerfSystem &lt;1|0&gt;  añade la pata del CLI: el coste del SISTEMA
+    ///                             COMPLETO (6ª pieza del criterio). Implica lo del
+    ///                             modo coste (sin vsync) y suma, ventana a ventana,
+    ///                             la CPU del proceso hijo y los ticks que simuló. El
+    ///                             horizonte tiene que dar para que el CLI siga
+    ///                             simulando TODA la ventana (`ANTSIM_PERF_TICKS`):
+    ///                             con el mundo terminado lo medido sería un player
+    ///                             solo con otro nombre.
     ///
     /// NO HAY CAPTURA PNG. `ScreenCapture` vive en el módulo `Screen Capture`, que
     /// este proyecto NO tiene en el manifest a propósito, y pedirlo rompería la
@@ -49,9 +57,10 @@ namespace AntSim.Unity.Scripts.Presenter
     /// Salida: 0 si MIDIÓ y la puerta de píxeles pasó en todas las vistas; 1 si
     /// midió pero la puerta suspende (o el montaje está muerto); 2 si no hubo ni
     /// una muestra; 3 en modo coste si el FrameTimingManager no entregó ni un
-    /// tiempo de frame (sin eso no hay coste, solo framerate). Un verde sobre una
-    /// escena sin hormigas sería el peor resultado posible, así que ese caso es un
-    /// suspenso explícito.
+    /// tiempo de frame (sin eso no hay coste, solo framerate); 10 en modo sistema si
+    /// el CLI no estuvo simulando dentro de la ventana (sin su pata no hay coste del
+    /// sistema). Un verde sobre una escena sin hormigas sería el peor resultado
+    /// posible, así que ese caso es un suspenso explícito.
     /// </summary>
     public sealed class PlayerPerfProbe : MonoBehaviour
     {
@@ -62,6 +71,7 @@ namespace AntSim.Unity.Scripts.Presenter
         private float _warmup = 12f;
         private float _boost = 10f;
         private bool _noVsync;
+        private bool _system;
         private int _projectVSync;
 
         // Tiempos del FrameTimingManager de la ventana en curso. Los ceros significan
@@ -98,14 +108,22 @@ namespace AntSim.Unity.Scripts.Presenter
             public readonly FrameTimingSample Timing;
             public readonly long WindowFrames;
             public readonly uint SyncInterval;
+            /// <summary>CPU acumulada de los CLI de todas las vistas (ms) en el
+            /// instante de esta muestra (F5.3, coste del SISTEMA).</summary>
+            public readonly double CliCpuMs;
+            /// <summary>Ticks simulados acumulados de todas las vistas: la SUMA, no
+            /// el máximo — cada vista simula su mundo y el CLI de cada una gasta lo
+            /// suyo, así que el trabajo total del sistema es la suma.</summary>
+            public readonly ulong TickSum;
 
             public Sample(float seconds, double fps, int drawCalls, int instanced, int fallback,
                 int ants, int items, ulong tick, bool focused, FrameTimingSample timing,
-                long windowFrames, uint syncInterval)
+                long windowFrames, uint syncInterval, double cliCpuMs, ulong tickSum)
             {
                 Seconds = seconds; Fps = fps; DrawCalls = drawCalls; Instanced = instanced;
                 Fallback = fallback; Ants = ants; Items = items; Tick = tick; Focused = focused;
                 Timing = timing; WindowFrames = windowFrames; SyncInterval = syncInterval;
+                CliCpuMs = cliCpuMs; TickSum = tickSum;
             }
         }
 
@@ -132,10 +150,12 @@ namespace AntSim.Unity.Scripts.Presenter
                 ArgFloat(args, "-antsimPerfSeconds", 30f),
                 ArgFloat(args, "-antsimPerfWarmup", 12f),
                 ArgFloat(args, "-antsimPerfBoost", 10f),
-                ArgFloat(args, "-antsimPerfNoVsync", 0f) >= 0.5f);
+                ArgFloat(args, "-antsimPerfNoVsync", 0f) >= 0.5f,
+                ArgFloat(args, "-antsimPerfSystem", 0f) >= 0.5f);
         }
 
-        private void Configure(string outPath, float seconds, float warmup, float boost, bool noVsync)
+        private void Configure(string outPath, float seconds, float warmup, float boost,
+            bool noVsync, bool system)
         {
             // El cwd de un player es su carpeta de build: el informe (y el pool y el
             // CLI) se anclan al repo root, que en un build dentro del repo se
@@ -150,7 +170,12 @@ namespace AntSim.Unity.Scripts.Presenter
             // para medir coste, el informe tiene que decir cuál era el del proyecto
             // (si no, la corrida de coste parecería un proyecto mal configurado).
             _projectVSync = QualitySettings.vSyncCount;
-            _noVsync = noVsync;
+            // El coste del SISTEMA se mide por fuerza sin vsync: con el vsync puesto
+            // el frame lo cierra la pantalla y el `cpuFrameTime` del player se llena
+            // de espera, así que sumarle la pata del CLI daría un número que no es
+            // trabajo de nadie.
+            _noVsync = noVsync || system;
+            _system = system;
             if (_noVsync)
             {
                 QualitySettings.vSyncCount = 0;
@@ -211,7 +236,8 @@ namespace AntSim.Unity.Scripts.Presenter
         private void TakeSample(float seconds, float now)
         {
             int drawCalls = 0, instanced = 0, fallback = 0, ants = 0, items = 0;
-            ulong tick = 0;
+            ulong tick = 0, tickSum = 0;
+            double cliCpuMs = 0.0;
             foreach (var p in Presenters())
             {
                 drawCalls += p.LastDrawCalls;
@@ -221,6 +247,11 @@ namespace AntSim.Unity.Scripts.Presenter
                 if (state != null) { ants += state.Ants.Count; items += state.Items.Count; }
                 ulong t = p.Presenter?.CurrentTick?.Tick ?? 0;
                 if (t > tick) tick = t;
+                tickSum += t;
+                // La pata del CLI se lee en el MISMO instante que el coste del frame:
+                // emparejar ventanas de procesos distintos es lo único que hace
+                // comparable el número del sistema.
+                cliCpuMs += p.CliCpuMs;
             }
             double dt = now - _lastSampleAt;
             long windowFrames = _frames - _lastSampleFrames;
@@ -230,7 +261,8 @@ namespace AntSim.Unity.Scripts.Presenter
                 FrameCost.Median(_renderMs), FrameCost.Median(_waitMs),
                 FrameCost.Median(_gpuMs));
             _samples.Add(new Sample(seconds, fps, drawCalls, instanced, fallback, ants, items,
-                tick, Application.isFocused, timing, windowFrames, _lastSyncInterval));
+                tick, Application.isFocused, timing, windowFrames, _lastSyncInterval,
+                cliCpuMs, tickSum));
             _cpuMs.Clear(); _mainMs.Clear(); _renderMs.Clear(); _waitMs.Clear(); _gpuMs.Clear();
             _lastSampleAt = now;
             _lastSampleFrames = _frames;
@@ -277,6 +309,50 @@ namespace AntSim.Unity.Scripts.Presenter
             }
             var cost = FrameCost.Summarize(windows);
 
+            // ── El coste del SISTEMA COMPLETO (F5.3, 6ª pieza) ──────────────────
+            //    El frame del player MÁS la simulación del CLI. Las dos patas se leen
+            //    en el mismo instante de muestreo, pero OCURREN en fases distintas
+            //    (el CLI simula y luego el player reproduce): el modelo se queda con
+            //    cada una en las ventanas donde pasa, y declara el solape.
+            //    El régimen al que se proyecta es el del JUEGO: los ticks que el
+            //    reloj de simulación pide por frame a la frecuencia objetivo (el
+            //    número sale del propio presenter, no de una constante inventada).
+            var systemWindows = new List<SystemWindow>();
+            for (int i = 1; i < _samples.Count; i++)
+            {
+                var prev = _samples[i - 1];
+                var cur = _samples[i];
+                double winSeconds = cur.WindowFrames > 0 && cur.Fps > 0 ? cur.WindowFrames / cur.Fps : 0.0;
+                double cliDelta = cur.CliCpuMs - prev.CliCpuMs;
+                long tickDelta = cur.TickSum >= prev.TickSum ? (long)(cur.TickSum - prev.TickSum) : 0L;
+                systemWindows.Add(new SystemWindow(winSeconds, cur.WindowFrames,
+                    cur.Timing.CpuMs, Math.Max(0.0, cliDelta), tickDelta, cur.Ants > 0));
+            }
+
+            // La pata del mundo, por AGREGADO: toda la CPU de los CLI y todos los
+            // ticks que simularon. La CPU del hijo se gasta antes de que los ticks
+            // lleguen (el stream sale en ráfaga al final), así que emparejarlos
+            // ventana a ventana daba 0,016 ms/tick en vez de 0,2 (medido).
+            double cliCpuTotal = 0.0, ticksPerPresentedFrame = 0.0;
+            long cliTicksTotal = 0;
+            bool cliCompleted = true;
+            foreach (var p in Presenters())
+            {
+                cliCpuTotal += p.CliCpuMs;
+                ulong tick = p.Presenter?.CurrentTick?.Tick ?? 0;
+                cliTicksTotal += (long)tick;
+                // Terminado = el hilo del stream acabó (el CLI salió) Y entregó su
+                // horizonte entero. Con la mitad del mundo simulado, la CPU es
+                // parcial y el precio por tick no vale.
+                if (p.IsStreaming) cliCompleted = false;
+                if (tick < (ulong)Math.Max(0, p.Ticks)) cliCompleted = false;
+                // Ticks que avanza UN frame sumando todas las vistas: el reloj de
+                // cada presenter al repartirlo entre los frames del objetivo.
+                ticksPerPresentedFrame += (double)p.ClockTicksPerSecond / FrameCost.DefaultTargetFps;
+            }
+            var system = FrameCost.SummarizeSystem(systemWindows, cliCpuTotal, cliTicksTotal,
+                ticksPerPresentedFrame, cliCompleted);
+
             var gates = GateViews();
             bool gateOk = gates.Count > 0;
             foreach (var g in gates) if (!g.Result.Ok) gateOk = false;
@@ -289,6 +365,8 @@ namespace AntSim.Unity.Scripts.Presenter
                       $"frames={_frames} · tick final={last.Tick}");
             if (_noVsync)
                 Debug.Log($"{Tag} coste/frame: {FrameCost.Describe(cost)}");
+            if (_system)
+                Debug.Log($"{Tag} coste/SISTEMA: {FrameCost.DescribeSystem(system)}");
             Debug.Log($"{Tag} draw calls={last.DrawCalls} (instanciadas={last.Instanced}, respaldo={last.Fallback}) · " +
                       $"carga final={last.Ants} hormigas y {last.Items} ítems");
             foreach (var g in gates)
@@ -297,7 +375,7 @@ namespace AntSim.Unity.Scripts.Presenter
                 if (g.Mosaic.Length > 0) Debug.Log($"{Tag} mosaico vista {g.Index}: {g.Mosaic}");
             }
 
-            WriteJson(median, worst, best, last, gates, gateOk, refresh, cost);
+            WriteJson(median, worst, best, last, gates, gateOk, refresh, cost, system);
 
             if (_samples.Count == 0)
             {
@@ -324,6 +402,16 @@ namespace AntSim.Unity.Scripts.Presenter
                           "FrameTimingManager — falta enableFrameTimingStats en el build");
                 return 3;
             }
+            // El coste del SISTEMA solo es del sistema si el CLI estaba simulando
+            // dentro de la ventana: con el mundo terminado lo medido es un player
+            // solo, y publicarlo como «sistema» sería el error que esta pieza evita.
+            if (_system && !system.Measured)
+            {
+                Debug.Log($"{Tag} ✗ MODO SISTEMA INCOMPLETO: {system.LoadedWindows} ventanas con el mundo en " +
+                          $"pantalla de {system.Windows} (mínimo {FrameCost.MinimumWindowsForALeg}), CLI terminado " +
+                          $"dentro de la corrida={system.CliCompleted}, cliMsPerTick={system.CliMsPerTick:0.###}");
+                return 10;
+            }
             if (_noVsync)
             {
                 if (!cost.Fits)
@@ -333,6 +421,13 @@ namespace AntSim.Unity.Scripts.Presenter
                     return 1;
                 }
                 Debug.Log($"{Tag} ✓ coste medido: {FrameCost.Describe(cost)}");
+                if (_system && !system.PlayerFits)
+                {
+                    Debug.Log($"{Tag} ✗ la pata del PLAYER del sistema NO cabe en " +
+                              $"{system.BudgetMs:0.#} ms: {FrameCost.DescribeSystem(system)}");
+                    return 1;
+                }
+                if (_system) Debug.Log($"{Tag} ✓ coste del sistema medido: {FrameCost.DescribeSystem(system)}");
                 return 0;
             }
             Debug.Log($"{Tag} ✓ medido: {last.Ants} hormigas, {last.DrawCalls} draw calls, " +
@@ -548,14 +643,16 @@ namespace AntSim.Unity.Scripts.Presenter
         }
 
         private void WriteJson(double median, double worst, double best, Sample last,
-            List<ViewGate> gates, bool gateOk, float refresh, FrameCostSummary cost)
+            List<ViewGate> gates, bool gateOk, float refresh, FrameCostSummary cost,
+            SystemCostSummary system)
         {
             try
             {
                 var sb = new StringBuilder();
                 sb.Append("{\n");
                 sb.Append("  \"probe\": \"player-perf\",\n");
-                sb.Append("  \"mode\": \"").Append(_noVsync ? "player-cpu" : "player").Append("\",\n");
+                sb.Append("  \"mode\": \"")
+                  .Append(_system ? "player-system" : _noVsync ? "player-cpu" : "player").Append("\",\n");
                 sb.Append("  \"unityVersion\": \"").Append(Application.unityVersion).Append("\",\n");
                 sb.Append("  \"vSyncCount\": ").Append(QualitySettings.vSyncCount).Append(",\n");
                 sb.Append("  \"projectVSyncCount\": ").Append(_projectVSync).Append(",\n");
@@ -597,6 +694,40 @@ namespace AntSim.Unity.Scripts.Presenter
                 sb.Append("  \"costFits\": ").Append(cost.Fits ? "true" : "false").Append(",\n");
                 sb.Append("  \"bottleneck\": \"").Append(FrameCost.Name(cost.Bottleneck)).Append("\",\n");
                 sb.Append("  \"costVerdict\": \"").Append(cost.Verdict).Append("\",\n");
+                // ── El SISTEMA COMPLETO (player + CLI) — 6ª pieza del criterio ──
+                sb.Append("  \"cliCpuMsTotal\": ").Append(F(system.CliCpuMsTotal)).Append(",\n");
+                sb.Append("  \"cliTicksTotal\": ").Append(system.CliTicks).Append(",\n");
+                sb.Append("  \"cliCompleted\": ").Append(system.CliCompleted ? "true" : "false").Append(",\n");
+                // La CPU de cada CLI por separado: si un proceso no se dejó
+                // cronometrar, la suma taparía su cero y el precio por tick saldría
+                // barato sin que nadie lo notara.
+                sb.Append("  \"cliCpuMsViews\": [");
+                var views = Presenters();
+                for (int i = 0; i < views.Length; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    sb.Append(F(views[i].CliCpuMs));
+                }
+                sb.Append("],\n");
+                sb.Append("  \"ticksTotal\": ").Append(last.TickSum).Append(",\n");
+                sb.Append("  \"systemPlayerFits\": ").Append(system.PlayerFits ? "true" : "false").Append(",\n");
+                sb.Append("  \"systemCores\": ").Append(F(system.SystemCores)).Append(",\n");
+                sb.Append("  \"systemWindows\": ").Append(system.Windows).Append(",\n");
+                sb.Append("  \"systemSimWindows\": ").Append(system.SimulatedWindows).Append(",\n");
+                sb.Append("  \"systemLoadedWindows\": ").Append(system.LoadedWindows).Append(",\n");
+                sb.Append("  \"systemOverlapWindows\": ").Append(system.OverlapWindows).Append(",\n");
+                sb.Append("  \"cliMsPerTick\": ").Append(F(system.CliMsPerTick)).Append(",\n");
+                sb.Append("  \"cliMsPerFrame\": ").Append(F(system.CliMsPerFrame)).Append(",\n");
+                sb.Append("  \"systemMsPerFrame\": ").Append(F(system.SystemMsPerFrame)).Append(",\n");
+                sb.Append("  \"systemPlayerMsPerFrame\": ").Append(F(system.PlayerMsPerFrame)).Append(",\n");
+                sb.Append("  \"systemCliShare\": ").Append(F(system.CliShareOfSystem)).Append(",\n");
+                sb.Append("  \"systemAggregateMsPerFrame\": ").Append(F(system.AggregateMsPerFrame)).Append(",\n");
+                sb.Append("  \"ticksPerPresentedFrame\": ").Append(F(system.TicksPerPresentedFrame)).Append(",\n");
+                sb.Append("  \"systemFractionOfBudget\": ").Append(F(system.SystemFractionOfBudget)).Append(",\n");
+                sb.Append("  \"systemPlayerFractionOfBudget\": ").Append(F(system.PlayerFractionOfBudget)).Append(",\n");
+                sb.Append("  \"systemPlayerHeadroom\": ").Append(F(system.PlayerHeadroom)).Append(",\n");
+                sb.Append("  \"systemMeasured\": ").Append(system.Measured ? "true" : "false").Append(",\n");
+                sb.Append("  \"systemVerdict\": \"").Append(system.Verdict).Append("\",\n");
                 sb.Append("  \"drawCalls\": ").Append(last.DrawCalls).Append(",\n");
                 sb.Append("  \"instancedCalls\": ").Append(last.Instanced).Append(",\n");
                 sb.Append("  \"fallbackCalls\": ").Append(last.Fallback).Append(",\n");
@@ -634,6 +765,8 @@ namespace AntSim.Unity.Scripts.Presenter
                       .Append(", \"ants\": ").Append(s.Ants)
                       .Append(", \"tick\": ").Append(s.Tick)
                       .Append(", \"cpuMs\": ").Append(F(s.Timing.CpuMs))
+                      .Append(", \"cliCpuMs\": ").Append(F(s.CliCpuMs))
+                      .Append(", \"tickSum\": ").Append(s.TickSum)
                       .Append(", \"gpuMs\": ").Append(F(s.Timing.GpuMs))
                       .Append(", \"focused\": ").Append(s.Focused ? "true" : "false").Append('}');
                 }
