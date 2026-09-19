@@ -49,8 +49,14 @@ además mal para una licencia Personal (`unity license activate --personal` no
 sirve en CI: el backend rechaza los tokens de cuenta de servicio), le
 faltaban las librerías de runtime del editor y el `--yes --accept-eula` del
 instalador. Los tres defectos se corrigieron contra el andamiaje oficial de
-Unity (`unity ci init --dry-run`); mientras siga dormido, un `error CS` de
-MonoBehaviour solo lo caza la pasada local.
+Unity (`unity ci init --dry-run`). Desde el 2026-09-19 tiene además
+**disparador manual** (`workflow_dispatch`, input `unity`): `cache` ejercita
+SOLO el paso de `actions/cache@v5` —lo que se quería comprobar del salto a v5
+sin encender nada permanente— en segundos y sin licencia, con clave de sonda
+para no ocupar la real; `full` levanta el job entero en una sola pasada (y es
+lo único que necesita el secreto de licencia). Mientras siga dormido en push,
+un `error CS` de MonoBehaviour solo lo caza la pasada local o un `unity=full`
+a mano.
 
 **NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
 innovation), paridad bit a bit con MLP (`FromMlp`), operadores

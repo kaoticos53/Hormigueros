@@ -443,7 +443,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | abierto: RLE funciona para render y la huella CHC ya añadió una capa; el LOD de difusión es la rodaja 3 de F5.3 |
 | NEAT estanca la evolución | mitigado: topología de respaldo + especiation medida en el pool (`.antgenome` v2, v0.7.0) |
-| `error CS` de MonoBehaviours | abierto: el job `unity-compile` está corregido pero DORMIDO (necesita `UNITY_CI` + licencia); hoy solo lo caza la pasada local |
+| `error CS` de MonoBehaviours | abierto: el job `unity-compile` está corregido pero DORMIDO en push (necesita `UNITY_CI` + licencia); se puede levantar a mano con `workflow_dispatch` (`unity: full` compila, `unity: cache` ejercita solo el paso del caché), y hoy solo lo caza la pasada local |
 
 ## 7. Qué NO es Fase 5
 

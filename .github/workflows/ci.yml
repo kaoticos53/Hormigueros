@@ -5,6 +5,45 @@ on:
     branches: [master]
   pull_request:
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # DISPARADOR MANUAL (Actions → CI → «Run workflow»). Existe por el job
+  # `unity-compile`, que está dormido en push: así se puede ejercitar UNA vez
+  # —y en particular el paso del caché de descargas del editor— sin encender
+  # `UNITY_CI` para todos los pushes.
+  #
+  # El input `unity` elige el ALCANCE:
+  #
+  #   none   (por defecto) → solo corre el job `test`, igual que un push.
+  #   cache  → corre SOLO el paso del caché `actions/cache@v5` (más un mkdir
+  #            del directorio que va a cachear). Segundos, sin licencia y sin
+  #            descargar el editor: es la prueba de que el paso del caché
+  #            funciona en el runner. Usa una clave de SONDA (ver el paso).
+  #   full   → el job COMPLETO: instala el CLI y ~5 GB de editor, activa
+  #            licencia, compila en batch y devuelve la licencia. Necesita los
+  #            secretos de licencia (ver el comentario del job); sin ellos falla
+  #            en 2 s a propósito, antes de descargar nada.
+  #
+  # Los valores NO son `off`/`on`: en YAML 1.1 esos son booleanos y hay
+  # parsers (no el de Actions, pero sí otros) que los convierten, con lo que la
+  # opción dejaría de ser la cadena que compara el `if` del job. `none` no es
+  # ambiguo en ningún dialecto.
+  #
+  # CÓMO SE LANZA:
+  #   UI   → Actions → CI → «Run workflow» → elegir `unity` → Run workflow
+  #   CLI  → gh workflow run ci.yml -f unity=cache
+  #   API  → POST /repos/{owner}/{repo}/actions/workflows/ci.yml/dispatches
+  #          con {"ref":"master","inputs":{"unity":"cache"}}
+  workflow_dispatch:
+    inputs:
+      unity:
+        description: 'Alcance del job de Unity: none (nada), cache (solo el caché) o full (compila)'
+        type: choice
+        options:
+          - none
+          - cache
+          - full
+        default: none
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -106,10 +145,20 @@ jobs:
   # Este job los compila en batch y falla con el primer error.
   #
   # DORMIDO por defecto (`UNITY_CI`): descargar Unity en cada push es caro y
-  # necesita licencia. Para activarlo hacen falta DOS cosas en
-  # Settings → Secrets and variables → Actions:
+  # necesita licencia. Se puede levantar de DOS maneras:
   #
-  #   1. Variable  UNITY_CI = true
+  #   a) A MANO, en una sola pasada: Actions → CI → «Run workflow» con
+  #      `unity: full` (o `gh workflow run ci.yml -f unity=full`); con
+  #      `unity: cache` se ejercita SOLO el paso del caché, en segundos y sin
+  #      licencia. El disparador manual NO sustituye a `UNITY_CI`: no hay
+  #      puerta en cada push, solo cuando alguien lo pide.
+  #   b) PERMANENTE: la variable `UNITY_CI = true` (más los secretos de abajo)
+  #      y entonces el job corre en cada push y PR — siempre con alcance full.
+  #
+  # La licencia (punto 2) la necesitan SOLO los runs de alcance `full`.
+  # Hacen falta DOS cosas en Settings → Secrets and variables → Actions:
+  #
+  #   1. Variable  UNITY_CI = true   (solo para la vía b)
   #   2. UN secreto de licencia, según el tipo de licencia:
   #
   #      Personal (gratuita) → UNITY_LICENSE_FILE_BASE64
@@ -137,7 +186,14 @@ jobs:
   # filtrar activaciones en runners efímeros.
   # ───────────────────────────────────────────────────────────────────────────
   unity-compile:
-    if: vars.UNITY_CI == 'true'
+    # Las dos puertas: permanente por variable, o UNA vez por dispatch manual.
+    # `inputs.unity` es un `choice`, así que llega como CADENA y la comparación
+    # es la obvia; con un input `boolean` habría que comparar contra `true`
+    # porque en `github.event.inputs` los booleanos son 'true'/'false' como
+    # cadenas (donde `'false'` es verdadero si uno se descuida).
+    if: >-
+      vars.UNITY_CI == 'true'
+      || (github.event_name == 'workflow_dispatch' && inputs.unity != 'none')
     runs-on: ubuntu-latest
     env:
       # El CLI lo lee del entorno: sin esto, cualquier comando que quiera
@@ -145,12 +201,39 @@ jobs:
       UNITY_NON_INTERACTIVE: '1'
       # Anotaciones de GitHub en el resumen del run en vez de solo en el log.
       UNITY_FORMAT: github
+      # ALCANCE: `full` compila el proyecto entero; `cache` corre solo el paso
+      # del caché. En push y PR el input no existe y el alcance es full.
+      UNITY_SCOPE: ${{ inputs.unity || 'full' }}
     steps:
       - uses: actions/checkout@v5
 
+      # QUÉ VA A HACER ESTE RUN, escrito también en el resumen del run: el
+      # mismo job tiene dos alcances y conviene no confundir un verde del paso
+      # del caché con una compilación verificada.
+      - name: Anunciar el alcance del job
+        run: |
+          if [[ "$UNITY_SCOPE" == "full" ]]; then
+            echo "alcance: full — instala el editor, activa licencia y compila"
+          else
+            echo "alcance: cache — solo el paso del caché (ni licencia ni editor)"
+          fi
+          echo "origen del evento: ${{ github.event_name }}"
+          {
+            echo "## Job de Unity — alcance $UNITY_SCOPE"
+            echo
+            echo "- origen del evento: ${{ github.event_name }}"
+            echo "- variable UNITY_CI: '${{ vars.UNITY_CI }}'"
+            echo
+            if [[ "$UNITY_SCOPE" != "full" ]]; then
+              echo "Este run NO compila el proyecto: solo ejercita el paso del caché."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Antes de descargar ~5 GB de editor: ¿hay con qué activarlo? Un secreto
-      # que falta debe costar 2 segundos, no 10 minutos.
+      # que falta debe costar 2 segundos, no 10 minutos. Solo en alcance full:
+      # el modo `cache` no activa nada y no puede pedir licencia.
       - name: Comprobar los requisitos de activación
+        if: env.UNITY_SCOPE == 'full'
         env:
           UNITY_LICENSE_SERIAL: ${{ secrets.UNITY_LICENSE_SERIAL }}
           UNITY_LICENSE_FILE_BASE64: ${{ secrets.UNITY_LICENSE_FILE_BASE64 }}
@@ -175,6 +258,7 @@ jobs:
           exit 1
 
       - name: Instalar el Unity CLI
+        if: env.UNITY_SCOPE == 'full'
         run: |
           curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh \
             | UNITY_CLI_CHANNEL=beta bash
@@ -188,13 +272,27 @@ jobs:
       # salto es la versión de Node. Se sube aquí también porque este job, hoy
       # saltado por `UNITY_CI`, es el único que quedaría emitiendo el aviso de
       # Node 20 el día que se active.
+      #
+      # ESTE es el paso que el disparador manual existe para poder ejercitar
+      # (`unity: cache`) sin encender `UNITY_CI`, y es el MISMO `uses:` con el
+      # MISMO `path`. La única diferencia en ese modo es la CLAVE: una de sonda.
+      # Guardar la caché real cuando el directorio está vacío (ningún editor
+      # descargado todavía) la dejaría ocupada — el servicio no permite
+      # sobrescribir una clave existente — y el siguiente run completo
+      # restauraría «con éxito» una caché sin nada dentro. La sonda ejercita el
+      # runtime, el `with:` y la API round-trip sin tocar la clave de verdad.
+      - name: Preparar el directorio de descargas (alcance cache)
+        if: env.UNITY_SCOPE != 'full'
+        run: mkdir -p ~/.config/unityhub/downloads
+
       - name: Restaurar la caché de descargas del editor
         uses: actions/cache@v5
         with:
           path: ~/.config/unityhub/downloads
-          key: unity-downloads-6000.6.0f1
+          key: ${{ env.UNITY_SCOPE == 'full' && 'unity-downloads-6000.6.0f1' || 'unity-downloads-sonda-v5' }}
 
       - name: Instalar la versión de Unity fijada por el proyecto
+        if: env.UNITY_SCOPE == 'full'
         run: |
           VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
             src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
@@ -206,6 +304,7 @@ jobs:
       # un veredicto vacío. Nombres de Ubuntu 24.04 (noble), que es lo que
       # corresponde a `runs-on: ubuntu-latest`.
       - name: Instalar las librerías de runtime del editor
+        if: env.UNITY_SCOPE == 'full'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -219,6 +318,7 @@ jobs:
             libsecret-1-0
 
       - name: Activar la licencia
+        if: env.UNITY_SCOPE == 'full'
         env:
           UNITY_LICENSE_SERIAL: ${{ secrets.UNITY_LICENSE_SERIAL }}
           UNITY_LICENSE_FILE_BASE64: ${{ secrets.UNITY_LICENSE_FILE_BASE64 }}
@@ -237,9 +337,11 @@ jobs:
       # licencia activable, editor ausente, disco corto, servicios inalcanzables)
       # en vez de a mitad de la compilación.
       - name: Preflight
+        if: env.UNITY_SCOPE == 'full'
         run: unity doctor --ci
 
       - name: Localizar el editor instalado
+        if: env.UNITY_SCOPE == 'full'
         run: |
           VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
             src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
@@ -254,10 +356,12 @@ jobs:
           echo "UNITY_EDITOR_BIN=$EDITOR" >> "$GITHUB_ENV"
 
       - name: Compilar el proyecto Unity en batch (falla con cualquier error CS)
+        if: env.UNITY_SCOPE == 'full'
         run: bash scripts/check-unity-compile.sh --unity "$UNITY_EDITOR_BIN"
 
       # Devolver el asiento aunque el job falle o se cancele: en runners
       # efímeros, una activación filtrada por run acaba bloqueando la cuenta.
+      # En alcance `cache` no se activó nada, así que no hay qué devolver.
       - name: Devolver la licencia
-        if: always()
+        if: always() && env.UNITY_SCOPE == 'full'
         run: unity license return --yes || true

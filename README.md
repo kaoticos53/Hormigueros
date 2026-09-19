@@ -400,18 +400,47 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (463/463), incluido el pin del hash del stream canónico |
+| `dotnet test` | la suite headless (536/536), incluido el pin del hash del stream canónico |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
+| `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
+| `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
+| `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
+| `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
 | `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor |
 
-El job `unity-compile` está **dormido** hasta que existan la variable de
-repositorio `UNITY_CI = true` y el secreto `UNITY_LICENSE` (o `UNITY_SERIAL`):
-descargar Unity en cada push es caro y necesita licencia. El script sí corre en
-local — encuentra el editor del Hub por la versión fijada en
-`ProjectSettings/ProjectVersion.txt` (`--selftest` verifica su analizador, y
-`--log FICHERO` analiza un log ya generado).
+El job `unity-compile` está **dormido**: descargar Unity en cada push es caro y
+necesita licencia. Tiene dos puertas:
+
+- **a mano, UNA pasada** — `workflow_dispatch` (Actions → CI → «Run workflow»),
+  con el input `unity`:
+  - `unity: cache` → ejercita **solo el paso del caché** `actions/cache@v5`
+    (segundos, sin licencia y sin descargar el editor). Usa una clave de sonda
+    para no ocupar la clave real, que solo se toca en `full`.
+  - `unity: full` → el job completo: instala ~5 GB de editor, activa licencia,
+    compila y devuelve la licencia.
+  - `unity: none` (por defecto) → el dispatch corre solo el job `test`.
+- **permanente** — la variable de repositorio `UNITY_CI = true`: el job corre en
+  cada push y PR, siempre con alcance `full`.
+
+```bash
+gh workflow run ci.yml -f unity=cache   # ejercita el paso del caché (sin licencia)
+gh workflow run ci.yml -f unity=full    # compila el proyecto Unity entero
+```
+
+El alcance `full` (por cualquiera de las dos vías) necesita UN secreto de
+licencia en Settings → Secrets and variables → Actions:
+`UNITY_LICENSE_FILE_BASE64` (licencia Personal: base64 del
+`UnityEntitlementLicense.xml` de una máquina ya activada) o
+`UNITY_LICENSE_SERIAL` (Pro/Plus). Sin ninguno de los dos el run falla en ~2 s,
+a propósito, antes de descargar nada. El dispatch se ve desde `master`: hasta
+que esta versión del workflow no esté en la rama por defecto, ni el botón de la
+UI ni `gh workflow run` lo conocen.
+
+El script (`check-unity-compile.sh`) sí corre en local — encuentra el editor del
+Hub por la versión fijada en `ProjectSettings/ProjectVersion.txt` (`--selftest`
+verifica su analizador, y `--log FICHERO` analiza un log ya generado).
 
 El **Play pass** en el editor —lo único que valida los MonoBehaviours EN VIVO—
 también está cableado: `scripts/playpass-live.sh` conduce el editor abierto
