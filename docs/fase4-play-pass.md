@@ -305,7 +305,8 @@ el vsync y mide el **coste por frame** dentro del build (con el `FrameTimingMana
 que es el número que el vsync esconde; con `--system` añade la pata del CLI —la
 simulación, que corre en otro proceso— y publica el coste del SISTEMA COMPLETO
 (`docs/fase5-3-escala.md` §4.9). Y `bash scripts/system-sweep.sh` es el mismo medidor
-con **2, 4 y 8 colonias por vista**, que es lo que responde cuántas caben (§4.10).
+con **1, 2, 4 y 8 colonias por vista** (más el ajuste fijo/marginal), que es lo que responde
+cuántas caben (§4.10).
 
 ### Cómo reproducir el pass automático
 

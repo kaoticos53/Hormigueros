@@ -301,7 +301,9 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   bootstrapper (`CreateMultiSimPerfScene(grid, ticks, coloniesPerView)`), el build
   (`ANTSIM_PERF_COLONIES`) y el medidor (`--colonies N`) llevan el mismo número, y el
   informe del player publica `coloniesPerView` para que no haya que adivinarlo. El
-  barrido completo es `bash scripts/system-sweep.sh` (`docs/fase5-3-escala.md` §4.10).
+  barrido completo es `bash scripts/system-sweep.sh`, que mide **1, 2, 4 y 8** colonias por
+  vista, publica el ajuste (fijo/marginal) y reconstruye la tabla y el ajuste de los
+  informes ya guardados con `--reuse` (`docs/fase5-3-escala.md` §4.10).
 
 Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
 juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La

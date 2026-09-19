@@ -85,10 +85,11 @@ cumplido en un build de jugador**, con el coste por frame del build medido apart
 (**1,294 ms de CPU**, 7,8 % del presupuesto) y el coste del **sistema completo**
 (añadiendo la simulación del CLI, que corre en otro proceso): **0,201 ms/tick** →
 **2,485 núcleos** al reloj del juego, con la vista en 1,116 ms/frame. Y **cuánto juego
-cabe**: el barrido con 2, 4 y 8 colonias por vista da **2,427 · 3,433 · 5,254 núcleos**
-—doblar colonias no dobla el coste: hay ~0,122 ms/tick fijos y ~0,0097 por colonia—, así
-que los 2,5 núcleos del criterio son **8 colonias** y 32 colonias (1 075 hormigas en
-pantalla) siguen a 589 fps con la puerta de píxeles verde. Detalle:
+cabe**: el barrido con 1, 2, 4 y 8 colonias por vista da **1,927 · 2,496 · 3,443 · 5,285
+núcleos** —doblar colonias no dobla el coste: hay **0,1203 ms/tick fijos** y 0,00983 por
+colonia, y la curva por colonia (0,482 → 0,165) es la **amortización** de ese fijo
+(0,1187 + 1,507/n)—, así que los 2,5 núcleos del criterio son **8 colonias** y 32 colonias
+(1 075 hormigas en pantalla) siguen a 609 fps con la puerta de píxeles verde. Detalle:
 [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md) §4.7–§4.10.
 
 ### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
