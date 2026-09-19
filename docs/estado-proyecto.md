@@ -1,7 +1,8 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-19 · HEAD: `150c18c` + el coste del SISTEMA COMPLETO (working tree) ·
-suite: 536/536 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+*Actualizado: 2026-09-19 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
+suite: 536/536 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+`v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -26,7 +27,7 @@ vs scripted vs evolucionada en la misma arena).
 | **5.2b** | **Eciton: saqueo + combate** (sensor, botín, balance V6) | ✅ **CERRADO** `v0.6.0` | `fase5-2b-eciton.md` |
 | **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** `v0.7.0` | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** | ✅ `v0.6.1` | `arquitectura.md` §CI |
-| **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje, LOD + instancing** | ✅ **rodajas 1–3 HECHAS** (exit medido hasta el Core) | `fase5-3-escala.md` |
+| **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje, LOD + instancing** | ✅ **CERRADO** `v0.8.0` (exit medido en un build de jugador) | `fase5-3-escala.md` |
 | 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
 
 ## Lo que ya funciona (verificado, no prometido)
