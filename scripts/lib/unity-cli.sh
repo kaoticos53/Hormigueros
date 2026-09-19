@@ -27,6 +27,52 @@ find_unity_cli() {
   return 1
 }
 
+# El EDITOR de Unity (no el shim del Hub): es el binario que acepta
+# `-batchmode -executeMethod -projectPath`. Se busca la versión FIJADA por el
+# proyecto (ProjectSettings/ProjectVersion.txt) y, si no, la primera del Hub.
+# `$UNITY_EDITOR` / `$UNITY_PATH` / `--unity` mandan sobre la búsqueda.
+_ucli_prefer_exe() {
+  if [[ -f "$1.exe" ]]; then printf '%s\n' "$1.exe"; return 0; fi
+  if [[ -f "$1" ]]; then printf '%s\n' "$1"; return 0; fi
+  return 1
+}
+
+_ucli_pinned_version() {
+  local f="$1/ProjectSettings/ProjectVersion.txt"
+  [[ -n "$1" && -f "$f" ]] || return 0
+  sed -n 's/^m_EditorVersion: *//p' "$f" | tr -d '\r' | head -n 1
+}
+
+find_unity_editor() {
+  local project="${1:-}" bases=() b dir hit version
+
+  if [[ -n "${UNITY_EDITOR:-}" ]]; then printf '%s\n' "$UNITY_EDITOR"; return 0; fi
+  if [[ -n "${UNITY_PATH:-}" && -f "${UNITY_PATH}" ]]; then printf '%s\n' "$UNITY_PATH"; return 0; fi
+
+  for b in "${LOCALAPPDATA:-}" "${PROGRAMFILES:-}"; do
+    [[ -n "$b" ]] || continue
+    case "$b" in *\\*) command -v cygpath >/dev/null 2>&1 && b="$(cygpath -u "$b" 2>/dev/null || printf '%s' "$b")" ;; esac
+    bases+=("$b/Unity/Hub/Editor")
+  done
+  bases+=("$HOME/Unity/Hub/Editor" "/c/Program Files/Unity/Hub/Editor"
+          "/Applications/Unity/Hub/Editor" "/opt/unity/editors")
+
+  version="$(_ucli_pinned_version "$project")"
+  if [[ -n "$version" ]]; then
+    for dir in "${bases[@]}"; do
+      [[ -d "$dir/$version/Editor" ]] || continue
+      if hit="$(_ucli_prefer_exe "$dir/$version/Editor/Unity")"; then printf '%s\n' "$hit"; return 0; fi
+    done
+  fi
+  for dir in "${bases[@]}"; do
+    [[ -d "$dir" ]] || continue
+    for hit in "$dir"/*/Editor/Unity.exe "$dir"/*/Editor/Unity; do
+      [[ -f "$hit" ]] && { printf '%s\n' "$hit"; return 0; }
+    done
+  done
+  return 1
+}
+
 # El CLI de Unity espera rutas de Windows con barras normales (`E:/…`).
 winpath() {
   if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi
