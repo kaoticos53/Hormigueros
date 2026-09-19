@@ -274,6 +274,30 @@ jobs:
           # PATH de esta shell: se publica para los pasos siguientes.
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # LA VERSIÓN DEL PROYECTO, LEÍDA UNA VEZ. La clave de la caché de
+      # descargas cuelga de ella: el instalador guarda los archivos POR VERSIÓN,
+      # así que una clave escrita a mano (`unity-downloads-6000.6.0f1`) queda
+      # obsoleta en silencio el día que el proyecto suba de versión — el job
+      # restauraría «con éxito» la caché de la versión anterior y se comería la
+      # descarga entera sin que nadie se entere. Derivada del fichero que FIJA
+      # la versión, no puede desincronizarse: si el proyecto sube, la clave
+      # cambia sola.
+      #
+      # Corre en los DOS alcances (los dos usan la clave) y va ANTES de instalar
+      # el CLI a propósito: no depende de que `unity` exista, solo de leer un
+      # fichero del repo — el checkout ya pasó.
+      - name: Leer la versión de Unity del proyecto
+        id: unity-version
+        run: |
+          VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
+            src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::ProjectVersion.txt no tiene m_EditorVersion"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Unity del proyecto: $VERSION"
+
       # El instalador del editor guarda los archivos comprimidos: una caché aquí
       # ahorra la descarga entera en cada push.
       # v5 es el mismo caché con el runtime nuevo (Node 24): el único cambio del
@@ -297,13 +321,20 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.config/unityhub/downloads
-          key: ${{ env.UNITY_SCOPE == 'full' && 'unity-downloads-6000.6.0f1' || 'unity-downloads-sonda-v5' }}
+          # La clave: `unity-downloads-<versión del proyecto>` y, solo en
+          # alcance `cache`, el sufijo de sonda. El sufijo se elige con
+          # `cond && 'x' || ''` y no con `cond && '' || 'x'`: en expresiones de
+          # Actions `''` es FALSO, así que la forma invertida devolvería el
+          # sufijo justo cuando la condición es cierta.
+          key: unity-downloads-${{ steps.unity-version.outputs.version }}${{ env.UNITY_SCOPE != 'full' && '-sonda' || '' }}
 
       - name: Instalar la versión de Unity fijada por el proyecto
         if: env.UNITY_SCOPE == 'full'
         run: |
-          VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
-            src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
+          # Del output del paso de versión: ProjectVersion.txt se lee UNA vez en
+          # el job y los tres consumidores (clave del caché, este y el
+          # localizador del editor) usan el mismo valor.
+          VERSION="${{ steps.unity-version.outputs.version }}"
           echo "Instalando Unity $VERSION"
           unity install "$VERSION" --yes --accept-eula
 
@@ -351,8 +382,7 @@ jobs:
       - name: Localizar el editor instalado
         if: env.UNITY_SCOPE == 'full'
         run: |
-          VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
-            src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
+          VERSION="${{ steps.unity-version.outputs.version }}"
           BASE="$(unity --quiet install-path | tail -n 1)"
           EDITOR="$BASE/$VERSION/Editor/Unity"
           if [[ ! -x "$EDITOR" ]]; then
