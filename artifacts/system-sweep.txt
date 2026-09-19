@@ -1,0 +1,18 @@
+Barrido del precio del tick por COLONIAS POR VISTA (F5.3 §4.10)
+Montaje: 4 vistas · grid 256 · horizonte 12000 ticks · boost ×10 · vsync apagado
+Presupuesto de núcleos para «caben»: 28 (los de esta máquina si no se pasa --cores)
+
+colonias  ms/tick      mundo ms/fr    player ms/fr     núcleos    núcleos/colonia caben(=28)  
+2         0.1970       39.323         1.129            2.427       0.3034           92          
+4         0.2800       55.990         1.219            3.433       0.2146           130         
+8         0.4300       86.068         1.491            5.254       0.1642           171         
+
+Columnas: la pata del MUNDO (ms/tick, y esos ticks costeados a 200 ticks/frame),
+la pata de la VISTA (player ms/frame) y las dos juntas en núcleos al reloj del juego.
+«núcleos/colonia» = núcleos del sistema / (vistas × colonias) — es un coste agregado,
+repartible entre procesos: se compara con núcleos, no con la latencia de un frame.
+«caben» = los núcleos dados / núcleos por colonia, es decir cuántas colonias
+simultáneas caben en ese presupuesto al ritmo del juego (boost ×10).
+
+Informes crudos de cada punto: artifacts/system-c<N>.json
+Generado: 2026-09-19 16:28
