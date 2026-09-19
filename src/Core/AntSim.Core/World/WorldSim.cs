@@ -135,19 +135,28 @@ public sealed class WorldSim
     /// <summary>Celdas por lado del grid de feromonas.</summary>
     public int GridCells => _gridCells;
 
+    /// <summary>Lado del bloque del LOD de difusión con el que se construyeron las
+    /// capas de feromonas de este mundo (F5.3 rodaja 3bis). Es un parámetro de
+    /// construcción del mundo porque el bloque se fija en cada capa al crearla;
+    /// cambiarlo NO cambia ningún valor (el LOD es exacto), solo el trabajo.</summary>
+    public int LodBlockSize { get; }
+
     private readonly List<Colony> _colonies = new();
     private readonly List<FoodItem> _items = new();
 
     public WorldSim(ulong seed, int gridCells = 256, int colonyCount = 2,
         IReadOnlyList<SpeciesDescriptor>? species = null,
         bool cloneFromElite = false,
-        float leafFraction = 0f)
+        float leafFraction = 0f,
+        int lodBlockSize = PheromoneLayer.DefaultLodBlockSize)
     {
         if (gridCells < 16) throw new ArgumentOutOfRangeException(nameof(gridCells));
         if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
+        if (lodBlockSize < 1) throw new ArgumentOutOfRangeException(nameof(lodBlockSize));
 
         _seed = seed;
         _gridCells = gridCells;
+        LodBlockSize = lodBlockSize;
         WorldWidth = gridCells * SimConstants.CellSizeUnits;
         WorldHeight = gridCells * SimConstants.CellSizeUnits;
         _worldRng = new DeterministicRandom(seed);
@@ -190,10 +199,10 @@ public sealed class WorldSim
             Rng = _worldRng.Fork(0x9E3779B97F4A7C15UL + (ulong)id * 0xBF58476D1CE4E5B9UL),
             Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), BrainSizes,
                 cloneFromElite: cloneFromElite),
-            FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
-            HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
-            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells),
-            FootprintLayer = new PheromoneLayer(_gridCells, _gridCells), // F5.3: huella CHC
+            FoodLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
+            HomeLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
+            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
+            FootprintLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize), // F5.3: huella CHC
             ConsumeEma = 1.0f
         };
 
@@ -1152,10 +1161,10 @@ public sealed class WorldSim
             FungusMax = sp.FungusMax, // F5.2a.2: capacidad siempre de la especie
             Rng = rng,
             Pool = new GenomePool(rng.Fork(0xA5C3E7B9UL), BrainSizes, seedCount: 0),
-            FoodLayer = new PheromoneLayer(_gridCells, _gridCells),
-            HomeLayer = new PheromoneLayer(_gridCells, _gridCells),
-            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells),
-            FootprintLayer = new PheromoneLayer(_gridCells, _gridCells) // F5.3: huella CHC
+            FoodLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
+            HomeLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
+            AlarmLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
+            FootprintLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize) // F5.3: huella CHC
         };
         _colonies.Add(colony);
         return colony;
