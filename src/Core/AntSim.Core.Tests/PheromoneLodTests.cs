@@ -246,4 +246,159 @@ public class PheromoneLodTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    // ── El TAMAÑO de bloque (F5.3 rodaja 3bis) ─────────────────────────────────
+    //
+    // El bloque no es un parámetro de calidad: es de COSTE. Eso son dos
+    // afirmaciones, y cada una tiene su test aquí abajo:
+    //
+    //   1. cambiarlo NO mueve ni una celda del mundo (sigue siendo exacto, con
+    //      cualquier lado — incluidos los que no dividen el grid);
+    //   2. más fino visita MENOS celdas y ESCANEA MÁS contadores: el equilibrio
+    //      que el barrido `--lod-blocks` publica, aquí fijado como dirección
+    //      (si un cambio invirtiera el ahorro, esto lo dice).
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]   // no divide el lado: ejercita el recorte de los bloques de borde
+    [InlineData(4)]
+    [InlineData(8)]
+    [InlineData(16)]
+    [InlineData(32)]
+    [InlineData(64)]
+    [InlineData(96)]
+    public void Lod_EsBitExactoConCualquierTamanoDeBloque(int bloque)
+    {
+        const int w = 96, h = 96;
+        var lod = new PheromoneLayer(w, h, lodBlockSize: bloque);
+        var referencia = new PheromoneLayer(w, h, lodBlockSize: bloque) { LodEnabled = false };
+        var rng = new Lcg(20260918UL + (ulong)bloque);
+
+        int[] focosX = { 20, 70, 48 };
+        int[] focosY = { 48, 24, 80 };
+
+        for (int paso = 0; paso < 150; paso++)
+        {
+            int op = rng.Next(10);
+            if (op < 4)
+            {
+                int f = rng.Next(3);
+                int x = Math.Clamp(focosX[f] + rng.Next(9) - 4, 0, w - 1);
+                int y = Math.Clamp(focosY[f] + rng.Next(9) - 4, 0, h - 1);
+                float q = 0.05f + rng.NextFloat() * 0.3f;
+                lod.Deposit(x, y, q);
+                referencia.Deposit(x, y, q);
+            }
+            else if (op < 6)
+            {
+                int x = rng.Next(w), y = rng.Next(h);
+                float q = 0.02f + rng.NextFloat() * 0.5f;
+                lod.Deposit(x, y, q);
+                referencia.Deposit(x, y, q);
+            }
+            else if (op < 8)
+            {
+                float dt = 0.5f + rng.NextFloat();
+                lod.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.FoodTrail));
+                referencia.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.FoodTrail));
+            }
+            else
+            {
+                float k = 0.06f + rng.NextFloat() * 0.19f;
+                lod.Diffuse(k);
+                referencia.Diffuse(k);
+            }
+
+            if (paso % 5 == 0) AssertSameEstado(lod, referencia, $"con bloque {bloque}, paso {paso}");
+        }
+
+        AssertSameEstado(lod, referencia, $"con bloque {bloque}, al cierre");
+        Assert.Equal(bloque, lod.LodBlockSize);
+        // La referencia es de verdad el grid completo (si no, compararíamos dos LOD).
+        Assert.Equal(w * h, referencia.ActiveRegionCells);
+    }
+
+    [Fact]
+    public void Lod_LosContadoresDeReconstruccionMidenElCosteDeLaLista()
+    {
+        var layer = new PheromoneLayer(64, 64, lodBlockSize: 8);
+        Assert.Equal(0, layer.BlockListRebuilds);
+        Assert.Equal(0, layer.BlockSlotsScanned);
+        Assert.Equal((64 / 8) * (64 / 8), layer.BlockSlotsPerRebuild);
+
+        layer.Deposit(1, 1, 1f);   // celda nueva: el bloque entra en el soporte
+        layer.Deposit(9, 9, 1f);   // …y otro bloque distinto
+        Assert.Equal(0, layer.BlockListRebuilds); // nadie ha pedido la lista todavía
+
+        Assert.Equal(2, layer.ActiveBlocks);
+        Assert.Equal(1, layer.BlockListRebuilds);
+        Assert.Equal(layer.BlockSlotsPerRebuild, layer.BlockSlotsScanned);
+
+        // Leerla otra vez NO reconstruye: el coste se paga cuando el soporte cambia.
+        Assert.Equal(2, layer.ActiveBlocks);
+        Assert.Equal(1, layer.BlockListRebuilds);
+        Assert.Equal(layer.BlockSlotsPerRebuild, layer.BlockSlotsScanned);
+
+        // El punto de entrada de MEDICIÓN fuerza una reconstrucción y la cuenta.
+        Assert.Equal(2, layer.ForceBlockListRebuild());
+        Assert.Equal(2, layer.BlockListRebuilds);
+        Assert.Equal(2L * layer.BlockSlotsPerRebuild, layer.BlockSlotsScanned);
+
+        // Y con el LOD apagado (la referencia) la lista no se mantiene: cero coste.
+        var sinLod = new PheromoneLayer(64, 64, lodBlockSize: 8) { LodEnabled = false };
+        sinLod.Deposit(3, 3, 1f);
+        sinLod.Diffuse(0.1f);
+        Assert.Equal(0, sinLod.BlockListRebuilds);
+        Assert.Equal(64 * 64, sinLod.ActiveRegionCells);
+    }
+
+    [Theory]
+    [InlineData(4, 8)]
+    [InlineData(8, 32)]
+    [InlineData(4, 32)]
+    public void Lod_ElTamanoDeBloqueNoCambiaElMundo(int fino, int grueso)
+    {
+        var a = new WorldSim(42, 96, colonyCount: 2, lodBlockSize: fino);
+        var b = new WorldSim(42, 96, colonyCount: 2, lodBlockSize: grueso);
+        for (int i = 0; i < 400; i++)
+        {
+            a.Step();
+            b.Step();
+        }
+
+        Assert.Equal(fino, a.LodBlockSize);
+        Assert.Equal(grueso, b.LodBlockSize);
+        // Ni el estado ni el hash dependen del bloque: es coste, no calidad.
+        Assert.Equal(a.HashLine(), b.HashLine());
+    }
+
+    [Fact]
+    public void Lod_MasFinoVisitaMenosCeldasYEscaneaMasContadores()
+    {
+        (long visitas, long escaneados) Medir(int bloque)
+        {
+            var sim = new WorldSim(42, 256, colonyCount: 2, lodBlockSize: bloque);
+            for (int i = 0; i < 800; i++) sim.Step();
+            long visitas = 0, escaneados = 0;
+            foreach (var c in sim.Colonies)
+                foreach (var l in new[] { c.FoodLayer, c.HomeLayer, c.AlarmLayer, c.FootprintLayer })
+                {
+                    visitas += l.ActiveRegionCells;
+                    escaneados += l.BlockSlotsScanned;
+                }
+            return (visitas, escaneados);
+        }
+
+        var fino = Medir(4);
+        var medio = Medir(8);
+        var grueso = Medir(32);
+        _out.WriteLine($"visitadas: 4={fino.visitas} · 8={medio.visitas} · 32={grueso.visitas} | " +
+                       $"contadores escaneados: 4={fino.escaneados} · 8={medio.escaneados} · 32={grueso.escaneados}");
+
+        Assert.True(fino.visitas < medio.visitas && medio.visitas < grueso.visitas,
+            $"más fino debía visitar menos celdas: 4={fino.visitas} 8={medio.visitas} 32={grueso.visitas}");
+        Assert.True(fino.escaneados > grueso.escaneados,
+            $"más fino debía escanear más contadores: 4={fino.escaneados} 32={grueso.escaneados}");
+    }
 }

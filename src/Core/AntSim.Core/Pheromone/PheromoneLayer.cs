@@ -28,10 +28,19 @@ public sealed class PheromoneLayer
 {
     public const int TileSize = 64;
 
-    /// <summary>Lado del bloque del LOD de difusión. Más fino que el tile de
-    /// render (64) a propósito: el tile de render mide envíos, el bloque de LOD
-    /// mide trabajo por tick, y con 16 un rastro fino activa pocos bloques.</summary>
-    public const int LodBlockSize = 16;
+    /// <summary>Lado del bloque del LOD POR DEFECTO. El valor efectivo lo fija
+    /// cada capa al construirla (<see cref="LodBlockSize"/>): el bloque es un
+    /// equilibrio entre CELDAS visitadas (más fino = menos área desperdiciada por
+    /// bloque activo) y COSTE de reconstruir la lista (más fino = más contadores
+    /// que escanear, `(lado/ladoBloque)²`), y ese equilibrio se mide — ver
+    /// `--mode scale --lod-blocks` y la tabla publicada en
+    /// `docs/fase5-3-escala.md` §4.6, de la que salió este número.</summary>
+    public const int DefaultLodBlockSize = 8;
+
+    /// <summary>Lado del bloque del LOD en ESTA capa, fijado al construirla: la
+    /// geometría de la lista de bloques (`BlocksX`×`BlocksY` contadores) se
+    /// dimensiona con él y no cambia en toda la vida de la capa.</summary>
+    public int LodBlockSize { get; }
 
     private readonly float[] _values;
     private readonly float[] _scratch;
@@ -83,6 +92,35 @@ public sealed class PheromoneLayer
     /// ahorra el LOD en un mundo real).</summary>
     public int ActiveRegionCells { get; private set; }
 
+    /// <summary>Cuántas veces se reconstruyó la lista de bloques activos (el
+    /// soporte cambió: una celda pasó de nula a con soporte, o al revés).</summary>
+    public long BlockListRebuilds { get; private set; }
+
+    /// <summary>Contadores de bloque escaneados por las reconstrucciones
+    /// acumuladas: es el COSTE ESTRUCTURAL exacto de la lista, el otro lado del
+    /// equilibrio. Reconstruir cuesta `BlocksX`×`BlocksY` comparaciones, así que
+    /// el bloque fino paga aquí lo que ahorra en celdas visitadas.</summary>
+    public long BlockSlotsScanned { get; private set; }
+
+    /// <summary>Contadores de bloque por reconstrucción (`BlocksX`×`BlocksY`):
+    /// lo que cuesta UNA reconstrucción en comparaciones.</summary>
+    public int BlockSlotsPerRebuild => _blockNonZero.Length;
+
+    /// <summary>
+    /// SOLO MEDICIÓN (F5.3 rodaja 3bis). Fuerza una reconstrucción de la lista de
+    /// bloques y devuelve cuántos quedaron activos. Existe porque el coste de la
+    /// lista ES el escaneo de sus contadores, y medirlo desde fuera —depositando
+    /// en una celda nueva para ensuciar el soporte— mezclaría el coste del
+    /// depósito; con este punto de entrada la sonda cronometra la reconstrucción
+    /// sola. No cambia ningún valor del mundo.
+    /// </summary>
+    public int ForceBlockListRebuild()
+    {
+        _blocksDirty = true;
+        EnsureActiveBlocks();
+        return _activeBlockCount;
+    }
+
     /// <summary>
     /// Interruptor de verificación (F5.3 rodaja 3). Con <c>true</c> — por
     /// defecto y en todo el producto — evaporación y difusión visitan solo los
@@ -94,12 +132,15 @@ public sealed class PheromoneLayer
     /// </summary>
     public bool LodEnabled { get; set; } = true;
 
-    public PheromoneLayer(int width, int height, float cellMax = SimConstants.PheromoneCellMax)
+    public PheromoneLayer(int width, int height, float cellMax = SimConstants.PheromoneCellMax,
+        int lodBlockSize = DefaultLodBlockSize)
     {
         if (width <= 0 || height <= 0) throw new ArgumentOutOfRangeException(nameof(width));
+        if (lodBlockSize < 1) throw new ArgumentOutOfRangeException(nameof(lodBlockSize));
         Width = width;
         Height = height;
         _cellMax = cellMax;
+        LodBlockSize = lodBlockSize;
         _values = new float[width * height];
         _scratch = new float[width * height];
         _tileVersions = new uint[TilesX * TilesY];
@@ -375,10 +416,13 @@ public sealed class PheromoneLayer
     {
         if (!_blocksDirty) return;
         int count = 0;
-        for (int b = 0; b < _blockNonZero.Length; b++)
-            if (_blockNonZero[b] > 0) _activeBlocks[count++] = b;
+        var slots = _blockNonZero;
+        for (int b = 0; b < slots.Length; b++)
+            if (slots[b] > 0) _activeBlocks[count++] = b;
         _activeBlockCount = count;
         _blocksDirty = false;
+        BlockListRebuilds++;
+        BlockSlotsScanned += slots.Length;
     }
 
     private void MarkDirty(int x, int y)

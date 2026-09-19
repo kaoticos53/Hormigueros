@@ -18,6 +18,7 @@ namespace AntSim.Cli;
 ///          [--colonies N] [--import archivo.antgenome] [--seed-pool archivo.antgenome]
 ///          [--export archivo.antgenome] [--pop N] [--generations N] [--warm-start f]
 ///          [--save f] [--save-tick N] [--antlog f] [--load f]
+///          [--colony-counts 1,2,4,8] [--lod-blocks 4,8,16,32,64] [--lod-colonies N]
 ///
 /// Modos:
 ///   verify   — Fase 4 (persistencia): carga un checkpoint .antsave (--load) y
@@ -36,6 +37,9 @@ namespace AntSim.Cli;
 ///              presupuesto de un frame a 60 fps, el trabajo de feromonas por tick
 ///              con el LOD frente al grid completo y las llamadas de dibujo del
 ///              plan instanciado. Es la evidencia del criterio de salida de F5.3.
+///              Con --lod-blocks (p. ej. 4,8,16,32,64) añade el barrido del BLOQUE
+///              del LOD (F5.3 rodaja 3bis): celdas visitadas frente al coste de
+///              reconstruir la lista, más la fila de referencia sin LOD.
 ///   pretrain — pre-entrenamiento headless (Fase 3): currículo por etapas sobre la
 ///              arena de WorldSim hasta alcanzar competencia mínima (ida-vuelta con
 ///              comida); con --export escribe la población entrenada y con
@@ -70,6 +74,8 @@ internal static class Program
         ulong[]? benchSeeds = null;
         int? arenaCells = null; // celdas del grid de la arena del benchmark (null = 96)
         int[]? scaleColonyCounts = null; // F5.3 rodaja 3: colonias del medidor de escala
+        int[]? lodBlockSizes = null;     // F5.3 rodaja 3bis: barrido del bloque del LOD
+        int? lodSweepColonies = null;    // colonias del barrido del LOD (null = la mayor del medidor)
         bool hybrid = false;    // currículo híbrido alternado (200-mid / 200-max por generación)
         bool fullWorld = false; // añade la 4ª etapa mundo-completo (arena 160, 200–700 u)
         string? importPath = null;
@@ -219,6 +225,29 @@ internal static class Program
                     scaleColonyCounts = list.ToArray();
                     break;
                 }
+                case "--lod-blocks":
+                {
+                    // F5.3 rodaja 3bis: barrido del tamaño de bloque del LOD. Cada
+                    // valor corre el MISMO mundo (semilla y pool idénticos), así que
+                    // la tabla compara trabajo, no mundos distintos.
+                    var parts = Next(args, ref i)
+                        .Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    if (parts.Length == 0) return Fail("--lod-blocks requiere al menos un lado de bloque.");
+                    var list = new List<int>(parts.Length);
+                    foreach (var p in parts)
+                    {
+                        if (!int.TryParse(p, NumberStyles.None, CultureInfo.InvariantCulture, out int bs) || bs < 1)
+                            return Fail($"--lod-blocks: valor inválido '{p}' (entero ≥ 1).");
+                        list.Add(bs);
+                    }
+                    lodBlockSizes = list.ToArray();
+                    break;
+                }
+                case "--lod-colonies":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out int lc) || lc < 1)
+                        return Fail("--lod-colonies requiere un entero ≥ 1.");
+                    lodSweepColonies = lc;
+                    break;
                 case "--band-min":
                     if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out bandMin) || bandMin < WorldSim.NestMinSpawnDistance)
                         return Fail($"--band-min requiere un float ≥ {WorldSim.NestMinSpawnDistance}.");
@@ -349,7 +378,10 @@ internal static class Program
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat),
                 "bench" => PolicyBenchmarkScenario.Run(benchSeeds, bandMin, bandMax, ticks, trials, seedPoolPath, arenaCells),
-                "scale" => ScaleScenario.Run(grid, ticks, scaleColonyCounts, seed, seedPoolPath),
+                "scale" => ScaleScenario.Run(grid, ticks, scaleColonyCounts, seed, seedPoolPath)
+                    + (lodBlockSizes == null ? "" : "\n" + ScaleScenario.RunLodSweep(grid, ticks,
+                        lodBlockSizes, lodSweepColonies ?? ScaleScenario.DefaultLodSweepColonies,
+                        seed, seedPoolPath)),
                 _ => Microcosm.Run(seed, ticks, grid)
             };
             Console.Out.Write(output);

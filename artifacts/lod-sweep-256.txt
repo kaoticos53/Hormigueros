@@ -1,0 +1,38 @@
+escala: semilla 42 · grid 256² · 6000 ticks cronometrados (+200 de calentamiento) · pool 'tests/fixtures/warm-v2.antgenome'
+
+col.  hormigas  ítems   ms/tick  %frame(60)  vel.máx.  celdas LOD            soporte
+   8       193    171     0.48        2.9%      ×69  181504/2097152 (8.7%)    36228
+
+## Tabla markdown
+
+| colonias | hormigas | ítems | ms/tick | % frame (60 fps) | velocidad máx. | celdas LOD visitadas | celdas con soporte |
+|---|---|---|---|---|---|---|---|
+| 8 | 193 | 171 | 0.48 | 2.9% | ×69 | 181504/2097152 (8.7%) | 36228 |
+
+Notas: los ms/tick son de ESTA máquina (una medida, no un récord); el estado
+medido (hormigas, celdas activas, llamadas) sí es determinista con la semilla.
+
+LOD de difusión — barrido del tamaño de bloque: semilla 42 · grid 256² · 8 colonias · 6000 ticks cronometrados (+200 de calentamiento) · pool 'tests/fixtures/warm-v2.antgenome'
+
+bloque  contadores/capa  celdas visitadas por op.          soporte  reconstr./tick  contadores/tick  ns/reconstr.  reconstr. µs/tick  %del tick  ms/tick
+     4           131072           111072/2097152 (5.3%)    36228            2.47            10136          4907               12.1       2.55%     0.48
+     8            32768           181504/2097152 (8.7%)    36228            2.47             2534           858                2.1       0.44%     0.48
+    16             8192          289024/2097152 (13.8%)    36228            2.47              634           227                0.6       0.11%     0.50
+    32             2048          491520/2097152 (23.4%)    36228            2.47              158            86                0.2       0.04%     0.54
+    64              512          811008/2097152 (38.7%)    36228            2.47               40            30                0.1       0.01%     0.60
+sin LOD            32768        2097152/2097152 (100.0%)    36228            0.00                0             —                  —       0.00%     1.10
+
+## Tabla markdown
+
+| bloque | contadores por capa | celdas visitadas por operación | celdas con soporte | reconstrucciones/tick | contadores escaneados/tick | ns/reconstrucción | reconstrucción (µs/tick) | % del tick | ms/tick | % frame (60 fps) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 4 | 131072 | 111072/2097152 (5.3%) | 36228 | 2.47 | 10136 | 4907 | 12.1 | 2.55% | 0.48 | 2.9% |
+| 8 | 32768 | 181504/2097152 (8.7%) | 36228 | 2.47 | 2534 | 858 | 2.1 | 0.44% | 0.48 | 2.9% |
+| 16 | 8192 | 289024/2097152 (13.8%) | 36228 | 2.47 | 634 | 227 | 0.6 | 0.11% | 0.50 | 3.0% |
+| 32 | 2048 | 491520/2097152 (23.4%) | 36228 | 2.47 | 158 | 86 | 0.2 | 0.04% | 0.54 | 3.2% |
+| 64 | 512 | 811008/2097152 (38.7%) | 36228 | 2.47 | 40 | 30 | 0.1 | 0.01% | 0.60 | 3.6% |
+| sin LOD | 32768 | 2097152/2097152 (100.0%) | 36228 | 0.00 | 0 | — | — | 0.00% | 1.10 | 6.6% |
+
+Notas: las celdas visitadas y los contadores son deterministas con la semilla;
+los ns y los ms/tick son de ESTA máquina. Los ns por reconstrucción son de una
+micro-medida aparte (patrón disperso, 20 000 llamadas), no del mundo corriendo.
