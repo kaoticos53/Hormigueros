@@ -599,6 +599,90 @@ guía tiene que **existir** (un puntero muerto es el mismo defecto y más difíc
 textura tiene que ser 1×1 RGBA32 `ffffff00`, es decir invisible. La guarda **se verificó en
 rojo** sobre los materiales de HEAD antes del arreglo.
 
+### 4.10 Cuánto juego cabe: el precio del tick con 2, 4 y 8 colonias por vista
+
+§4.9 mide el precio del tick **a un solo tamaño de mundo** (2 colonias por vista), y ese
+número solo responde «cuánto juego cabe» si se sabe cómo escala. `bash
+scripts/system-sweep.sh` corre el MISMO montaje (4 vistas, grid 256, horizonte 12 000,
+boost ×10, vsync apagado) con **2, 4 y 8 colonias por vista**, reconstruyendo el player en
+cada paso porque las colonias van dentro de la escena. Medido el 2026-09-19, 30/30 muestras
+enfocadas en cada punto (`artifacts/system-c*.json`, tabla en `artifacts/system-sweep.txt`):
+
+| colonias por vista | **2** | **4** | **8** |
+|---|---|---|---|
+| colonias en total (4 vistas) | 8 | 16 | 32 |
+| **precio del tick** | **0,197 ms** | **0,280 ms** | **0,430 ms** |
+| pata del mundo (200 ticks/frame) | 39,32 ms/frame | 55,99 ms/frame | 86,07 ms/frame |
+| pata del player | 1,129 ms/frame | 1,219 ms/frame | 1,491 ms/frame |
+| **SISTEMA** | **2,427 núcleos** | **3,433 núcleos** | **5,254 núcleos** |
+| núcleos por colonia | 0,303 | 0,215 | 0,164 |
+| hormigas en pantalla | 292 (+684 ítems) | 553 | 1 075 |
+| frames/s sin vsync | 833 | 720 | 589 |
+| puerta de píxeles · CLI terminado | verde ×4 · sí | verde ×4 · sí | verde ×4 · sí |
+
+#### Doblar colonias NO dobla el coste
+
+Los núcleos pasan de 2,427 a 3,433 (×1,42) y de 3,433 a 5,254 (×1,53): **sublineal**. La
+razón está en las dos partes de la simulación — una **fija**, que no depende de cuántas
+colonias haya (la difusión de feromonas de las cuatro rejillas de 256², la evaporación, los
+ítems), y otra **variable**, que sigue a las hormigas. Un ajuste por los tres puntos las
+separa: **0,122 ms/tick fijos + 0,0097 por colonia** (el marginal sale 0,0104 entre 2 y 4
+y 0,0094 entre 4 y 8: prácticamente constante, coherente con que las hormigas por colonia
+se quedan en 36,5 · 34,6 · 33,6). En núcleos al reloj del juego, contando la pata del
+player, el modelo queda **≈ 1,53 + 0,117 × colonias** y reproduce los tres puntos medidos
+dentro del 2 %. El ajuste es una **interpretación de tres puntos**, no una ley medida: lo
+medido es la tabla.
+
+#### La respuesta, y por qué no es «más colonias gratis»
+
+La pregunta era cuántas colonias caben en los **2,5 núcleos** de §4.9, y la respuesta es
+incómoda pero clara: **esos 2,5 núcleos son exactamente las 8 colonias que ya estaban
+medidas** (2,427). El coste es **monótono**: ninguna configuración con más colonias vuelve
+a bajar de 2,5. Lo que baja es el **precio unitario** —0,303 → 0,215 → 0,164 núcleos por
+colonia—, y eso no es que las colonias extra sean gratis, es que **el coste fijo se reparte
+entre más**. En el margen cada colonia extra cuesta **≈ 0,117 núcleos** (0,0097 ms/tick):
+
+| presupuesto | colonias que caben | de dónde sale |
+|---|---|---|
+| **2,5 núcleos** | **8** | medido (§4.9 y punto «2» de esta tabla) |
+| **3,5 núcleos** | **16** | medido (punto «4»: 3,433) |
+| **5,3 núcleos** | **32** | medido (punto «8»: 5,254) |
+| 8 núcleos | ~55 | **extrapolado** del modelo |
+| 28 núcleos | ~226 | **extrapolado** del modelo |
+
+Las dos últimas filas son extrapolación y así hay que leerlas: el barrido mide 8, 16 y 32
+colonias, y por encima de ahí lo que hay es el modelo, no una medida. El script publica
+además una tercera cifra más conservadora, la del **solo punto medido** (presupuesto ÷ su
+núcleos por colonia: 92 · 130 · 171 con 28 núcleos); sale más baja que el modelo porque el
+cociente de un punto ya incluye amortizar su propio coste fijo. Las tres cifras son la misma
+evidencia leída con distinto atrevimiento, y la que no se atreve a nada es la tabla de los
+tres puntos medidos.
+
+#### Lo que el barrido sí decide
+
+- **La vista no es el problema, y escala mejor que el mundo**: de 2 a 8 colonias por vista
+  la pata del player sube 1,129 → 1,491 ms/frame (×1,32) mientras el mundo sube ×2,19. Con
+  32 colonias en pantalla (1 075 hormigas) el build sigue a **589 fps sin vsync** y la
+  puerta de píxeles sale verde en las cuatro vistas: 8 colonias por vista **se ven** de
+  sobra.
+- **El mundo manda, y su parte fija es la palanca**: de los ≈1,5 núcleos de intercepto,
+  ~1,46 son simulación (0,122 ms/tick costeados a 200 ticks/frame) y el resto la vista.
+  Esa parte fija no depende de las colonias — es la difusión de las cuatro rejillas a
+  256², exactamente lo que ataca el LOD de §4.2. O sea que bajar el coste fijo del LOD no
+  ahorra «un poco de tick»: **compra colonias**.
+- **La media de 2 colonias por vista sigue siendo buena para el criterio**: 8 colonias al
+  reloj del juego caben en 2,5 núcleos, menos del 9 % de una máquina de 28, y las 16 se
+  quedan en 3,4.
+
+#### El ruido, medido de paso
+
+El punto «2» de este barrido mide **el mismo montaje que §4.9** con otro build: 0,197 frente
+a 0,201 ms/tick, y 2,427 frente a 2,485 núcleos — un **2 %**. Esa es la resolución de estas
+medidas entre corridas, y por eso los puntos de 4 y 8 colonias (**+42 %** y **+116 %** sobre
+el de 2 en la misma tanda) son diferencias reales y no ruido. Las dos corridas de 2 colonias
+se conservan (`artifacts/perf-player-system.json` y `artifacts/system-c2.json`) porque son
+la única manera de tener ese ruido medido.
+
 ## 5. Qué NO demuestra esta rodaja
 
 - **El coste ya NO es una incógnita, ni el del player ni el del sistema** (§4.8:
@@ -606,9 +690,11 @@ rojo** sobre los materiales de HEAD antes del arreglo.
   §4.9: **0,201 ms/tick** de simulación, **41,4 ms/frame agregados = 2,485 núcleos** al
   reloj del juego, con el 97,3 % de la CPU del sistema en el mundo). Lo que sigue sin
   medir es más estrecho: los tiempos de GPU los declara el backend y no se han verificado
-  por otra vía; el precio del tick depende del **tamaño del mundo** (aquí 2 colonias por
-  vista, ~150 hormigas) y no se ha barrido con 4 u 8 colonias por vista; y todo es de
-  **una máquina** y de una sesión de medida.
+  por otra vía; el precio del tick **ya está barrido** con 2, 4 y 8 colonias por vista
+  (§4.10: 2,427 → 5,254 núcleos, sublineal, con un fijo de ~0,122 ms/tick y ~0,117 núcleos
+  por colonia), así que falta **por encima de 8 colonias por vista** —donde la cifra es
+  modelo y no medida— y **por debajo de 2**, con una sola colonia, donde manda el coste
+  fijo; y todo es de **una máquina** y de una sesión de medida.
 - **El provecho del canal E.** El stream ya emitía RLE de celdas no nulas, así que
   el LOD **no** cambia lo que viaja al presenter; cambia el coste de la difusión
   en el Core. Son dos ahorros distintos y conviene no confundirlos.
@@ -630,7 +716,10 @@ rojo** sobre los materiales de HEAD antes del arreglo.
   llamadas de dibujo, §4.7) · **el coste por frame DENTRO del build** (1,294 ms de CPU y
   0,127 ms de GPU, 7,8 % del presupuesto, §4.8) · **el coste del SISTEMA COMPLETO**
   (0,201 ms/tick de simulación, 41,4 ms/frame agregados = **2,485 núcleos** al reloj del
-  juego, con la pata del player en 1,116 ms = 6,7 % del presupuesto, §4.9).
+  juego, con la pata del player en 1,116 ms = 6,7 % del presupuesto, §4.9) — y **el barrido
+  de esa 6ª pieza** (§4.10: 2, 4 y 8 colonias por vista → 2,427 · 3,433 · 5,254 núcleos, y
+  las 32 colonias con 1 075 hormigas en pantalla siguen a 589 fps sin vsync con la puerta
+  verde en las cuatro vistas).
 - **Los 6 pines de hash pasan sin regenerarse**: el LOD es exacto, así que el
   mundo no se movió — stream canónico, replay con drops, Atta, invasión y NEAT.
 - **El proyecto Unity compila en batch con 0 errores y 0 avisos** con el presenter
@@ -664,6 +753,14 @@ rojo** sobre los materiales de HEAD antes del arreglo.
   ajustan el montaje. Los dos modos exigen el vsync apagado, y las guardas inversas
   (7/8/9/10) existen porque cada corrida mide una cosa distinta y publicar una con el
   nombre de otra es el error que estos scripts existen para no cometer.
+- **El barrido del precio del tick se mide con `bash scripts/system-sweep.sh`**
+  (2, 4 y 8 colonias por vista; `--colonies 1,2,4` y `--cores N` para el presupuesto con el
+  que se lee «cuántas caben»). Cada punto es **un build** (~20 s) más una corrida (~45 s),
+  y deja su informe crudo en `artifacts/system-c<N>.json` con el resumen en
+  `artifacts/system-sweep.txt`; `--selftest` verifica la tabla sin Unity (la fila medida,
+  la sublinealidad de los núcleos por colonia y que un punto sin medir **no** se declare).
+  Las colonias por vista viajan al build por `ANTSIM_PERF_COLONIES`, que es el mismo camino
+  que el grid y el horizonte.
 - **El Play pass del editor ya no se puede conducir**: los bloques 3, 4 y 5 de
   `playpass-live.sh` necesitan `com.unity.pipeline`, que salió del manifest en la poda
   de paquetes (`unity command editor_status` responde «No Pipeline instance found»). La
