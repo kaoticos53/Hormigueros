@@ -341,13 +341,89 @@ frame** (15 % del presupuesto), con **19 llamadas de dibujo** por frame y todas
 instanciadas. Lo que sigue sin medir es un **build de jugador** (el framerate con
 el vsync del monitor aplicado, fuera del editor) y el gate de píxeles.
 
+### 4.7 El build de jugador: el framerate PRESENTADO y la puerta de píxeles
+
+Las dos lecturas anteriores miden el COSTE de producir frames, y la de ventana (§4.4)
+ni siquiera llega a presentar: en el editor el vsync no se aplica (`vSyncCount=1` y
+403,8 fps). El criterio de la fase —«N colonias estables a 60 fps»— solo se cierra en
+un BUILD, que entrega frames a la pantalla con siguiente frame vecino.
+
+`bash scripts/player-perf.sh` hace las dos cosas en un comando: construye el player
+(escena del multi-visor, 4 vistas × 2 colonias, grid 256 — `PlayerBuild` en el editor)
+y lo ejecuta con la sonda del player, que muestrea frames/s y pasa la PUERTA DE
+PÍXELES **por vista**. Medido el 2026-09-19, Unity 6000.6.0f1, backend Mono2x, build de
+99 MB en 18 s, ventana 1280×720, 12 s de calentamiento + 30 s de ventana, 30/30
+muestras con la ventana en primer plano (informe: `artifacts/perf-player.json`):
+
+| medida | valor |
+|---|---|
+| frames/s (mediana) | **59,99** |
+| peor muestra / mejor | 55,6 / 60,0 |
+| intervalo presentado | 16,67 ms/frame |
+| refresco del monitor | 59,997 Hz · `vSyncCount`=1 · `targetFrameRate`=−1 |
+| **presentado al refresco** | **sí** (dentro del 5 %) |
+| llamadas de dibujo | 19, **todas instanciadas** (37 317 instancias, 0 de respaldo) |
+| carga final | 292 hormigas y 684 ítems · tick 12 000 |
+| puerta de píxeles | **verde en las 4 vistas** (antPx 132–160 · portadoras 34–76 · ítems 189–213 · suelo tierra 0,42:0,329:0,231) |
+
+Lo que dice el número: el build **entrega al refresco del monitor** con el mundo
+cargado — el techo de 60 fps lo pone la pantalla, no el juego. Lo que **no** dice: el
+COSTE del frame en el build. La única medida de coste con presentación sigue siendo la
+del editor (§4.4, 2,44 ms/frame) y el desglose de GPU no está hecho.
+
+La puerta mira PÍXELES, y en un player no hay PNG posible (ver defecto 2), así que cada
+vista deja además su frame en una **mosaica de caracteres** (24×10, del frame real de
+la cámara): `a` hormiga · `c` portadora · `i` ítem · `e` tierra. La vista 0 del informe:
+
+```text
+       iieeiieieiee      /      ieeeeieiiieii     /      eiieeeieeiei      /
+       eeaeeeeeiiie      /     iiceaaeaaaaii      /     iaacaaecaaaee      /
+       eaaeaaaeaaiei     /      ieieicieaeei      /      eeiiieeiiiii      /
+       eiieiieieieei     /
+```
+
+#### Los tres defectos que el primer build destapó
+
+1. **El juego NO compilaba como player.** `ImportDialogBehaviour` usa `DragAndDrop` y
+   `DragAndDropVisualMode`, que son API de **UnityEditor**, sin guarda: el editor compila
+   Assembly-CSharp con referencia a UnityEditor (por eso allí pasaba) y el build del
+   jugador reventó con **ocho CS0103**. El drag & drop queda bajo `#if UNITY_EDITOR`
+   —arrastrar un archivo desde el explorador es una capacidad del editor: un player no
+   la tiene— con `IsDragHovering => false` en la otra rama para que el HUD no cambie.
+2. **La captura de pantalla necesita un módulo que el manifest no tenía.**
+   `ScreenCapture` vive en `com.unity.modules.screencapture`, que el manifest mínimo no
+   incluía: la sonda del Play pass (`ProbeVisualSample`, F5.1) **no compilaba** — llevaba
+   rota desde el recorte del manifest sin que nadie lo notara, porque el pass del editor
+   no se había vuelto a correr. Se repuso el módulo (lo necesita la verificación visual
+   del proyecto, no el juego) y **la sonda del player no lo usa**: su vista del mundo sale
+   de la cámara a un `RenderTexture`, sin captura de pantalla.
+3. **La puerta medía el color equivocado.** En el multi-visor las hormigas se pintan con
+   `ColonyAntMaterials` (una por colonia: naranja y azul), no con `AntMaterial` (marrón
+   oscuro): la puerta daba **antPx=0 con 292 hormigas dibujadas**. El Play pass del editor
+   tenía el mismo defecto por el mismo motivo. `FrameGate` acepta ahora la LISTA de
+   colores por familia.
+
+#### Una sola puerta, verificada headless
+
+`FrameGate` (pura, sin UnityEngine) es ya la única implementación del recuento de
+píxeles: la usan `ProbeVisualSample` (editor) y la sonda del player. **11 tests
+headless** cubren los tres casos que importan —tierra con hormigas pasa, tierra SIN
+hormigas suspende, blanco suspende (el defecto del F5.1)—, más la ventana de muestreo
+calculada del encuadre y el fondo declarado. Dos de esas pruebas salieron de defectos
+reales medidos aquí:
+
+- **La ventana no puede ser fija.** Una vista 16:9 deja el tablero en su 54 % central,
+  así que con la ventana del editor (0,15–0,85) medio muestreo cae FUERA y la «mediana
+  del suelo» es el fondo: la sonda calcula la ventana del encuadre real.
+- **El fondo hay que declararlo.** El fondo del multi-visor (56,45,33) dista 12 del tono
+  de hormiga: si no está en la paleta, cada píxel de fondo se cuenta como hormiga.
+
 ## 5. Qué NO demuestra esta rodaja
 
-- **Los fps de un build de jugador.** Hay dos lecturas de la vista: **0,51 ms/frame**
-  en batch (coste de CPU, §4.3) y **2,44 ms/frame** en el editor con ventana (§4.4).
-  La segunda incluye presentación real, pero es **dentro del editor** (con su UI, su
-  Game view y sin vsync aplicado). Un build de jugador con el vsync del monitor
-  sigue sin medir, y el tiempo de GPU no está desglosado.
+- **El coste del frame en un build.** El build entrega al refresco (§4.7), pero con
+  vsync eso es lo que dice el monitor: el trabajo por frame sigue medido solo dentro del
+  editor (**0,51 ms/frame** en batch, §4.3, y **2,44 ms/frame** con presentación,
+  §4.4). El tiempo de GPU no está desglosado.
 - **El provecho del canal E.** El stream ya emitía RLE de celdas no nulas, así que
   el LOD **no** cambia lo que viaja al presenter; cambia el coste de la difusión
   en el Core. Son dos ahorros distintos y conviene no confundirlos.
@@ -358,10 +434,13 @@ el vsync del monitor aplicado, fuera del editor) y el gate de píxeles.
 
 ## 6. Verificación
 
-- **496/496 tests** headless (los 480 de la rodaja 3 más 16 de la 3bis: la
-  equivalencia bit a bit con 9 lados de bloque, la contabilidad de las
-  reconstrucciones, el mundo invariante al bloque en 3 parejas y la dirección del
-  equilibrio, y 2 del reporte del barrido).
+- **512/512 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
+  píxeles `FrameGate` y 5 del ancla de rutas del player).
+- **El criterio de salida de la fase, cerrado**: el build entrega **59,99 fps con el
+  refresco del monitor a 59,997 Hz** y la puerta de píxeles pasa en las cuatro vistas
+  (§4.7). Las tres piezas medidas quedan así: **Core 0,47 ms/tick** (8 colonias, grid
+  256), **vista 0,51 ms/frame** en batch y **2,44 ms/frame** con presentación en el
+  editor, y **el build presentado al refresco** con 19 llamadas de dibujo.
 - **Los 6 pines de hash pasan sin regenerarse**: el LOD es exacto, así que el
   mundo no se movió — stream canónico, replay con drops, Atta, invasión y NEAT.
 - **El proyecto Unity compila en batch con 0 errores y 0 avisos** con el presenter
@@ -375,6 +454,18 @@ el vsync del monitor aplicado, fuera del editor) y el gate de píxeles.
   `artifacts/perf-scene-live.json` — y conserva el log si falla. Los analizadores se
   verifican sin editor con `bash scripts/perf-scene.sh --selftest`; los 6 pines, con
   `scripts/check-*.sh`, y los MonoBehaviours, con `bash scripts/check-unity-compile.sh`.
+- **El criterio de la fase se mide con un comando**: `bash scripts/player-perf.sh`
+  (build + sonda del player + puerta de píxeles; informe `artifacts/perf-player.json`,
+  y `--skip-build` para reusar el build y `--selftest` para verificar el analizador sin
+  Unity). Sale **7** si el vsync del proyecto está apagado: sin vsync, esa corrida mide
+  coste y no refresco presentado, y darle el número por bueno sería el error que el
+  script existe para no cometer.
+- **El Play pass del editor ya no se puede conducir**: los bloques 3, 4 y 5 de
+  `playpass-live.sh` necesitan `com.unity.pipeline`, que salió del manifest en la poda
+  de paquetes (`unity command editor_status` responde «No Pipeline instance found»). La
+  verificación visual end-to-end la cubre ahora la sonda del player, que corre la MISMA
+  puerta de píxeles sobre frames reales; reactivar el pass es una decisión de
+  dependencias (una línea en `Packages/manifest.json`), no una tarea de código.
 - **Ojo con lo que deja en el árbol**: el medidor monta la escena con el
   bootstrapper, así que regenera `MultiSim.unity` y sus materiales. Son artefactos
   generados y el contenido queda canónicamente idéntico (ids locales y orden son

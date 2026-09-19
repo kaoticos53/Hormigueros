@@ -275,6 +275,33 @@ del editor. Resultado por bloque:
    hasta que el tick AVANZA de verdad (no basta con «hay hormigas»), con
    recuperación explícita y registro del motivo si se congela a mitad.
 
+### Aviso (2026-09-19): el pass automático NO se puede conducir hoy
+
+Los bloques 3, 4 y 5 necesitan el paquete `com.unity.pipeline`, que **ya no está
+en `Packages/manifest.json`** (salió en la poda de paquetes). Comprobado:
+`bash scripts/unity-cli.sh editor_status` responde «No Pipeline instance found for
+project: … Make sure Unity Editor is running with the Pipeline package installed».
+Volver a conducirlo es una decisión de dependencias (una línea en el manifest), no
+una tarea de código; hasta entonces el pass se hace a mano con el §3.
+
+Dos consecuencias ya resueltas de aquel recorte, encontradas al construir el player
+de F5.3 (ver [`fase5-3-escala.md`](fase5-3-escala.md) §4.7):
+
+- **`ProbeVisualSample` no compilaba**: usa `ScreenCapture`, que vive en el módulo
+  `com.unity.modules.screencapture`, fuera del manifest mínimo. Se repuso el módulo
+  (lo necesita la verificación visual del proyecto, no el juego) y la puerta de
+  píxeles quedó como **una sola implementación pura** (`FrameGate`, 11 tests
+  headless) compartida por esta sonda y por la del player — antes había dos copias
+  del recuento.
+- **La puerta medía el color equivocado**: las hormigas se pintan con
+  `ColonyAntMaterials` (una por colonia), no con `AntMaterial`; la sonda ahora
+  prefiere la lista por colonia, que es lo que hace que el recuento de hormigas
+  mida hormigas.
+
+La verificación visual end-to-end de hoy es la del **player**
+(`bash scripts/player-perf.sh`): mide el framerate presentado y pasa la misma
+puerta de píxeles por vista sobre frames reales.
+
 ### Cómo reproducir el pass automático
 
 ```bash

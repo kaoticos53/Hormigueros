@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-18 · HEAD: `0485071` + la rodaja 3 de F5.3 (working tree) ·
-suite: 496/496 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+*Actualizado: 2026-09-19 · HEAD: `920be47` + el cierre de F5.3 con build de jugador (working tree) ·
+suite: 512/512 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -89,11 +89,13 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 
 ## Lo que queda (en orden de dependencia)
 
-1. **Lo que queda** (ya no es una rodaja de F5.3: esa sub-fase está cerrada). El
-   detalle de las rodajas está abajo; ahora mismo los cabos sueltos son la
-   medida de fps REALES en el editor (el exit de F5.3 está medido hasta el Core:
-   8 colonias = 3 % del frame + 17 llamadas de dibujo), la deuda menor de F5.1 y
-   el gate de Unity en CI, que sigue dormido tras la variable `UNITY_CI`.
+1. **Lo que queda** (F5.3 está cerrada: su exit se midió de punta a punta). Los
+   cabos sueltos son la deuda menor de F5.1, el gate de Unity en CI —que sigue
+   dormido tras la variable `UNITY_CI`— y una decisión de dependencias: los bloques
+   3/4/5 del Play pass del editor necesitan `com.unity.pipeline`, que salió del
+   manifest en la poda de paquetes (`unity command editor_status` responde «No
+   Pipeline instance found»). La verificación visual end-to-end la cubre ahora la
+   sonda del PLAYER, que corre la misma puerta de píxeles sobre frames reales.
    **F5.3 rodaja 1 — HECHA**: `AntSoA` (parallel arrays), infraestructura lista.
    **F5.3 rodaja 2 — HECHO (2026-09-17)**: el mundo COMPACTA las adultas muertas al final de cada `Step` (O(n), `BankAndCompactDeadAnts`). Claves del diseño: el fitness de por vida de las muertas va a un BANCO por colonia (el pool ya cobró en el tick de la muerte) que `HashLine`, el save y la arena suman para producir lo mismo que la lista con cadáveres; `HashLine` y los checkpoints solo describen vivas; los registros de shaping de la arena van claveados por `Id` (la posición en la lista ya no es identidad). Pines: solo invasión y NEAT se movieron (hay muertes en sus ventanas de hash); stream/replay/Atta son byte-idénticos. La fila del canal A desaparece en el tick de la muerte (contrato actualizado en `UnityStreamContractTests`): la muerte la captura el canal B.
    **F5.3 rodaja 2bis — HECHO (2026-09-17): huella CHC (4ª capa) y tropotaxis en ratio.**
@@ -150,7 +152,18 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    el presenter; y la configuración de la sonda en statics se perdía en el reload de Play (movida a `SessionState`).
    **Los 6 pines NO se movieron** (el LOD es exacto: el mundo es byte a byte el mismo) y el proyecto Unity compila en
    batch con 0 errores y 0 avisos. **496/496 tests.**
-2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
+   **F5.3 rodaja 3ter — HECHO (2026-09-19): el criterio de salida, medido en un BUILD de jugador.**
+   `scripts/player-perf.sh` construye el player (escena del multi-visor, 4 vistas × 2 colonias, grid 256) y lo ejecuta
+   con una sonda de runtime que muestrea frames/s y pasa la puerta de PÍXELES por vista. Medido: **59,99 fps de mediana
+   con el refresco del monitor a 59,997 Hz y el vsync del proyecto aplicado** (peor muestra 55,6; 19 llamadas de dibujo
+   todas instanciadas; 292 hormigas y 684 ítems en pantalla; tick 12 000) y **puerta verde en las cuatro vistas**
+   (antPx 132–160). El primer build destapó **tres defectos reales**: el juego **no compilaba como player**
+   (`DragAndDrop` de UnityEditor sin guarda → ocho CS0103; ahora `#if UNITY_EDITOR`), el módulo
+   `com.unity.modules.screencapture` faltaba del manifest —la sonda del Play pass del editor llevaba sin compilar desde
+   la poda— y la puerta medía con `AntMaterial` cuando el multi-visor pinta con `ColonyAntMaterials` (antPx=0 con 292
+   hormigas dibujadas). La puerta es ahora UNA implementación pura (`FrameGate`) con 11 tests headless, compartida por
+   el editor y el player. **512/512 tests · los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player.json`.
+2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome` —del editor, ya guardado—,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
    hojas con mordiscos en el presenter (el canal A ya emite `cuts` y la
@@ -166,7 +179,8 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 | NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
 | `error CS` de MonoBehaviours | **abierto** — el job existe y está corregido, pero dormido: hoy lo caza la pasada local, no CI |
 | Feromonas costosas a escala | **mitigado (F5.3 rodajas 3 y 3bis)** — LOD exacto con bloque 8 medido: 7.8–8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
-| Framerate real de Unity a N colonias | **medido (F5.3 rodaja 3)** — 8 colonias: 0.51 ms/frame en batch, **2.44 ms/frame con el editor en ventana** (Play pass real, `--live`) y 19 llamadas (todas instanciadas). Falta un **build de jugador** (vsync del monitor aplicado, fuera del editor) |
+| Framerate real de Unity a N colonias | **cerrado (F5.3 rodajas 3 y 3ter)** — 8 colonias: 0.51 ms/frame en batch, **2.44 ms/frame con el editor en ventana** y, en un **build de jugador**, **59,99 fps con el refresco del monitor** (vsync aplicado) y 19 llamadas (todas instanciadas). Lo que sigue sin medir es el coste por frame DENTRO del build y el tiempo de GPU |
+| El juego compila como player | **cerrado (F5.3 rodaja 3ter)** — el primer build destapó CS0103 de `DragAndDrop` (API del editor sin guarda): el editor compilaba Assembly-CSharp con referencia a UnityEditor y el player no. `PlayerBuild` construye en 18 s y la sonda del player falla si la escena no pinta hormigas |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools |
 | Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta |

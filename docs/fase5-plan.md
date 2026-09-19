@@ -370,13 +370,23 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   `DrawMeshInstanced` lanza si el material no trae `enableInstancing` y la escena
   se quedaba sin hormigas —, corregido en los bootstrappers y con respaldo en el
   presenter.
+- **Build de jugador — HECHO (rodaja 3ter)**: `scripts/player-perf.sh` construye el
+  player (4 vistas × 2 colonias, grid 256) y lo mide con una sonda de runtime: **59,99
+  fps de mediana con el refresco del monitor (59,997 Hz) y el vsync del proyecto
+  aplicado**, 19 llamadas de dibujo (todas instanciadas) y **puerta de píxeles verde en
+  las cuatro vistas**. El primer build destapó tres defectos reales —el juego NO
+  compilaba como player (`DragAndDrop` del editor sin guarda), faltaba el módulo
+  `com.unity.modules.screencapture` y la puerta medía `AntMaterial` en vez de los
+  materiales por colonia— y la puerta quedó como UNA implementación pura (`FrameGate`,
+  11 tests headless) compartida por el editor y el player.
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
-  escena de juego. **Medido en las tres piezas**: el Core cuesta **0,47 ms por
+  escena de juego. **CUMPLIDO y medido en cuatro piezas**: el Core cuesta **0,47 ms por
   tick** con 8 colonias en grid 256 (2.8 % de un frame a 60 fps), la VISTA **0,51
   ms por frame** en batch y **2,44 ms por frame** en el Play pass con ventana
   (`--live`), con **19 llamadas de dibujo** (4 vistas × 2 colonias, todas
-  instanciadas). Lo que falta es un **build de jugador** (framerate con el vsync
-  del monitor aplicado) y el gate de píxeles del Play pass interactivo. Detalle y
+  instanciadas), y el **build de jugador entrega al refresco del monitor** con la
+  puerta de píxeles en verde. Lo que sigue sin medir: el coste por frame DENTRO del
+  build y el tiempo de GPU. Detalle y
   cifras: [`fase5-3-escala.md`](fase5-3-escala.md).
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)
@@ -417,9 +427,9 @@ F5.1  pulido uGUI (toasts-rect, drag&drop, gráficas, iconos)            ✅ (+5
 F5.2a Atta: cortar→transportar→hongo (ítems compuestos + hongo)         ✅ CERRADO (2026-09-13)
 F5.2b Eciton + depredadores (Alarm ofensiva, combate en canal B)        ✅ CERRADO (2026-09-14, v0.6.0)
 F5.2c NEAT v2 (.antgenome v2 + inspector de grafos generalizado)        ✅ CERRADO (2026-09-15, v0.7.0)
-F5.3  SoA/ECS + LOD feromonas + GPU instancing (pin de hash)            🔄 rodajas 1, 2, 2bis, 2ter, 2quater HECHAS
-      └ siguiente: rodaja 3 — LOD de difusión de feromonas + GPU instancing
-        (exit de fase: N colonias a 60 fps en la escena de juego)
+F5.3  SoA/ECS + LOD feromonas + GPU instancing + escala medida          ✅ CERRADO (2026-09-19)
+      └ rodajas 1, 2, 2bis, 2ter, 2quater, 3, 3bis y 3ter (build de jugador: 60 fps
+        presentados + puerta de píxeles verde). Criterio de fase CUMPLIDO
 ```
 
 Cada hito sale con: tests de hash (si toca el mundo o la telemetría),
