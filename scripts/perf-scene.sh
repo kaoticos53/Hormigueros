@@ -7,13 +7,23 @@
 # colonias = 3 % del presupuesto de un frame), pero eso NO es el framerate: el
 # framerate los hace el editor. Este script monta la escena del multi-visor con
 # CUATRO vistas × 2 colonias = 8 colonias en el grid REAL del modo juego (256),
-# entra en Play en batch y mide, por muestra y por vista, frames/s reales,
-# `LastDrawCalls` (el contador del instancing), hormigas e ítems dibujados.
+# entra en Play —en batch o con ventana, ver «DOS MODOS»— y mide, por muestra y por
+# vista, frames/s reales, `LastDrawCalls` (el contador del instancing), hormigas e
+# ítems dibujados.
 #
-# QUÉ NO ES. No es un banco de pruebas de rendimiento de Unity: corre en
-# batchmode y sin vsync, así que lo que se lee es el COSTE de producir frames,
-# no los fps que verá el jugador con la pantalla. Se publica como cota y así se
-# documenta en docs/fase5-3-escala.md.
+# DOS MODOS, y la diferencia entre ellos es todo:
+#
+#   · por defecto (BATCH): `-batchmode`, sin presentación y con dt de captura
+#     fijo (1/30 s). Lo que se lee es el COSTE de producir frames — la cifra
+#     comparable con `--mode scale` del Core.
+#   · --live (PLAY PASS): abre el editor DE VERDAD, con ventana, bucle real y
+#     presentación; lo que se lee es el framerate que ve el jugador. Con --vsync
+#     se respeta el vsync del proyecto (techo de la pantalla); sin él la sonda lo
+#     apaga para dejar al descubierto el coste del frame.
+#
+# El modo live necesita una sesión de escritorio (abre una ventana del editor) y
+# deja el editor abierto hasta que la sonda cierra: si eso molesta, se mata el
+# proceso. El árbol queda igual que en batch (ver «LO QUE DEJA EN EL ÁRBOL»).
 #
 # LA SONDA SE MONTA EN EL PROYECTO. `-executeMethod` necesita la clase compilada
 # dentro del proyecto: la sonda vive en scripts/unity/ (fuente, con el resto de
@@ -30,8 +40,15 @@
 #   git checkout -- src/App/AntSim.Unity/Assets/Materials \
 #                   src/App/AntSim.Unity/Assets/Scenes/MultiSim.unity
 #
+# EL INFORME va a `artifacts/perf-scene.json` en batch y a
+# `artifacts/perf-scene-live.json` en --live (o a $ANTSIM_PERF_OUT si se fija):
+# un fichero por modo, porque miden cosas distintas y con un solo nombre el
+# segundo borraría la evidencia del primero.
+#
 # Uso:
 #   scripts/perf-scene.sh                        # 45 s, boost ×10, grid 256
+#   scripts/perf-scene.sh --live                  # el Play pass REAL (ventana)
+#   scripts/perf-scene.sh --live --vsync          # …y con el vsync del proyecto
 #   scripts/perf-scene.sh --seconds 30 --boost 6
 #   scripts/perf-scene.sh --log FICHERO          # solo analiza un log ya hecho
 #   scripts/perf-scene.sh --project RUTA         # otro proyecto (con guarda)
@@ -56,6 +73,8 @@ ANALYZE_ONLY=0
 QUIET=0
 SELFTEST=0
 UNITY=""
+LIVE=0
+VSYNC=0
 
 # shellcheck source=lib/unity-project.sh
 source "$ROOT/scripts/lib/unity-project.sh"
@@ -70,6 +89,8 @@ while [[ $# -gt 0 ]]; do
     --boost)   BOOST="$2"; shift 2 ;;
     --grid)    GRID="$2"; shift 2 ;;
     --log)     LOG="$2"; ANALYZE_ONLY=1; shift 2 ;;
+    --live)    LIVE=1; shift ;;
+    --vsync)   VSYNC=1; shift ;;
     --quiet)   QUIET=1; shift ;;
     --selftest) SELFTEST=1; shift ;;
     --help|-h) sed -n '2,40p' "$0"; exit 0 ;;
@@ -113,13 +134,23 @@ ran_in_log() {
 if [[ $SELFTEST -eq 1 ]]; then
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
-  # Log bueno: montaje + muestras + cierre verde.
+  # Log bueno (batch): montaje + muestras + cierre verde.
   {
     echo "Initialize engine version: 6000.6.0f1"
-    echo "[Perf] escena: 4 vistas × 2 colonias = 8 colonias · grid 256² · ventana 45s · boost ×10"
+    echo "[Perf] escena: 4 vistas × 2 colonias = 8 colonias · grid 256² · ventana 45s · boost ×10 · modo=batch · vsync=apagado"
     echo "[Perf] frames/s: mediana=52.3 · p10=41.0 · peor=38.9 · mejor=61.2"
     echo "[Perf] ✓ medido: 206 hormigas, 13 draw calls, mediana 52.3 frames/s"
   } > "$tmp/ok.log"
+  # Log bueno (modo VENTANA, el Play pass): la línea de condiciones tiene que
+  # sobrevivir al analizador — si se perdiera, el número saldría sin decir en qué
+  # condiciones se midió.
+  {
+    echo "Initialize engine version: 6000.6.0f1"
+    echo "[Perf] escena: 4 vistas × 2 colonias = 8 colonias · grid 256² · ventana 40s · boost ×10 · modo=ventana · vsync=apagado"
+    echo "[Perf] condiciones: modo=ventana (Play pass, con presentación) · vsync=apagado por la sonda · targetFrameRate=-1 · pantalla=2560×1440 · con foco=40/40 muestras"
+    echo "[Perf] frames/s: mediana=214.0 · p10=180.2 · peor=95.5 · mejor=320.7"
+    echo "[Perf] ✓ medido: 292 hormigas, 19 draw calls, mediana 214.0 frames/s"
+  } > "$tmp/live.log"
   # Log vacío: la sonda corrió y midió una escena muerta.
   {
     echo "Initialize engine version: 6000.6.0f1"
@@ -130,17 +161,26 @@ if [[ $SELFTEST -eq 1 ]]; then
   printf 'Successfully changed project path to: /x\n[ExitDontLaunchBugReporter] Exiting without the bug reporter. Application will exit with return code 1\n' > "$tmp/truncado.log"
 
   fails=0
-  rc_ok=0; rc_vacio=0; rc_trunc=0
+  rc_ok=0; rc_vacio=0; rc_trunc=0; rc_live=0
   perf_verdict "$tmp/ok.log" >/dev/null 2>&1 || rc_ok=$?
   perf_verdict "$tmp/vacio.log" >/dev/null 2>&1 || rc_vacio=$?
   perf_verdict "$tmp/truncado.log" >/dev/null 2>&1 || rc_trunc=$?
+  perf_verdict "$tmp/live.log" >/dev/null 2>&1 || rc_live=$?
   if [[ $rc_ok -ne 0 ]]; then echo "✗ selftest: un log medido dio $rc_ok (esperado 0)" >&2; fails=1; fi
+  if [[ $rc_live -ne 0 ]]; then echo "✗ selftest: un log del modo ventana dio $rc_live (esperado 0)" >&2; fails=1; fi
+  # Sin `| grep -q`: cierra el pipe, el productor muere con SIGPIPE y `pipefail`
+  # da la tubería por fallida (el mismo motivo que documenta playpass-live.sh).
+  LIVE_LINES="$(perf_verdict "$tmp/live.log" 2>/dev/null || true)"
+  case "$LIVE_LINES" in
+    *modo=ventana*) ;;
+    *) echo "✗ selftest: la línea de condiciones del modo ventana no llegó al analizador" >&2; fails=1 ;;
+  esac
   if [[ $rc_vacio -ne 1 ]]; then echo "✗ selftest: una medición vacía dio $rc_vacio (esperado 1)" >&2; fails=1; fi
   if [[ $rc_trunc -ne 5 ]]; then echo "✗ selftest: un log sin escena dio $rc_trunc (esperado 5)" >&2; fails=1; fi
   if ran_in_log "$tmp/truncado.log"; then echo "✗ selftest: un log sin montaje pasó por bueno" >&2; fails=1; fi
   if ! ran_in_log "$tmp/ok.log"; then echo "✗ selftest: un log con montaje se reportó como no montado" >&2; fails=1; fi
   if [[ $fails -eq 0 ]]; then
-    echo "✓ selftest del analizador del medidor ok (medido / vacío / sin montaje)"
+    echo "✓ selftest del analizador del medidor ok (medido / medido en ventana / vacío / sin montaje)"
     exit 0
   fi
   exit 1
@@ -228,21 +268,41 @@ cleanup() {
 }
 trap cleanup EXIT
 
+if [[ $LIVE -eq 1 ]]; then
+  MODE_DESC="ventana (Play pass, con presentación)"
+else
+  MODE_DESC="batch (sin presentación)"
+fi
 log "▶ Medidor de rendimiento: 4 vistas × 2 colonias · grid $GRID · ventana ${SECONDS_WINDOW}s · boost ×$BOOST"
+log "   modo:     $MODE_DESC · vsync $( [[ $VSYNC -eq 1 ]] && echo 'del proyecto' || echo 'apagado por la sonda' )"
 log "   editor:   $UNITY"
 log "   proyecto: $PROJECT"
 cp "$PROBE_SRC" "$PROBE_DST"
 
 # El techo de tiempo: ventana + compilación + arranque. Sin esto, una sonda que
-# no cierra deja el script colgado para siempre (y en CI, hasta el timeout).
+# no cierra deja el script colgado para siempre (y en CI, hasta el timeout). En
+# modo ventana el arranque del editor es más lento (crea la ventana, carga el
+# layout, levanta el Game view), así que el margen es mayor.
 #
 # SIN `-nographics` a PROPÓSITO: lo que se mide es el camino de dibujo
 # (DrawMeshInstanced, el upload de feromonas), y sin dispositivo gráfico ese
 # trabajo no ocurre — el medidor daría frames/s de una escena que no pinta nada.
-LIMIT=$(( SECONDS_WINDOW + 300 ))
+# En modo ventana tampoco se pasa `-batchmode`: el bucle y la presentación son
+# los del jugador, que es justo lo que se quiere medir.
+MODEFLAGS=()
+[[ $LIVE -eq 1 ]] || MODEFLAGS+=(-batchmode)
+if [[ $LIVE -eq 1 ]]; then LIMIT=$(( SECONDS_WINDOW + 420 )); else LIMIT=$(( SECONDS_WINDOW + 300 )); fi
+
+# El informe se escribe en un fichero POR MODO: los dos modos miden cosas
+# distintas (coste de producir frames vs. framerate con presentación) y con un
+# solo nombre el segundo borraría la evidencia del primero. `ANTSIM_PERF_OUT`
+# sigue mandando si el llamador lo fija.
+if [[ $LIVE -eq 1 ]]; then REPORT="artifacts/perf-scene-live.json"; else REPORT="artifacts/perf-scene.json"; fi
+REPORT="${ANTSIM_PERF_OUT:-$REPORT}"
+
 MSYS_NO_PATHCONV=1 ANTSIM_PERF_SECONDS="$SECONDS_WINDOW" ANTSIM_PERF_BOOST="$BOOST" \
-  ANTSIM_PERF_GRID="$GRID" \
-  "$UNITY" -batchmode \
+  ANTSIM_PERF_GRID="$GRID" ANTSIM_PERF_VSYNC="$VSYNC" ANTSIM_PERF_OUT="$REPORT" \
+  "$UNITY" ${MODEFLAGS[@]+"${MODEFLAGS[@]}"} \
     -projectPath "$(to_native "$PROJECT")" \
     -executeMethod "$METHOD" \
     -logFile "$(to_native "$TMP_LOG")" >/dev/null 2>&1 &
@@ -292,5 +352,5 @@ if [[ $rc -ne 0 ]]; then
 fi
 
 log ""
-log "   informe JSON: artifacts/perf-scene.json"
+log "   informe JSON: $REPORT"
 exit $rc
