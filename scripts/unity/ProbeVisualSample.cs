@@ -42,14 +42,15 @@ public static class ProbeVisualSample
 
         float floorR, floorG, floorB;
         int antPx, carrierPx, itemPx, totalPx;
-        CameraRender(out floorR, out floorG, out floorB, out antPx, out carrierPx, out itemPx,
-            out totalPx, parser);
+        bool brown;
+        CameraRender(out floorR, out floorG, out floorB, out brown, out antPx, out carrierPx,
+            out itemPx, out totalPx, parser);
 
         sb.Append("|world=").Append(RtWidth).Append('x').Append(RtHeight);
         sb.Append("|floor=").Append(F(floorR)).Append(':').Append(F(floorG)).Append(':').Append(F(floorB));
-        // Terreno «tierra»: el rojo manda y el azul es bajo. Si el quad de
-        // feromonas vuelve a tapar el suelo, esto se pone gris/blanco (r≈g≈b).
-        bool brown = floorR > floorG + 0.02f && floorG > floorB + 0.02f && floorB < 0.45f;
+        // Terreno «tierra»: lo decide la PUERTA (FrameGate), la misma que usa la
+        // sonda del player: si el quad de feromonas vuelve a tapar el suelo, esto
+        // se pone gris/blanco (r≈g≈b) en los dos sitios a la vez.
         sb.Append("|brown=").Append(brown ? 1 : 0);
         sb.Append("|antPx=").Append(antPx);
         sb.Append("|carrierPx=").Append(carrierPx);
@@ -62,16 +63,20 @@ public static class ProbeVisualSample
         return sb.ToString();
     }
 
-    /// <summary>Render de la cámara a una RT pequeña y estadísticas de color.</summary>
+    /// <summary>Render de la cámara a una RT pequeña y estadísticas de color.
+    /// El recuento y la decisión de «tierra» los hace <see cref="FrameGate"/>:
+    /// UNA sola implementación de la puerta de píxeles para el editor y para el
+    /// player (dos copias dieron números distintos sin que nadie lo notara).</summary>
     private static void CameraRender(out float floorR, out float floorG, out float floorB,
-        out int antPx, out int carrierPx, out int itemPx, out int totalPx, StringBuilder detail)
+        out bool brown, out int antPx, out int carrierPx, out int itemPx, out int totalPx,
+        StringBuilder detail)
     {
         floorR = floorG = floorB = -1f;
+        brown = false;
         antPx = carrierPx = itemPx = totalPx = 0;
 
         var cam = Camera.main;
         if (cam == null) { detail.Append("cam=null"); return; }
-        Color32 floorMed, gridMed, bgMed;
 
         var presenter = Object.FindAnyObjectByType<SimPresenterBehaviour>();
         var rt = RenderTexture.GetTemporary(RtWidth, RtHeight, 24);
@@ -89,64 +94,41 @@ public static class ProbeVisualSample
             Object.Destroy(tex);
 
             // Color de las hormigas/portadores/ítems tal como los pinta el
-            // presenter: se cuentan píxeles parecidos, con tolerancia.
-            Color32 ant = MaterialColor(presenter != null ? presenter.AntMaterial : null);
-            Color32 car = MaterialColor(presenter != null ? presenter.CarrierMaterial : null);
+            // presenter: son las referencias de la puerta. En el multi-visor las
+            // hormigas usan los materiales POR COLONIA (`ColonyAntMaterials`), así
+            // que se prefiere esa lista — con `AntMaterial` a secas la familia de
+            // hormigas no está representada y la puerta da antPx=0 sobre un tablero
+            // lleno de hormigas (medido en el primer build, 04/09).
+            Color32 ant = MaterialColor(FirstOf(presenter?.ColonyAntMaterials, presenter?.AntMaterial));
+            Color32 car = MaterialColor(FirstOf(presenter?.ColonyCarrierMaterials, presenter?.CarrierMaterial));
             Color32 item = MaterialColor(presenter != null ? presenter.ItemMaterial : null);
             detail.Append("antRGB=").Append(C(ant)).Append(";carRGB=").Append(C(car))
                   .Append(";itemRGB=").Append(C(item));
 
-            // Paleta de referencia de la escena (medida, no supuesta): el suelo
-            // sale de la propia mediana de abajo; el fondo, de la esquina.
-            floorMed = default; gridMed = default; bgMed = default;
-            bgMed = px[2 * RtWidth + 2];
-
-            // Suelo = MEDIANA de 49 puntos repartidos DENTRO del mundo (0.2–0.8
-            // del lado), no de una esquina: la cámara cubre más que el tablero
-            // (el orthoSize lleva margen), así que la esquina mide el FONDO, no el
-            // suelo — la primera versión de esta sonda daba brown=0 por eso, no
-            // porque el suelo estuviera mal. La mediana aguanta que una muestra
-            // caiga sobre una hormiga, un ítem o un nido.
-            var samples = new System.Collections.Generic.List<Color32>(49);
-            for (int gy = 1; gy <= 7; gy++)
-                for (int gx = 1; gx <= 7; gx++)
-                {
-                    int sx = (int)(RtWidth * (0.15f + 0.7f * gx / 8f));
-                    int sy = (int)(RtHeight * (0.15f + 0.7f * gy / 8f));
-                    samples.Add(px[sy * RtWidth + sx]);
-                }
-            samples.Sort((a, b2) => (a.r + a.g + a.b).CompareTo(b2.r + b2.g + b2.b));
-            var med = samples[samples.Count / 2];
-            floorMed = med;
-            // El surco de la rejilla es la muestra MÁS OSCURA del terreno (sin
-            // salir del 10% inferior, que ya podría ser una hormiga o el fondo).
-            gridMed = samples[samples.Count / 10];
-            floorR = med.r / 255f; floorG = med.g / 255f; floorB = med.b / 255f;
-
-            // Clasificación por COLOR MÁS CERCANO, no por tolerancia suelta: con el
-            // suelo tierra (107,84,59) y la hormiga (76,46,26) distan ~40, así que
-            // un `tol=40` contaba el tablero ENTERO como hormigas (antPx=47265 de
-            // 76800 en la primera medida). El más cercano separa las dos familias
-            // —que es justo lo que distingue «se ve el suelo» de «se ven hormigas»—
-            // y solo se acepta si además está razonablemente cerca (no cualquier
-            // pixel oscuro o brillante).
-            float dark = 0f;
+            // Buffer RGB para la puerta (mismo orden de filas que ReadPixels).
+            var bytes = new byte[px.Length * 3];
             for (int i = 0; i < px.Length; i++)
             {
-                totalPx++;
-                var best = Nearest(px[i], out int bestDist, ant, car, item, floorMed, gridMed, bgMed);
-                // Umbral ESTRECHO (12): el suelo y el surco de la rejilla están a
-                // ~20-35 del tono de hormiga, así que un umbral ancho volvía a
-                // contar tablero como si fueran hormigas.
-                if (bestDist <= 12)
-                {
-                    if (best == 0) antPx++;
-                    else if (best == 1) carrierPx++;
-                    else if (best == 2) itemPx++;
-                }
-                if (px[i].r < 40 && px[i].g < 40 && px[i].b < 40) dark++;
+                bytes[i * 3] = px[i].r;
+                bytes[i * 3 + 1] = px[i].g;
+                bytes[i * 3 + 2] = px[i].b;
             }
-            detail.Append(";darkFrac=").Append(F(dark / Mathf.Max(1, px.Length)));
+
+            // LA PUERTA. Misma implementación que la sonda del player (FrameGate,
+            // verificada headless): mide el suelo del propio frame, clasifica por
+            // color más cercano con umbral estrecho y decide «tierra». Todo el
+            // detalle de por qué así está en FrameGate.cs — aquí solo se pinta.
+            var result = FrameGate.Analyze(bytes, RtWidth, RtHeight,
+                ToRgb(ant), ToRgb(car), ToRgb(item));
+            floorR = result.Floor.Rf; floorG = result.Floor.Gf; floorB = result.Floor.Bf;
+            brown = result.Brown;
+            antPx = result.AntPx;
+            carrierPx = result.CarrierPx;
+            itemPx = result.ItemPx;
+            totalPx = result.TotalPx;
+            detail.Append(";floorRGB=").Append(result.Floor.R).Append(',').Append(result.Floor.G)
+                  .Append(',').Append(result.Floor.B)
+                  .Append(";darkFrac=").Append(F(result.DarkFraction));
         }
         finally
         {
@@ -240,31 +222,19 @@ public static class ProbeVisualSample
         catch (System.Exception) { return null; }
     }
 
-    /// <summary>Índice del color de referencia MÁS cercano y su distancia.</summary>
-    private static int Nearest(Color32 p, out int dist, params Color32[] palette)
-    {
-        int best = -1; dist = int.MaxValue;
-        for (int i = 0; i < palette.Length; i++)
-        {
-            int dr = p.r - palette[i].r, dg = p.g - palette[i].g, db = p.b - palette[i].b;
-            int d = dr * dr + dg * dg + db * db;
-            if (d < dist) { dist = d; best = i; }
-        }
-        dist = (int)System.Math.Sqrt(dist / 3.0);
-        return best;
-    }
-
     private static string C(Color32 c) => c.r + "," + c.g + "," + c.b;
 
-    private static Color32 MaterialColor(Material m)
+    private static Color32 MaterialColor(Material? m)
         => m == null ? new Color32(0, 0, 0, 255) : (Color32)m.color;
 
-    private static bool Near(Color32 a, Color32 b, int tol)
+    /// <summary>El primero de los materiales POR COLONIA, o el único si no hay
+    /// (mismo criterio que la sonda del player).</summary>
+    private static Material? FirstOf(Material[]? perColony, Material? single)
     {
-        int dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
-        if (dr < 0) dr = -dr;
-        if (dg < 0) dg = -dg;
-        if (db < 0) db = -db;
-        return dr <= tol && dg <= tol && db <= tol;
+        if (perColony != null)
+            foreach (var m in perColony) if (m != null) return m;
+        return single;
     }
+
+    private static Rgb ToRgb(Color32 c) => new(c.r, c.g, c.b);
 }
