@@ -20,10 +20,19 @@ namespace AntSim.Unity.Scripts.EditorTools
     /// cuatro vistas con sus dos colonias cada una son el caso de carga del criterio.
     /// El build va a <c>build/player/</c> (ignorado por git, como el resto de build/).
     ///
+    /// DOS MODOS DE MEDIDA, DOS BUILDES. El defecto mide el framerate PRESENTADO
+    /// (vsync del monitor). Con <c>ANTSIM_PERF_FRAME_TIMING=1</c> el build además
+    /// enciende los estadísticos de tiempos de frame (`enableFrameTimingStats`), que
+    /// es lo que necesita la sonda para medir el COSTE por frame desde dentro sin
+    /// inventar nada. Ese ajuste se RESTAURA antes de salir: es un ajuste del
+    /// proyecto (vive en ProjectSettings) y la corrida de coste no debe dejarlo
+    /// cambiado para la siguiente.
+    ///
     /// Entrada: <c>-executeMethod AntSim.Unity.Scripts.EditorTools.PlayerBuild.BuildMultiViewPlayer</c>.
     /// Variables de entorno: <c>ANTSIM_BUILD_OUT</c> (def. build/player/AntSim.exe),
     /// <c>ANTSIM_BUILD_SCENE</c> (def. la escena del multi-visor),
-    /// <c>ANTSIM_PERF_GRID</c> (def. 256).
+    /// <c>ANTSIM_PERF_GRID</c> (def. 256),
+    /// <c>ANTSIM_PERF_FRAME_TIMING</c> (1 = enciende los tiempos de frame del build).
     ///
     /// Salida: 0 si el build terminó con éxito, 1 si falló (con el resumen del
     /// BuildReport en el log: los bytes y, si falla, los errores uno a uno).
@@ -44,6 +53,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             }
 
             int grid = (int)EnvFloat("ANTSIM_PERF_GRID", 256f);
+            bool frameTiming = EnvFloat("ANTSIM_PERF_FRAME_TIMING", 0f) >= 0.5f;
             string scenePath = Environment.GetEnvironmentVariable("ANTSIM_BUILD_SCENE") ?? MultiSimScene;
             string outPath = Environment.GetEnvironmentVariable("ANTSIM_BUILD_OUT") ?? "";
             if (string.IsNullOrEmpty(outPath)) outPath = Path.Combine("build", "player", "AntSim.exe");
@@ -61,9 +71,24 @@ namespace AntSim.Unity.Scripts.EditorTools
                 options = BuildOptions.None,
             };
 
+            // Los tiempos de frame del build: el ajuste lo LEE el build, así que se
+            // enciende antes de construirlo y se devuelve a su valor al terminar (si
+            // no, quedaría escrito en ProjectSettings para siempre).
+            bool prevFrameTiming = PlayerSettings.enableFrameTimingStats;
+            PlayerSettings.enableFrameTimingStats = frameTiming;
+
             Debug.Log($"{Tag} construyendo {outPath} · escena {scenePath} · grid {grid}² · " +
-                      $"backend={PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone)}");
-            BuildReport report = BuildPipeline.BuildPlayer(options);
+                      $"backend={PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone)}" +
+                      $" · tiempos de frame={PlayerSettings.enableFrameTimingStats}");
+            BuildReport report;
+            try
+            {
+                report = BuildPipeline.BuildPlayer(options);
+            }
+            finally
+            {
+                PlayerSettings.enableFrameTimingStats = prevFrameTiming;
+            }
             BuildSummary summary = report.summary;
 
             Debug.Log($"{Tag} resultado={summary.result} · tamaño={summary.totalSize / (1024 * 1024)} MB · " +

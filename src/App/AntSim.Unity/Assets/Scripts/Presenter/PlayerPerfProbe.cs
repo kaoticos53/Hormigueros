@@ -29,6 +29,16 @@ namespace AntSim.Unity.Scripts.Presenter
     ///                             y el mundo crece; muestrear eso mezclaría arranque
     ///                             con régimen
     ///   -antsimPerfBoost &lt;x&gt;       velocidad de reproducción (def. 10)
+    ///   -antsimPerfNoVsync &lt;1|0&gt;  apaga el vsync para medir el COSTE por frame
+    ///                             (5ª pieza del criterio de cierre). Con vsync el
+    ///                             techo de 60 fps lo pone la pantalla y el coste del
+    ///                             frame queda tapado; sin vsync el bucle produce
+    ///                             frames tan rápido como puede y el
+    ///                             `FrameTimingManager` dice cuánto cuesta cada uno
+    ///                             de CPU (y de GPU, si la plataforma lo expone).
+    ///                             El vsync DEL PROYECTO se registra aparte
+    ///                             (`projectVSyncCount`): la corrida lo apaga, y eso
+    ///                             no debe leerse como que el proyecto lo tenía así.
     ///
     /// NO HAY CAPTURA PNG. `ScreenCapture` vive en el módulo `Screen Capture`, que
     /// este proyecto NO tiene en el manifest a propósito, y pedirlo rompería la
@@ -38,8 +48,10 @@ namespace AntSim.Unity.Scripts.Presenter
     ///
     /// Salida: 0 si MIDIÓ y la puerta de píxeles pasó en todas las vistas; 1 si
     /// midió pero la puerta suspende (o el montaje está muerto); 2 si no hubo ni
-    /// una muestra. Un verde sobre una escena sin hormigas sería el peor
-    /// resultado posible, así que ese caso es un suspenso explícito.
+    /// una muestra; 3 en modo coste si el FrameTimingManager no entregó ni un
+    /// tiempo de frame (sin eso no hay coste, solo framerate). Un verde sobre una
+    /// escena sin hormigas sería el peor resultado posible, así que ese caso es un
+    /// suspenso explícito.
     /// </summary>
     public sealed class PlayerPerfProbe : MonoBehaviour
     {
@@ -49,6 +61,20 @@ namespace AntSim.Unity.Scripts.Presenter
         private float _seconds = 30f;
         private float _warmup = 12f;
         private float _boost = 10f;
+        private bool _noVsync;
+        private int _projectVSync;
+
+        // Tiempos del FrameTimingManager de la ventana en curso. Los ceros significan
+        // «este frame no dejó dato» (el manager entrega con retardo) y la mediana los
+        // ignora: contarlos hundiría el coste que se publica.
+        private readonly List<double> _cpuMs = new();
+        private readonly List<double> _mainMs = new();
+        private readonly List<double> _renderMs = new();
+        private readonly List<double> _waitMs = new();
+        private readonly List<double> _gpuMs = new();
+        private readonly FrameTiming[] _timingOne = new FrameTiming[1];
+        private int _timingsTaken;
+        private uint _lastSyncInterval;
 
         private float _start;
         private float _lastSampleAt;
@@ -68,12 +94,18 @@ namespace AntSim.Unity.Scripts.Presenter
             public readonly int Items;
             public readonly ulong Tick;
             public readonly bool Focused;
+            /// <summary>Mediana de los tiempos de frame de esa ventana (0 = sin dato).</summary>
+            public readonly FrameTimingSample Timing;
+            public readonly long WindowFrames;
+            public readonly uint SyncInterval;
 
             public Sample(float seconds, double fps, int drawCalls, int instanced, int fallback,
-                int ants, int items, ulong tick, bool focused)
+                int ants, int items, ulong tick, bool focused, FrameTimingSample timing,
+                long windowFrames, uint syncInterval)
             {
                 Seconds = seconds; Fps = fps; DrawCalls = drawCalls; Instanced = instanced;
                 Fallback = fallback; Ants = ants; Items = items; Tick = tick; Focused = focused;
+                Timing = timing; WindowFrames = windowFrames; SyncInterval = syncInterval;
             }
         }
 
@@ -99,10 +131,11 @@ namespace AntSim.Unity.Scripts.Presenter
                 outPath,
                 ArgFloat(args, "-antsimPerfSeconds", 30f),
                 ArgFloat(args, "-antsimPerfWarmup", 12f),
-                ArgFloat(args, "-antsimPerfBoost", 10f));
+                ArgFloat(args, "-antsimPerfBoost", 10f),
+                ArgFloat(args, "-antsimPerfNoVsync", 0f) >= 0.5f);
         }
 
-        private void Configure(string outPath, float seconds, float warmup, float boost)
+        private void Configure(string outPath, float seconds, float warmup, float boost, bool noVsync)
         {
             // El cwd de un player es su carpeta de build: el informe (y el pool y el
             // CLI) se anclan al repo root, que en un build dentro del repo se
@@ -112,10 +145,23 @@ namespace AntSim.Unity.Scripts.Presenter
             _seconds = Mathf.Max(1f, seconds);
             _warmup = Mathf.Max(0f, warmup);
             _boost = Mathf.Max(0f, boost);
+
+            // El vsync DEL PROYECTO se lee ANTES de tocarlo: si la corrida lo apaga
+            // para medir coste, el informe tiene que decir cuál era el del proyecto
+            // (si no, la corrida de coste parecería un proyecto mal configurado).
+            _projectVSync = QualitySettings.vSyncCount;
+            _noVsync = noVsync;
+            if (_noVsync)
+            {
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = -1;   // sin techo de fps: el bucle manda
+            }
+
             _start = Time.realtimeSinceStartup;
             _lastSampleAt = _start;
             Debug.Log($"{Tag} arrancada: ventana {_seconds:0}s · calentamiento {_warmup:0}s · " +
-                      $"boost ×{_boost:0.#} · vsync del proyecto={QualitySettings.vSyncCount} · " +
+                      $"boost ×{_boost:0.#} · vsync del proyecto={_projectVSync} · " +
+                      $"modo={(_noVsync ? "COSTE (vsync apagado por la sonda)" : "PRESENTADO")} · " +
                       $"pantalla={Screen.width}×{Screen.height} · " +
                       $"refresco={Screen.currentResolution.refreshRateRatio.value:0.#} Hz · informe={_outPath}");
         }
@@ -138,6 +184,11 @@ namespace AntSim.Unity.Scripts.Presenter
             // Update y una recarga de escena lo devuelve a 1.
             if (_boost > 1f)
                 foreach (var p in Presenters()) p.SpeedBoost = _boost;
+
+            // Tiempos de frame: hay que CAPTURAR cada frame (la API entrega los datos
+            // con retardo) y se acumulan hasta la muestra. `syncInterval` deja la
+            // prueba de que la corrida de coste se hizo sin vsync de verdad.
+            CollectTimings();
 
             // Las muestras empiezan DESPUÉS del calentamiento: el arranque (el
             // stream entrando, el mundo naciendo) no es el régimen que se mide.
@@ -172,33 +223,72 @@ namespace AntSim.Unity.Scripts.Presenter
                 if (t > tick) tick = t;
             }
             double dt = now - _lastSampleAt;
-            double fps = dt > 0.001 ? (_frames - _lastSampleFrames) / dt : 0;
+            long windowFrames = _frames - _lastSampleFrames;
+            double fps = dt > 0.001 ? windowFrames / dt : 0;
+            var timing = new FrameTimingSample(
+                FrameCost.Median(_cpuMs), FrameCost.Median(_mainMs),
+                FrameCost.Median(_renderMs), FrameCost.Median(_waitMs),
+                FrameCost.Median(_gpuMs));
             _samples.Add(new Sample(seconds, fps, drawCalls, instanced, fallback, ants, items,
-                tick, Application.isFocused));
+                tick, Application.isFocused, timing, windowFrames, _lastSyncInterval));
+            _cpuMs.Clear(); _mainMs.Clear(); _renderMs.Clear(); _waitMs.Clear(); _gpuMs.Clear();
             _lastSampleAt = now;
             _lastSampleFrames = _frames;
+        }
+
+        /// <summary>Un frame de tiempos del FrameTimingManager por Update. Sin
+        /// `enableFrameTimingStats` en el build (lo enciende `PlayerBuild`) la API
+        /// devuelve 0 frames y el informe lo declara en vez de inventar un cero.
+        /// </summary>
+        private void CollectTimings()
+        {
+            FrameTimingManager.CaptureFrameTimings();
+            uint n = FrameTimingManager.GetLatestTimings(1u, _timingOne);
+            if (n == 0) return;
+            var t = _timingOne[0];
+            _lastSyncInterval = t.syncInterval;
+            if (t.cpuFrameTime <= 0.0 && t.cpuMainThreadFrameTime <= 0.0 && t.gpuFrameTime <= 0.0) return;
+            _cpuMs.Add(t.cpuFrameTime);
+            _mainMs.Add(t.cpuMainThreadFrameTime);
+            _renderMs.Add(t.cpuRenderThreadFrameTime);
+            _waitMs.Add(t.cpuMainThreadPresentWaitTime);
+            _gpuMs.Add(t.gpuFrameTime);
+            _timingsTaken++;
         }
 
         private int Report()
         {
             var fps = new List<double>();
             foreach (var s in _samples) fps.Add(s.Fps);
-            fps.Sort();
-            double median = fps.Count > 0 ? fps[fps.Count / 2] : 0;
-            double worst = fps.Count > 0 ? fps[0] : 0;
-            double best = fps.Count > 0 ? fps[fps.Count - 1] : 0;
+            double median = FrameCost.Median(fps);
+            var ordered = new List<double>(fps);
+            ordered.Sort();
+            double worst = ordered.Count > 0 ? ordered[0] : 0;
+            double best = ordered.Count > 0 ? ordered[ordered.Count - 1] : 0;
             var last = _samples.Count > 0 ? _samples[_samples.Count - 1] : default;
+
+            // El COSTE por frame de la corrida (5ª pieza del criterio): se resume con
+            // el modelo puro, el mismo que prueban los tests headless.
+            var windows = new List<FrameCostWindow>();
+            foreach (var s in _samples)
+            {
+                double windowSeconds = s.WindowFrames > 0 && s.Fps > 0 ? s.WindowFrames / s.Fps : 0.0;
+                windows.Add(new FrameCostWindow(windowSeconds, s.WindowFrames, s.Timing));
+            }
+            var cost = FrameCost.Summarize(windows);
 
             var gates = GateViews();
             bool gateOk = gates.Count > 0;
             foreach (var g in gates) if (!g.Result.Ok) gateOk = false;
 
             float refresh = (float)Screen.currentResolution.refreshRateRatio.value;
-            Debug.Log($"{Tag} condiciones: vsync={QualitySettings.vSyncCount} · " +
+            Debug.Log($"{Tag} condiciones: vsync={QualitySettings.vSyncCount} (proyecto={_projectVSync}) · " +
                       $"targetFrameRate={Application.targetFrameRate} · pantalla={Screen.width}×{Screen.height} · " +
                       $"refresco={refresh:0.#} Hz · con foco={Focused()}/{_samples.Count} muestras");
             Debug.Log($"{Tag} frames/s: mediana={median:0.#} · peor={worst:0.#} · mejor={best:0.#} · " +
                       $"frames={_frames} · tick final={last.Tick}");
+            if (_noVsync)
+                Debug.Log($"{Tag} coste/frame: {FrameCost.Describe(cost)}");
             Debug.Log($"{Tag} draw calls={last.DrawCalls} (instanciadas={last.Instanced}, respaldo={last.Fallback}) · " +
                       $"carga final={last.Ants} hormigas y {last.Items} ítems");
             foreach (var g in gates)
@@ -207,7 +297,7 @@ namespace AntSim.Unity.Scripts.Presenter
                 if (g.Mosaic.Length > 0) Debug.Log($"{Tag} mosaico vista {g.Index}: {g.Mosaic}");
             }
 
-            WriteJson(median, worst, best, last, gates, gateOk, refresh);
+            WriteJson(median, worst, best, last, gates, gateOk, refresh, cost);
 
             if (_samples.Count == 0)
             {
@@ -224,6 +314,26 @@ namespace AntSim.Unity.Scripts.Presenter
             {
                 Debug.Log($"{Tag} ✗ la puerta de píxeles suspende en alguna vista (¿tablero sin tierra o sin hormigas?)");
                 return 1;
+            }
+            // En modo coste, «no medido» no es un verde: sin tiempos de frame lo que
+            // hay es un framerate, que es justo el número que esta corrida existe
+            // para no publicar como coste.
+            if (_noVsync && !cost.Measured)
+            {
+                Debug.Log($"{Tag} ✗ MODO COSTE SIN TIEMPOS DE FRAME: {_timingsTaken} frames con dato del " +
+                          "FrameTimingManager — falta enableFrameTimingStats en el build");
+                return 3;
+            }
+            if (_noVsync)
+            {
+                if (!cost.Fits)
+                {
+                    Debug.Log($"{Tag} ✗ el coste de CPU NO cabe en el presupuesto de {cost.BudgetMs:0.#} ms: " +
+                              FrameCost.Describe(cost));
+                    return 1;
+                }
+                Debug.Log($"{Tag} ✓ coste medido: {FrameCost.Describe(cost)}");
+                return 0;
             }
             Debug.Log($"{Tag} ✓ medido: {last.Ants} hormigas, {last.DrawCalls} draw calls, " +
                       $"mediana {median:0.#} frames/s con vsync del monitor");
@@ -438,16 +548,17 @@ namespace AntSim.Unity.Scripts.Presenter
         }
 
         private void WriteJson(double median, double worst, double best, Sample last,
-            List<ViewGate> gates, bool gateOk, float refresh)
+            List<ViewGate> gates, bool gateOk, float refresh, FrameCostSummary cost)
         {
             try
             {
                 var sb = new StringBuilder();
                 sb.Append("{\n");
                 sb.Append("  \"probe\": \"player-perf\",\n");
-                sb.Append("  \"mode\": \"player\",\n");
+                sb.Append("  \"mode\": \"").Append(_noVsync ? "player-cpu" : "player").Append("\",\n");
                 sb.Append("  \"unityVersion\": \"").Append(Application.unityVersion).Append("\",\n");
                 sb.Append("  \"vSyncCount\": ").Append(QualitySettings.vSyncCount).Append(",\n");
+                sb.Append("  \"projectVSyncCount\": ").Append(_projectVSync).Append(",\n");
                 sb.Append("  \"targetFrameRate\": ").Append(Application.targetFrameRate).Append(",\n");
                 sb.Append("  \"refreshRateHz\": ").Append(F(refresh)).Append(",\n");
                 sb.Append("  \"screenWidth\": ").Append(Screen.width).Append(",\n");
@@ -469,6 +580,23 @@ namespace AntSim.Unity.Scripts.Presenter
                 sb.Append("  \"presentedIntervalMs\": ").Append(F(1000.0 / Math.Max(1.0, median))).Append(",\n");
                 sb.Append("  \"presentedAtRefresh\": ")
                   .Append(refresh > 1f && Math.Abs(median - refresh) < refresh * 0.05 ? "true" : "false").Append(",\n");
+                // ── El COSTE por frame medido DENTRO del build (modo coste) ────
+                sb.Append("  \"frameTimingsTaken\": ").Append(_timingsTaken).Append(",\n");
+                sb.Append("  \"syncInterval\": ").Append(last.SyncInterval).Append(",\n");
+                sb.Append("  \"achievedMsMedian\": ").Append(F(cost.AchievedMsMedian)).Append(",\n");
+                sb.Append("  \"cpuMsMedian\": ").Append(F(cost.CpuMsMedian)).Append(",\n");
+                sb.Append("  \"cpuMainMsMedian\": ").Append(F(cost.MainMsMedian)).Append(",\n");
+                sb.Append("  \"cpuRenderMsMedian\": ").Append(F(cost.RenderMsMedian)).Append(",\n");
+                sb.Append("  \"presentWaitMsMedian\": ").Append(F(cost.PresentWaitMsMedian)).Append(",\n");
+                sb.Append("  \"gpuMsMedian\": ").Append(F(cost.GpuMsMedian)).Append(",\n");
+                sb.Append("  \"gpuAvailable\": ").Append(cost.GpuAvailable ? "true" : "false").Append(",\n");
+                sb.Append("  \"budgetMs\": ").Append(F(cost.BudgetMs)).Append(",\n");
+                sb.Append("  \"cpuFractionOfBudget\": ").Append(F(cost.CpuFractionOfBudget)).Append(",\n");
+                sb.Append("  \"costHeadroom\": ").Append(F(cost.Headroom)).Append(",\n");
+                sb.Append("  \"costMeasured\": ").Append(cost.Measured ? "true" : "false").Append(",\n");
+                sb.Append("  \"costFits\": ").Append(cost.Fits ? "true" : "false").Append(",\n");
+                sb.Append("  \"bottleneck\": \"").Append(FrameCost.Name(cost.Bottleneck)).Append("\",\n");
+                sb.Append("  \"costVerdict\": \"").Append(cost.Verdict).Append("\",\n");
                 sb.Append("  \"drawCalls\": ").Append(last.DrawCalls).Append(",\n");
                 sb.Append("  \"instancedCalls\": ").Append(last.Instanced).Append(",\n");
                 sb.Append("  \"fallbackCalls\": ").Append(last.Fallback).Append(",\n");
@@ -505,6 +633,8 @@ namespace AntSim.Unity.Scripts.Presenter
                       .Append(", \"drawCalls\": ").Append(s.DrawCalls)
                       .Append(", \"ants\": ").Append(s.Ants)
                       .Append(", \"tick\": ").Append(s.Tick)
+                      .Append(", \"cpuMs\": ").Append(F(s.Timing.CpuMs))
+                      .Append(", \"gpuMs\": ").Append(F(s.Timing.GpuMs))
                       .Append(", \"focused\": ").Append(s.Focused ? "true" : "false").Append('}');
                 }
                 sb.Append("\n  ]\n}\n");
