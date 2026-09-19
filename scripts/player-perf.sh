@@ -24,16 +24,29 @@
 # El player va a build/player/ (ignorado por git) y el informe a
 # artifacts/perf-player.json.
 #
+# MODO COSTE (--cpu). El framerate presentado tiene un problema de fondo: con el
+# vsync entregando al refresco, el techo de 60 fps lo pone la PANTALLA y el coste
+# del frame queda tapado. `--cpu` construye el player con los tiempos de frame
+# encendidos (`enableFrameTimingStats`) y lo corre con el vsync APAGADO, así que
+# el bucle produce frames tan rápido como puede y el FrameTimingManager dice
+# cuánto cuesta cada uno: CPU total, hilo principal, hilo de render y GPU (si la
+# plataforma la expone). Informe aparte (artifacts/perf-player-cpu.json): son dos
+# medidas distintas y con un solo nombre la segunda borraría la evidencia de la
+# primera. En este modo el vsync apagado es el REQUISITO, no el defecto.
+#
 # Uso:
 #   scripts/player-perf.sh                     # construye y mide 30 s (+12 s de calentamiento)
 #   scripts/player-perf.sh --seconds 60
+#   scripts/player-perf.sh --cpu               # ídem, sin vsync: el COSTE por frame
 #   scripts/player-perf.sh --skip-build        # reusa el player ya construido
 #   scripts/player-perf.sh --log FICHERO       # solo analiza el log de una corrida
 #   scripts/player-perf.sh --selftest          # verifica el analizador (sin Unity)
 #
 # Salida: 0 medido y puerta verde · 1 medido con la puerta en rojo · 2 uso ·
 # 3 sin editor/CLI · 4 el player no arrancó · 5 sin veredicto (no midió) ·
-# 6 el build falló · 7 el vsync está apagado (la medida no sería la presentada).
+# 6 el build falló · 7 el vsync está apagado (la medida no sería la presentada) ·
+# 8 en modo --cpu el vsync NO llegó a apagarse (mediría el refresco, no el coste) ·
+# 9 en modo --cpu el informe no trae coste medido (sin tiempos de frame no hay coste).
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -43,6 +56,8 @@ METHOD="AntSim.Unity.Scripts.EditorTools.PlayerBuild.BuildMultiViewPlayer"
 PLAYER="$ROOT/build/player/AntSim.exe"
 CLI_EXE="$ROOT/build/antsim/antsim.exe"
 REPORT="artifacts/perf-player.json"
+REPORT_CPU="artifacts/perf-player-cpu.json"
+CPU_MODE=0
 SECONDS_WINDOW=30
 WARMUP=12
 BOOST=10
@@ -69,11 +84,12 @@ while [[ $# -gt 0 ]]; do
     --warmup)      WARMUP="$2"; shift 2 ;;
     --boost)       BOOST="$2"; shift 2 ;;
     --grid)        GRID="$2"; shift 2 ;;
+    --cpu)         CPU_MODE=1; REPORT="$REPORT_CPU"; shift ;;
     --skip-build)  SKIP_BUILD=1; shift ;;
     --log)         LOG="$2"; ANALYZE_ONLY=1; shift 2 ;;
     --quiet)       QUIET=1; shift ;;
     --selftest)    SELFTEST=1; shift ;;
-    --help|-h)     sed -n '2,37p' "$0"; exit 0 ;;
+    --help|-h)     sed -n '2,48p' "$0"; exit 0 ;;
     *) echo "✗ parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
@@ -91,7 +107,8 @@ pp_verdict() {
     return 5
   fi
   printf '%s\n' "$lines"
-  if grep -qa '\[PlayerPerf\] ✓ medido' "$file"; then return 0; fi
+  # Los dos cierres verdes: el del modo presentado y el del modo coste.
+  if grep -qaE '\[PlayerPerf\] ✓ (medido|coste medido)' "$file"; then return 0; fi
   if grep -qa '\[PlayerPerf\] ✗' "$file"; then return 1; fi
   echo "(la sonda arrancó pero no cerró con veredicto: se quedó sin ventana)"
   return 5
@@ -151,8 +168,25 @@ if [[ $SELFTEST -eq 1 ]]; then
   if [[ "$got" != "59.9" ]]; then echo "✗ selftest: jget fpsMedian dio «$got» (esperado 59.9)" >&2; fails=1; fi
   got="$(jget "$tmp/perf.json" gateOk)"
   if [[ "$got" != "true" ]]; then echo "✗ selftest: jget gateOk dio «$got» (esperado true)" >&2; fails=1; fi
+  # Las claves del modo coste: son las que publica la 5ª pieza del criterio.
+  printf '{\n  "mode": "player-cpu",\n  "vSyncCount": 0,\n  "projectVSyncCount": 1,\n  "cpuMsMedian": 4.1,\n  "costMeasured": true,\n  "costFits": true,\n  "costVerdict": "cabe: la CPU deja margen al objetivo",\n  "bottleneck": "equilibrado"\n}\n' > "$tmp/cpu.json"
+  for kv in "cpuMsMedian=4.1" "costMeasured=true" "projectVSyncCount=1"; do
+    k="${kv%%=*}"; want="${kv#*=}"
+    got="$(jget "$tmp/cpu.json" "$k")"
+    if [[ "$got" != "$want" ]]; then echo "✗ selftest: jget $k dio «$got» (esperado $want)" >&2; fails=1; fi
+  done
+  # Log del modo coste: la sonda cierra con «coste medido» y el analizador debe
+  # leerlo como verde igual que el del modo presentado.
+  {
+    echo "Initialize engine version: 6000.6.0f1"
+    echo "[PlayerPerf] arrancada: ventana 30s · calentamiento 12s · boost ×10 · vsync del proyecto=1 · modo=COSTE (vsync apagado por la sonda) · pantalla=1280×720 · refresco=60 Hz"
+    echo "[PlayerPerf] coste/frame: coste/frame cpu=4.1 ms (hilo ppal 3.4 ms, hilo render 0.7 ms) · gpu=2.2 ms · techo sin vsync=250 fps · 24.6% del presupuesto de 16.667 ms · cuello=equilibrado · cabe: la CPU deja margen al objetivo"
+    echo "[PlayerPerf] ✓ coste medido: coste/frame cpu=4.1 ms"
+  } > "$tmp/coste.log"
+  rc_cost=0; pp_verdict "$tmp/coste.log" >/dev/null 2>&1 || rc_cost=$?
+  if [[ $rc_cost -ne 0 ]]; then echo "✗ selftest: un log de coste medido dio $rc_cost (esperado 0)" >&2; fails=1; fi
   if [[ $fails -eq 0 ]]; then
-    echo "✓ selftest del analizador del player ok (medido / puerta roja / sin sonda / claves del JSON)"
+    echo "✓ selftest del analizador del player ok (medido / puerta roja / sin sonda / claves del JSON y del modo coste)"
     exit 0
   fi
   exit 1
@@ -195,6 +229,7 @@ trap cleanup EXIT
 if [[ $SKIP_BUILD -eq 0 ]]; then
   log "▶ Build del player: $PLAYER"
   log "   escena:   Assets/Scenes/MultiSim.unity · grid $GRID · 4 vistas × 2 colonias"
+  log "   modo:     $([[ $CPU_MODE -eq 1 ]] && echo 'COSTE por frame (vsync apagado, tiempos de frame encendidos)' || echo 'framerate PRESENTADO (vsync del monitor)')"
   log "   editor:   $UNITY"
   set +e
   # El techo de tiempo importa: un proyecto abierto en OTRO editor hace que la
@@ -202,6 +237,7 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
   # quedarse colgado sin escribir el cierre. `timeout` lo mata y el veredicto
   # (que exige la línea de cierre) lo detecta.
   MSYS_NO_PATHCONV=1 ANTSIM_PERF_GRID="$GRID" \
+    ANTSIM_PERF_FRAME_TIMING="$CPU_MODE" \
     timeout 900 "$UNITY" -batchmode -quit -nographics \
       -projectPath "$(winpath "$PROJECT")" \
       -executeMethod "$METHOD" \
@@ -225,7 +261,7 @@ fi
 
 [[ -f "$PLAYER" ]] || { echo "✗ no existe el player: $PLAYER (¿se saltó el build?)" >&2; exit 6; }
 
-log "▶ Sonda del player: ventana ${SECONDS_WINDOW}s · calentamiento ${WARMUP}s · boost ×$BOOST"
+log "▶ Sonda del player: ventana ${SECONDS_WINDOW}s · calentamiento ${WARMUP}s · boost ×$BOOST · no-vsync $CPU_MODE"
 set +e
 # Se ejecuta desde la RAÍZ del repo: el ancla del player ya resuelve el repo root
 # por el marcador (build dentro del repo), pero el cwd deja el caso trivial a mano.
@@ -233,6 +269,7 @@ set +e
     -logFile "$(winpath "$RUN_LOG")" \
     -screen-fullscreen 0 -screen-width 1280 -screen-height 720 \
     -antsimPerfOut "$REPORT" \
+    -antsimPerfNoVsync "$CPU_MODE" \
     -antsimPerfSeconds "$SECONDS_WINDOW" \
     -antsimPerfWarmup "$WARMUP" \
     -antsimPerfBoost "$BOOST" >/dev/null 2>&1)
@@ -254,17 +291,44 @@ if [[ -f "$REPORT_ABS" ]]; then
   log ""
   log "   informe: $REPORT"
   log "   frames/s (mediana): $(jget "$REPORT_ABS" fpsMedian) · peor $(jget "$REPORT_ABS" fpsWorst) · mejor $(jget "$REPORT_ABS" fpsBest)"
-  log "   intervalo presentado: $(jget "$REPORT_ABS" presentedIntervalMs) ms/frame · al refresco: $(jget "$REPORT_ABS" presentedAtRefresh) · refresco $(jget "$REPORT_ABS" refreshRateHz) Hz"
-  log "   vsync: $(jget "$REPORT_ABS" vSyncCount) · draw calls $(jget "$REPORT_ABS" drawCalls) (instanciadas $(jget "$REPORT_ABS" instancedCalls), respaldo $(jget "$REPORT_ABS" fallbackCalls))"
+  log "   vsync: $(jget "$REPORT_ABS" vSyncCount) (proyecto $(jget "$REPORT_ABS" projectVSyncCount)) · draw calls $(jget "$REPORT_ABS" drawCalls) (instanciadas $(jget "$REPORT_ABS" instancedCalls), respaldo $(jget "$REPORT_ABS" fallbackCalls))"
   log "   carga final: $(jget "$REPORT_ABS" ants) hormigas · $(jget "$REPORT_ABS" items) ítems · tick $(jget "$REPORT_ABS" finalTick)"
   log "   puerta de píxeles: $(jget "$REPORT_ABS" gateOk)"
 
-  # Sin vsync no hay «framerate presentado»: la corrida mide otra cosa y dar el
-  # número por bueno sería exactamente el error que este script existe para no
-  # cometer.
-  if [[ "$(jget "$REPORT_ABS" vSyncCount)" == "0" ]]; then
-    echo "✗ el vsync del proyecto está APAGADO: esta corrida mide coste, no refresco presentado" >&2
-    exit 7
+  if [[ $CPU_MODE -eq 1 ]]; then
+    # ── Modo coste: el número que se publica es el de la CPU del frame ────────
+    log "   COSTE/FRAME: cpu $(jget "$REPORT_ABS" cpuMsMedian) ms (hilo ppal $(jget "$REPORT_ABS" cpuMainMsMedian) · hilo render $(jget "$REPORT_ABS" cpuRenderMsMedian))"
+    log "   gpu: $(jget "$REPORT_ABS" gpuMsMedian) ms (disponible $(jget "$REPORT_ABS" gpuAvailable)) · espera Present $(jget "$REPORT_ABS" presentWaitMsMedian) ms"
+    log "   techo sin vsync: $(jget "$REPORT_ABS" achievedMsMedian) ms/frame · $(jget "$REPORT_ABS" fpsMedian) fps"
+    log "   presupuesto: $(jget "$REPORT_ABS" cpuFractionOfBudget) del de $(jget "$REPORT_ABS" budgetMs) ms · cuello de botella: $(jget "$REPORT_ABS" bottleneck)"
+    log "   veredicto: $(jget "$REPORT_ABS" costVerdict)"
+    log "   tiempos de frame: $(jget "$REPORT_ABS" frameTimingsTaken) frames con dato · syncInterval $(jget "$REPORT_ABS" syncInterval)"
+
+    # En modo coste el requisito es lo contrario: el vsync TIENE que estar
+    # apagado. Si no lo estuvo, lo medido es el refresco del monitor con otro
+    # nombre — el error simétrico al que protege la salida 7.
+    if [[ "$(jget "$REPORT_ABS" vSyncCount)" != "0" ]]; then
+      echo "✗ modo coste con el vsync ACTIVO: lo medido no es el coste del frame" >&2
+      exit 8
+    fi
+    if [[ "$(jget "$REPORT_ABS" costMeasured)" != "true" ]]; then
+      echo "✗ modo coste sin tiempos de frame (¿build sin enableFrameTimingStats?)" >&2
+      exit 9
+    fi
+    if [[ "$(jget "$REPORT_ABS" costFits)" != "true" ]]; then
+      echo "✗ el coste de CPU NO cabe en el presupuesto del objetivo" >&2
+      exit 1
+    fi
+  else
+    log "   intervalo presentado: $(jget "$REPORT_ABS" presentedIntervalMs) ms/frame · al refresco: $(jget "$REPORT_ABS" presentedAtRefresh) · refresco $(jget "$REPORT_ABS" refreshRateHz) Hz"
+
+    # Sin vsync no hay «framerate presentado»: la corrida mide otra cosa y dar el
+    # número por bueno sería exactamente el error que este script existe para no
+    # cometer.
+    if [[ "$(jget "$REPORT_ABS" vSyncCount)" == "0" ]]; then
+      echo "✗ el vsync del proyecto está APAGADO: esta corrida mide coste, no refresco presentado" >&2
+      exit 7
+    fi
   fi
 fi
 
