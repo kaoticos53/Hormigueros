@@ -487,6 +487,40 @@ clasificación es la del ejemplo oficial de `FrameTiming`, con sus umbrales. Dos
 pruebas son los casos que cambian la decisión: sin tiempos de GPU lo declara
 (`indeterminado`) en vez de inventar, y un coste por encima del presupuesto suspende.
 
+#### Un artefacto commiteado que iba por detrás del generador
+
+Los materiales del bootstrapper se commitean (son lo que ve un checkout limpio), y
+**cuatro de los cinco materiales de feromonas tenían `_BaseMap` SIN textura**
+(`m_Texture: {fileID: 0}`) mientras el generador escribía la referencia. Salieron a la
+luz al comparar el árbol con HEAD después de una pasada de medición: la escena y 73 de 76
+materiales salían canónicamente idénticos, y en los de feromonas el generador no coincidía.
+
+Qué significa ese `fileID: 0`, que es lo que lo hace algo más que cosmética: el material es
+**transparente** con `_BaseColor` blanco y alpha 1, así que sin textura el shader muestrea
+**blanco** y el quad se pinta **blanco opaco tapando el tablero** mientras no llega ningún
+frame de feromonas (escena recién abierta, canal E apagado, primer tick). Con su textura de
+reposo —1×1 blanca con alpha 0— el reposo es **invisible**. Es el mismo defecto del Play pass
+de F5.1 («el terreno es blanco») por la puerta de atrás, y el síntoma exacto con el que el
+17-09 apareció un material sin su textura tras una pasada del generador.
+
+**El generador va por delante, y se comprobó por medición.** Tres generaciones independientes
+—dos del multi-visor y una de la escena simple, con una **borrando la textura de reposo** para
+forzar su recreación en la MISMA pasada— producen el material de cada vista **canónicamente
+idéntico** (`f0c6f473…`, `3ed42a58…`, `4c953c4b…`, `3525b9d9…`) y siempre con la referencia.
+Eso descarta la hipótesis de que la referencia se pierda cuando la textura se crea en la misma
+pasada: la pérdida es de una corrida vieja (la misma clase de puntero muerto que arregló la
+idempotencia del relleno el 17-09), y el set commiteado era **inconsistente consigo mismo**
+—`PheromoneMat_V2` sí tenía su textura y los otros cuatro no—, que es la firma de una pérdida
+parcial y no de un diseño.
+
+Arreglo: los cuatro materiales quedan con su referencia (7 líneas) y el contenido es
+canónicamente idéntico al que escribe el generador (comparado archivo a archivo). Y para que
+no vuelva a pasar en silencio, **2 tests headless** (`PheromoneMaterialGuardTests`) leen los
+`.mat` del repo y exigen lo que un checkout limpio necesita: la referencia no puede faltar, la
+guía tiene que **existir** (un puntero muerto es el mismo defecto y más difícil de ver) y la
+textura tiene que ser 1×1 RGBA32 `ffffff00`, es decir invisible. La guarda **se verificó en
+rojo** sobre los materiales de HEAD antes del arreglo.
+
 ## 5. Qué NO demuestra esta rodaja
 
 - **El coste del frame ya NO es una incógnita** (§4.8: **1,294 ms de CPU por frame**,
@@ -505,9 +539,9 @@ pruebas son los casos que cambian la decisión: sin tiempos de GPU lo declara
 
 ## 6. Verificación
 
-- **524/524 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
-  píxeles `FrameGate`, 12 del modelo de coste por frame `FrameCost` y 5 del ancla de
-  rutas del player).
+- **526/526 tests** headless (los 480 de la rodaja 3, 16 de la 3bis, 11 de la puerta de
+  píxeles `FrameGate`, 12 del modelo de coste por frame `FrameCost`, 5 del ancla de rutas
+  del player y 2 de la guarda de los materiales de feromonas).
 - **El criterio de salida de la fase, cerrado con CINCO piezas**: **Core 0,47 ms/tick**
   (8 colonias, grid 256) · **vista 0,51 ms/frame** en batch · **2,44 ms/frame** con
   presentación en el editor · **el build presentado al refresco** (59,997 fps sobre un
@@ -548,4 +582,7 @@ pruebas son los casos que cambian la decisión: sin tiempos de GPU lo declara
   bootstrapper, así que regenera `MultiSim.unity` y sus materiales. Son artefactos
   generados y el contenido queda canónicamente idéntico (ids locales y orden son
   de cada sesión de Unity), pero el `git status` sale con ~60 ficheros: el script
-  lo avisa y deja el comando para dejarlo limpio.
+  lo avisa y deja el comando para dejarlo limpio. Con una excepción que conviene
+  mirar antes de restaurar a ciegas: si el generador cambió, restaurar deja el
+  artefacto **por detrás**, que es como apareció el cuarto defecto de §4.7. La
+  guarda de los materiales de feromonas lo detecta sin abrir Unity.
