@@ -36,8 +36,11 @@ a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
 el 2026-09-17 (runs 17 y 19, verdes en Linux): stream canónico, replay con
 drops a 3000 y 6000 ticks, la
 partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica. **496/496 tests** en Windows (y los 5 scripts de pin verificados en
-Linux en el último push; la suite corre en las dos plataformas en CI).
+canónica. **536/536 tests** en Windows y verdes en Linux en CI en cada push,
+igual que los 5 scripts de pin. El job `test` incluye además **tres pasos que
+verifican instrumentos sin editor**: el analizador de compilación de Unity, las
+guardas del Unity CLI y —desde el 2026-09-19— el **selftest del barrido de
+costes**, que es el que prueba el ajuste fijo/marginal de §4.10.
 
 **Gate de Unity en CI — corregido y DORMIDO** — el job `unity-compile`
 compila los MonoBehaviours que `dotnet test` no ve, y hasta hoy nunca había
