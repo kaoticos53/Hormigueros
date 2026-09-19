@@ -125,9 +125,17 @@ namespace AntSim.Unity.Scripts.EditorTools
         public const int PerfFrameEvery = 5;
 
         public static void CreateMultiSimPerfScene(int gridCells)
+            => CreateMultiSimPerfScene(gridCells, PerfTicks);
+
+        /// <summary>El medidor con un horizonte explícito. Existe por la medida del
+        /// SISTEMA COMPLETO (F5.3, 6ª pieza): para que el CLI siga simulando durante
+        /// TODA la ventana hay que darle mundo de sobra — con el horizonte del
+        /// criterio el mundo se acaba en el calentamiento y lo que se mediría sería un
+        /// player solo (la sonda lo detecta y suspende, pero mejor no llegar ahí).</summary>
+        public static void CreateMultiSimPerfScene(int gridCells, int ticks)
         {
             CreateMultiSimScene(views: 4, baseSeed: 42, pools: null, replayFiles: null,
-                gridCells: gridCells, frameEvery: PerfFrameEvery, ticks: PerfTicks);
+                gridCells: gridCells, frameEvery: PerfFrameEvery, ticks: ticks);
         }
 
         public static void CreateMultiSimScene(int views, ulong baseSeed,

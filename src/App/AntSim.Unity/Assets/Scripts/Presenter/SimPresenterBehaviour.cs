@@ -188,6 +188,23 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Velocidad efectiva actual de simulación (Speed * SpeedBoost).</summary>
         public float EffectiveSpeed => Speed * SpeedBoost;
 
+        /// <summary>
+        /// Ticks que el reloj de simulación pide por SEGUNDO con la velocidad actual
+        /// (F5.3, coste del sistema): es el ritmo al que el mundo TIENE que avanzar
+        /// para que la reproducción no se quede atrás, y sale del propio reloj del
+        /// motor (Dt), no de una constante aparte.
+        /// </summary>
+        public float ClockTicksPerSecond => Dt > 0f ? Speed * SpeedBoost / Dt : 0f;
+
+        /// <summary>
+        /// CPU (ms, todos sus hilos) que lleva gastada el CLI de ESTA vista (F5.3,
+        /// coste del SISTEMA). El mundo se simula en otro proceso, así que su trabajo
+        /// no aparece en ningún tiempo de frame del player: esto es lo que permite
+        /// sumarlo. Vale 0 si esta vista no lanza CLI (p. ej. reproduciendo un
+        /// archivo) — y entonces el coste del sistema no está medido, no es gratis.
+        /// </summary>
+        public double CliCpuMs => _source?.CliCpuMs ?? 0.0;
+
         /// <summary>Indica si la simulación está pausada (Speed == 0).</summary>
         public bool IsPaused => Speed <= 0f;
 

@@ -14,6 +14,15 @@ namespace AntSim.Unity.Scripts.Streaming
     {
         private readonly string _cliPath;
 
+        /// <summary>Proceso del CLI EN CURSO (F5.3, coste del SISTEMA). El player
+        /// solo puede cronometrar al hijo mientras tiene su handle, y el motor del
+        /// stream vive en otro hilo: aquí se publica de forma atómica y se retira al
+        /// terminar.</summary>
+        private volatile Process? _live;
+        /// <summary>CPU del hijo al cerrar: el proceso ya no está, pero su coste
+        /// total sí (dejarlo a 0 diría que la simulación fue gratis).</summary>
+        private double _cliCpuMsClosed;
+
         /// <param name="cliPath">Ruta del CLI: absoluta, relativa al cwd o
         /// relativa al repo root (p. ej. "build/antsim").</param>
         /// <param name="repoRoot">Ancla del repo root para rutas relativas
@@ -63,9 +72,20 @@ namespace AntSim.Unity.Scripts.Streaming
             }
 
             using var proc = Process.Start(psi)!;
-            string? line;
-            while ((line = proc.StandardOutput.ReadLine()) != null)
-                onLine(line);
+            _live = proc;
+            try
+            {
+                string? line;
+                while ((line = proc.StandardOutput.ReadLine()) != null)
+                    onLine(line);
+            }
+            finally
+            {
+                // El coste del CLI se congela ANTES de soltar el handle y de
+                // disponer el objeto: después ya no hay de dónde leerlo.
+                _cliCpuMsClosed = ReadCpuMs(proc, _cliCpuMsClosed);
+                _live = null;
+            }
             proc.WaitForExit();
         }
 
@@ -78,6 +98,35 @@ namespace AntSim.Unity.Scripts.Streaming
 
         /// <summary>Ruta del CLI ya resuelta (tests y diagnóstico).</summary>
         public string CliPath => _cliPath;
+
+        /// <summary>
+        /// CPU consumida por el CLI (ms, todos sus hilos) hasta este instante. Es la
+        /// pata que falta para medir el coste del SISTEMA COMPLETO: el mundo se
+        /// simula en OTRO proceso y su trabajo no aparece en ningún tiempo de frame
+        /// del player (F5.3, 6ª pieza del criterio).
+        ///
+        /// Si el CLI ya terminó devuelve su CPU final, no 0: un 0 significa «no
+        /// trabajó» y se leería como que simular es gratis. Quien mide tiene que
+        /// mirar además si los TICKS avanzaron — es el contraste que distingue «ya
+        /// terminó» de «no está trabajando».
+        /// </summary>
+        public double CliCpuMs
+        {
+            get
+            {
+                Process? proc = _live;
+                if (proc == null) return _cliCpuMsClosed;
+                return ReadCpuMs(proc, _cliCpuMsClosed);
+            }
+        }
+
+        /// <summary>CPU del proceso en ms, o el último valor conocido si el sistema
+        /// ya no la deja leer (el hijo murió y el handle se fue con él).</summary>
+        private static double ReadCpuMs(Process proc, double fallback)
+        {
+            try { return proc.TotalProcessorTime.TotalMilliseconds; }
+            catch (Exception) { return fallback; }
+        }
 
         /// <summary>Descarga las tarjetas del picker (JSON canónico del CLI).</summary>
         public string FetchPresetsJson()

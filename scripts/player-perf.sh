@@ -34,10 +34,31 @@
 # medidas distintas y con un solo nombre la segunda borraría la evidencia de la
 # primera. En este modo el vsync apagado es el REQUISITO, no el defecto.
 #
+# MODO SISTEMA (--system). El coste del frame del player no es el coste del
+# JUEGO: el mundo lo simula el CLI en OTRO proceso y su trabajo no aparece en
+# ningún tiempo de frame del player. `--system` (implica lo del modo coste) corre
+# la pareja con el vsync apagado y lee, ventana a ventana, la CPU del proceso hijo
+# y los ticks que simuló.
+#
+# LAS DOS PATAS VIVEN EN FASES DISTINTAS, y el montaje tiene que contener las dos.
+# Este CLI simula el horizonte ENTERO y escribe el stream cuando termina: primero
+# simula (y el player dibuja un tablero todavía vacío) y después el player
+# reproduce con el mundo cargado (y el CLI parado). Por eso el modo sistema baja el
+# CALENTAMIENTO a 2 s (con los 12 s del criterio la fase de simulación queda fuera
+# de la ventana y solo se mediría un player) y NO sube el horizonte: con más ticks
+# el CLI tarda más en escribir y la corrida se queda sin ninguna de las dos patas
+# —medido así: horizonte ×17 = cero datos y suspenso—. El número que publica es la
+# suma de las dos fases, y la sonda declara cuántas ventanas hubo de cada una y que
+# el solape es 0. Informe aparte (artifacts/perf-player-system.json): son tres
+# medidas distintas (presentado, coste del player, coste del sistema) y con un solo
+# nombre la siguiente borraría la evidencia de la anterior.
+#
 # Uso:
 #   scripts/player-perf.sh                     # construye y mide 30 s (+12 s de calentamiento)
 #   scripts/player-perf.sh --seconds 60
 #   scripts/player-perf.sh --cpu               # ídem, sin vsync: el COSTE por frame
+#   scripts/player-perf.sh --system            # + la pata del CLI: el coste del SISTEMA
+#   scripts/player-perf.sh --system --ticks 6000 --warmup 1
 #   scripts/player-perf.sh --skip-build        # reusa el player ya construido
 #   scripts/player-perf.sh --log FICHERO       # solo analiza el log de una corrida
 #   scripts/player-perf.sh --selftest          # verifica el analizador (sin Unity)
@@ -46,7 +67,10 @@
 # 3 sin editor/CLI · 4 el player no arrancó · 5 sin veredicto (no midió) ·
 # 6 el build falló · 7 el vsync está apagado (la medida no sería la presentada) ·
 # 8 en modo --cpu el vsync NO llegó a apagarse (mediría el refresco, no el coste) ·
-# 9 en modo --cpu el informe no trae coste medido (sin tiempos de frame no hay coste).
+# 9 en modo --cpu el informe no trae coste medido (sin tiempos de frame no hay coste) ·
+# 10 en modo --system falta alguna de las dos fases dentro de la ventana: sin la
+#    pata del CLI o sin el mundo en pantalla no hay coste del sistema (ajusta
+#    --ticks y --warmup: las dos tienen que caer dentro de la ventana).
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -57,9 +81,19 @@ PLAYER="$ROOT/build/player/AntSim.exe"
 CLI_EXE="$ROOT/build/antsim/antsim.exe"
 REPORT="artifacts/perf-player.json"
 REPORT_CPU="artifacts/perf-player-cpu.json"
+REPORT_SYSTEM="artifacts/perf-player-system.json"
 CPU_MODE=0
+SYSTEM_MODE=0
+# Horizonte del medidor: vacío = el del criterio (12 000). El modo sistema lo sube
+# solo, porque necesita que el CLI siga simulando durante TODA la ventana.
+TICKS=""
+DEFAULT_TICKS=12000
 SECONDS_WINDOW=30
-WARMUP=12
+# Vacío = se resuelve abajo: 12 s (criterio) o 2 s en modo sistema, donde la fase
+# de simulación del CLI tiene que caer DENTRO de la ventana de muestreo.
+WARMUP=""
+WARMUP_DEFAULT=12
+WARMUP_SYSTEM=2
 BOOST=10
 GRID=256
 SKIP_BUILD=0
@@ -78,6 +112,7 @@ log() { [[ $QUIET -eq 1 ]] || echo "$@"; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    # (los modos se resuelven abajo: --system sube el horizonte si no se dio uno)
     --project)     PROJECT="$2"; shift 2 ;;
     --unity)       UNITY="$2"; shift 2 ;;
     --seconds)     SECONDS_WINDOW="$2"; shift 2 ;;
@@ -85,14 +120,21 @@ while [[ $# -gt 0 ]]; do
     --boost)       BOOST="$2"; shift 2 ;;
     --grid)        GRID="$2"; shift 2 ;;
     --cpu)         CPU_MODE=1; REPORT="$REPORT_CPU"; shift ;;
+    --system)      CPU_MODE=1; SYSTEM_MODE=1; REPORT="$REPORT_SYSTEM"; shift ;;
+    --ticks)       TICKS="$2"; shift 2 ;;
     --skip-build)  SKIP_BUILD=1; shift ;;
     --log)         LOG="$2"; ANALYZE_ONLY=1; shift 2 ;;
     --quiet)       QUIET=1; shift ;;
     --selftest)    SELFTEST=1; shift ;;
-    --help|-h)     sed -n '2,48p' "$0"; exit 0 ;;
+    --help|-h)     sed -n '2,65p' "$0"; exit 0 ;;
     *) echo "✗ parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
+
+if [[ -z "$TICKS" ]]; then TICKS="$DEFAULT_TICKS"; fi
+if [[ -z "$WARMUP" ]]; then
+  if [[ $SYSTEM_MODE -eq 1 ]]; then WARMUP="$WARMUP_SYSTEM"; else WARMUP="$WARMUP_DEFAULT"; fi
+fi
 
 # ── Analizador del log (aislado: testeable sin Unity) ────────────────────────
 # El veredicto es la última línea de la sonda, no el código de salida del player:
@@ -175,6 +217,14 @@ if [[ $SELFTEST -eq 1 ]]; then
     got="$(jget "$tmp/cpu.json" "$k")"
     if [[ "$got" != "$want" ]]; then echo "✗ selftest: jget $k dio «$got» (esperado $want)" >&2; fails=1; fi
   done
+  # Las claves del modo SISTEMA: es lo que publica la 6ª pieza del criterio, y su
+  # guarda (salida 10) depende de que el extractor las lea bien.
+  printf '{\n  "mode": "player-system",\n  "systemMeasured": true,\n  "systemPlayerFits": true,\n  "cliMsPerTick": 0.203,\n  "cliCompleted": true,\n  "systemMsPerFrame": 41.7,\n  "systemCores": 2.502,\n  "systemSimWindows": 10,\n  "systemLoadedWindows": 21,\n  "systemOverlapWindows": 0,\n  "systemWindows": 29,\n  "systemVerdict": "cabe: el frame del player deja margen"\n}\n' > "$tmp/sistema.json"
+  for kv in "systemMeasured=true" "cliMsPerTick=0.203" "systemCores=2.502" "cliCompleted=true"; do
+    k="${kv%%=*}"; want="${kv#*=}"
+    got="$(jget "$tmp/sistema.json" "$k")"
+    if [[ "$got" != "$want" ]]; then echo "✗ selftest: jget $k dio «$got» (esperado $want)" >&2; fails=1; fi
+  done
   # Log del modo coste: la sonda cierra con «coste medido» y el analizador debe
   # leerlo como verde igual que el del modo presentado.
   {
@@ -228,8 +278,8 @@ trap cleanup EXIT
 
 if [[ $SKIP_BUILD -eq 0 ]]; then
   log "▶ Build del player: $PLAYER"
-  log "   escena:   Assets/Scenes/MultiSim.unity · grid $GRID · 4 vistas × 2 colonias"
-  log "   modo:     $([[ $CPU_MODE -eq 1 ]] && echo 'COSTE por frame (vsync apagado, tiempos de frame encendidos)' || echo 'framerate PRESENTADO (vsync del monitor)')"
+  log "   escena:   Assets/Scenes/MultiSim.unity · grid $GRID · 4 vistas × 2 colonias · horizonte $TICKS ticks"
+  log "   modo:     $([[ $SYSTEM_MODE -eq 1 ]] && echo 'COSTE DEL SISTEMA (player + CLI, vsync apagado, tiempos de frame encendidos)' || { [[ $CPU_MODE -eq 1 ]] && echo 'COSTE por frame (vsync apagado, tiempos de frame encendidos)' || echo 'framerate PRESENTADO (vsync del monitor)'; })"
   log "   editor:   $UNITY"
   set +e
   # El techo de tiempo importa: un proyecto abierto en OTRO editor hace que la
@@ -237,6 +287,7 @@ if [[ $SKIP_BUILD -eq 0 ]]; then
   # quedarse colgado sin escribir el cierre. `timeout` lo mata y el veredicto
   # (que exige la línea de cierre) lo detecta.
   MSYS_NO_PATHCONV=1 ANTSIM_PERF_GRID="$GRID" \
+    ANTSIM_PERF_TICKS="$TICKS" \
     ANTSIM_PERF_FRAME_TIMING="$CPU_MODE" \
     timeout 900 "$UNITY" -batchmode -quit -nographics \
       -projectPath "$(winpath "$PROJECT")" \
@@ -261,7 +312,7 @@ fi
 
 [[ -f "$PLAYER" ]] || { echo "✗ no existe el player: $PLAYER (¿se saltó el build?)" >&2; exit 6; }
 
-log "▶ Sonda del player: ventana ${SECONDS_WINDOW}s · calentamiento ${WARMUP}s · boost ×$BOOST · no-vsync $CPU_MODE"
+log "▶ Sonda del player: ventana ${SECONDS_WINDOW}s · calentamiento ${WARMUP}s · boost ×$BOOST · no-vsync $CPU_MODE · sistema $SYSTEM_MODE"
 set +e
 # Se ejecuta desde la RAÍZ del repo: el ancla del player ya resuelve el repo root
 # por el marcador (build dentro del repo), pero el cwd deja el caso trivial a mano.
@@ -270,6 +321,7 @@ set +e
     -screen-fullscreen 0 -screen-width 1280 -screen-height 720 \
     -antsimPerfOut "$REPORT" \
     -antsimPerfNoVsync "$CPU_MODE" \
+    -antsimPerfSystem "$SYSTEM_MODE" \
     -antsimPerfSeconds "$SECONDS_WINDOW" \
     -antsimPerfWarmup "$WARMUP" \
     -antsimPerfBoost "$BOOST" >/dev/null 2>&1)
@@ -318,6 +370,32 @@ if [[ -f "$REPORT_ABS" ]]; then
     if [[ "$(jget "$REPORT_ABS" costFits)" != "true" ]]; then
       echo "✗ el coste de CPU NO cabe en el presupuesto del objetivo" >&2
       exit 1
+    fi
+
+    if [[ $SYSTEM_MODE -eq 1 ]]; then
+      # ── Modo SISTEMA: el número es la pareja (player + CLI) ───────────────
+      log "   SISTEMA pata del player (mundo cargado): $(jget "$REPORT_ABS" systemPlayerMsPerFrame) ms/frame = $(jget "$REPORT_ABS" systemPlayerFractionOfBudget) del presupuesto · margen x$(jget "$REPORT_ABS" systemPlayerHeadroom)"
+      log "   SISTEMA pata del mundo: $(jget "$REPORT_ABS" cliMsPerTick) ms/tick ($(jget "$REPORT_ABS" cliCpuMsTotal) ms de CPU del CLI / $(jget "$REPORT_ABS" cliTicksTotal) ticks · terminado $(jget "$REPORT_ABS" cliCompleted)) → $(jget "$REPORT_ABS" cliMsPerFrame) ms/frame con $(jget "$REPORT_ABS" ticksPerPresentedFrame) ticks/frame"
+      log "   SISTEMA total: $(jget "$REPORT_ABS" systemMsPerFrame) ms/frame agregados = $(jget "$REPORT_ABS" systemCores) nucleos al reloj del juego · cli $(jget "$REPORT_ABS" systemCliShare) del sistema"
+      log "   SISTEMA fases: $(jget "$REPORT_ABS" systemSimWindows) ventanas de simulacion · $(jget "$REPORT_ABS" systemLoadedWindows) con el mundo en pantalla · $(jget "$REPORT_ABS" systemOverlapWindows) de solape · $(jget "$REPORT_ABS" ticksTotal) ticks entregados"
+      log "   SISTEMA agregado de la corrida (las dos fases mezcladas): $(jget "$REPORT_ABS" systemAggregateMsPerFrame) ms/frame"
+      log "   SISTEMA CPU del CLI por vista: $(jget "$REPORT_ABS" cliCpuMsViews)"
+      log "   SISTEMA veredicto: $(jget "$REPORT_ABS" systemVerdict)"
+
+      # Sin las DOS patas lo medido es un player (o un CLI) solo: eso no es el
+      # sistema, y darlo por bueno sería el falso verde que esta pieza existe para
+      # evitar.
+      if [[ "$(jget "$REPORT_ABS" systemMeasured)" != "true" ]]; then
+        echo "✗ modo sistema INCOMPLETO: $(jget "$REPORT_ABS" systemSimWindows) ventanas simulando y $(jget "$REPORT_ABS" systemLoadedWindows) con el mundo en pantalla — las dos fases tienen que caer dentro de la ventana (ajusta --ticks y --warmup)" >&2
+        exit 10
+      fi
+      # La pata del PLAYER sí tiene que caber en un frame (es el lado de los fps);
+      # el agregado del mundo se publica en núcleos equivalentes, porque corre en
+      # otros procesos y se reparte entre núcleos: no es una latencia de frame.
+      if [[ "$(jget "$REPORT_ABS" systemPlayerFits)" != "true" ]]; then
+        echo "✗ la pata del PLAYER del sistema NO cabe en el presupuesto del objetivo" >&2
+        exit 1
+      fi
     fi
   else
     log "   intervalo presentado: $(jget "$REPORT_ABS" presentedIntervalMs) ms/frame · al refresco: $(jget "$REPORT_ABS" presentedAtRefresh) · refresco $(jget "$REPORT_ABS" refreshRateHz) Hz"

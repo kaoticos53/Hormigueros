@@ -32,6 +32,7 @@ namespace AntSim.Unity.Scripts.EditorTools
     /// Variables de entorno: <c>ANTSIM_BUILD_OUT</c> (def. build/player/AntSim.exe),
     /// <c>ANTSIM_BUILD_SCENE</c> (def. la escena del multi-visor),
     /// <c>ANTSIM_PERF_GRID</c> (def. 256),
+    /// <c>ANTSIM_PERF_TICKS</c> (def. 12 000, el horizonte del criterio),
     /// <c>ANTSIM_PERF_FRAME_TIMING</c> (1 = enciende los tiempos de frame del build).
     ///
     /// Salida: 0 si el build terminó con éxito, 1 si falló (con el resumen del
@@ -53,6 +54,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             }
 
             int grid = (int)EnvFloat("ANTSIM_PERF_GRID", 256f);
+            // El horizonte del medidor es un parámetro (def. el del criterio): la
+            // medida del SISTEMA necesita un mundo que siga vivo durante la ventana.
+            int ticks = (int)EnvFloat("ANTSIM_PERF_TICKS", MultiSimBootstrapper.PerfTicks);
             bool frameTiming = EnvFloat("ANTSIM_PERF_FRAME_TIMING", 0f) >= 0.5f;
             string scenePath = Environment.GetEnvironmentVariable("ANTSIM_BUILD_SCENE") ?? MultiSimScene;
             string outPath = Environment.GetEnvironmentVariable("ANTSIM_BUILD_OUT") ?? "";
@@ -60,7 +64,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (!Path.IsPathRooted(outPath)) outPath = Path.GetFullPath(Path.Combine(repo, outPath));
 
             // La escena que se va a medir: la misma que monta el medidor del editor.
-            MultiSimBootstrapper.CreateMultiSimPerfScene(grid);
+            MultiSimBootstrapper.CreateMultiSimPerfScene(grid, ticks);
 
             var scenes = new List<string> { scenePath };
             var options = new BuildPlayerOptions
@@ -78,6 +82,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             PlayerSettings.enableFrameTimingStats = frameTiming;
 
             Debug.Log($"{Tag} construyendo {outPath} · escena {scenePath} · grid {grid}² · " +
+                      $"horizonte {ticks} ticks · " +
                       $"backend={PlayerSettings.GetScriptingBackend(NamedBuildTarget.Standalone)}" +
                       $" · tiempos de frame={PlayerSettings.enableFrameTimingStats}");
             BuildReport report;
