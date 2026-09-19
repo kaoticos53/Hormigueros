@@ -25,11 +25,11 @@ Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.m
 
 ## Notas de versión
 
-### F5.3 — Escala: el mundo deja de costar lo mismo (rodajas 1–3, sin tag todavía)
+### F5.3 — Escala: el mundo deja de costar lo mismo (rodajas 1–3ter, sin tag todavía)
 
 La sub-fase que hace sostenible todo lo anterior: el mismo mundo, con menos
-trabajo por tick y por frame. Cinco rodajas, ninguna de ellas cambia el mundo
-salvo donde se dice:
+trabajo por tick y por frame. Ninguna de las rodajas cambia el mundo salvo donde
+se dice:
 
 - **LOD de difusión EXACTO (rodajas 3 y 3bis)**: la difusión nunca llena una
   celda nula (régimen original del proyecto), así que las nulas no pueden cambiar
@@ -57,6 +57,16 @@ salvo donde se dice:
   instanciadas** y 292 hormigas + 684 ítems en pantalla. Destapó un defecto real
   que dejaba el tablero sin hormigas (`DrawMeshInstanced` exige
   `enableInstancing` en el material).
+- **Build de jugador (rodaja 3ter)**: `scripts/player-perf.sh` construye el player
+  del multi-visor y lo mide con una sonda de runtime. El build entrega **59,99 fps
+  con el refresco del monitor (59,997 Hz) y el vsync del proyecto aplicado** —el
+  techo lo pone la pantalla, no el juego— y **la puerta de píxeles pasa en las
+  cuatro vistas**. El primer build destapó tres defectos reales: el juego **no
+  compilaba como player** (`DragAndDrop`, API del editor sin guarda), faltaba el
+  módulo `com.unity.modules.screencapture` (la sonda visual del pass no compilaba
+  desde la poda de paquetes) y la puerta medía `AntMaterial` cuando el multi-visor
+  pinta con `ColonyAntMaterials`. La puerta es ahora una sola implementación pura
+  (`FrameGate`, 11 tests headless) compartida por el editor y el player.
 - **Huella CHC (rodaja 2bis)**: cuarta capa repelente + tropotaxis en ratio — la
   señal negativa que faltaba, sin canal nuevo y sin invalidar los `.antgenome`.
 - **Benchmark de políticas (rodaja 2ter)**: aleatoria vs scripted vs evolucionada
@@ -64,8 +74,9 @@ salvo donde se dice:
 - **Curva de aprendizaje y cobertura (rodaja 2quater)**: dos bloques nuevos en el
   canal C y panel por tarjeta en el HUD.
 
-`496/496` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
-errores ni avisos. Detalle: [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md).
+`512/512` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
+errores ni avisos. Criterio de la fase —«N colonias estables a 60 fps»— **medido y
+cumplido en un build de jugador**. Detalle: [`docs/fase5-3-escala.md`](docs/fase5-3-escala.md).
 
 ### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
 

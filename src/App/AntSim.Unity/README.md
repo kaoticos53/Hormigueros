@@ -271,6 +271,20 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   ficheros modificados, la decisión por defecto es `git checkout --` y dejarlos
   fuera: si algún día el juego los necesita (p. ej. un modelo ONNX en el
   inspector), se añaden a PROPÓSITO, en su propio commit y con justificación.
+  Con la misma regla, el manifest lleva **`com.unity.modules.screencapture`**: no
+  lo usa el juego, lo usa la **verificación visual** del proyecto
+  (`ProbeVisualSample` del Play pass lee píxeles del backbuffer). Sin él, ese
+  probe **no compila** y la fase visual del pass deja de poder correr — que es lo
+  que estuvo pasando, en silencio, desde la poda de paquetes hasta que el primer
+  build de jugador lo destapó (`docs/fase5-3-escala.md` §4.7).
+- **El juego NO compila como player si un script de runtime usa API de
+  `UnityEditor`.** El editor compila `Assembly-CSharp` con referencia a
+  `UnityEditor`, así que allí pasa y aquí no: `DragAndDrop`/`DragAndDropVisualMode`
+  (el drag & drop del diálogo de importación) costaron ocho `CS0103` en el primer
+  build. Todo lo del editor va bajo `#if UNITY_EDITOR`, con una rama de
+  comportamiento neutro (`IsDragHovering => false`) para que la vista no cambie.
+  El build se comprueba con `bash scripts/player-perf.sh` (construye el player) o
+  `bash scripts/check-unity-compile.sh` (compilación en batch, más rápida).
 
 Para volver a generar la escena con este aspecto: menú **AntSim → Crear escena de
 juego** (o `unity command menu --path "AntSim/Crear escena de juego"`) y Play. La
