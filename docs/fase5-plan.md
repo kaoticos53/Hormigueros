@@ -349,31 +349,35 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   evolucionada con política congelada ([`politicas-benchmark.md`](politicas-benchmark.md)).
 - **Curva de aprendizaje y cobertura — HECHAS (rodaja 2quater)**: bloques
   `learning`/`fitcurve` en el canal C + panel por tarjeta en el HUD.
-- **LOD de feromonas — HECHO (rodaja 3)**: LOD **exacto** por bloques con
-  soporte (16×16) en `PheromoneLayer`: la difusión del proyecto nunca llena una
-  celda nula, así que las nulas no pueden cambiar y visitarlas era trabajo puro.
-  La equivalencia se demuestra celda a celda contra la implementación de
-  referencia a grid completo, y los 6 pines no se movieron (el mundo es el
-  mismo). Medido: 12–14 % del grid visitado en un mundo forrajeado (1.2 % en un
-  mundo casi limpio) — el ahorro se encoge según se extiende el rastro.
+- **LOD de feromonas — HECHO (rodajas 3 y 3bis)**: LOD **exacto** por bloques con
+  soporte en `PheromoneLayer`: la difusión del proyecto nunca llena una celda
+  nula, así que las nulas no pueden cambiar y visitarlas era trabajo puro. La
+  equivalencia se demuestra celda a celda contra la implementación de referencia a
+  grid completo, y los 6 pines no se movieron (el mundo es el mismo). **El lado
+  del bloque ya no es un número a ojo**: la rodaja 3bis mide el equilibrio entre
+  celdas ahorradas y coste de reconstruir la lista (`--lod-blocks`, documento
+  §4.6) y de ahí salió el **8** — con 16 era 13.8 % del grid visitado y con 8 es
+  8.7 %, con la reconstrucción por debajo del 1 % del tick.
 - **GPU instancing — HECHO (rodaja 3)**: el presenter agrupa por material y
   envía lotes de hasta 1023 instancias (`Graphics.DrawMeshInstanced`), con
   caída al camino de una llamada por objeto si la plataforma no lo soporta. El
   troceo vive en un modelo puro del esqueleto Unity
   (`Streaming/InstancedDrawPlan.cs`) compilado en la suite headless, y hay
-  contador en vivo (`LastDrawCalls`, presupuesto 32). Medido en el editor con
-  `scripts/perf-scene.sh` (8 colonias en pantalla): **0.51 ms/frame** y 19
-  llamadas, todas instanciadas. La sonda destapó un defecto real —
+  contador en vivo (`LastDrawCalls`, presupuesto 32). Medido con
+  `scripts/perf-scene.sh` (8 colonias en pantalla): **0.51 ms/frame** en batch y
+  **2.44 ms/frame** en el Play pass con ventana (`--live`, bucle y presentación
+  reales), con 19 llamadas, todas instanciadas. La sonda destapó un defecto real —
   `DrawMeshInstanced` lanza si el material no trae `enableInstancing` y la escena
   se quedaba sin hormigas —, corregido en los bootstrappers y con respaldo en el
   presenter.
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
-  escena de juego. **Medido en las dos piezas**: el Core cuesta **0,50 ms por
-  tick** con 8 colonias en grid 256 (3 % de un frame a 60 fps) y la VISTA **0,51
-  ms por frame** con **19 llamadas de dibujo** (4 vistas × 2 colonias, todas
-  instanciadas). Lo que falta es la medida con presentación a pantalla y el gate
-  de píxeles del Play pass interactivo. Detalle y cifras:
-  [`fase5-3-escala.md`](fase5-3-escala.md).
+  escena de juego. **Medido en las tres piezas**: el Core cuesta **0,47 ms por
+  tick** con 8 colonias en grid 256 (2.8 % de un frame a 60 fps), la VISTA **0,51
+  ms por frame** en batch y **2,44 ms por frame** en el Play pass con ventana
+  (`--live`), con **19 llamadas de dibujo** (4 vistas × 2 colonias, todas
+  instanciadas). Lo que falta es un **build de jugador** (framerate con el vsync
+  del monitor aplicado) y el gate de píxeles del Play pass interactivo. Detalle y
+  cifras: [`fase5-3-escala.md`](fase5-3-escala.md).
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)
 

@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-09-18 · HEAD: `0485071` + la rodaja 3 de F5.3 (working tree) ·
-suite: 480/480 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
+suite: 496/496 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b), `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
@@ -36,7 +36,7 @@ a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
 el 2026-09-17 (runs 17 y 19, verdes en Linux): stream canónico, replay con
 drops a 3000 y 6000 ticks, la
 partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica. **480/480 tests** en Windows (y los 5 scripts de pin verificados en
+canónica. **496/496 tests** en Windows (y los 5 scripts de pin verificados en
 Linux en el último push; la suite corre en las dos plataformas en CI).
 
 **Gate de Unity en CI — corregido y DORMIDO** — el job `unity-compile`
@@ -130,24 +130,26 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    **F5.3 rodaja 3 — HECHO (2026-09-18): LOD de difusión EXACTO e instancing ([`fase5-3-escala.md`](fase5-3-escala.md)).**
    El LOD no aproxima: la difusión del proyecto nunca llena una celda nula (régimen original, no de esta
    rodaja), así que las nulas no pueden cambiar y visitarlas era trabajo puro. `PheromoneLayer` mantiene un
-   contador de celdas no nulas por BLOQUE de 16×16 y arma con ellos las regiones a visitar; el checkpoint
+   contador de celdas no nulas por BLOQUE — **de 8×8 desde la rodaja 3bis**, que es el lado medido en
+   [`fase5-3-escala.md`](fase5-3-escala.md) §4.6: el 16 histórico no ganaba en ningún mundo — y arma con ellos las regiones a visitar; el checkpoint
    DERIVA el soporte de los valores (`RebuildSupport`). La equivalencia se demuestra celda a celda contra una
    capa gemela con `LodEnabled = false` (implementación de referencia) sobre 400 operaciones aleatorias — el
-   primer intento del test comparaba dos secuencias distintas y hay una nota en él sobre eso. Medido: 12–14 %
-   del grid visitado en un mundo forrajeado, 1.2 % en uno casi limpio — **el ahorro se encoge según se extiende
-   el rastro** (bloques, no celdas). Y en el render, el presenter agrupa por material y envía lotes de 1023
+   primer intento del test comparaba dos secuencias distintas y hay una nota en él sobre eso. Medido: 7.8–8.7 %
+   del grid visitado en un mundo forrajeado (2.0 % en uno joven, 2.0 % a 512²) con el bloque 8 — **el ahorro se
+   encoge según se extiende el rastro** (bloques, no celdas). Y en el render, el presenter agrupa por material y envía lotes de 1023
    instancias, con caída a una llamada por objeto si la plataforma no soporta instancing; el troceo es un modelo
    puro del esqueleto Unity (el Core no viaja a la vista) con contador en vivo (`LastDrawCalls`, presupuesto 32).
    Exit de F5.3 (grid 256, 6000 ticks, warm-v2, semilla 42): 1/2/4/8 colonias ⇒
-   0.06/0.12/0.24/0.50 ms por tick (**3 % del frame a 60 fps con 8 colonias**), techo de velocidad ×553/×279/×137/×67.
-   Y el lado de la VISTA, medido en el editor con `scripts/perf-scene.sh` (4 vistas × 2 colonias = 8 colonias en pantalla,
-   grid 256): **0.51 ms por frame** en la fase estable, **19 llamadas de dibujo** (todas instanciadas, 0 de respaldo) con
-   292 hormigas y 684 ítems en pantalla. La sonda destapó **dos defectos reales**: `DrawMeshInstanced` LANZA si el
+   0.06/0.11/0.23/0.47 ms por tick (**2.8 % del frame a 60 fps con 8 colonias**), techo de velocidad ×596/×292/×144/×71.
+   Y el lado de la VISTA, medido con `scripts/perf-scene.sh` (4 vistas × 2 colonias = 8 colonias en pantalla,
+   grid 256) en sus **dos modos**: en batch **0.51 ms por frame** y, en el Play pass con ventana —bucle y presentación
+   reales—, **2.44 ms por frame** (15 % del presupuesto a 60 fps), con **19 llamadas de dibujo** (todas instanciadas, 0
+   de respaldo) y 292 hormigas + 684 ítems en pantalla en los dos casos. La sonda destapó **dos defectos reales**: `DrawMeshInstanced` LANZA si el
    material no tiene `enableInstancing` (los del bootstrapper no lo tenían: el tablero se quedaba SIN HORMIGAS, con una
    excepción por frame y 0 draw calls) — arreglado en los dos bootstrappers y con activación defensiva + contadores en
    el presenter; y la configuración de la sonda en statics se perdía en el reload de Play (movida a `SessionState`).
    **Los 6 pines NO se movieron** (el LOD es exacto: el mundo es byte a byte el mismo) y el proyecto Unity compila en
-   batch con 0 errores y 0 avisos. **480/480 tests.**
+   batch con 0 errores y 0 avisos. **496/496 tests.**
 2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome`,
    chip de estado por runway, fuente propia y sprites
    (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
@@ -163,8 +165,8 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 |---|---|
 | NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
 | `error CS` de MonoBehaviours | **abierto** — el job existe y está corregido, pero dormido: hoy lo caza la pasada local, no CI |
-| Feromonas costosas a escala | **mitigado (F5.3 rodaja 3)** — LOD exacto: 12–14 % del grid visitado en un mundo forrajeado; el RLE ya resolvía el envío del canal E |
-| Framerate real de Unity a N colonias | **medido en batch (F5.3 rodaja 3)** — 8 colonias: 0.51 ms/frame en la vista y 19 llamadas (todas instanciadas). Falta la medida con presentación a pantalla (Play pass interactivo) |
+| Feromonas costosas a escala | **mitigado (F5.3 rodajas 3 y 3bis)** — LOD exacto con bloque 8 medido: 7.8–8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
+| Framerate real de Unity a N colonias | **medido (F5.3 rodaja 3)** — 8 colonias: 0.51 ms/frame en batch, **2.44 ms/frame con el editor en ventana** (Play pass real, `--live`) y 19 llamadas (todas instanciadas). Falta un **build de jugador** (vsync del monitor aplicado, fuera del editor) |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools |
 | Pool Atta desde cero | **resuelto** — la sonda de transferencia validó warm-v2 en cuerpo Atta |
