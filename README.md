@@ -25,7 +25,7 @@ Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.m
 
 ## Notas de versión
 
-### F5.3 — Escala: el mundo deja de costar lo mismo (rodajas 1–3ter, sin tag todavía)
+### v0.8.0 — Fase 5.3: escala, el mundo deja de costar lo mismo (CERRADO)
 
 La sub-fase que hace sostenible todo lo anterior: el mismo mundo, con menos
 trabajo por tick y por frame. Ninguna de las rodajas cambia el mundo salvo donde
@@ -78,6 +78,12 @@ se dice:
   en la misma arena ([`docs/politicas-benchmark.md`](docs/politicas-benchmark.md)).
 - **Curva de aprendizaje y cobertura (rodaja 2quater)**: dos bloques nuevos en el
   canal C y panel por tarjeta en el HUD.
+- **CI del cierre**: el job de Unity —el único que compila los MonoBehaviours que
+  la suite headless no ve— se puede levantar **a mano** con `workflow_dispatch`
+  (`unity: cache` ejercita el paso del caché en 18 s, sin licencia; `unity: full`
+  corre el job entero), las cuatro acciones del workflow van en v5 (Node 24) y la
+  **clave del caché de descargas deriva de `ProjectVersion.txt`** en vez de estar
+  escrita a mano, así que no puede quedar obsoleta al subir de versión de Unity.
 
 `536/536` tests, 6 pines de hash y el proyecto Unity compilando en batch sin
 errores ni avisos. Criterio de la fase —«N colonias estables a 60 fps»— **medido y
@@ -90,7 +96,8 @@ núcleos** —doblar colonias no dobla el coste: hay **0,1203 ms/tick fijos** y 
 colonia, y la curva por colonia (0,482 → 0,165) es la **amortización** de ese fijo
 (0,1187 + 1,507/n)—, así que los 2,5 núcleos del criterio son **8 colonias** y 32 colonias
 (1 075 hormigas en pantalla) siguen a 609 fps con la puerta de píxeles verde. Detalle:
-[`docs/fase5-3-escala.md`](docs/fase5-3-escala.md) §4.7–§4.10.
+[`docs/fase5-3-escala.md`](docs/fase5-3-escala.md) §4.7–§4.10. **Cierre de la
+sub-fase: tag `v0.8.0`.**
 
 ### v0.7.0 — Fase 5.2c: NEAT, topologías que evolucionan (CERRADO)
 
