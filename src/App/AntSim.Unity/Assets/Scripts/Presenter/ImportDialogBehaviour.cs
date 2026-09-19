@@ -149,8 +149,17 @@ namespace AntSim.Unity.Scripts.Presenter
         // en el campo de texto + se lanza Inspect() automáticamente.
         // Si el modal NO está abierto, se abre primero (el jugador puede
         // soltar en cualquier momento, no solo dentro del modal).
+        //
+        // SOLO EN EL EDITOR, y no por capricho: `DragAndDrop` (y
+        // `DragAndDropVisualMode`) son API de UnityEditor. El editor compila
+        // Assembly-CSharp con referencia a UnityEditor, así que aquí compilaba
+        // sin protestar — y el PRIMER build de jugador de F5.3 (04/09) reventó con
+        // ocho CS0103 en este archivo. Arrastrar un archivo desde el explorador
+        // es una capacidad del editor; un player no la tiene.
+#if UNITY_EDITOR
 
-        /// <summary>¿Hay un archivo .antgenome arrastrándose sobre la ventana?</summary>
+        /// <summary>¿Hay un archivo .antgenome arrastrándose sobre la ventana?
+        /// (Editor: lo calcula <see cref="OnGUI"/>. En un player siempre false.)</summary>
         public bool IsDragHovering { get; private set; }
 
         private void OnGUI()
@@ -254,6 +263,12 @@ namespace AntSim.Unity.Scripts.Presenter
                 }
             }
         }
+#else
+        /// <summary>Sin drag &amp; drop en un player: la propiedad existe para que el
+        /// HUD (HudLayoutBehaviour, el rótulo de «suelta el archivo») no tenga que
+        /// cambiar.</summary>
+        public bool IsDragHovering => false;
+#endif
 
         /// <summary>Hook para la UI (el bootstrapper conecta un setter de Text).</summary>
         public event System.Action<string>? OnDialogChanged;
