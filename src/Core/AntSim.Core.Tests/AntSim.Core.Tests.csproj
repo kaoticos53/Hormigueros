@@ -24,6 +24,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/GameStreamParser.cs" Link="UnityPure/GameStreamParser.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/StreamReader.cs" Link="UnityPure/StreamReader.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/RepoPathResolver.cs" Link="UnityPure/RepoPathResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/FrameGate.cs" Link="UnityPure/FrameGate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/WorldUnits.cs" Link="UnityPure/WorldUnits.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/WorldPlaneRay.cs" Link="UnityPure/WorldPlaneRay.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Presenter/GameStreamPresenter.cs" Link="UnityPure/GameStreamPresenter.cs" />
