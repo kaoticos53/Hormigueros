@@ -189,13 +189,16 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    ms/frame agregados = 2,485 núcleos**, con el mundo siendo el **97,3 % de la CPU del sistema**; 9 ventanas simulando ·
    22 con el mundo en pantalla · 2 de solape. El modelo puro gana **10 tests headless** (`SystemCost`). **536/536 tests ·
    los 6 pines verdes sin regenerarse.** Evidencia: `artifacts/perf-player-system.json`.
-   **Y cuánto juego cabe — HECHO (2026-09-19):** el barrido del precio del tick con 2, 4 y 8 colonias por vista
-   (`bash scripts/system-sweep.sh`) mide **2,427 · 3,433 · 5,254 núcleos** al reloj del juego: doblar colonias **no**
-   dobla el coste (×1,42 y ×1,53, sublineal, porque ~0,122 ms/tick son fijos —la difusión de las cuatro rejillas— y
-   solo ~0,0097 ms/tick siguen a cada colonia). La vista escala mejor que el mundo: con **32 colonias (1 075 hormigas)**
-   el build sigue a 589 fps y la puerta sale verde en las cuatro vistas. Leído en presupuesto: **8 colonias en los 2,5
-   núcleos de §4.9**, 16 en 3,4, 32 en 5,3 (medidos) y ~0,117 núcleos por colonia en el margen. Evidencia:
-   `artifacts/system-c{2,4,8}.json` + `artifacts/system-sweep.txt` (`docs/fase5-3-escala.md` §4.10).
+   **Y cuánto juego cabe — HECHO (2026-09-19):** el barrido del precio del tick con **1, 2, 4 y 8 colonias por vista**
+   (`bash scripts/system-sweep.sh`) mide **1,927 · 2,496 · 3,443 · 5,285 núcleos** al reloj del juego: doblar colonias
+   **no** dobla el coste (×1,30 · ×1,38 · ×1,53, sublineal, porque **0,1203 ms/tick son fijos** —la difusión de las
+   cuatro rejillas— y solo 0,00983 ms/tick siguen a cada colonia). El **coste fijo, medido y no extrapolado**: con 1
+   colonia por vista (1,927 núcleos) el fijo son **1,507 núcleos** —1,443 del mundo + 0,064 de la vista—, el 78 % del
+   sistema, y el ajuste sin ese punto lo predecía en 2,039 (−5,5 %): la incertidumbre de publicar un intercepto de tres
+   puntos. La **amortización** explica la curva por colonia: 0,1187 + 1,507/n. La vista escala mejor que el mundo (1,064
+   → 1,488 ms/frame) y con **32 colonias (1 075 hormigas)** el build sigue a 609 fps con la puerta verde en las cuatro
+   vistas. Leído en presupuesto: **8 colonias en los 2,5 núcleos de §4.9**, 16 en 3,4, 32 en 5,3 (medidos). Evidencia:
+   `artifacts/system-c{1,2,4,8}.json` + `artifacts/system-sweep.txt` (`docs/fase5-3-escala.md` §4.10).
    **Artefacto commiteado por detrás del generador — CORREGIDO (2026-09-19):** cuatro de los cinco materiales de
    feromonas tenían `_BaseMap` **sin textura** (`fileID: 0`), que con el material transparente y `_BaseColor` blanco
    significa **quad blanco OPACO tapando el tablero** mientras no llega ningún frame de feromonas (el defecto del Play
@@ -220,7 +223,7 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 | NEAT estanca la evolución | mitigado — fallback de topología fija; meritocracia de arena medida |
 | `error CS` de MonoBehaviours | **abierto** — el job existe y está corregido, pero dormido: hoy lo caza la pasada local, no CI |
 | Feromonas costosas a escala | **mitigado (F5.3 rodajas 3 y 3bis)** — LOD exacto con bloque 8 medido: 7.8–8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
-| Framerate real de Unity a N colonias | **cerrado (F5.3 rodajas 3 y 3ter)** — 8 colonias: 0.51 ms/frame en batch, **2.44 ms/frame con el editor en ventana** y, en un **build de jugador**, **59,99 fps con el refresco del monitor** (vsync aplicado) y 19 llamadas (todas instanciadas). El coste por frame DENTRO del build ya está medido (**1,294 ms de CPU, 7,8 % del presupuesto**, §4.8) y el del **sistema completo** también (**2,485 núcleos** al reloj del juego, §4.9), igual que su barrido por colonias (**2,427 · 3,433 · 5,254 núcleos** con 2, 4 y 8 por vista, §4.10). Lo que sigue sin medir: el precio del tick **por encima de 8 colonias por vista**, los tiempos de GPU por otra vía y una segunda máquina |
+| Framerate real de Unity a N colonias | **cerrado (F5.3 rodajas 3 y 3ter)** — 8 colonias: 0.51 ms/frame en batch, **2.44 ms/frame con el editor en ventana** y, en un **build de jugador**, **59,99 fps con el refresco del monitor** (vsync aplicado) y 19 llamadas (todas instanciadas). El coste por frame DENTRO del build ya está medido (**1,294 ms de CPU, 7,8 % del presupuesto**, §4.8) y el del **sistema completo** también (**2,485 núcleos** al reloj del juego, §4.9), igual que su barrido por colonias (**1,927 · 2,496 · 3,443 · 5,285 núcleos** con 1, 2, 4 y 8 por vista, §4.10, con el fijo **medido** en 1,507 en vez de extrapolado). Lo que sigue sin medir: el precio del tick **por encima de 8 colonias por vista**, el **barrido de VISTAS** (con 4 fijas no se separa el fijo por mundo del fijo por montaje), los tiempos de GPU por otra vía y una segunda máquina |
 | El juego compila como player | **cerrado (F5.3 rodaja 3ter)** — el primer build destapó CS0103 de `DragAndDrop` (API del editor sin guarda): el editor compilaba Assembly-CSharp con referencia a UnityEditor y el player no. `PlayerBuild` construye en 18 s y la sonda del player falla si la escena no pinta hormigas |
 | Bug de Unity Search (Library fría en batch) | mitigado — fallback `PumpOneTick` en las sondas |
 | Balance de especies | se calibrará con tests de balance contra el benchmark de pools |

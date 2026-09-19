@@ -393,17 +393,20 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   del presupuesto)** y **pata del mundo 0,201 ms/tick** → **41,415 ms/frame agregados =
   2,485 núcleos** al reloj del juego, con el **97,3 % de la CPU del sistema** en el
   mundo. Modelo puro `SystemCost` (+10 tests headless).
-- **Cuánto juego cabe — HECHO (2026-09-19)**: el barrido del precio del tick con 2, 4 y
-  8 colonias por vista (`bash scripts/system-sweep.sh`) → **2,427 · 3,433 · 5,254
-  núcleos**: doblar colonias no dobla el coste (×1,42 · ×1,53) porque hay una parte
-  **fija** de ~0,122 ms/tick (la difusión de las cuatro rejillas de 256²) y solo
-  ~0,0097 ms/tick por colonia. La **vista** escala mejor que el mundo (1,129 → 1,491
-  ms/frame de 2 a 8 por vista) y con **32 colonias y 1 075 hormigas** en pantalla el
-  build sigue a 589 fps sin vsync con la puerta verde en las cuatro vistas. Leído en
-  presupuesto: **8 colonias en 2,5 núcleos** (las del propio §4.9), 16 en 3,4 y 32 en
-  5,3 (medidos); por encima, modelo. Informes crudos por punto en
-  `artifacts/system-c<N>.json`, tabla en `artifacts/system-sweep.txt`, y `--selftest`
-  verifica el analizador sin Unity.
+- **Cuánto juego cabe — HECHO (2026-09-19)**: el barrido del precio del tick con **1, 2,
+  4 y 8** colonias por vista (`bash scripts/system-sweep.sh`) → **1,927 · 2,496 · 3,443 ·
+  5,285 núcleos**: doblar colonias no dobla el coste (×1,30 · ×1,38 · ×1,53) porque hay
+  una parte **fija** de **0,1203 ms/tick** (la difusión de las cuatro rejillas de 256²) y
+  solo 0,00983 ms/tick por colonia. El **coste fijo queda medido, no extrapolado**: con 1
+  colonia por vista el fijo (1,507 núcleos) es el 78 % del sistema, y ajustando sin ese
+  punto se predecía en 2,039 (−5,5 %); la curva por colonia (0,482 → 0,165) es su
+  amortización, 0,1187 + 1,507/n. La **vista** escala mejor que el mundo (1,064 → 1,488
+  ms/frame) y con **32 colonias y 1 075 hormigas** en pantalla el build sigue a 609 fps sin
+  vsync con la puerta verde en las cuatro vistas. Leído en presupuesto: **8 colonias en 2,5
+  núcleos**, 16 en 3,4 y 32 en 5,3 (medidos); por encima, modelo. Informes crudos por punto
+  en `artifacts/system-c<N>.json`, tabla y ajuste en `artifacts/system-sweep.txt`, y
+  `--selftest` verifica analizador **y ajuste** sin Unity (`--reuse` reconstruye la tabla de
+  los informes guardados).
 - **Exit de fase** (de arquitectura): N colonias estables a 60 fps en la
   escena de juego. **CUMPLIDO y medido en seis piezas**: el Core cuesta **0,47 ms por
   tick** con 8 colonias en grid 256 (2.8 % de un frame a 60 fps), la VISTA **0,51
@@ -414,9 +417,12 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   CPU (7,8 % del presupuesto) y 0,127 ms de GPU**, y el **sistema completo (player +
   simulación del CLI) cuesta 2,485 núcleos al reloj del juego**, con la vista en 1,116
   ms/frame. Lo que sigue sin medir: el precio del tick **por encima de 8 colonias por
-  vista** (el barrido mide 2, 4 y 8 → 2,427 · 3,433 · 5,254 núcleos; más allá es modelo)
-  y con **una sola** colonia, donde manda el coste fijo; los tiempos de GPU por otra vía
-  y una segunda máquina. Detalle y cifras: [`fase5-3-escala.md`](fase5-3-escala.md).
+  vista** (el barrido mide 1, 2, 4 y 8 → 1,927 · 2,496 · 3,443 · 5,285 núcleos; más allá
+  es modelo) y el **barrido de VISTAS**, que es lo único que separaría el fijo «por mundo»
+  del fijo «por montaje» —con cuatro vistas fijas, el barrido mide el fijo respecto a las
+  colonias, que es lo que hacía falta, pero no su reparto entre mundos—; los tiempos de GPU
+  por otra vía y una segunda máquina. Detalle y cifras:
+  [`fase5-3-escala.md`](fase5-3-escala.md).
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)
 
