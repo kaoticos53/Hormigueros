@@ -304,8 +304,11 @@ namespace AntSim.Unity.Scripts.Presenter
 
             // Play-pass: el cwd del editor es la carpeta del proyecto, no la del
             // repo — las rutas relativas (build/antsim, artifacts/…) se resuelven
-            // contra el repo root derivado de Application.dataPath.
-            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromProjectPath(Application.dataPath);
+            // contra el repo root derivado de Application.dataPath. En un PLAYER
+            // empaquetado dataPath es <build>/<Nombre>_Data, así que el ancla sale
+            // del marcador del repo (build dentro del repo): el mismo binario
+            // funciona lanzado desde el editor y desde el build.
+            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromDataPath(Application.dataPath);
             string seedPool = SeedPoolPath != null && repoRoot != null
                 ? Streaming.RepoPathResolver.Resolve(SeedPoolPath, baseDir: null, repoRoot)
                 : SeedPoolPath ?? "";
