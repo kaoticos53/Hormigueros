@@ -61,7 +61,12 @@ se dice:
   del multi-visor y lo mide con una sonda de runtime. El build entrega **59,99 fps
   con el refresco del monitor (59,997 Hz) y el vsync del proyecto aplicado** —el
   techo lo pone la pantalla, no el juego— y **la puerta de píxeles pasa en las
-  cuatro vistas**. El primer build destapó tres defectos reales: el juego **no
+  cuatro vistas**. Y `scripts/player-perf.sh --cpu` apaga el vsync para medir lo que
+  la pantalla tapa: **el COSTE por frame dentro del build** — **1,294 ms de CPU**
+  (hilo principal 1,272 · hilo de render 0,277 · espera en Present 0,003) y
+  **0,127 ms de GPU**, con un techo de **683,7 fps** sin vsync: **7,8 % del
+  presupuesto de 60 fps**, calculado por un modelo puro (`FrameCost`) con 12 tests
+  headless. El primer build destapó tres defectos reales: el juego **no
   compilaba como player** (`DragAndDrop`, API del editor sin guarda), faltaba el
   módulo `com.unity.modules.screencapture` (la sonda visual del pass no compilaba
   desde la poda de paquetes) y la puerta medía `AntMaterial` cuando el multi-visor
