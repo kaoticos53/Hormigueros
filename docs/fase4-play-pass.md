@@ -46,7 +46,9 @@ porque solo compila los modelos puros, nunca los MonoBehaviours, así que solo
 aparecen en una compilación del editor. Por eso este paso es ahora un **check de
 CI** (`scripts/check-unity-compile.sh`, job `unity-compile`), no una auditoría
 manual: compila el proyecto en batch y falla con cualquier `error CS` (dormido
-hasta definir `UNITY_CI` + licencia; ver el README).
+en push hasta definir `UNITY_CI` + licencia, pero lanzable a mano con
+`workflow_dispatch` — `unity: full` compila, `unity: cache` ejercita solo el paso
+del caché; ver el README).
 
 ### Puntos que siguen dependiendo del entorno (no rotos, aislados)
 

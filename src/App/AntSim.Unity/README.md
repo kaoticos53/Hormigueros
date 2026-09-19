@@ -130,7 +130,7 @@ en el editor — la misma asimetría que hace que un `error CS` de la capa de vi
 pueda pasar el `dotnet build` y reventar al abrir Unity.
 
 **Los hashes no se tocan.** Las anotaciones son metadatos de compilación: no
-cambian el IL, así que el mundo, los tres pins de CI y los fixtures siguen
+cambian el IL, así que el mundo, los seis pins de CI y los fixtures siguen
 idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
 
 ## Abrir el proyecto (arranque rápido)
