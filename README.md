@@ -417,8 +417,11 @@ necesita licencia. Tiene dos puertas:
   con el input `unity`:
   - `unity: cache` → ejercita **solo el paso del caché** `actions/cache@v5`
     (segundos: sin licencia, sin descargar el editor y **saltando el job `test`**,
-    que es el caro). Usa una clave de sonda para no ocupar la clave real, que
-    solo se toca en `full`.
+    que es el caro). Usa una clave de sonda (`<versión>-sonda`) para no ocupar la
+    clave real, que solo se toca en `full`. La clave **deriva de la versión que
+    fija `src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt`**, no de una
+    constante escrita a mano: al subir de versión de Unity cambia sola y no
+    puede quedar restaurando la caché de la versión anterior.
   - `unity: full` → el job completo: instala ~5 GB de editor, activa licencia,
     compila y devuelve la licencia.
   - `unity: none` (por defecto) → el dispatch corre solo el job `test`.
