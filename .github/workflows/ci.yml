@@ -289,14 +289,31 @@ jobs:
       - name: Leer la versión de Unity del proyecto
         id: unity-version
         run: |
-          VERSION="$(sed -n 's/^m_EditorVersion: *//p' \
-            src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt | tr -d '\r')"
+          P="src/App/AntSim.Unity/ProjectSettings/ProjectVersion.txt"
+          VERSION="$(sed -n 's/^m_EditorVersion: *//p' "$P" | tr -d '\r')"
           if [[ -z "$VERSION" ]]; then
             echo "::error::ProjectVersion.txt no tiene m_EditorVersion"
             exit 1
           fi
+          # EL CHANGESET, y por qué hace falta (medido, no supuesto):
+          # `unity install <versión>` NO resuelve contra el histórico de Unity
+          # sino contra un CATÁLOGO CURADO de una sola versión por línea —
+          # `unity editors --releases` en Linux devuelve exactamente cuatro
+          # (6000.0.84f1, 6000.3.24f1, 6000.6.2f1, 6000.7.0b1). El 2026-09-18
+          # salió 6000.6.2f1 y la línea 6000.6 pasó a apuntar ahí, así que el
+          # 09-20 `unity install 6000.6.0f1` murió con «Provided editor version
+          # does not match to any known Unity Editor versions» (exit 6) a los
+          # 0,5 s, ANTES de descargar nada. No era el CLI —falla igual con
+          # 1.0.0-beta.9 y con beta.10—: era el catálogo moviéndose bajo un pin
+          # que no se mueve. Con el changeset la versión exacta SÍ resuelve
+          # (probado en Linux, 3,88 GB), porque es la vía que el CLI tiene para
+          # instalaciones que ya no están en el catálogo. Y no hay que
+          # inventarlo: lo fija el propio proyecto.
+          REVISION="$(sed -n 's/^m_EditorVersionWithRevision:.*(\([^)]*\)).*$/\1/p' \
+            "$P" | tr -d '\r' | head -n 1)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Unity del proyecto: $VERSION"
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+          echo "Unity del proyecto: $VERSION (changeset ${REVISION:-AUSENTE})"
 
       # El instalador del editor guarda los archivos comprimidos: una caché aquí
       # ahorra la descarga entera en cada push.
@@ -335,8 +352,18 @@ jobs:
           # el job y los tres consumidores (clave del caché, este y el
           # localizador del editor) usan el mismo valor.
           VERSION="${{ steps.unity-version.outputs.version }}"
-          echo "Instalando Unity $VERSION"
-          unity install "$VERSION" --yes --accept-eula
+          REVISION="${{ steps.unity-version.outputs.revision }}"
+          if [[ -n "$REVISION" ]]; then
+            # El changeset es lo que permite instalar una versión que YA NO es
+            # la del catálogo curado (el porqué, medido, en el paso de versión).
+            # Sin él este paso falla en cuanto Unity publica una revisión de la
+            # misma línea: el pin del proyecto no se mueve, el catálogo sí.
+            echo "Instalando Unity $VERSION (changeset $REVISION)"
+            unity install "$VERSION" --changeset "$REVISION" --yes --accept-eula
+          else
+            echo "::warning::ProjectVersion.txt no trae m_EditorVersionWithRevision: se instala $VERSION sin changeset, que solo resolverá si el catálogo curado aún ofrece esa versión"
+            unity install "$VERSION" --yes --accept-eula
+          fi
 
       # El editor es una aplicación de escritorio incluso en batch: sin estas
       # librerías sale antes de imprimir nada útil y el análisis del log daría
