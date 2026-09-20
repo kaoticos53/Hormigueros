@@ -460,6 +460,12 @@ public static class GameScenario
                   .Append(",\"elite\":").Append(c.EliteCount)
                   .Append(",\"fungus\":").Append(F(c.Fungus))
                   .Append(",\"fungusMax\":").Append(F(c.FungusMax))
+                  // F5.1: autonomía (segundos) y su tramo en la escalera de
+                  // escasez de la especie, decidido por el Core (RunwayVerdict).
+                  // −1/0 = sin medida (EMA de consumo degenerada): el chip no se
+                  // pinta, que es más honesto que un chip que miente.
+                  .Append(",\"runway\":").Append(F(c.Runway))
+                  .Append(",\"runwayLevel\":").Append(c.RunwayLevel)
                   .Append('}');
             }
             sb.Append(']');
