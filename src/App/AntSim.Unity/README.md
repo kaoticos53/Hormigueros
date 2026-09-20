@@ -236,6 +236,33 @@ El binario lo resuelve el mismo código que los pases (`scripts/lib/unity-cli.sh
 `$UNITY_CLI` → `unity` en el PATH → instalaciones del Hub), de modo que no hay dos
 ideas de dónde está el editor.
 
+## Unity ensució los assets: ¿churn o cambio de verdad?
+
+Abrir el proyecto, construir un player o simplemente guardar una escena
+**reescribe** la escena, los materiales y los ajustes de URP sin cambiar lo que
+significan: reordena los documentos del YAML, renumera las anclas `&N` y mueve el
+bloque `AssetVersion` de sitio. El diff resultante son miles de líneas que
+esconden, si acaso, un cambio pequeño — y commitearlas contamina la historia del
+repo para siempre. Medido (2026-09-20) en una pasada del generador del
+multi-visor: de 64 assets reescritos, 60 no cambiaban nada.
+
+A ojo eso no se decide. El verificador lo hace por **equivalencia estructural**
+(documentos por clase, cada referencia local `{fileID: N}` sin `guid` resuelta a
+la huella de su destino e iterada hasta el punto fijo, así que el mismo cableado
+da la misma huella aunque las anclas se renumeren):
+
+```bash
+bash scripts/check-unity-assets.sh            # los assets que el árbol tiene tocados
+bash scripts/check-unity-assets.sh --list     # qué comprueba y qué no
+bash scripts/check-unity-assets.sh --churn    # ¿el último commit metió ruido?
+```
+
+La respuesta termina con la orden exacta para descartar el ruido sin perder nada
+(`git checkout -- …`) y sale con código 1 si alguno **sí** cambia de verdad. En CI
+el paso `Assets de Unity (el churn de re-serialización no entra)` recorre los
+commits del push y falla si alguno metió un asset que no cambia nada; su selftest
+es también un paso del job `test`, junto a los de las otras herramientas.
+
 ## Aspecto del mundo y del HUD (F5.1)
 
 Lo que se ve y por qué, en una tabla — el resto de decisiones están comentadas en
