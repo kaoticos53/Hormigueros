@@ -1,0 +1,39 @@
+# ── Finales de línea: que el checkout no dependa de la máquina ──────────────
+# POR QUÉ. El repo se desarrolla en Windows —Git for Windows instala con
+# `core.autocrlf=true`— y sus scripts se ejecutan en Linux: la CI y, aquí mismo,
+# WSL. Sin reglas, lo que cae en el disco lo decide el `autocrlf` de cada
+# máquina, no el repo: medido el 2026-09-20 con `git ls-files --eol`, 444
+# ficheros estaban en LF y 173 en CRLF, con los MISMOS blobs. (Lo que quede en
+# CRLF en la copia de trabajo no es un fallo de estas reglas: son los assets de
+# Unity y los paquetes de `.agents/`, que no ejecuta ningún shell.)
+#
+# Y donde de verdad muerde no es cosmético. Medido en un shell POSIX (Linux) con
+# un fichero CRLF: el shebang no arranca («cannot execute: required file not
+# found»), una asignación se queda con el `\r` dentro (`v=[hola\r]`, o sea que
+# toda ruta o argumento construido desde una variable lo arrastra) y un `case`
+# revienta con «Syntax error: word unexpected (expecting "in")». Eso es
+# exactamente `.githooks/pre-push` —que git ejecuta por su shebang— y los
+# `scripts/*.sh`, incluidos el verificador de assets y los pines de hash.
+#
+# CÓMO. Se fija el eol por TIPO de fichero, que es lo que todas las plataformas
+# pueden respetar: LF para lo que interpreta un shell POSIX o Python, CRLF para
+# lo que interpreta Windows. Nada más, a propósito: no hay `* text=auto` ni
+# `* text` porque no hace falta —el ÍNDICE ya está entero en LF— y porque
+# renormalizaría el contenido real de los `artifacts/*.txt` con finales
+# mezclados. Con `eol=` fijo, git no cambia lo que GUARDA (los blobs siguen en
+# LF); cambia lo que ESCRIBE al hacer checkout, así que un clone fresco da los
+# mismos bytes en Windows, Linux y macOS sin depender del `autocrlf` local.
+
+# Lo que ejecuta un shell POSIX o Python: el shebang, los heredocs y los
+# patrones exigen LF. El hook no lleva extensión, de ahí su línea propia.
+*.sh            text eol=lf
+*.py            text eol=lf
+.githooks/*     text eol=lf
+
+# Lo que interpreta Windows: cmd.exe y PowerShell esperan CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Este fichero también: con CRLF, cada patrón de aquí llevaría un `\r` pegado.
+.gitattributes  text eol=lf
