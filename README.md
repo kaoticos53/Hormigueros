@@ -81,7 +81,11 @@ se dice:
 - **CI del cierre**: el job de Unity —el único que compila los MonoBehaviours que
   la suite headless no ve— se puede levantar **a mano** con `workflow_dispatch`
   (`unity: cache` ejercita el paso del caché en 18 s, sin licencia; `unity: full`
-  corre el job entero), las cuatro acciones del workflow van en v5 (Node 24) y la
+  corre el job entero — y al ejercitarlo por fin con un secreto de licencia se
+  midió que el camino no cierra: una licencia **Personal** no se activa en un
+  runner alojado. La capa de vista queda cubierta por la puerta local y su
+  pre-push, y el job admite `UNITY_RUNNER` para un self-hosted), las cuatro
+  acciones del workflow van en v5 (Node 24) y la
   **clave del caché de descargas deriva de `ProjectVersion.txt`** en vez de estar
   escrita a mano, así que no puede quedar obsoleta al subir de versión de Unity.
 
@@ -415,7 +419,8 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
-| `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor |
+| `.githooks/pre-push --selftest` | el veredicto de la puerta local: solo un rojo de verdad (errores CS) bloquea un push; «no pude comprobar» avisa y deja pasar |
+| `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor. El job está dormido y con licencia Personal no puede encenderse en un runner alojado, así que la cobertura diaria es ese mismo script en local, vía `.githooks/pre-push` |
 
 El job `unity-compile` está **dormido**: descargar Unity en cada push es caro y
 necesita licencia. Tiene dos puertas:
@@ -430,28 +435,58 @@ necesita licencia. Tiene dos puertas:
     constante escrita a mano: al subir de versión de Unity cambia sola y no
     puede quedar restaurando la caché de la versión anterior.
   - `unity: full` → el job completo: instala ~5 GB de editor, activa licencia,
-    compila y devuelve la licencia.
+    compila y devuelve la licencia (en el runner alojado; ver la licencia abajo).
   - `unity: none` (por defecto) → el dispatch corre solo el job `test`.
 - **permanente** — la variable de repositorio `UNITY_CI = true`: el job corre en
   cada push y PR, siempre con alcance `full`.
+- **en tu máquina** — la variable `UNITY_RUNNER` (p. ej. `self-hosted`) decide
+  DÓNDE corre el job: con ella, corre en esa máquina —la que ya tiene editor y
+  licencia del Hub— y se salta instalación, librerías, activación, preflight y
+  devolución de licencia, compilando con el editor que ya está. Es la única vía a
+  una puerta **permanente** en CI sin pagar asiento (hoy sin ejercitar: no hay
+  runner registrado).
 
 ```bash
 gh workflow run ci.yml -f unity=cache   # ejercita el paso del caché (sin licencia)
 gh workflow run ci.yml -f unity=full    # compila el proyecto Unity entero
 ```
 
-El alcance `full` (por cualquiera de las dos vías) necesita UN secreto de
-licencia en Settings → Secrets and variables → Actions:
-`UNITY_LICENSE_FILE_BASE64` (licencia Personal: base64 del
-`UnityEntitlementLicense.xml` de una máquina ya activada) o
-`UNITY_LICENSE_SERIAL` (Pro/Plus). Sin ninguno de los dos el run falla en ~2 s,
-a propósito, antes de descargar nada. El dispatch se ve desde `master`: hasta
-que esta versión del workflow no esté en la rama por defecto, ni el botón de la
-UI ni `gh workflow run` lo conocen.
+El alcance `full` **en el runner alojado** necesita UN secreto de licencia en
+Settings → Secrets and variables → Actions: `UNITY_LICENSE_SERIAL` (serial
+legacy Pro/Plus) o `UNITY_LICENSE_FILE_BASE64` (el `.ulf` de un asiento
+Enterprise/Industry). Sin ninguno de los dos el run falla en ~2 s, a propósito,
+antes de descargar nada.
 
-El script (`check-unity-compile.sh`) sí corre en local — encuentra el editor del
-Hub por la versión fijada en `ProjectSettings/ProjectVersion.txt` (`--selftest`
-verifica su analizador, y `--log FICHERO` analiza un log ya generado).
+**Una licencia Personal NO se puede activar en un runner alojado**, y no es una
+limitación de este workflow: es de Unity. Medido el 2026-09-20 con dos pruebas
+independientes: `unity license activate --personal --accept-eula` responde «Sign
+in with unity auth login» (y en un runner efímero no hay sesión que valga), y el
+`UnityEntitlementLicense.xml` que el Hub deja en `%LOCALAPPDATA%\Unity\licenses\`
+no es un ULF —el cargador lo rechaza por el namespace de su firma— y además lleva
+cinco identificadores `Legacy.MachineBinding1..5` (el hash de la máquina y su
+MAC): está atado a ESA máquina, así que copiarlo no activaría nada ni con el
+formato correcto. El detalle completo está en el comentario del job. Quien tenga
+Personal cubre la capa de vista por la **puerta local** o apuntando el job a un
+self-hosted con `UNITY_RUNNER`.
+
+El dispatch se ve desde `master`: hasta que esta versión del workflow no esté en
+la rama por defecto, ni el botón de la UI ni `gh workflow run` lo conocen.
+
+La **puerta local** es la que HOY cubre el riesgo sin infraestructura, y es el
+MISMO script que corre el job: `bash scripts/check-unity-compile.sh` compila en
+batch con el editor del Hub (lo encuentra por la versión fijada en
+`ProjectSettings/ProjectVersion.txt`) y tarda **8 s** medidos con la Library
+caliente (`--selftest` verifica su analizador, `--log FICHERO` analiza un log ya
+generado). En Windows el mismo comando es `scripts/check-unity.bat`, y para que
+no dependa de acordarse, `.githooks/pre-push` lo corre antes de cada push:
+**bloquea solo con errores CS de verdad** (exit 1); editor ausente, sin licencia
+o instancia que no llegó a compilar AVISAN y dejan pasar, porque «no medido» no
+es «roto».
+
+```bash
+bash scripts/install-hooks.sh     # activa el pre-push del repo (idempotente)
+scripts/check-unity.bat           # (Windows) la misma comprobación a mano
+```
 
 El **Play pass** en el editor —lo único que valida los MonoBehaviours EN VIVO—
 también está cableado: `scripts/playpass-live.sh` conduce el editor abierto
