@@ -3,10 +3,14 @@
 Realismo, especies y escala — la fase que convierte el simulador verificado
 en un mundo con contenido. Este documento es el PLAN de trabajo (no el
 registro de lo hecho): hitos, decisiones abiertas y criterios de cierre.
+<!-- cifras-historicas: punto de partida (cierre de Fase 4) — 276/276 era la cifra de ENTONCES. -->
+
 Estado del que parte: Fase 4 cerrada
 ([`fase4-resumen.md`](fase4-resumen.md)) — 276/276 tests, contratos de HUD
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
+
+<!-- /cifras-historicas -->
 
 **Estado ACTUAL** (HEAD `v0.8.0`, suite **536/536**, **6 pines** de hash): las
 seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
@@ -19,6 +23,8 @@ registro de lo hecho.
 Core por el stream; toda decisión de mundo deja huella en el hash; el
 determinismo (semilla + comandos ⇒ mundo) es inviolable. Cada hito de abajo
 lleva su test de hash invariante cuando toca telemetría, como en F4.
+
+<!-- cifras-historicas: §1–§2bis son el registro de sub-fases CERRADAS (F5.0, F5.1, F5.1bis): las cifras de tests son las de cada entrega. -->
 
 ## 1. El contenido que ya prometió la inspección (F5.0 — barato y vendible) — ✅ IMPLEMENTADO
 
@@ -293,6 +299,8 @@ En interactivo el camino del jugador no cambia.
   (no verifica nada; solo calienta Library) — no lo hace innecesario el
   fallback de la sonda, que cubre ambos estados.
 
+<!-- /cifras-historicas -->
+
 ## 3. Realismo y especies (F5.2 — el contenido nuevo)
 
 Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
@@ -338,6 +346,8 @@ Lo que `arquitectura.md` §Fase 5 promete, en orden de dependencia:
 **Criterio de cierre — CUMPLIDO con matiz** (2026-09-15): 3 especies con recetas distintas jugables; una
 partida de invasión Eciton vs colonia Atta sembrada con pool propio, con el
 grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa Lasius (invasión) y presa + pool v2 (NEAT), no una Atta sembrada.
+
+<!-- cifras-historicas: §4 es el registro de F5.3 (sub-fase cerrada con `v0.8.0`); las cifras son las de sus mediciones. -->
 
 ## 4. Escala y rendimiento (F5.3 — sostenibilidad de todo lo anterior)
 
@@ -429,6 +439,8 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
   colonias, que es lo que hacía falta, pero no su reparto entre mundos—; los tiempos de GPU
   por otra vía y una segunda máquina. Detalle y cifras:
   [`fase5-3-escala.md`](fase5-3-escala.md).
+
+<!-- /cifras-historicas -->
 
 ## 5. Decisiones abiertas (se resuelven aquí, no antes)
 

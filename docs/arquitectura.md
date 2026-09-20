@@ -94,6 +94,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 
 ## 7. Plan por fases
 
+<!-- cifras-historicas: Fases 0–4 (cerradas) — cada «Exit» lleva la cifra de SU cierre. La Fase 5 en adelante se comprueba con `scripts/check-doc-figures.sh`. -->
+
 ### Fase 0 — Andamiaje ✅ (completada)
 - Solución .NET, proyectos Core/Tests/Cli, CI (build + tests).
 - RNG determinista (xoshiro256**), serialización canónica (bits exactos + SHA-256),
@@ -401,6 +403,8 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
 - `SimPresenter`: interpolación con retraso de 1 tick, pool, feromonas GPU por tiles.
 - HUD, inspección con traza, alertas, biblioteca de cerebros, checkpoints desde UI.
 - **Exit**: demo jugable 60 fps con 2 colonias; regresión visual con seeds fijas.
+
+<!-- /cifras-historicas -->
 
 ### Fase 5 — Realismo, especies y escala
 - Plan de trabajo: [`fase5-plan.md`](fase5-plan.md) (mini-grafo MLP, pulido
