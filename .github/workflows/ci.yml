@@ -58,7 +58,16 @@ jobs:
     steps:
       # checkout v5 y setup-dotnet v5 corren en Node 24: con v4 el runner avisa
       # en cada run de que Node 20 está deprecado y los fuerza a Node 24.
+      #
+      # fetch-depth: 0 — el paso de churn de assets de Unity compara CADA COMMIT
+      # del push contra su padre (`git diff-tree <commit>^ <commit>`), y con el
+      # clon superficial por defecto (depth 1) el commit «antes» del push no está
+      # en el clon: el escaneo no tendría nada que mirar y saldría verde sin haber
+      # mirado — justo el falso verde que este repo evita. El repo pesa ~18 MB, así
+      # que la historia completa cuesta segundos.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -105,6 +114,30 @@ jobs:
       # suite a propósito: `--list-tests` aprovecha la compilación ya hecha.
       - name: Cifras documentales (pines y tests contra los documentos)
         run: bash scripts/check-doc-figures.sh
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # EL CHURN DE ASSETS DE UNITY NO ENTRA AL REPO.
+      #
+      # Abrir el proyecto, construir un player o dejar que el editor guarde
+      # reescribe la escena, los materiales y los ajustes de URP SIN cambiar lo que
+      # significan: reordena documentos, renumera anclas `&N` y mueve el bloque
+      # `AssetVersion`. Son miles de líneas de diff que esconden, si acaso, un
+      # cambio pequeño — medido (2026-09-20): una pasada del generador reescribió
+      # 64 assets y 60 no cambiaban nada. Este paso recorre los commits del push y
+      # falla si alguno metió un asset así, con la lista exacta de ficheros a
+      # descartar. El verificador vive en `scripts/unity-asset-equivalence.py` (es
+      # el primer script en Python del repo: el algoritmo —bisimulación sobre el
+      # grafo de referencias locales— no cabe en bash).
+      #
+      # `CI_RANGE` es el rango que el propio evento declara; si no trae dos
+      # extremos utilizables (un PR no lo trae, y el primer push de una rama manda
+      # 40 ceros), el verificador cae a `HEAD~1..HEAD` y LO DICE. Con fetch-depth 0
+      # el rango está siempre en el clon, así que ese respaldo no esconde una
+      # medida vacía.
+      - name: Assets de Unity (el churn de re-serialización no entra)
+        env:
+          CI_RANGE: ${{ github.event.before }}..${{ github.sha }}
+        run: bash scripts/check-unity-assets.sh --churn
 
       - name: Fixture hash check (regenera el stream canónico y compara)
         run: bash scripts/check-stream-fixture.sh
@@ -164,6 +197,13 @@ jobs:
       # falla, y que un ratio que no es de la suite (200/450) se ignora.
       - name: Selftest del guardarraíl de cifras documentales (sin repo)
         run: bash scripts/check-doc-figures.sh --selftest
+
+      # El verificador de assets, con assets de mentira: reordenar y re-anclar es
+      # idéntico, un escalar distinto NO lo es, un cableado cruzado tampoco (es
+      # bisimulación, no normalización de texto), los finales de línea no cuentan,
+      # y un repo de verdad comprueba que un commit que sólo re-ancla se detecta.
+      - name: Selftest del verificador de assets de Unity (sin repo)
+        run: bash scripts/check-unity-assets.sh --selftest
 
   # ───────────────────────────────────────────────────────────────────────────
   # Compilación del proyecto Unity. POR QUÉ no basta con `test`: la suite
