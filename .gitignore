@@ -37,6 +37,16 @@ TestResults/
 .DS_Store
 Thumbs.db
 
+# Salidas EFÍMERAS de la sonda del player (scripts/player-perf.sh): el log del
+# build, el de la corrida y el volcado crudo de píxeles (~2,7 MB) se PISAN en
+# cada medición y no son evidencia por sí solos — ensucian `git status` después
+# de cada corrida. Lo que sí se trackea es el informe (perf-player.json) y las
+# medidas consolidadas (hud-chip-ladder.txt).
+artifacts/perf-player.log
+artifacts/perf-player-build.log
+artifacts/perf-player-capture.rgb
+artifacts/*.out
+
 # Restos de una invocación de Unity apuntada a la RAÍZ del repo (el proyecto
 # real vive en src/App/AntSim.Unity/). Las anclas con "/" inicial son SOLO de la
 # raíz: sin ellas, un "Packages/" sin anclar también ignoraría
