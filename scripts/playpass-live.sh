@@ -648,6 +648,14 @@ UCMD() { MSYS_NO_PATHCONV=1 "$UNITY_CLI_BIN" command "$@" --project-path "$(winp
 # la sonda en `data.result.result`; otros comandos (editor_status, …) devuelven
 # un objeto que se conserva tal cual; un fallo de la sonda se normaliza a
 # `error|…` para que el analizador lo vea.
+# Escribe el resultado del script de Unity tal cual, SIN traducir finales de
+# línea. `sys.stdout` en Windows es un TextIOWrapper con newline=None, así que
+# cada `\n` que se le escribe se convierte en `os.linesep`: como el resultado de
+# `StringBuilder.AppendLine` YA trae `\r\n` en Windows, el fichero salía con
+# `\r\r\n` (CR doble) —medido: `artifacts/playpass-scene.txt` tenía las 65
+# líneas así, y por eso ni siquiera lo normalizaba git al añadirlo. Escribir en
+# `stdout.buffer` en UTF-8 fija LF en todas las plataformas y hace que estos
+# volcados (que son evidencia commiteada) no dependan de quién los generó.
 cmd_result() {
   python3 -c "
 import sys, json
@@ -656,17 +664,20 @@ try:
 except Exception:
     sys.exit(0)
 r = (d.get('data') or {}).get('result')
+out = ''
 if isinstance(r, dict):
     if r.get('success') is False or r.get('error'):
-        sys.stdout.write('error|' + str(r.get('error') or 'fallo'))
+        out = 'error|' + str(r.get('error') or 'fallo')
     elif isinstance(r.get('result'), str):
-        sys.stdout.write(r['result'])
+        out = r['result']
     else:
-        sys.stdout.write(json.dumps(r))
+        out = json.dumps(r)
 elif isinstance(r, str):
-    sys.stdout.write(r)
+    out = r
 elif r is not None:
-    sys.stdout.write(json.dumps(r))
+    out = json.dumps(r)
+sys.stdout.buffer.write(out.encode('utf-8'))
+sys.stdout.buffer.flush()
 "
 }
 
