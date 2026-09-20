@@ -169,22 +169,38 @@ jobs:
   #   1. Variable  UNITY_CI = true   (solo para la vía b)
   #   2. UN secreto de licencia, según el tipo de licencia:
   #
-  #      Personal (gratuita) → UNITY_LICENSE_FILE_BASE64
-  #        `unity license activate --personal` NO sirve en CI: el backend de
-  #        licencias rechaza los tokens de cuenta de servicio para activar
-  #        (lo dice el propio andamiaje de `unity ci init`). Hay que usar el
-  #        archivo de activación offline de una máquina con la licencia ya
-  #        activada, en base64 y en UNA línea:
-  #          Windows  %LOCALAPPDATA%\Unity\licenses\UnityEntitlementLicense.xml
-  #            PowerShell:
-  #              [Convert]::ToBase64String([IO.File]::ReadAllBytes(
-  #                "$env:LOCALAPPDATA\Unity\licenses\UnityEntitlementLicense.xml"))
-  #          Linux    ~/.local/share/unity3d/Unity/Unity_lic.ulf
-  #            bash:  base64 -w0 ~/.local/share/unity3d/Unity/Unity_lic.ulf
-  #        La licencia NO está atada a plataforma ni a versión: activada en
-  #        Windows, vale para compilar en Ubuntu.
+  #      LEGACY PRO (serial) → UNITY_LICENSE_SERIAL
+  #        XX-XXXX-XXXX-XXXX-XXXX-XXXX. `unity license activate --serial` la
+  #        activa sin login, sin fichero y sin navegador: es la vía limpia en
+  #        un runner efímero.
   #
-  #      Pro/Plus → UNITY_LICENSE_SERIAL (XX-XXXX-XXXX-XXXX-XXXX-XXXX)
+  #      ENTERPRISE / INDUSTRY (asiento asignado) → UNITY_LICENSE_FILE_BASE64
+  #        El .xml/.ulf que devuelve license.unity3d.com/manual a partir de un
+  #        .alf generado en la máquina, en base64 y en UNA línea (`base64 -w0
+  #        fichero`).
+  #
+  #      PERSONAL (gratuita) → NO HAY VÍA AUTOMÁTICA, y no es una limitación
+  #        de este workflow ni del CLI: es de Unity. El manual de Unity 6.5 lo
+  #        dice con todas las letras —«Manual activation … doesn't support …
+  #        Unity Personal … To activate a license for Unity Personal, log in
+  #        to the Unity Hub»— y el CLI solo sabe entrar sin navegador con
+  #        cuentas de servicio, que el backend rechaza para activar (esta
+  #        misma fase lo comprueba: `unity auth login` no expone usuario y
+  #        contraseña, solo --client-id/--client-secret).
+  #
+  #        MEDIDO, no supuesto (run 35499256572, 2026-09-20): el fichero que
+  #        el Hub deja en %LOCALAPPDATA%\Unity\licenses\ NO es un ULF sino el
+  #        entitlement de la sesión, y `unity license activate --file` lo
+  #        rechaza con «Cannot load ULF license: Signature element not found in
+  #        XML document»: su <Signature> vive en el namespace XML-DSig
+  #        (xmlns="http://www.w3.org/2000/09/xmldsig#") y el cargador ULF lo
+  #        busca sin namespace. Subirlo en base64 es, por tanto, inútil.
+  #
+  #        Con Personal, las dos salidas que quedan son: (a) un runner
+  #        SELF-HOSTED en la máquina que ya tiene la licencia —el editor
+  #        instalado aquí basta, y `scripts/check-unity-compile.sh` compila el
+  #        proyecto con él en un par de minutos sin tocar GitHub—, o (b) un
+  #        asiento de pago (serial legacy o Enterprise/Industry).
   #
   # Los pasos de abajo salen del andamiaje oficial (`unity ci init --provider
   # github --dry-run`), no de la intuición: instalar el editor necesita
@@ -258,9 +274,16 @@ jobs:
             echo "El job necesita UNO de estos dos secretos (ver el comentario del"
             echo "job para el detalle de cómo generarlos):"
             echo
-            echo "- \`UNITY_LICENSE_FILE_BASE64\` — licencia Personal (base64 del"
-            echo "  \`UnityEntitlementLicense.xml\` de una máquina ya activada)"
-            echo "- \`UNITY_LICENSE_SERIAL\` — licencia Pro/Plus"
+            echo "- \`UNITY_LICENSE_SERIAL\` — serial legacy Pro (XX-XXXX-…): la"
+            echo "  vía que funciona en un runner efímero sin más"
+            echo "- \`UNITY_LICENSE_FILE_BASE64\` — .xml/.ulf de un asiento"
+            echo "  Enterprise/Industry, de license.unity3d.com/manual"
+            echo
+            echo "Una licencia **Personal no se puede activar aquí**: Unity no"
+            echo "admite su activación manual y el CLI solo entra sin navegador"
+            echo "con cuentas de servicio, que el backend rechaza para activar."
+            echo "Con Personal hay que usar un runner self-hosted con el editor"
+            echo "ya licenciado (ver el comentario del job)."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error::define UNITY_LICENSE_FILE_BASE64 o UNITY_LICENSE_SERIAL en Settings → Secrets and variables → Actions"
           exit 1
