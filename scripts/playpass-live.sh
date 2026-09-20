@@ -655,12 +655,15 @@ UCMD() { MSYS_NO_PATHCONV=1 "$UNITY_CLI_BIN" command "$@" --project-path "$(winp
 # `\r\r\n` (CR doble) —medido: `artifacts/playpass-scene.txt` tenía las 65
 # líneas así, y por eso ni siquiera lo normalizaba git al añadirlo. Escribir en
 # `stdout.buffer` en UTF-8 fija LF en todas las plataformas y hace que estos
-# volcados (que son evidencia commiteada) no dependan de quién los generó.
+# volcados (que son evidencia commiteada) no dependan de quién los generó. La
+# entrada se lee igual de explícita (`stdin.buffer` + UTF-8) porque el JSON trae
+# acentos y glifos (`●`, `·`) y la codificación por defecto de un pipe en
+# Windows no es UTF-8.
 cmd_result() {
   python3 -c "
 import sys, json
 try:
-    d = json.load(sys.stdin)
+    d = json.loads(sys.stdin.buffer.read().decode('utf-8'))
 except Exception:
     sys.exit(0)
 r = (d.get('data') or {}).get('result')
