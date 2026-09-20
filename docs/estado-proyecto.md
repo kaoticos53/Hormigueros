@@ -1,6 +1,6 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-19 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
+*Actualizado: 2026-09-20 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
 suite: 536/536 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
@@ -33,12 +33,11 @@ vs scripted vs evolucionada en la misma arena).
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
-a bit. Fijado en CI con **SEIS pines de hash**, verificados en una pasada
-el 2026-09-17 (runs 17 y 19, verdes en Linux): stream canónico, replay con
-drops a 3000 y 6000 ticks, la
-partida Atta canónica, la partida de INVASIÓN canónica, y la partida NEAT
-canónica. **536/536 tests** en Windows y verdes en Linux en CI en cada push,
-igual que los 5 scripts de pin. El job `test` incluye además **tres pasos que
+a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
+push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
+3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
+NEAT canónica. **536/536 tests** en Windows y verdes en Linux en CI en cada push,
+igual que los 6 scripts de pin. El job `test` incluye además **tres pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI y —desde el 2026-09-19— el **selftest del barrido de
 costes**, que es el que prueba el ajuste fijo/marginal de §4.10.
@@ -99,9 +98,9 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 
 ## Lo que queda (en orden de dependencia)
 
-1. **Lo que queda** (F5.3 está cerrada: su exit se midió de punta a punta). Los
-   cabos sueltos son la deuda menor de F5.1, el gate de Unity en CI —que sigue
-   dormido tras la variable `UNITY_CI`— y una decisión de dependencias: los bloques
+1. **F5.3 — registro de rodajas (TODAS HECHAS; sub-fase cerrada con `v0.8.0`).** Lo
+   que queda FUERA de la sub-fase: la deuda menor de F5.1 (punto 2), el gate de Unity
+   en CI —que sigue dormido tras la variable `UNITY_CI`— y una decisión de dependencias: los bloques
    3/4/5 del Play pass del editor necesitan `com.unity.pipeline`, que salió del
    manifest en la poda de paquetes (`unity command editor_status` responde «No
    Pipeline instance found»). La verificación visual end-to-end la cubre ahora la
@@ -135,7 +134,7 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    deltas para no medir supervivencia) y cobertura del mundo leída de la huella CHC (celdas pisadas +
    radio máximo). Dos bloques nuevos en el canal C (`learning`, `fitcurve`) cada 120 ticks; `LearningPanelModel`
    + `LearningPanelBehaviour` en el HUD (curva por generación autoescalada, color por nivel de cobertura y
-   dos líneas de datos en la tarjeta, que crece a 268 px). Telemetría pura: test de hash y 5 pines verdes;
+   dos líneas de datos en la tarjeta, que crece a 268 px). Telemetría pura: test de hash y 6 pines verdes;
    Unity compila en batch sin avisos. Evidencia: en 9000 ticks la colonia sembrada con warm-v2 conoce
    **2148/9216 celdas (23.3 %)** con fitness medio 4.7, y la fría 728 (7.9 %) con 1.8 — la diferencia de
    aprendizaje se ve en el HUD. **463/463 tests**.
@@ -217,12 +216,13 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    cuatro materiales quedan con su referencia (7 líneas) y **2 tests headless** (`PheromoneMaterialGuardTests`, en rojo
    sobre los materiales de HEAD antes del arreglo) impiden que vuelva en silencio: referencia presente, guía existente y
    textura 1×1 RGBA32 `ffffff00` (invisible).
-2. **Deuda menor de F5.1** (no bloquea): drag & drop de `.antgenome` —del editor, ya guardado—,
-   chip de estado por runway, fuente propia y sprites
-   (hormiga/carga/huevo), serie de descargas en la gráfica, y render de
-   hojas con mordiscos en el presenter (el canal A ya emite `cuts` y la
-   tarjeta ya lee el hongo/cortes; el tablero aún pinta las hojas como
-   esferas simples).
+2. **Deuda menor de F5.1** (no bloquea): chip de estado por runway, fuente propia y
+   sprites (hormiga/carga/huevo), y la serie de DESCARGAS en la gráfica de reserva
+   (hoy la sparkline guarda `Stock`; la serie de drops aún no se grafica).
+   Ya HECHO, para no contarlo más como deuda: el drag & drop de `.antgenome`
+   (`ImportDialogBehaviour`, `#if UNITY_EDITOR` — esa API es del editor y su guarda
+   es lo que compila el player) y las hojas con mordiscos (`CutsInitial - CutsLeft`
+   restado por el presenter).
 3. **Fase 6 — 2D → 3D**: explícitamente fuera de Fase 5; el adaptador
    cambia, los contratos no.
 

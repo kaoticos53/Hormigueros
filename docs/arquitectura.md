@@ -324,7 +324,7 @@ Detalles y fórmulas en [`especificaciones.md`](especificaciones.md).
   corte de cabecera con `AppendLine` dependiente del SO). `Sim/CanonMath.cs`
   implementa las trascendentes con series de precisión controlada en double
   (aritmética IEEE básica, 2^k por bits, reducción de argumento exacta):
-  mismo resultado bit a bit en cualquier SO, verificado suite + 5 pines en
+  mismo resultado bit a bit en cualquier SO, verificado suite + 6 pines en
   Windows y Linux (WSL). Coste: 2–5× por llamada, decenas de llamadas por
   tick — despreciable frente al tick. `Sqrt` sigue siendo `MathF.Sqrt`
   (IEEE-exact, correctamente redondeado en toda plataforma).
