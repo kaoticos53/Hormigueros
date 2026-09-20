@@ -320,7 +320,10 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   comando). Esa comprobación está enganchada a `.githooks/pre-push`
   (`scripts/install-hooks.sh`) porque el job de CI que la hace está dormido y, con
   licencia Personal, no puede activarse en un runner alojado: la puerta local es
-  la que cubre este riesgo hoy.
+  la que cubre este riesgo hoy. El hook corre además, **antes** de esa puerta y
+  sin necesidad del editor, el chequeo de churn de assets (`scripts/check-unity-assets.sh`)
+  sobre los commits que el push manda: así el ruido de re-serialización que este
+  proyecto genera al abrir la escena no llega siquiera a la rama.
 - **Medir el COSTE por frame del build necesita `enableFrameTimingStats`.** Con el
   vsync entregando al refresco, el coste del frame queda tapado (60 fps es el techo
   del monitor): `bash scripts/player-perf.sh --cpu` construye con ese ajuste

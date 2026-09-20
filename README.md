@@ -423,9 +423,9 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
 | `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 604 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
-| `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance |
+| `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance. El MISMO chequeo es la **puerta 1** de `.githooks/pre-push`, con el rango sacado de las refs que el push manda |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
-| `.githooks/pre-push --selftest` | el veredicto de la puerta local: solo un rojo de verdad (errores CS) bloquea un push; «no pude comprobar» avisa y deja pasar |
+| `.githooks/pre-push --selftest` | el veredicto de las **dos puertas locales**, en su orden: el churn de assets (sin editor) y los errores CS (con el editor). Solo un rojo de verdad bloquea —churn detectado o `error CS`—; «no pude comprobar» avisa y deja pasar. Cubre también la derivación de rangos desde las refs del push, incluida la **ref nueva** (arranca donde la rama diverge de lo publicado, no en `HEAD~1`) |
 | `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor. El job está dormido y con licencia Personal no puede encenderse en un runner alojado, así que la cobertura diaria es ese mismo script en local, vía `.githooks/pre-push` |
 
 El job `unity-compile` está **dormido**: descargar Unity en cada push es caro y
@@ -488,6 +488,12 @@ no dependa de acordarse, `.githooks/pre-push` lo corre antes de cada push:
 **bloquea solo con errores CS de verdad** (exit 1); editor ausente, sin licencia
 o instancia que no llegó a compilar AVISAN y dejan pasar, porque «no medido» no
 es «roto».
+
+Ese hook tiene **dos puertas**, y van en este orden porque la primera no necesita
+el editor: (1) el **churn de assets** —`scripts/check-unity-assets.sh --churn`
+sobre el rango de commits que el push manda, así que también protege en una
+máquina sin Unity instalado— y (2) la compilación de la capa de vista. Las dos
+comparten la misma decisión asimétrica: solo el exit 1 bloquea, el resto avisa.
 
 ```bash
 bash scripts/install-hooks.sh     # activa el pre-push del repo (idempotente)
