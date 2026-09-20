@@ -129,7 +129,7 @@ en la arena) están cerrados, con el criterio de fin del plan cumplido.
 - **6º pin de CI** (`check-neat-command.sh`, hash `021ed04f…`): la partida
   de invasión lasius+eciton con pool NEAT propio — el cierre del plan §3.
 
-**Suite 463/463 tests, 6 pins de hash verificados en Windows y Linux.**
+**Suite 379/379 tests, 6 pins de hash verificados en Windows y Linux.**
 
 ### v0.6.1 — CI verde cross-platform: determinismo canónico reparado
 
@@ -243,7 +243,7 @@ criterio de cierre verificado en vivo y headless:
   cuerpo Eciton validada por sonda. Sensor dirigido y balance: en curso.
 - CI con pins de hash (stream canónico, replay 3000/6000 con drops, partida
   Atta) y compilación batch de Unity. *(Cuando se escribió esta nota eran 4
-  pines y 305 tests; hoy son **6 pines** —+invasión, +NEAT— y **496/496 tests**.)*
+  pines y 305 tests; hoy son **6 pines** —+invasión, +NEAT— y **536/536 tests**.)*
 - Detalles: [`docs/fase5-plan.md`](docs/fase5-plan.md) ·
   [`docs/fase5-2a-atta.md`](docs/fase5-2a-atta.md) ·
   [`docs/fase5-2b-eciton.md`](docs/fase5-2b-eciton.md) ·

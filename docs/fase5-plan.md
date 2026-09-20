@@ -1,4 +1,4 @@
-# Fase 5 — Plan (borrador)
+# Fase 5 — Plan
 
 Realismo, especies y escala — la fase que convierte el simulador verificado
 en un mundo con contenido. Este documento es el PLAN de trabajo (no el
@@ -8,8 +8,11 @@ Estado del que parte: Fase 4 cerrada
 §0–§8 implementados, determinismo fijado en CI (3 capas de pin de hash), y
 un bucle de jugador completo demostrado end-to-end.
 
-**Estado ACTUAL** (HEAD, suite, rodajas hechas):
-[`estado-proyecto.md`](estado-proyecto.md) — este documento es el plan, no el
+**Estado ACTUAL** (HEAD `v0.8.0`, suite **536/536**, **6 pines** de hash): las
+seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
+F5.2c y F5.3. Lo que sigue abierto es deuda menor de presentación (F5.1, §2) y el
+camino `unity: full` de CI. El registro cronológico con las cifras vive en
+[`estado-proyecto.md`](estado-proyecto.md); este documento es el PLAN, no el
 registro de lo hecho.
 
 **La regla que Fase 5 hereda y no puede romper**: todo lo visible sale del
@@ -68,10 +71,13 @@ acabado):
    parpadeos), pinta `fillAmount` por colonia y `BindNativeButtons` conecta
    los tres botones a las acciones ya verificadas. El bootstrapper crea
    contenedor/plantilla/barras/botones con referencias asignadas. Pendiente:
-   chip de estado por runway y drag&drop.
-2. **Drag & drop de `.antgenome`** — el diálogo de importación acepta ruta
-   de texto; el punto de entrada prometido es soltar el archivo sobre la
-   ventana (Unity `Application.openExternalFiles` / editor `DragAndDrop`).
+   chip de estado por runway.
+2. **Drag & drop de `.antgenome`** — ✅ HECHO (editor): el diálogo acepta la
+   ruta por texto Y los archivos soltados sobre la ventana (`DragAndDrop`,
+   bajo `#if UNITY_EDITOR` — esa API es del editor y la guarda es justo lo que
+   hace compilar el BUILD de jugador, F5.3 rodaja 3ter). Sin camino de
+   runtime (`Application.openExternalFiles`) y sin falta: el jugador carga
+   pools por el picker.
 3. **Gráficas por tarjeta** — ✅ HECHO (reserva, 2026-09-12):
    `ColonySparklineModel` (puro) guarda una muestra por SEGUNDO de simulación
    (30 ticks, el mismo ritmo que la ventana del canal C) con ventana de 90 s, y
@@ -438,10 +444,10 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 
 | Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 463/463 en Windows y Linux |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 536/536 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
-| Feromonas costosas | abierto: RLE funciona para render y la huella CHC ya añadió una capa; el LOD de difusión es la rodaja 3 de F5.3 |
+| Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
 | NEAT estanca la evolución | mitigado: topología de respaldo + especiation medida en el pool (`.antgenome` v2, v0.7.0) |
 | `error CS` de MonoBehaviours | abierto: el job `unity-compile` está corregido pero DORMIDO en push (necesita `UNITY_CI` + licencia); se puede levantar a mano con `workflow_dispatch` (`unity: full` compila, `unity: cache` ejercita solo el paso del caché), y hoy solo lo caza la pasada local |
 
@@ -462,9 +468,11 @@ F5.1  pulido uGUI (toasts-rect, drag&drop, gráficas, iconos)            ✅ (+5
 F5.2a Atta: cortar→transportar→hongo (ítems compuestos + hongo)         ✅ CERRADO (2026-09-13)
 F5.2b Eciton + depredadores (Alarm ofensiva, combate en canal B)        ✅ CERRADO (2026-09-14, v0.6.0)
 F5.2c NEAT v2 (.antgenome v2 + inspector de grafos generalizado)        ✅ CERRADO (2026-09-15, v0.7.0)
-F5.3  SoA/ECS + LOD feromonas + GPU instancing + escala medida          ✅ CERRADO (2026-09-19)
-      └ rodajas 1, 2, 2bis, 2ter, 2quater, 3, 3bis y 3ter (build de jugador: 60 fps
-        presentados + puerta de píxeles verde). Criterio de fase CUMPLIDO
+F5.3  SoA/ECS + LOD feromonas + GPU instancing + escala medida          ✅ CERRADO (2026-09-19, v0.8.0)
+      └ rodajas 1, 2, 2bis, 2ter, 2quater, 3, 3bis, 3ter, 3quater y 3quinquies,
+        más el barrido de colonias por vista (1/2/4/8 → 1,927 · 2,496 · 3,443 ·
+        5,285 núcleos, con el coste FIJO medido en 1,507 en vez de extrapolado).
+        Criterio de fase CUMPLIDO y medido en un build de jugador
 ```
 
 Cada hito sale con: tests de hash (si toca el mundo o la telemetría),
