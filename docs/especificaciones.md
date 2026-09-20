@@ -230,6 +230,8 @@ CHC (hidrocarburos cuticulares) es lo contrario y por eso es la cuarta capa:
 
 ### Arranque en frío — Fase 3ter (implementada)
 
+<!-- cifras-historicas: sub-fase cerrada — las cifras de tests son las de su cierre. -->
+
 > Objetivo: que una colonia fundada pre-entrenada alcance su PRIMERA descarga y
 > su primera eclosión. El bloqueo del arranque en frío no era de la arena sino
 > del MUNDO: descompuesto en tres mecanismos acoplados y corregido con cambios
@@ -284,6 +286,8 @@ CHC (hidrocarburos cuticulares) es lo contrario y por eso es la cuarta capa:
   fija al este, rastro sembrado (0.9), umbral de competencia 8.5, estancamiento
   a 1 200 ticks y currículo 12→25→40→60 u. Sustituida por la arena realista al
   demostrar la validación de transferencia que no transfería.
+
+<!-- /cifras-historicas -->
 
 ### Warm-start — siembra desde `.antgenome` (implementada)
 

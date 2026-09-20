@@ -162,6 +162,8 @@ stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
 
 ### Multi-visor: varias simulaciones a la vez (F5.1bis)
 
+<!-- cifras-historicas: sub-fase cerrada — las cifras de tests son las de su entrega. -->
+
 La fase B del flujo del jugador: ver N partidas EN VIVO en una pantalla, cada
 una sembrada con su pool de la fase A (evolución headless). Menú
 **AntSim → Crear escena multi-visor**: construye y guarda
@@ -195,6 +197,8 @@ flujo rec/desc — el texto sale de `ColonyCardModel.RenderCompact()` (puro y
 testeado headless), y la reserva añade una franja vertical por colonia con la
 misma regla de «reserva baja» del HUD grande. Cada tarjeta consume SOLO el
 stream de su vista: cuatro partidas, cuatro semáforos independientes.
+
+<!-- /cifras-historicas -->
 
 ## La ruta del proyecto está guardada (`-projectPath`)
 
