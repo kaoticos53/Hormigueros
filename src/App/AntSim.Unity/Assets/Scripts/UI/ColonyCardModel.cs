@@ -136,7 +136,15 @@ namespace AntSim.Unity.Scripts.Streaming
             // tenga jerarquía — antes las cinco líneas pesaban igual y el bloque se
             // leía como un muro de texto.
             sb.Append("<b>colonia ").Append(c.Id).Append("  ").Append(LightGlyph(card.Light))
-              .Append("</b>").AppendLine();
+              .Append("</b>");
+            // F5.1 — chip de estado por runway, en la MISMA línea del título para
+            // no crecer la tarjeta. El tramo lo decidió el Core (RunwayVerdict) y
+            // viaja en el canal A: aquí solo se pinta (glifo + rótulo + segundos).
+            // Estado 0 (sin medida o stream viejo) ⇒ no hay chip, y la línea queda
+            // exactamente como antes de F5.1.
+            string chip = RunwayChipModel.RichText(c.RunwayLevel, c.Runway);
+            if (chip.Length > 0) sb.Append("  ").Append(chip);
+            sb.AppendLine();
 
             // Adultas con tope duro del diseño + cría en chips.
             // F5.1: sin emoji — la fuente por defecto de uGUI (LegacyRuntime) no
@@ -215,6 +223,11 @@ namespace AntSim.Unity.Scripts.Streaming
                 sb.Append("  ").Append(c.Adults).Append("h")
                   .Append(' ').Append(F1(frac * 100f)).Append('%');
                 if (frac < 0.20f) sb.Append(" ¡BAJA!");
+                // F5.1: chip en forma corta — en una vista de 1/4 de pantalla no
+                // cabe el rótulo, pero el glifo y los segundos sí, y con ellos el
+                // jugador ve a quién le queda menos aire sin abrir la tarjeta.
+                string chip = RunwayChipModel.RichShort(c.RunwayLevel, c.Runway);
+                if (chip.Length > 0) sb.Append(' ').Append(chip);
                 if (card.Window is GameStreamParser.ColonyMetricsView w && (w.Pickups > 0 || w.Unloads > 0))
                     sb.Append(' ').Append(w.Pickups).Append("rec/")
                       .Append(w.Unloads).Append("desc");

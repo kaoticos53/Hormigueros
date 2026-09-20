@@ -63,13 +63,21 @@ namespace AntSim.Unity.Scripts.Streaming
             public readonly int Adults, Eggs, Larvae, Pupae, Elite;
             // F5.2a.3: hongo (0/0 = especie sin hongo — default tolerante).
             public readonly float Fungus, FungusMax;
+            // F5.1: autonomía en segundos y tramo de la escalera de escasez
+            // (RunwayState), calculados por el Core. −1/0 = el stream no los
+            // trae (streams anteriores a F5.1) o la colonia aún no tiene EMA:
+            // el chip no se pinta.
+            public readonly float Runway;
+            public readonly byte RunwayLevel;
 
             public ColonyView(int id, float nestX, float nestY, float stock, float stockMax,
                 int adults, int eggs, int larvae, int pupae, int elite,
-                float fungus = 0f, float fungusMax = 0f)
+                float fungus = 0f, float fungusMax = 0f,
+                float runway = -1f, byte runwayLevel = 0)
             { Id = id; NestX = nestX; NestY = nestY; Stock = stock; StockMax = stockMax;
               Adults = adults; Eggs = eggs; Larvae = larvae; Pupae = pupae; Elite = elite;
-              Fungus = fungus; FungusMax = fungusMax; }
+              Fungus = fungus; FungusMax = fungusMax;
+              Runway = runway; RunwayLevel = runwayLevel; }
         }
 
         public readonly struct EventView
@@ -390,13 +398,19 @@ namespace AntSim.Unity.Scripts.Streaming
                 foreach (string row in SplitTop(ArrayBody(raw, ci + "\"colonies\":[".Length - 1)))
                 {
                     var p = new Reader(row); // objeto {id, nest:[x,y], adults, ...}
+                    // La AUSENCIA del campo se distingue del valor 0: un stream
+                    // sin runway (anterior a F5.1) no puede leerse como «0 s de
+                    // autonomía», que sería un chip CRÍTICO inventado.
+                    bool traeRunway = row.Contains("\"runway\":");
                     v.Colonies.Add(new ColonyView(
                         (int)p.Num("id"),
                         (float)p.Num("nestX"), (float)p.Num("nestY"),
                         (float)p.Num("stock"), (float)p.Num("stockMax"),
                         (int)p.Num("adults"), (int)p.Num("eggs"),
                         (int)p.Num("larvae"), (int)p.Num("pupae"), (int)p.Num("elite"),
-                        (float)p.Num("fungus"), (float)p.Num("fungusMax")));
+                        (float)p.Num("fungus"), (float)p.Num("fungusMax"),
+                        traeRunway ? (float)p.Num("runway") : -1f,
+                        traeRunway ? (byte)p.Num("runwayLevel") : (byte)0));
                 }
             }
 
