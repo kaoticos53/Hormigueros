@@ -415,14 +415,14 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (536/536), incluido el pin del hash del stream canónico |
+| `dotnet test` | la suite headless (604/604), incluido el pin del hash del stream canónico |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
-| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 536 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 604 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
 | `.githooks/pre-push --selftest` | el veredicto de la puerta local: solo un rojo de verdad (errores CS) bloquea un push; «no pude comprobar» avisa y deja pasar |
 | `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor. El job está dormido y con licencia Personal no puede encenderse en un runner alojado, así que la cobertura diaria es ese mismo script en local, vía `.githooks/pre-push` |
