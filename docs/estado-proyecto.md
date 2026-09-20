@@ -101,7 +101,10 @@ asiento de pago, o (c) la **puerta local**, que es la cobertura real de hoy:
 `scripts/check-unity-compile.sh` —el MISMO script del job, **8 s** con la
 Library caliente— corre en `.githooks/pre-push` (`scripts/install-hooks.sh`) y
 bloquea **solo** con errores CS (exit 1); «no pude comprobar» avisa y deja
-pasar. En Windows el mismo comando es `scripts/check-unity.bat`.
+pasar. En Windows el mismo comando es `scripts/check-unity.bat`. El hook tiene
+dos puertas y la primera es el **churn de assets** (`check-unity-assets.sh
+--churn` sobre los commits que el push manda), que no necesita el editor: el
+ruido de re-serialización se corta antes de salir de la máquina, no en CI.
 
 **NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
 innovation), paridad bit a bit con MLP (`FromMlp`), operadores
