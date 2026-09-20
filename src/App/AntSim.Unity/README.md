@@ -284,7 +284,12 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   build. Todo lo del editor va bajo `#if UNITY_EDITOR`, con una rama de
   comportamiento neutro (`IsDragHovering => false`) para que la vista no cambie.
   El build se comprueba con `bash scripts/player-perf.sh` (construye el player) o
-  `bash scripts/check-unity-compile.sh` (compilación en batch, más rápida).
+  `bash scripts/check-unity-compile.sh` (compilación en batch, más rápida: **8 s**
+  con la Library caliente; en Windows, `scripts/check-unity.bat` es el mismo
+  comando). Esa comprobación está enganchada a `.githooks/pre-push`
+  (`scripts/install-hooks.sh`) porque el job de CI que la hace está dormido y, con
+  licencia Personal, no puede activarse en un runner alojado: la puerta local es
+  la que cubre este riesgo hoy.
 - **Medir el COSTE por frame del build necesita `enableFrameTimingStats`.** Con el
   vsync entregando al refresco, el coste del frame queda tapado (60 fps es el techo
   del monitor): `bash scripts/player-perf.sh --cpu` construye con ese ajuste

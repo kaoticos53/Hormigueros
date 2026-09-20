@@ -449,7 +449,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
 | NEAT estanca la evolución | mitigado: topología de respaldo + especiation medida en el pool (`.antgenome` v2, v0.7.0) |
-| `error CS` de MonoBehaviours | abierto: el job `unity-compile` está corregido pero DORMIDO en push (necesita `UNITY_CI` + licencia); se puede levantar a mano con `workflow_dispatch` (`unity: full` compila, `unity: cache` ejercita solo el paso del caché), y hoy solo lo caza la pasada local |
+| `error CS` de MonoBehaviours | abierto con alcance acotado: el job `unity-compile` está corregido pero DORMIDO en push (necesita `UNITY_CI` + licencia). El 2026-09-20 se ejercitó `unity: full` con secreto real y se **midió que con licencia Personal el camino no cierra** en un runner alojado. Salidas: `UNITY_RUNNER` (self-hosted, implementado sin ejercitar) o asiento de pago; y cobertura de HOY por la puerta local (`scripts/check-unity-compile.sh`, 8 s) enganchada a `.githooks/pre-push` |
 
 ## 7. Qué NO es Fase 5
 
