@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-09-20 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 536/536 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 604/604 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -36,7 +36,7 @@ vs scripted vs evolucionada en la misma arena).
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **536/536 tests** en Windows y verdes en Linux en CI en cada push,
+NEAT canónica. **604/604 tests** en Windows y verdes en Linux en CI en cada push,
 igual que los 6 scripts de pin. El job `test` incluye además **cuatro pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI y —desde el 2026-09-19— el **selftest del barrido de
@@ -249,10 +249,12 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    cuatro materiales quedan con su referencia (7 líneas) y **2 tests headless** (`PheromoneMaterialGuardTests`, en rojo
    sobre los materiales de HEAD antes del arreglo) impiden que vuelva en silencio: referencia presente, guía existente y
    textura 1×1 RGBA32 `ffffff00` (invisible).
-2. **Deuda menor de F5.1** (no bloquea): chip de estado por runway, fuente propia y
-   sprites (hormiga/carga/huevo), y la serie de DESCARGAS en la gráfica de reserva
+2. **Deuda menor de F5.1** (no bloquea): fuente propia y sprites
+   (hormiga/carga/huevo), y la serie de DESCARGAS en la gráfica de reserva
    (hoy la sparkline guarda `Stock`; la serie de drops aún no se grafica).
-   Ya HECHO, para no contarlo más como deuda: el drag & drop de `.antgenome`
+   Ya HECHO, para no contarlo más como deuda: el **chip de estado por runway**
+   (canal A + `RunwayVerdict`/`RunwayChipModel`, en la línea del título de la
+   tarjeta y en forma corta en el multi-visor), el drag & drop de `.antgenome`
    (`ImportDialogBehaviour`, `#if UNITY_EDITOR` — esa API es del editor y su guarda
    es lo que compila el player) y las hojas con mordiscos (`CutsInitial - CutsLeft`
    restado por el presenter).

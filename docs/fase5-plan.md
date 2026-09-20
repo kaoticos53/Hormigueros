@@ -12,7 +12,7 @@ un bucle de jugador completo demostrado end-to-end.
 
 <!-- /cifras-historicas -->
 
-**Estado ACTUAL** (HEAD `v0.8.0`, suite **536/536**, **6 pines** de hash): las
+**Estado ACTUAL** (HEAD `v0.8.0`, suite **604/604**, **6 pines** de hash): las
 seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
 F5.2c y F5.3. Lo que sigue abierto es deuda menor de presentación (F5.1, §2) y el
 camino `unity: full` de CI. El registro cronológico con las cifras vive en
@@ -76,8 +76,25 @@ acabado):
    `HudLayoutBehaviour` instancia un elemento POR toast (pool por key, sin
    parpadeos), pinta `fillAmount` por colonia y `BindNativeButtons` conecta
    los tres botones a las acciones ya verificadas. El bootstrapper crea
-   contenedor/plantilla/barras/botones con referencias asignadas. Pendiente:
-   chip de estado por runway.
+   contenedor/plantilla/barras/botones con referencias asignadas. El **chip de
+   estado por runway** también está HECHO: el tramo viaja calculado en el canal A
+   (`RunwayVerdict`, umbrales de la especie) y la tarjeta lo pinta en la línea del
+   título — en forma corta en la tarjeta compacta del multi-visor.
+   No es decoración, y está medido en seed 42 · grid 96 · 2 colonias · 12000
+   ticks: los tramos se recorren enteros —561 muestras de desahogo, 26 de
+   reserva, 27 de oofagia, 17 de caníbal y 169 de crítico— con el primer
+   no-desahogo en el tick 8280, el primer crítico (runway 7,62 s) en el 9330 y
+   la despensa a 0 s en el 9540. El radio de la escalera son los umbrales de la
+   ESPECIE (Lasius 40/25/15/8 · Atta 50/30/18/10 · Eciton 30/20/12/6), así que
+   la misma autonomía significa cosas distintas en un mundo multi-especie.
+   Y está medido **en píxeles** con la sonda del player (`player-perf.sh
+   --ticks`, build de 4 vistas × 2 colonias sobre grid 256): las cinco entradas
+   de la paleta aparecen en pantalla con el color de su tramo —DESAHOGO
+   `#4CAF50` a t3000/t6000, RESERVA `#7ED07E` a t8000, OOFAGIA `#D8B02A` y
+   CRÍTICO `#E03A3A` a t9500, CRÍTICO/CANÍBAL `#E07A2A` a t12000— a 0,67–0,91
+   de cobertura, con la línea del título entre 139 y 200 px de los 601
+   reservados y **ni un píxel de tinta** dentro de la barra de reserva.
+   Evidencia cruda: `artifacts/hud-chip-ladder.txt`.
 2. **Drag & drop de `.antgenome`** — ✅ HECHO (editor): el diálogo acepta la
    ruta por texto Y los archivos soltados sobre la ventana (`DragAndDrop`,
    bajo `#if UNITY_EDITOR` — esa API es del editor y la guarda es justo lo que
@@ -456,7 +473,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 
 | Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 536/536 en Windows y Linux |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 604/604 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
