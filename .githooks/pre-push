@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# .githooks/pre-push — la puerta LOCAL de la capa de vista.
+#
+# POR QUÉ EXISTE: la suite headless (`dotnet test`) compila solo los scripts
+# PUROS; los MonoBehaviours no se compilan ahí, así que un `error CS` en la capa
+# de vista pasa todos los tests y solo revienta al abrir Unity. El job de CI que
+# sí los compila (`unity-compile`) está dormido por defecto y, con licencia
+# Personal, NO puede encenderse en un runner alojado (el porqué, medido, está en
+# el comentario de ese job). Es decir: sin este hook, nada impide empujar una
+# rotura que la CI no verá.
+#
+# Este hook ejecuta el MISMO script que ese job —`scripts/check-unity-compile.sh`,
+# con el editor licenciado de esta máquina— así que el veredicto es el mismo,
+# solo que antes de salir de casa.
+#
+# DECISIÓN DE BLOQUEO, y por qué es ASIMÉTRICA: SOLO el código 1 (errores de
+# compilación) bloquea el push. Los códigos 2/3/4/5 significan «no pude
+# comprobar» —proyecto inválido, editor ausente, sin licencia, la instancia
+# batch no llegó a compilar— y AVISAN sin bloquear: un hook que impide empujar
+# por no tener Unity instalado se desactiva el primer día, y entonces no protege
+# nada. Un rojo de verdad es rojo; «no medido» no es rojo.
+#
+# Uso:
+#   scripts/install-hooks.sh            # activa el hook (core.hooksPath)
+#   scripts/install-hooks.sh --off      # lo desactiva
+#   git push --no-verify                # saltarlo UNA vez
+#   .githooks/pre-push --selftest       # verifica el mapeo de códigos, sin Unity
+#   ANT_GATE_CMD='exit 1' .githooks/pre-push    # seam: simula un rojo sin romper nada
+# ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
+
+# rc del gate → veredicto del hook. 0 deja pasar, 1 bloquea, el resto avisa.
+verdict() {
+  case "${1:-99}" in
+    0) echo ok ;;
+    1) echo block ;;
+    *) echo warn ;;
+  esac
+}
+
+if [[ "${1:-}" == "--selftest" ]]; then
+  echo "githooks/pre-push --selftest"
+  FAIL=0
+  check() {
+    local rc="$1" want="$2" got
+    got="$(verdict "$rc")"
+    if [[ "$got" != "$want" ]]; then
+      echo "  X rc=$rc esperaba '$want' y salió '$got'"
+      FAIL=1
+    else
+      echo "  ok rc=$rc -> $got"
+    fi
+  }
+  check 0 ok
+  check 1 block
+  check 2 warn
+  check 3 warn
+  check 4 warn
+  check 5 warn
+  check 130 warn
+  if [[ "$FAIL" -eq 0 ]]; then
+    echo "✓ mapeo de códigos correcto (solo el 1 bloquea)"
+  else
+    echo "✗ mapeo de códigos roto"
+  fi
+  exit "$FAIL"
+fi
+
+# Git manda por stdin las refs que va a empujar; este hook no las necesita. El
+# vaciado va SOLO si stdin es un tubo: al ejecutar el hook a mano la entrada es
+# la terminal y un `cat` sin guarda se queda esperando a un EOF que no llega.
+if [[ ! -t 0 ]]; then cat >/dev/null || true; fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+GATE_CMD="${ANT_GATE_CMD:-bash scripts/check-unity-compile.sh}"
+
+echo "▶ pre-push: comprobando que la capa de vista compila (el mismo script que el job de CI)…"
+( cd "$ROOT" && eval "$GATE_CMD" )
+RC=$?
+
+case "$(verdict "$RC")" in
+  ok)
+    echo "✓ capa de vista OK — push adelante"
+    exit 0
+    ;;
+  block)
+    echo ""
+    echo "X PUSH DETENIDO: la capa de vista NO compila (los errores CS están arriba)."
+    echo "  Es exactamente la rotura que la suite headless no ve y que la CI"
+    echo "  dormida no te avisaría a tiempo. Repara y vuelve a empujar."
+    echo "  Saltarlo UNA vez: git push --no-verify"
+    exit 1
+    ;;
+  *)
+    echo ""
+    echo "! No se pudo comprobar (rc=$RC): editor ausente, sin licencia o la instancia batch no llegó a compilar."
+    echo "  NO bloqueo: «no medido» no es «roto». Push adelante."
+    exit 0
+    ;;
+esac
