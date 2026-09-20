@@ -37,6 +37,12 @@ TestResults/
 .DS_Store
 Thumbs.db
 
+# Restos de Python: `scripts/unity-asset-equivalence.py` es el primer script en
+# Python del repo, y basta importarlo (o dejar que una herramienta lo cargue) para
+# que deje un `__pycache__/` al lado — que no es código, es la caché del intérprete.
+__pycache__/
+*.pyc
+
 # Salidas EFÍMERAS de la sonda del player (scripts/player-perf.sh): el log del
 # build, el de la corrida y el volcado crudo de píxeles (~2,7 MB) se PISAN en
 # cada medición y no son evidencia por sí solos — ensucian `git status` después
