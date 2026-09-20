@@ -25,6 +25,8 @@ Estado consolidado por fases: [`docs/estado-proyecto.md`](docs/estado-proyecto.m
 
 ## Notas de versión
 
+<!-- cifras-historicas: notas de versión — cada cifra es la de SU cierre, no la de hoy. La comprobación de cifras del repo (`scripts/check-doc-figures.sh`) ignora lo que va entre estas dos marcas. -->
+
 ### v0.8.0 — Fase 5.3: escala, el mundo deja de costar lo mismo (CERRADO)
 
 La sub-fase que hace sostenible todo lo anterior: el mismo mundo, con menos
@@ -280,6 +282,8 @@ El bucle completo del jugador funciona y está verificado de extremo a extremo:
 Ver [`docs/fase5-plan.md`](docs/fase5-plan.md) para lo que sigue (mini-grafo MLP,
 pulido uGUI, especies Atta/Eciton y escala).
 
+<!-- /cifras-historicas -->
+
 ## Requisitos
 
 - .NET SDK 8+ (el Core apunta a `netstandard2.1` para compatibilidad futura con Unity).
@@ -418,6 +422,7 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 536 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
 | `.githooks/pre-push --selftest` | el veredicto de la puerta local: solo un rojo de verdad (errores CS) bloquea un push; «no pude comprobar» avisa y deja pasar |
 | `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor. El job está dormido y con licencia Personal no puede encenderse en un runner alojado, así que la cobertura diaria es ese mismo script en local, vía `.githooks/pre-push` |
