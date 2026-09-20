@@ -97,6 +97,15 @@ jobs:
       # commit — un pin que cambia «solo a veces» es un bug de determinismo,
       # no una regeneración.
       # ─────────────────────────────────────────────────────────────────────────
+      # Las cifras de los DOCUMENTOS contra el repo: los documentos afirman el
+      # número de pines y el de tests de la suite, y esas cifras se quedaron
+      # atrás más de una vez (el README dijo «5 scripts de pin» con seis, y la
+      # lista de deuda pedía cosas ya hechas) sin que ningún test pudiera verlo,
+      # porque los documentos no estaban en ninguno. Va justo después de la
+      # suite a propósito: `--list-tests` aprovecha la compilación ya hecha.
+      - name: Cifras documentales (pines y tests contra los documentos)
+        run: bash scripts/check-doc-figures.sh
+
       - name: Fixture hash check (regenera el stream canónico y compara)
         run: bash scripts/check-stream-fixture.sh
 
@@ -149,6 +158,12 @@ jobs:
       # editor y sin Unity: es bash puro.
       - name: Selftest del hook pre-push (mapeo de códigos, sin editor)
         run: bash .githooks/pre-push --selftest
+
+      # El analizador de cifras se prueba con documentos de mentira: así se sabe
+      # que un «9 tests» falla, que una cifra dentro de la región histórica NO
+      # falla, y que un ratio que no es de la suite (200/450) se ignora.
+      - name: Selftest del guardarraíl de cifras documentales (sin repo)
+        run: bash scripts/check-doc-figures.sh --selftest
 
   # ───────────────────────────────────────────────────────────────────────────
   # Compilación del proyecto Unity. POR QUÉ no basta con `test`: la suite

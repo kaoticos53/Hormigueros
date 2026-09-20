@@ -37,10 +37,23 @@ a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
 NEAT canónica. **536/536 tests** en Windows y verdes en Linux en CI en cada push,
-igual que los 6 scripts de pin. El job `test` incluye además **tres pasos que
+igual que los 6 scripts de pin. El job `test` incluye además **cuatro pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI y —desde el 2026-09-19— el **selftest del barrido de
 costes**, que es el que prueba el ajuste fijo/marginal de §4.10.
+
+**Guardarraíl de cifras documentales** (2026-09-20) — los documentos afirman el
+número de pines y el de tests, y esas cifras se quedaron atrás más de una vez
+(el README llegó a contar un pin de menos que hashes fijados; la lista de deuda
+de F5.1 pedía cosas hechas) sin que nada pudiera verlo, porque los documentos no
+estaban en ningún test. Ahora `scripts/check-doc-figures.sh` —paso propio en el
+job `test`— mide la verdad del repo (pines = ficheros `scripts/*.expected`;
+tests = casos descubiertos por la suite) y falla si un documento de estado
+dice otra cosa. Dos escapatorias, las dos explícitas: las regiones
+`<!-- cifras-historicas -->` (notas de versión, registro de rodajas, fases
+cerradas: una cifra de un cierre pasado es correcta aunque no sea la de hoy) y
+las bitácoras `docs/fase*-*.md`; un documento nuevo con cifras que no esté
+clasificado **falla** en vez de colarse.
 
 **Gate de Unity en CI — corregido, DORMIDO y con el alcance acotado** — el job
 `unity-compile` compila los MonoBehaviours que `dotnet test` no ve, y hasta el
@@ -115,6 +128,8 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
 `raids` en canal C.
 
 ## Lo que queda (en orden de dependencia)
+
+<!-- cifras-historicas: registro de rodajas — cada cifra es la del cierre de SU rodaja, no la de hoy. `scripts/check-doc-figures.sh` ignora lo que va entre estas dos marcas; las cifras de HOY viven en la cabecera y en la tabla de arriba. -->
 
 1. **F5.3 — registro de rodajas (TODAS HECHAS; sub-fase cerrada con `v0.8.0`).** Lo
    que queda FUERA de la sub-fase: la deuda menor de F5.1 (punto 2), el gate de Unity
@@ -243,6 +258,8 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    restado por el presenter).
 3. **Fase 6 — 2D → 3D**: explícitamente fuera de Fase 5; el adaptador
    cambia, los contratos no.
+
+<!-- /cifras-historicas -->
 
 ## Riesgos abiertos
 
