@@ -37,10 +37,24 @@ a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
 NEAT canónica. **604/604 tests** en Windows y verdes en Linux en CI en cada push,
-igual que los 6 scripts de pin. El job `test` incluye además **cuatro pasos que
+igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
-guardas del Unity CLI y —desde el 2026-09-19— el **selftest del barrido de
-costes**, que es el que prueba el ajuste fijo/marginal de §4.10.
+guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
+de costes** (el que prueba el ajuste fijo/marginal de §4.10), el guardarraíl de
+cifras documentales y —desde el 2026-09-20— el **verificador de equivalencia de
+assets de Unity**.
+
+**El churn de assets de Unity no entra al repo** (2026-09-20) — abrir el
+proyecto, construir un player o dejar que el editor guarde reescribe la escena,
+los materiales y los ajustes de URP SIN cambiar lo que significan. Medido ese
+día, en una pasada del generador del multi-visor: **de 64 assets, 60 eran
+idénticos** (sólo se movía el bloque `AssetVersion` y cambiaban de ancla) y 4
+cambiaban de verdad. `scripts/check-unity-assets.sh` decide eso por equivalencia
+estructural —documentos por clase, referencias locales resueltas a la huella de
+su destino e iteradas a punto fijo— así que el reordenamiento y la renumeración
+de anclas de Unity no cuentan, y los finales de línea tampoco (Windows escribe
+CRLF y CI tiene LF). En CI recorre los commits del push y falla si alguno metió
+un asset que no cambia nada, con la lista de ficheros a descartar.
 
 **Guardarraíl de cifras documentales** (2026-09-20) — los documentos afirman el
 número de pines y el de tests, y esas cifras se quedaron atrás más de una vez
