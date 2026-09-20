@@ -2,8 +2,8 @@
 # POR QUÉ. El repo se desarrolla en Windows —Git for Windows instala con
 # `core.autocrlf=true`— y sus scripts se ejecutan en Linux: la CI y, aquí mismo,
 # WSL. Sin reglas, lo que cae en el disco lo decide el `autocrlf` de cada
-# máquina, no el repo: medido el 2026-09-20 con `git ls-files --eol`, 444
-# ficheros estaban en LF y 173 en CRLF, con los MISMOS blobs.
+# máquina, no el repo: medido el 2026-09-20 con `git ls-files --eol`, 442
+# ficheros estaban en LF y 176 en CRLF, con los MISMOS blobs.
 #
 # Y donde de verdad muerde no es cosmético. Medido en un shell POSIX (Linux) con
 # un fichero CRLF: el shebang no arranca («cannot execute: required file not
