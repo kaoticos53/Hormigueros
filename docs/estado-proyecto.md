@@ -52,9 +52,28 @@ idénticos** (sólo se movía el bloque `AssetVersion` y cambiaban de ancla) y 4
 cambiaban de verdad. `scripts/check-unity-assets.sh` decide eso por equivalencia
 estructural —documentos por clase, referencias locales resueltas a la huella de
 su destino e iteradas a punto fijo— así que el reordenamiento y la renumeración
-de anclas de Unity no cuentan, y los finales de línea tampoco (Windows escribe
-CRLF y CI tiene LF). En CI recorre los commits del push y falla si alguno metió
-un asset que no cambia nada, con la lista de ficheros a descartar.
+de anclas de Unity no cuentan, y los finales de línea tampoco —desde el
+2026-09-20 los assets están fijados a LF por `.gitattributes`, así que el
+`autocrlf` de la máquina ya no los reescribe—. En CI recorre los commits del
+push y falla si alguno metió un asset que no cambia nada, con la lista de
+ficheros a descartar.
+
+**Finales de línea fijados por el repo, no por la máquina** (2026-09-20) —
+`.gitattributes` fija el `eol` por tipo: **LF para todo el texto** —código,
+documentos y los assets YAML de Unity en modo Force Text— y **CRLF sólo para lo
+que interpreta Windows** (`.bat`, `.cmd`, `.ps1`); los binarios (`.png`,
+`.antgenome`, `.antsave`) quedan `-text`. Antes lo decidía el `autocrlf` de cada
+máquina: medido con `git ls-files --eol`, 442 ficheros en LF y 176 en CRLF **con
+los MISMOS blobs**, y una lectura sin normalizar veía un fichero entero cambiado
+(`AntMat.mat`: 71 inserciones / 71 borrados, sólo por el `\r`). El supuesto de
+que el editor escribe CRLF resultó **falso al medirlo**: `MultiSim.unity` y el
+asset de URP salidos del bootstrapper tienen hash sin filtros idéntico al del
+blob —LF de verdad— y el CRLF del árbol era del checkout. La medición destapó
+además un defecto del volcado de la sonda: `cmd_result` escribía por
+`sys.stdout`, que en Windows es un `TextIOWrapper` que traduce `\n` a
+`os.linesep`, así que `artifacts/playpass-scene.txt` quedó commiteado con CR
+doble (sus 65 líneas eran `\r\r\n`); ahora escribe bytes en UTF-8 y el volcado
+es LF en toda plataforma.
 
 **Guardarraíl de cifras documentales** (2026-09-20) — los documentos afirman el
 número de pines y el de tests, y esas cifras se quedaron atrás más de una vez
