@@ -143,6 +143,13 @@ jobs:
           bash scripts/lib/unity-cli.sh --selftest
           bash scripts/unity-cli.sh --selftest
 
+      # El pre-push es una puerta de VERDAD (puede impedir un push), así que su
+      # lógica de veredicto se verifica en cada push: solo el código 1 del gate
+      # bloquea, y los «no pude comprobar» (2..5) avisan y dejan pasar. Sin
+      # editor y sin Unity: es bash puro.
+      - name: Selftest del hook pre-push (mapeo de códigos, sin editor)
+        run: bash .githooks/pre-push --selftest
+
   # ───────────────────────────────────────────────────────────────────────────
   # Compilación del proyecto Unity. POR QUÉ no basta con `test`: la suite
   # headless solo compila los scripts PUROS que el csproj enlaza con
@@ -162,6 +169,12 @@ jobs:
   #      puerta en cada push, solo cuando alguien lo pide.
   #   b) PERMANENTE: la variable `UNITY_CI = true` (más los secretos de abajo)
   #      y entonces el job corre en cada push y PR — siempre con alcance full.
+  #
+  # Además hay una tercera variable, `UNITY_RUNNER`, que decide DÓNDE corre el
+  # job: sin ella es `ubuntu-latest` (el runner alojado, el único que puede
+  # instalar y activar); con ella (p. ej. `self-hosted`) el job corre en esa
+  # máquina ya licenciada y se salta toda la parte de instalación/licencia. Ver
+  # el bloque de la licencia Personal más abajo para el porqué.
   #
   # La licencia (punto 2) la necesitan SOLO los runs de alcance `full`.
   # Hacen falta DOS cosas en Settings → Secrets and variables → Actions:
@@ -196,11 +209,49 @@ jobs:
   #        (xmlns="http://www.w3.org/2000/09/xmldsig#") y el cargador ULF lo
   #        busca sin namespace. Subirlo en base64 es, por tanto, inútil.
   #
-  #        Con Personal, las dos salidas que quedan son: (a) un runner
-  #        SELF-HOSTED en la máquina que ya tiene la licencia —el editor
-  #        instalado aquí basta, y `scripts/check-unity-compile.sh` compila el
-  #        proyecto con él en un par de minutos sin tocar GitHub—, o (b) un
-  #        asiento de pago (serial legacy o Enterprise/Industry).
+  #        2. ACTIVAR SIN FICHERO PIDE SESIÓN. `unity license activate
+  #           --personal --accept-eula` (el flag EXISTE: medido con el binario
+  #           1.0.0-beta.10 en un HOME aislado) responde «Sign in with unity
+  #           auth login, or pass --serial»: en un runner efímero no hay sesión
+  #           que valga, y `unity auth login` sin navegador solo acepta cuentas
+  #           de servicio.
+  #
+  #        Y aunque el cargador ULF aceptara el fichero, el propio XML lleva
+  #        cinco identificadores `Legacy.MachineBinding1..5` —el hash de la
+  #        máquina y su MAC (b0:19:21:04:ed:fe)—: está atado a ESTA máquina,
+  #        así que copiarlo a un runner no activaría nada ni aunque el formato
+  #        fuera el bueno. Subirlo en base64 es, por tanto, doblemente inútil.
+  #
+  #        Las salidas que quedan, en orden de coste:
+  #
+  #          a) UN RUNNER SELF-HOSTED en la máquina que ya tiene el editor
+  #             licenciado: se apunta el job con la VARIABLE de repositorio
+  #             `UNITY_RUNNER` (p. ej. `self-hosted`) y el job SALTA la
+  #             instalación del CLI y del editor, las librerías, la activación,
+  #             el preflight y la devolución de licencia —la licencia es la del
+  #             Hub de esa máquina— y compila con el editor que ya está
+  #             instalado. Es la única vía que da una puerta PERMANENTE en CI
+  #             sin pagar asiento. (Ese camino, hoy, está sin ejercitar: no hay
+  #             runner registrado.)
+  #          b) UN ASIENTO DE PAGO: serial legacy Pro (`UNITY_LICENSE_SERIAL`)
+  #             o .ulf de un asiento Enterprise/Industry
+  #             (`UNITY_LICENSE_FILE_BASE64`).
+  #          c) LA PUERTA LOCAL, la única que cubre el riesgo HOY y sin
+  #             infraestructura: `scripts/check-unity-compile.sh` usa el mismo
+  #             editor licenciado de la máquina de desarrollo, es el MISMO
+  #             script que corre este job y tarda SEGUNDOS con la Library
+  #             caliente (8 s medidos el 2026-09-20). Para que no dependa de
+  #             acordarse, `.githooks/pre-push` lo ejecuta antes de cada push y
+  #             solo BLOQUEA con errores CS de verdad (exit 1): editor ausente,
+  #             sin licencia o instancia que no llegó a compilar AVISAN y dejan
+  #             pasar. Se instala con `scripts/install-hooks.sh`.
+  #
+  # OJO CON EL EQUILIBRIO: el 2026-09-20 se midió que los cinco pasos de
+  # licencia y editor NO son portables a un runner que ya los tiene, así que
+  # van condicionados a `UNITY_SELF_HOSTED`. Un verde de este job en modo
+  # self-hosted significa «el proyecto compila con el editor de esa máquina»,
+  # no «la instalación y la activación funcionan»: eso último solo lo prueba un
+  # run alojado, y un run alojado con licencia Personal no existe (ver arriba).
   #
   # Los pasos de abajo salen del andamiaje oficial (`unity ci init --provider
   # github --dry-run`), no de la intuición: instalar el editor necesita
@@ -218,7 +269,11 @@ jobs:
     if: >-
       vars.UNITY_CI == 'true'
       || (github.event_name == 'workflow_dispatch' && inputs.unity != 'none')
-    runs-on: ubuntu-latest
+    # DÓNDE CORRE: por defecto el runner alojado (el único que puede instalar y
+    # ACTIVAR el editor). Con la variable `UNITY_RUNNER` puesta, corre en esa
+    # máquina — self-hosted, ya licenciada por el Hub — y los pasos que asumen
+    # un runner virgen (CLI, editor, librerías, licencia, preflight) se saltan.
+    runs-on: ${{ vars.UNITY_RUNNER || 'ubuntu-latest' }}
     env:
       # El CLI lo lee del entorno: sin esto, cualquier comando que quiera
       # preguntar algo se queda colgado hasta el timeout del job.
@@ -228,6 +283,11 @@ jobs:
       # ALCANCE: `full` compila el proyecto entero; `cache` corre solo el paso
       # del caché. En push y PR el input no existe y el alcance es full.
       UNITY_SCOPE: ${{ inputs.unity || 'full' }}
+      # ¿EL RUNNER YA TIENE EDITOR Y LICENCIA? Se deriva de la MISMA variable que
+      # elige `runs-on`, no de una detección en tiempo de ejecución: un runner
+      # self-hosted que además instalara y activara repetiría trabajo y pediría
+      # un secreto que su licencia hace innecesario.
+      UNITY_SELF_HOSTED: ${{ vars.UNITY_RUNNER != '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -241,15 +301,21 @@ jobs:
           else
             echo "alcance: cache — solo el paso del caché (ni licencia ni editor)"
           fi
+          echo "runner: ${{ vars.UNITY_RUNNER || 'ubuntu-latest' }} (self-hosted: $UNITY_SELF_HOSTED)"
           echo "origen del evento: ${{ github.event_name }}"
           {
             echo "## Job de Unity — alcance $UNITY_SCOPE"
             echo
             echo "- origen del evento: ${{ github.event_name }}"
             echo "- variable UNITY_CI: '${{ vars.UNITY_CI }}'"
+            echo "- runner: ${{ vars.UNITY_RUNNER || 'ubuntu-latest' }} (self-hosted: $UNITY_SELF_HOSTED)"
             echo
             if [[ "$UNITY_SCOPE" != "full" ]]; then
               echo "Este run NO compila el proyecto: solo ejercita el paso del caché."
+            fi
+            if [[ "$UNITY_SELF_HOSTED" == "true" ]]; then
+              echo "Runner self-hosted: la instalación y la activación de Unity no"
+              echo "corren (se usan el editor y la licencia que esa máquina ya tiene)."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -257,7 +323,9 @@ jobs:
       # que falta debe costar 2 segundos, no 10 minutos. Solo en alcance full:
       # el modo `cache` no activa nada y no puede pedir licencia.
       - name: Comprobar los requisitos de activación
-        if: env.UNITY_SCOPE == 'full'
+        # En self-hosted la licencia es la del Hub de esa máquina: pedir el
+        # secreto aquí bloquearía un trabajo que NO lo necesita.
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         env:
           UNITY_LICENSE_SERIAL: ${{ secrets.UNITY_LICENSE_SERIAL }}
           UNITY_LICENSE_FILE_BASE64: ${{ secrets.UNITY_LICENSE_FILE_BASE64 }}
@@ -289,7 +357,7 @@ jobs:
           exit 1
 
       - name: Instalar el Unity CLI
-        if: env.UNITY_SCOPE == 'full'
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         run: |
           curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh \
             | UNITY_CLI_CHANNEL=beta bash
@@ -369,7 +437,7 @@ jobs:
           key: unity-downloads-${{ steps.unity-version.outputs.version }}${{ env.UNITY_SCOPE != 'full' && '-sonda' || '' }}
 
       - name: Instalar la versión de Unity fijada por el proyecto
-        if: env.UNITY_SCOPE == 'full'
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         run: |
           # Del output del paso de versión: ProjectVersion.txt se lee UNA vez en
           # el job y los tres consumidores (clave del caché, este y el
@@ -393,7 +461,7 @@ jobs:
       # un veredicto vacío. Nombres de Ubuntu 24.04 (noble), que es lo que
       # corresponde a `runs-on: ubuntu-latest`.
       - name: Instalar las librerías de runtime del editor
-        if: env.UNITY_SCOPE == 'full'
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -407,7 +475,7 @@ jobs:
             libsecret-1-0
 
       - name: Activar la licencia
-        if: env.UNITY_SCOPE == 'full'
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         env:
           UNITY_LICENSE_SERIAL: ${{ secrets.UNITY_LICENSE_SERIAL }}
           UNITY_LICENSE_FILE_BASE64: ${{ secrets.UNITY_LICENSE_FILE_BASE64 }}
@@ -426,11 +494,11 @@ jobs:
       # licencia activable, editor ausente, disco corto, servicios inalcanzables)
       # en vez de a mitad de la compilación.
       - name: Preflight
-        if: env.UNITY_SCOPE == 'full'
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         run: unity doctor --ci
 
       - name: Localizar el editor instalado
-        if: env.UNITY_SCOPE == 'full'
+        if: env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         run: |
           VERSION="${{ steps.unity-version.outputs.version }}"
           BASE="$(unity --quiet install-path | tail -n 1)"
@@ -445,11 +513,19 @@ jobs:
 
       - name: Compilar el proyecto Unity en batch (falla con cualquier error CS)
         if: env.UNITY_SCOPE == 'full'
-        run: bash scripts/check-unity-compile.sh --unity "$UNITY_EDITOR_BIN"
+        run: |
+          if [[ "${UNITY_SELF_HOSTED}" == "true" ]]; then
+            # Self-hosted: el editor lo resuelve el propio script en la
+            # instalación del Hub de ESA máquina (el paso que publica
+            # $UNITY_EDITOR_BIN es de los que no corren aquí).
+            bash scripts/check-unity-compile.sh
+          else
+            bash scripts/check-unity-compile.sh --unity "$UNITY_EDITOR_BIN"
+          fi
 
       # Devolver el asiento aunque el job falle o se cancele: en runners
       # efímeros, una activación filtrada por run acaba bloqueando la cuenta.
       # En alcance `cache` no se activó nada, así que no hay qué devolver.
       - name: Devolver la licencia
-        if: always() && env.UNITY_SCOPE == 'full'
+        if: always() && env.UNITY_SCOPE == 'full' && env.UNITY_SELF_HOSTED != 'true'
         run: unity license return --yes || true
