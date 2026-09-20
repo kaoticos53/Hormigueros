@@ -1,36 +1,56 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# .githooks/pre-push — la puerta LOCAL de la capa de vista.
+# .githooks/pre-push — las puertas LOCALES del push (dos, y en este orden).
 #
+# PUERTA 1 — CHURN DE ASSETS DE UNITY (`scripts/check-unity-assets.sh --churn`).
+# Abrir el proyecto, construir un player o sólo dejar que el editor guarde la
+# escena reescribe assets SIN cambiar lo que significan: reordena documentos,
+# renumera anclas `&N` y mueve el bloque `AssetVersion` de sitio. Son miles de
+# líneas de diff que contaminan la historia del repo para siempre y esconden, si
+# acaso, un cambio pequeño (medido: 64 assets reescritos, 60 idénticos). Va la
+# PRIMERA porque no necesita el editor —segundos— y porque así protege también en
+# una máquina sin Unity instalado, donde la puerta 2 sólo puede avisar.
+#
+# PUERTA 2 — COMPILACIÓN DE LA CAPA DE VISTA (`scripts/check-unity-compile.sh`).
 # POR QUÉ EXISTE: la suite headless (`dotnet test`) compila solo los scripts
 # PUROS; los MonoBehaviours no se compilan ahí, así que un `error CS` en la capa
 # de vista pasa todos los tests y solo revienta al abrir Unity. El job de CI que
 # sí los compila (`unity-compile`) está dormido por defecto y, con licencia
 # Personal, NO puede encenderse en un runner alojado (el porqué, medido, está en
 # el comentario de ese job). Es decir: sin este hook, nada impide empujar una
-# rotura que la CI no verá.
+# rotura que la CI no verá. Este hook ejecuta el MISMO script que ese job —con el
+# editor licenciado de esta máquina— así que el veredicto es el mismo, solo que
+# antes de salir de casa.
 #
-# Este hook ejecuta el MISMO script que ese job —`scripts/check-unity-compile.sh`,
-# con el editor licenciado de esta máquina— así que el veredicto es el mismo,
-# solo que antes de salir de casa.
+# QUÉ ESCANEA LA PUERTA 1, y por qué así: los commits que este push MANDA, no el
+# árbol de trabajo (lo que se queda en la máquina no viaja). El rango sale de las
+# refs que git entrega por stdin: `<remoto>..<local>` en un push normal y —si la
+# ref es NUEVA— desde donde la rama diverge de lo ya publicado (`--not --remotes`),
+# porque ahí no hay extremo remoto y caer a `HEAD~1..HEAD` dejaría fuera del
+# escaneo justo al commit que se está empujando. Sin refs que usar, la puerta
+# delega en el resolutor del propio verificador (que ya sabe de `CI_RANGE`).
 #
-# DECISIÓN DE BLOQUEO, y por qué es ASIMÉTRICA: SOLO el código 1 (errores de
-# compilación) bloquea el push. Los códigos 2/3/4/5 significan «no pude
-# comprobar» —proyecto inválido, editor ausente, sin licencia, la instancia
-# batch no llegó a compilar— y AVISAN sin bloquear: un hook que impide empujar
-# por no tener Unity instalado se desactiva el primer día, y entonces no protege
-# nada. Un rojo de verdad es rojo; «no medido» no es rojo.
+# DECISIÓN DE BLOQUEO, y por qué es ASIMÉTRICA (igual en las dos puertas): SOLO el
+# código 1 bloquea —errores de compilación en la puerta 2, churn detectado en la
+# puerta 1—. Los códigos 2/3/4/5 significan «no pude comprobar»: proyecto
+# inválido, editor ausente, sin licencia, sin Python, la instancia batch no llegó
+# a compilar. Se AVISA sin bloquear: un hook que impide empujar por no tener
+# Unity o Python instalado se desactiva el primer día, y entonces no protege nada.
+# Un rojo de verdad es rojo; «no medido» no es rojo.
 #
 # Uso:
 #   scripts/install-hooks.sh            # activa el hook (core.hooksPath)
 #   scripts/install-hooks.sh --off      # lo desactiva
 #   git push --no-verify                # saltarlo UNA vez
-#   .githooks/pre-push --selftest       # verifica el mapeo de códigos, sin Unity
-#   ANT_GATE_CMD='exit 1' .githooks/pre-push    # seam: simula un rojo sin romper nada
+#   .githooks/pre-push --selftest       # rangos, mapeo de códigos y las dos puertas, sin Unity
+#   ANT_GATE_CMD='exit 1' .githooks/pre-push             # seam: rojo de compilación
+#   PUSH_REFS='…' ANT_ASSET_CMD='…' .githooks/pre-push   # seams de la puerta 1 (los usa el selftest)
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
-# rc del gate → veredicto del hook. 0 deja pasar, 1 bloquea, el resto avisa.
+CEROS="$(printf '0%.0s' {1..40})"
+
+# rc de un gate → veredicto del hook. 0 deja pasar, 1 bloquea, el resto avisa.
 verdict() {
   case "${1:-99}" in
     0) echo ok ;;
@@ -39,19 +59,68 @@ verdict() {
   esac
 }
 
+# ── El rango de commits de una ref empujada ─────────────────────────────────
+# `git push` entrega por stdin líneas «<ref local> <sha local> <ref remota>
+# <sha remoto>». Devuelve «A..B» o nada (nada = no hay commits nuevos que mirar).
+rango_de_ref() {
+  local sha_local="${1:-}" sha_remoto="${2:-}" raiz commit padre
+  # Ref borrada en el remoto: el push no manda commits, sólo quita la referencia.
+  [[ -z "$sha_local" || "$sha_local" == "$CEROS" ]] && return 0
+  if [[ -n "$sha_remoto" && "$sha_remoto" != "$CEROS" ]]; then
+    # Push normal: lo nuevo es exactamente lo que el remoto no tenía. Sin el
+    # atajo de la igualdad, empujar una ref ya al día escanearía historia ajena.
+    [[ "$sha_remoto" == "$sha_local" ]] && return 0
+    echo "$sha_remoto..$sha_local"
+    return 0
+  fi
+  # Ref NUEVA: no hay extremo remoto. El punto de comparación es donde esta rama
+  # diverge de lo YA publicado; y como el verificador compara cada commit con su
+  # padre, el primero que sirve es el primero de esa cola que TENGA padre (el
+  # commit raíz del repo no tiene con quién compararse).
+  raiz="$(git rev-list --reverse "$sha_local" --not --remotes 2>/dev/null || true)"
+  while read -r commit; do
+    [[ -z "$commit" ]] && continue
+    # El padre se resuelve a un sha SUELTO, no se pega un «^» literal: el
+    # verificador valida cada extremo con `rev-parse '<rev>^{commit}'`, y un «^»
+    # pegado ahí se leería «<sha>^^{commit}» —el abuelo— y validaría otra revisión.
+    padre="$(git rev-parse --verify --quiet "$commit^" 2>/dev/null || true)"
+    if [[ -n "$padre" ]]; then
+      echo "$padre..$sha_local"
+      return 0
+    fi
+  done <<<"$raiz"
+  return 0
+}
+
+# Los rangos de todas las refs del push, uno por línea.
+rangos_del_push() {
+  local _ref_local sha_local _ref_remota sha_remoto rango
+  while read -r _ref_local sha_local _ref_remota sha_remoto; do
+    rango="$(rango_de_ref "$sha_local" "$sha_remoto")"
+    [[ -n "$rango" ]] && echo "$rango"
+  done <<<"${PUSH_REFS:-}"
+  return 0
+}
+
 if [[ "${1:-}" == "--selftest" ]]; then
   echo "githooks/pre-push --selftest"
   FAIL=0
+  ok() { echo "  ok $1"; }
+  bad() { echo "  X $1"; FAIL=1; }
   check() {
     local rc="$1" want="$2" got
     got="$(verdict "$rc")"
     if [[ "$got" != "$want" ]]; then
-      echo "  X rc=$rc esperaba '$want' y salió '$got'"
-      FAIL=1
+      bad "rc=$rc esperaba '$want' y salió '$got'"
     else
-      echo "  ok rc=$rc -> $got"
+      ok "rc=$rc -> $got"
     fi
   }
+  check_eq() { # nombre, obtenido, esperado
+    if [[ "$2" == "$3" ]]; then ok "$1"; else bad "$1 (obtuve «$2», esperaba «$3»)"; fi
+  }
+
+  # 1. El mapeo de códigos: sólo el 1 bloquea; el resto (no medido) avisa.
   check 0 ok
   check 1 block
   check 2 warn
@@ -59,23 +128,162 @@ if [[ "${1:-}" == "--selftest" ]]; then
   check 4 warn
   check 5 warn
   check 130 warn
-  if [[ "$FAIL" -eq 0 ]]; then
-    echo "✓ mapeo de códigos correcto (solo el 1 bloquea)"
+
+  # 2. El rango de una ref: los casos que no necesitan git, porque el push
+  #    normal no debe llamar a git para nada (camino caliente del hook).
+  check_eq "push normal ⇒ remoto..local" \
+    "$(rango_de_ref aaaa1111 bbbb2222)" "bbbb2222..aaaa1111"
+  check_eq "ref ya al día ⇒ nada que escanear" "$(rango_de_ref aaaa1111 aaaa1111)" ""
+  check_eq "ref borrada en el remoto ⇒ nada" "$(rango_de_ref "$CEROS" bbbb2222)" ""
+  check_eq "sha local vacío ⇒ nada" "$(rango_de_ref '' bbbb2222)" ""
+  check_eq "sha remoto ausente ⇒ se trata como ref nueva" \
+    "$(rango_de_ref no-existe-esta-rev '')" ""
+
+  # 3. La ref NUEVA se resuelve con git de verdad: en un repo de prueba con dos
+  #    commits y SIN remotos, el rango arranca en el primero (la cola
+  #    `--not --remotes` es todo el historial y el raíz no tiene padre).
+  if ! git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+    echo "  • sin repo git: se salta el caso de la ref nueva"
   else
-    echo "✗ mapeo de códigos roto"
+    tmp="$(mktemp -d)"
+    (
+      cd "$tmp" || exit 1
+      git init -q .
+      git config user.email t@t
+      git config user.name t
+      echo a > a.txt && git add -A && git commit -qm uno
+      echo b > b.txt && git add -A && git commit -qm dos
+    ) >/dev/null 2>&1
+    primero="$(cd "$tmp" && git rev-parse HEAD~1)"
+    ultimo="$(cd "$tmp" && git rev-parse HEAD)"
+    check_eq "ref nueva ⇒ desde donde diverge la rama" \
+      "$(cd "$tmp" && rango_de_ref "$ultimo" "$CEROS")" "$primero..$ultimo"
+    check_eq "commit raíz ⇒ no hay con qué comparar" \
+      "$(cd "$tmp" && rango_de_ref "$primero" "$CEROS")" ""
+    rm -rf "$tmp"
+  fi
+
+  # 4. Las dos puertas, de verdad y sin Unity: la orden de la puerta 1 se
+  #    sustituye por un doble y los comandos se ejecutan con las MISMAS refs que
+  #    git mandaría. Es lo que comprueba que el churn bloquee, que «no medido» no
+  #    bloquee, y que el rango llegue a la puerta 1 (no un HEAD~1 inventado).
+  SELF="$0"
+  [[ "$SELF" != /* ]] && SELF="$PWD/$SELF"
+  doble="$(mktemp)"
+  cat > "$doble" <<'EOF'
+#!/usr/bin/env bash
+echo "DOBLE_ASSET args=$*"
+exit "${FAKE_RC:-0}"
+EOF
+
+  REFS='refs/heads/x aaaa1111 refs/heads/x bbbb2222'
+  probe() { # FAKE_RC, ANT_GATE_CMD, refs
+    PROBE_OUT="$(PUSH_REFS="$3" FAKE_RC="$1" ANT_ASSET_CMD="bash $doble" \
+                 ANT_GATE_CMD="$2" "$SELF" </dev/null 2>&1)"
+    PROBE_RC=$?
+  }
+
+  probe 1 'echo GATE_RAN' "$REFS"
+  check_eq "churn detectado ⇒ bloquea (rc 1)" "$PROBE_RC" "1"
+  case "$PROBE_OUT" in
+    *GATE_RAN*) bad "churn detectado ⇒ NO debe llegar a la puerta de compilación" ;;
+    *) ok "churn detectado ⇒ no gasta un arranque del editor" ;;
+  esac
+  case "$PROBE_OUT" in
+    *"args=--churn --range bbbb2222..aaaa1111"*) ok "el rango del push llega a la puerta 1" ;;
+    *) bad "el rango del push no llegó a la puerta 1 ($PROBE_OUT)" ;;
+  esac
+
+  probe 3 'echo GATE_RAN' "$REFS"
+  check_eq "sin Python/no medible ⇒ no bloquea (rc 0)" "$PROBE_RC" "0"
+  case "$PROBE_OUT" in
+    *GATE_RAN*) ok "«no medido» no bloquea y la puerta 2 sí corre" ;;
+    *) bad "un aviso de la puerta 1 no debe saltarse la puerta 2" ;;
+  esac
+
+  probe 0 'exit 1' "$REFS"
+  check_eq "compilación roja ⇒ bloquea (rc 1)" "$PROBE_RC" "1"
+
+  probe 0 'echo GATE_RAN' ''
+  check_eq "sin refs ⇒ la puerta 1 resuelve el rango por su cuenta" "$PROBE_RC" "0"
+  case "$PROBE_OUT" in
+    *"args=--churn"*) ok "sin refs se llama al verificador sin --range" ;;
+    *) bad "sin refs debía delegar en el resolutor del verificador ($PROBE_OUT)" ;;
+  esac
+  if [[ "$FAIL" -eq 0 ]]; then
+    echo "✓ hook ok (rangos, mapeo de códigos y las dos puertas: churn bloquea, «no medido» avisa)"
+  else
+    echo "✗ el hook tiene un fallo (arriba)"
   fi
   exit "$FAIL"
 fi
 
-# Git manda por stdin las refs que va a empujar; este hook no las necesita. El
-# vaciado va SOLO si stdin es un tubo: al ejecutar el hook a mano la entrada es
-# la terminal y un `cat` sin guarda se queda esperando a un EOF que no llega.
-if [[ ! -t 0 ]]; then cat >/dev/null || true; fi
+# Git manda por stdin las refs que va a empujar: son la materia prima de la
+# puerta 1. El vaciado va SOLO si stdin es un tubo: al ejecutar el hook a mano la
+# entrada es la terminal y un `cat` sin guarda se queda esperando a un EOF que no
+# llega. `PUSH_REFS` (seam del selftest) gana si ya viene puesto.
+if [[ ! -t 0 && -z "${PUSH_REFS:-}" ]]; then
+  PUSH_REFS="$(cat || true)"
+fi
 
 ROOT="$(git rev-parse --show-toplevel)"
+# Seam de la puerta 1: es la ORDEN sin argumentos (el rango se le añade detrás),
+# no el comando entero, para que el doble del selftest siga ejercitando el
+# traspaso del rango.
+ASSET_CMD="${ANT_ASSET_CMD:-bash scripts/check-unity-assets.sh}"
 GATE_CMD="${ANT_GATE_CMD:-bash scripts/check-unity-compile.sh}"
 
-echo "▶ pre-push: comprobando que la capa de vista compila (el mismo script que el job de CI)…"
+# ── Puerta 1: el churn de assets (sin editor, segundos) ─────────────────────
+echo "▶ pre-push 1/2: comprobando que ningún commit del push meta churn de assets de Unity…"
+ASSET_RC=0
+if [[ -z "${PUSH_REFS:-}" ]]; then
+  echo "  · sin refs que leer: se deja que el verificador resuelva el rango (CI_RANGE o el último commit)"
+  ( cd "$ROOT" && $ASSET_CMD --churn )
+  ASSET_RC=$?
+else
+  RANGOS=0
+  # `sort -u`: dos refs del mismo push pueden compartir rango (una rama y su tag),
+  # y el escaneo es el mismo. El prefijo de la orden se expande a propósito sin
+  # comillas (puede llevar argumentos: «bash ruta/x.sh»); el rango va citado y
+  # viene de git, no del shell.
+  while read -r rango; do
+    [[ -z "$rango" ]] && continue
+    RANGOS=$((RANGOS + 1))
+    # shellcheck disable=SC2086
+    ( cd "$ROOT" && $ASSET_CMD --churn --range "$rango" )
+    rc=$?
+    # Un rojo gana a cualquier aviso: sólo el 1 bloquea, pero bloquea.
+    if [[ "$rc" -eq 1 ]]; then ASSET_RC=1
+    elif [[ "$rc" -ne 0 && "$ASSET_RC" -ne 1 ]]; then ASSET_RC="$rc"; fi
+  done < <(rangos_del_push | sort -u)
+  if [[ "$RANGOS" -eq 0 ]]; then
+    echo "  · ninguna ref de este push trae commits nuevos que escanear"
+  fi
+fi
+
+case "$(verdict "$ASSET_RC")" in
+  ok)
+    echo "✓ puerta 1: ningún asset de Unity entró con cambios que no cambian nada"
+    ;;
+  block)
+    echo ""
+    echo "X PUSH DETENIDO: hay churn de re-serialización en los commits que ibas a mandar."
+    echo "  Es ruido del editor (anclas, orden de documentos, AssetVersion), no tu cambio,"
+    echo "  y commiteado contamina la historia del repo para siempre. Quítalo del commit con"
+    echo "  la orden «git checkout -- …» que imprime arriba el verificador y vuelve a empujar."
+    echo "  Saltarlo UNA vez: git push --no-verify"
+    exit 1
+    ;;
+  *)
+    echo ""
+    echo "! Puerta 1 no medible (rc=$ASSET_RC): falta git, falta Python 3 o el rango no es usable."
+    echo "  NO bloqueo: «no medido» no es «roto». Compruébalo a mano con"
+    echo "  «bash scripts/check-unity-assets.sh --selftest» si sospechas del entorno."
+    ;;
+esac
+
+# ── Puerta 2: la capa de vista compila ──────────────────────────────────────
+echo "▶ pre-push 2/2: comprobando que la capa de vista compila (el mismo script que el job de CI)…"
 ( cd "$ROOT" && eval "$GATE_CMD" )
 RC=$?
 
