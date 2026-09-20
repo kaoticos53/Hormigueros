@@ -380,8 +380,18 @@ namespace AntSim.Unity.Scripts.EditorTools
             go.transform.SetParent(canvas, false);
             var rt = (RectTransform)go.transform;
             // Mismos gaps que la cámara: el rótulo queda DENTRO del rect de su vista.
-            rt.anchorMin = new Vector2(v.X, 1f - (v.Y + v.H));
-            rt.anchorMax = new Vector2(v.X + v.W, 1f - v.Y);
+            //
+            // Las anclas de la UI van de ABAJO arriba (0 = fondo del canvas) igual que
+            // el rect de la cámara: el borde SUPERIOR de la vista es v.Y + v.H, y las
+            // dos anclas lo comparten porque el rótulo es una banda colgada de ese
+            // borde (la altura la dan los offsets, no el ancla). Aquí había un
+            // `1 − (…)` que espejaba el HUD en vertical: el rótulo y la tarjeta de
+            // cada vista caían sobre el viewport VECINO y, con anclas estiradas y
+            // offsets de banda, el panel se extendía cientos de unidades (medido con la
+            // sonda del player, 2026-09-20: rótulo y tarjeta de 606 unidades sobre un
+            // tablero de 540, y la tarjeta de la vista 0 en la mitad de ABAJO).
+            rt.anchorMin = new Vector2(v.X, v.Y + v.H);
+            rt.anchorMax = new Vector2(v.X + v.W, v.Y + v.H);
             rt.offsetMin = new Vector2(12f, -34f);
             rt.offsetMax = new Vector2(-12f, -6f);
             var img = go.AddComponent<Image>();
@@ -416,13 +426,18 @@ namespace AntSim.Unity.Scripts.EditorTools
             var rt = (RectTransform)go.transform;
             // Bajo el rótulo, dentro del rect de la vista: el panel ocupa el
             // ancho del viewport menos márgenes, altura fija de 3 líneas.
-            rt.anchorMin = new Vector2(v.X, 1f - (v.Y + v.H));
-            rt.anchorMax = new Vector2(v.X + v.W, 1f - v.Y);
+            //
+            // El panel se ESTIRA al rect de su vista (mismas anclas que el rótulo) y
+            // los offsets recortan los márgenes y dejan la banda del rótulo fuera. Aquí
+            // había un `rt.anchorMin = rt.anchorMax` que colapsaba las anclas a un
+            // punto: con anclas de punto el rect lo manda el `sizeDelta` de los offsets
+            // (−12−12 = −24) y el panel quedaba de ANCHO NEGATIVO — el texto, estirado a
+            // ese rect, salía de −54 y uGUI no generaba ni un glifo: la tarjeta de
+            // colonia del multi-visor no pintaba NADA (medido con la sonda del player,
+            // 2026-09-20: «0 bandas de tinta», rect −54×58).
+            rt.anchorMin = new Vector2(v.X, v.Y + v.H);
+            rt.anchorMax = new Vector2(v.X + v.W, v.Y + v.H);
             rt.pivot = new Vector2(0f, 1f);
-            // Anclado arriba-izquierda del rect de la vista (bajo el rótulo):
-            // la altura la manda sizeDelta porque anchorMin.y == anchorMax.y no
-            // va aquí — usamos anclas sueltas con offsets explícitos.
-            rt.anchorMin = rt.anchorMax; // punto único arriba-izq de la vista
             rt.offsetMin = new Vector2(12f, -106f);  // 66 de alto + 40 del rótulo
             rt.offsetMax = new Vector2(-12f, -40f);
             var img = go.AddComponent<Image>();

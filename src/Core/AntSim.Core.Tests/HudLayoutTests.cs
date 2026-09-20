@@ -104,8 +104,11 @@ namespace AntSim.Core.Tests
             Assert.Contains("colonia 0", card);
             Assert.Contains("/40", card);                    // tope duro de adultas
             // F5.1: la línea de la ventana cabe en la tarjeta (440 px a fs 14).
+            // Se mide el ancho VISIBLE: el chip del runway lleva su color en
+            // etiquetas de rich text, que no ocupan un solo píxel.
             foreach (var line in card.Split('\n'))
-                Assert.True(line.Length <= 60, "línea demasiado larga para la tarjeta: " + line);
+                Assert.True(SinTags(line).Length <= 60,
+                    "línea demasiado larga para la tarjeta: " + line);
             Assert.Contains("reserva [", card);              // barra
             Assert.Contains("cerebros:", card);              // línea permanente
             // El semáforo llega del canal D (aquí gris: sin relevo en 5200 ticks).
@@ -148,6 +151,83 @@ namespace AntSim.Core.Tests
             Assert.Contains(ColonyCardModel.LightGlyph(0), fresh.Render(0));
         }
 
+        // ————— F5.1: chip de estado por runway (canal A, mismo patrón) —————
+
+        private const string Colony0ConRunway =
+            "{\"id\":0,\"nest\":[128,128],\"adults\":10,\"eggs\":0,\"larvae\":0,\"pupae\":0,\"stock\":50,\"stockMax\":100,\"elite\":0,\"runway\":22.5,\"runwayLevel\":3}";
+
+        [Fact]
+        public void TarjetaColonia_ChipDeRunway_EnLaLineaDelTitulo()
+        {
+            // El tramo (3 = oofagia) y los segundos llegan IMPRESOS en el canal A:
+            // la tarjeta los pinta tal cual, en la misma línea del título para no
+            // crecer la tarjeta. La igualdad exacta fija además que no hay espacios
+            // colgando al final.
+            var model = new ColonyCardModel();
+            model.Observe(TickFrom(colonies: Colony0ConRunway));
+            string card = model.Render(0)!;
+            string titulo = card.Split('\n')[0].TrimEnd('\r');
+            Assert.Equal("<b>colonia 0  " + ColonyCardModel.LightGlyph(0) + "</b>  " +
+                         RunwayChipModel.RichText(3, 22.5f), titulo);
+        }
+
+        [Fact]
+        public void TarjetaColonia_SinMedida_ElTituloQuedaComoSiempre()
+        {
+            // Stream sin los campos de F5.1 (el parser los deja en −1/0): no hay
+            // chip y el título es EXACTAMENTE el de antes — un chip en gris sería
+            // peor que ninguno.
+            var model = new ColonyCardModel();
+            model.Observe(TickFrom(colonies: Colony0));
+            string titulo = model.Render(0)!.Split('\n')[0].TrimEnd('\r');
+            Assert.Equal("<b>colonia 0  " + ColonyCardModel.LightGlyph(0) + "</b>", titulo);
+        }
+
+        [Fact]
+        public void TarjetaColonia_EstadoCeroConRunway_NoPintaChip()
+        {
+            // Caso degenerado: el campo llega pero sin medida. Se pinta sin chip;
+            // no se convierte un «sin dato» en un «crítico» inventado.
+            var model = new ColonyCardModel();
+            model.Observe(TickFrom(colonies:
+                "{\"id\":0,\"nest\":[128,128],\"adults\":10,\"eggs\":0,\"larvae\":0,\"pupae\":0,\"stock\":50,\"stockMax\":100,\"elite\":0,\"runway\":-1,\"runwayLevel\":0}"));
+            Assert.Equal("<b>colonia 0  " + ColonyCardModel.LightGlyph(0) + "</b>",
+                model.Render(0)!.Split('\n')[0].TrimEnd('\r'));
+        }
+
+        [Fact]
+        public void TarjetaCompacta_LlevaElChipEnCorto()
+        {
+            // En el multi-visor la línea es corta: glifo + segundos, sin rótulo.
+            var model = new ColonyCardModel();
+            model.Observe(TickFrom(colonies: Colony0ConRunway, light: "[0,2]"));
+            string linea = model.RenderCompact().Split('\n')[0];
+            Assert.Contains("[!]22.5s", linea);
+        }
+
+        [Fact]
+        public void Chip_DelStreamReal_TarjetaYCompacta()
+        {
+            // Extremo a extremo: el chip de una partida REAL sale del canal A del
+            // Core y acaba pintado en las DOS vistas. Hasta el tick 6000 la colonia
+            // va sobrada (medido: todas las muestras en desahogo), así que el chip
+            // tiene que estar en TODOS los frames con canal A — no «a veces».
+            string stream = GameScenario.Run(42, ticks: 6000, colonies: 2, grid: 96,
+                frameEvery: 30);
+            var model = new ColonyCardModel();
+            int frames = 0, conChip = 0;
+            foreach (var v in Parse(stream))
+            {
+                if (v.Colonies.Count == 0) continue;   // tick sin canal A
+                model.Observe(v);
+                frames++;
+                if (model.RenderCompact().Contains("[++]", System.StringComparison.Ordinal)) conChip++;
+            }
+            Assert.Equal(200, frames);      // 6000 ticks / frameEvery 30
+            Assert.Equal(frames, conChip);  // chip en cada frame, sin huecos
+            Assert.Contains("[++] DESAHOGO", model.Render(0)!);
+        }
+
         // ————— F5.1bis: tarjeta compacta del multi-visor —————
 
         [Fact]
@@ -185,7 +265,10 @@ namespace AntSim.Core.Tests
             Assert.Contains(ColonyCardModel.LightGlyph(1), lines[1]);
             Assert.Contains("¡BAJA!", lines[1]);
             // Líneas cortas: caben en media pantalla (el viewport del multi-visor).
-            Assert.All(lines, l => Assert.True(l.Length <= 55, "línea larga para el viewport: " + l));
+            // Ancho VISIBLE: el chip trae su color en rich text y las etiquetas no
+            // ocupan píxeles — lo que tiene que caber es el texto que se ve.
+            Assert.All(lines, l => Assert.True(SinTags(l).Length <= 55,
+                "línea larga para el viewport: " + l));
         }
 
         [Fact]
@@ -212,7 +295,7 @@ namespace AntSim.Core.Tests
             string text = model.RenderCompact();
             Assert.Contains("colonia 0", text);
             Assert.Contains("colonia 1", text);
-            Assert.All(text.Split('\n'), l => Assert.True(l.Length <= 55, l));
+            Assert.All(text.Split('\n'), l => Assert.True(SinTags(l).Length <= 55, l));
         }
 
         private const string Colony0 =
@@ -368,6 +451,21 @@ namespace AntSim.Core.Tests
             var v = new GameStreamParser().ParseLine(sb.ToString());
             Assert.NotNull(v);
             return v!;
+        }
+
+        /// <summary>Ancho VISIBLE de una línea: fuera las etiquetas de rich text
+        /// (el chip del runway lleva su color en <c>&lt;color=…&gt;</c>).</summary>
+        private static string SinTags(string s)
+        {
+            var sb = new System.Text.StringBuilder(s.Length);
+            bool dentro = false;
+            foreach (char ch in s)
+            {
+                if (ch == '<') dentro = true;
+                else if (ch == '>') dentro = false;
+                else if (!dentro) sb.Append(ch);
+            }
+            return sb.ToString();
         }
 
         private static HudToastsModel.Toast Toast(string key, string text, ulong tick)
