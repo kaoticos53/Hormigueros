@@ -38,6 +38,20 @@
 #     Fue el defecto del jugador: «el terreno es blanco y no se ven hormigas», con
 #     todas las muestras de estado en verde.
 #
+#   + ICONOS (F5.1): el recorte NATIVO de las tarjetas de colonia, con la posición
+#     y el avance que uGUI le da a cada icono de la fuente propia, y el frame
+#     entero. Es la evidencia para comparar los iconos del HUD contra la
+#     referencia del `.ttf` al tamaño efectivo (scripts/playpass-icons.py): la
+#     legibilidad a 14 px se había verificado sobre una muestra del .ttf, no
+#     sobre lo que la tarjeta pinta. La captura va a
+#     artifacts/playpass-hud-icons.txt (o $HUD_ICONS) y los PNG a Temp/.
+#
+#     Y EL VEREDICTO CUENTA: `scripts/playpass-icons.py` no es un informe que se
+#     mira sino un PASO de este pass — si algún icono del HUD no se clasifica
+#     como SU glifo (correlación por encima del mínimo, margen sobre el segundo
+#     glifo y tinta), el pass sale ≠ 0 con el glifo y sus números. Antes el
+#     comparador se ejecutaba a mano y un icono roto pasaba en verde.
+#
 # LA SEÑAL ES LA MUESTRA, NO UNA FOTO: el stream del CLI llega entero de golpe y
 # el presenter lo reproduce con buffer, así que una sola lectura en el instante
 # equivocado no ve nada. Las muestras se acumulan cada segundo hasta el último
@@ -49,6 +63,7 @@
 #   scripts/playpass-live.sh --samples FICHERO   # solo analiza muestras (3 y 5)
 #   scripts/playpass-live.sh --analyze-block4 F  # solo analiza pasos del bloque 4
 #   scripts/playpass-live.sh --analyze-visual    # solo analiza el aspecto (F5.1)
+#   scripts/playpass-live.sh --analyze-icons     # solo clasifica los iconos (F5.1)
 #   scripts/playpass-live.sh --selftest          # verifica los analizadores (sin editor)
 #
 # Opciones: --speed N (def. 3) · --ticks N (def. 7200) · --grid N (def. 96) ·
@@ -56,8 +71,13 @@
 # artifacts/pretrain-warm-v2.antgenome) · --deadline SEG (def. 240) · --max-stack
 # N (def. 4) · --seeded-colony N (def. 0) · --no-relay · --no-contrast ·
 # --out FICHERO · --no-stream-check · --quiet · --no-block4 · --block4-speed N
-# (def. 6) · --block4-deadline SEG (def. 200) · --block4-samples FICHERO ·
-# --analyze-block4 FICHERO · --analyze-visual.
+# (def. 2) · --block4-deadline SEG (def. 200) · --block4-samples FICHERO ·
+# --analyze-block4 FICHERO · --analyze-visual · --analyze-icons · --icons-dump
+# FICHERO · --icons-crops DIR.
+#
+# El comparador de iconos necesita Pillow (rasteriza el `.ttf`): se usa el primer
+# intérprete del PATH que lo tenga (medido: `python` sí, `python3` no) y se puede
+# forzar con $ICONS_PY.
 #
 # Salida: 0 ok · 1 invariante roto · 2 uso · 3 no hay editor/CLI disponible.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -91,7 +111,16 @@ OUT=""
 INTERVAL=1
 STREAM_FILE=""
 BLOCK4=1
-B4_SPEED=6
+# Velocidad del bloque 4. NO es un número a gusto: el paso C espera a que salga
+# una alerta en pantalla y la sonda tarda ~1 s por vuelta, mientras la partida
+# dura 7200 ticks. MEDIDO con 6: la corrida entera se consumía antes de que C
+# empezara a sondear (su primera muestra salía ya en tick=7200, toasts=0) → el
+# gate no podía ni VER la alerta, que el mundo había pasado durante A2/B.
+# A 2 el toast se ve en ~3 s de reloj (6 s de sim) y C lo cazó en 2 muestras
+# seguidas (tick 335 y 435), que es lo que el paso necesita para juzgarlo.
+# (Que la alerta de la partida canónica traiga ancla es otra cosa: se mide aparte
+# y hoy sale SIN ancla — ver el comentario del paso C.)
+B4_SPEED=2
 B4_DEADLINE=200
 B4_SAMPLES=""
 B4_ANALYZE=""
@@ -99,6 +128,13 @@ VIS_ANALYZE=0
 VIS_PLAY=""
 VIS_EDIT=""
 VIS_SCENE=""
+HUD_ICONS=""
+ICONS_ANALYZE=0
+ICONS_CROPS=""
+# Intérprete para el comparador de iconos (necesita Pillow): vacío = se resuelve
+# entre los del PATH (ver python_with_pillow).
+ICONS_PY=""
+ICONS_SCRIPT="$ROOT/scripts/playpass-icons.py"
 
 log() { [[ $QUIET -eq 1 ]] || echo "$@"; }
 
@@ -107,6 +143,9 @@ while [[ $# -gt 0 ]]; do
     --samples)   SAMPLES="$2"; ANALYZE_ONLY=1; shift 2 ;;
     --analyze-block4) B4_ANALYZE="$2"; shift 2 ;;
     --analyze-visual) VIS_ANALYZE=1; shift ;;
+    --analyze-icons)  ICONS_ANALYZE=1; shift ;;
+    --icons-dump)     HUD_ICONS="$2"; shift 2 ;;
+    --icons-crops)    ICONS_CROPS="$2"; shift 2 ;;
     --selftest)  SELFTEST=1; shift ;;
     --speed)     SPEED="$2"; shift 2 ;;
     --ticks)     TICKS="$2"; shift 2 ;;
@@ -130,7 +169,7 @@ while [[ $# -gt 0 ]]; do
     --block4-deadline) B4_DEADLINE="$2"; shift 2 ;;
     --block4-samples)  B4_SAMPLES="$2"; shift 2 ;;
     --quiet)     QUIET=1; shift ;;
-    --help|-h)   sed -n '2,58p' "$0"; exit 0 ;;
+    --help|-h)   sed -n '2,82p' "$0"; exit 0 ;;
     *) echo "parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
@@ -476,6 +515,78 @@ analyze_visual() {
   return 0
 }
 
+# ── Comparador de ICONOS del HUD (F5.1) ─────────────────────────────────────
+# El veredicto es de `scripts/playpass-icons.py` (correlación normalizada + IoU
+# de silueta + margen sobre el segundo glifo, por icono); lo que aporta ESTE
+# script es la POLÍTICA: ese veredicto es un PASO del play pass, no un informe.
+# Un icono que no se clasifica como su propio glifo —o que directamente no se
+# pudo medir— deja el pass en ≠ 0, con el glifo y sus números delante. Es el
+# fallo que antes se escapaba: el comparador existía y daba 0 fallos a mano,
+# pero nadie lo miraba.
+#
+# POR QUÉ FALLA TAMBIÉN SI NO SE PUDO MEDIR: un paso que no corre no puede
+# contar como verde (el modo de fallo es «la sonda no guardó el PNG» o «este
+# intérprete no tiene Pillow»), y ese falso verde es justo el que este script
+# persigue. El mensaje distingue «el icono no se clasifica» de «no se pudo
+# medir»; los dos bloquean.
+
+# El comparador rasteriza el `.ttf` de referencia, así que necesita Pillow — y
+# no lo tiene cualquier python del equipo (medido aquí: `python` sí, `python3`
+# no). Se prueba en orden y se publica cuál se usó, en vez de asumir `python3`
+# (que es lo que usan los demás pasos, y que solo necesitan la stdlib).
+python_with_pillow() {
+  local p
+  for p in python python3 py; do
+    command -v "$p" >/dev/null 2>&1 || continue
+    if "$p" -c "import PIL" >/dev/null 2>&1; then printf '%s' "$p"; return 0; fi
+  done
+  return 1
+}
+
+# analyze_icons <volcado de la sonda> <dir de los recortes> → 0 solo si TODOS
+# los iconos del HUD se clasifican como el suyo y la procedencia del recorte
+# cuadra. Imprime el informe del comparador y, si falla, un veredicto propio.
+analyze_icons() {
+  local dump="$1" crops="$2" py="${ICONS_PY:-}" rc=0 out
+
+  if [[ -z "$py" ]]; then py="$(python_with_pillow || true)"; fi
+  if [[ ! -f "$ICONS_SCRIPT" ]]; then
+    echo "  ✗ FALLO (iconos): falta el comparador $ICONS_SCRIPT" >&2
+    return 1
+  fi
+  if [[ -z "$py" ]]; then
+    echo "  ✗ FALLO (iconos): ningún python del PATH tiene Pillow — sin él no se puede rasterizar la referencia del .ttf" >&2
+    echo "    (comprobación: python -c 'import PIL'; o fija el intérprete con \$ICONS_PY)" >&2
+    return 1
+  fi
+  if [[ ! -f "$dump" ]]; then
+    echo "  ✗ FALLO (iconos): no hay volcado de la sonda ($dump)" >&2
+    echo "    (sin el volcado no se clasifica ningún icono: ¿corrió ProbeHudIconShot con Play vivo?)" >&2
+    return 1
+  fi
+
+  out="$("$py" "$ICONS_SCRIPT" "$dump" "$crops" 2>&1)" || rc=$?
+  # El informe se publica entero: sin los números por glifo, «falló» no dice qué
+  # mirar. El CR se cae aquí (la salida del CLI llega con CRLF en Windows).
+  local line
+  while IFS= read -r line; do log "  ${line%$'\r'}"; done <<<"$out"
+
+  if [[ $rc -eq 0 ]]; then
+    log "  ✓ los tres iconos del HUD se clasifican como SU glifo (comparador en verde)"
+    return 0
+  fi
+  if [[ $rc -eq 2 ]]; then
+    echo "  ✗ FALLO (iconos): el comparador NO pudo medir (rc=2: falta Pillow o uso incorrecto) — el pass no puede dar esto por verde" >&2
+    return 1
+  fi
+  local detalle
+  detalle="$(printf '%s' "$out" | tr -d '\r' | grep -E '✗|fallo' | tail -4 || true)"
+  echo "  ✗ FALLO (iconos): algún icono del HUD no se clasifica como SU glifo contra la referencia del .ttf" >&2
+  echo "    (correlación por debajo del mínimo, sin margen sobre el segundo glifo o sin tinta; comparador rc=$rc)" >&2
+  if [[ -n "$detalle" ]]; then printf '%s\n' "$detalle" | sed 's/^/    /' >&2; fi
+  return 1
+}
+
 # ── Selftest: el analizador, sin editor ──────────────────────────────────────
 if [[ $SELFTEST -eq 1 ]]; then
   # El temporal se borra AL FINAL, de forma explícita: un `trap … EXIT`
@@ -582,8 +693,37 @@ if [[ $SELFTEST -eq 1 ]]; then
     echo "✓ selftest del aspecto ok (limpio + 4 fallos detectados)"
   fi
 
+  # — Iconos del HUD: se verifica el CABLEADO, no la métrica —
+  # La métrica trae su propio `--selftest` en scripts/playpass-icons.py y aquí no
+  # hay tarjeta ni `.ttf` que rasterizar. Lo que aporta ESTE script —y por tanto
+  # lo que se prueba— es la política: un veredicto ≠ 0 del comparador tiene que
+  # romper el paso, un 0 no, y no poder medir (sin volcado) NO puede contar como
+  # verde. Para eso se sustituyen el comparador (por un doble) y el intérprete
+  # (por bash): el doble imprime el informe y sale con el código que se le pide.
+  icons_dump="$tmp/hud-icons.txt"
+  printf 'em=13.758|scale=0.983|t=Body|t=Card|file=card0.png|rect=35,1093,435,1226\n' > "$icons_dump"
+  icons_ok="$tmp/iconos-ok"; icons_fail="$tmp/iconos-fail"
+  printf '#!/usr/bin/env bash\necho "  ✓ Ant: correlación 0.41 · IoU 0.78 · margen +0.34"\nexit 0\n' > "$icons_ok"
+  printf '#!/usr/bin/env bash\necho "  ✗ Egg: correlación 0.11 · margen -0.05 · tinta 0.30"\necho "3 glifo(s) · 0 fallo(s)"\nexit 1\n' > "$icons_fail"
+
+  f6=0
+  ICONS_PY=bash
+  ICONS_SCRIPT="$icons_ok"
+  r=0; QUIET=1 analyze_icons "$icons_dump" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 ]]; then echo "✗ selftest(iconos): el comparador en verde rompió el paso" >&2; f6=1; fi
+  ICONS_SCRIPT="$icons_fail"
+  r=0; QUIET=1 analyze_icons "$icons_dump" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(iconos): un icono que NO se clasifica pasó en verde" >&2; f6=1; fi
+  # Sin volcado no hay nada que clasificar: «no pude medir» nunca es verde.
+  ICONS_SCRIPT="$icons_ok"
+  r=0; QUIET=1 analyze_icons "$tmp/no-existe-icons.txt" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(iconos): la falta de volcado pasó en verde" >&2; f6=1; fi
+  if [[ $f6 -eq 0 ]]; then
+    echo "✓ selftest de los iconos ok (verde pasa · glifo roto falla · sin volcado falla)"
+  fi
+
   rm -rf "$tmp"
-  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 ]] || exit 1
+  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 ]] || exit 1
   exit 0
 fi
 
@@ -594,6 +734,18 @@ if [[ $VIS_ANALYZE -eq 1 ]]; then
   VIS_SCENE="${VIS_SCENE:-$ROOT/artifacts/playpass-scene.txt}"
   log "▶ Analizando aspecto: $VIS_PLAY · $VIS_EDIT · $VIS_SCENE"
   if analyze_visual "$VIS_PLAY" "$VIS_EDIT" "$VIS_SCENE"; then exit 0; fi
+  exit 1
+fi
+
+# ── Modo solo-análisis (iconos del HUD) ─────────────────────────────────────
+# La MISMA clasificación que decide el paso de la ruta viva, pero sobre la
+# captura ya en disco: así un icono roto se reproduce sin abrir Unity, y el paso
+# del pass se puede verificar en los dos sentidos (verde y roto).
+if [[ $ICONS_ANALYZE -eq 1 ]]; then
+  HUD_ICONS="${HUD_ICONS:-$ROOT/artifacts/playpass-hud-icons.txt}"
+  ICONS_CROPS="${ICONS_CROPS:-$PROJECT/Temp}"
+  log "▶ Clasificando los iconos del HUD: $HUD_ICONS · recortes en $ICONS_CROPS"
+  if analyze_icons "$HUD_ICONS" "$ICONS_CROPS"; then exit 0; fi
   exit 1
 fi
 
@@ -821,7 +973,7 @@ trap cleanup_play EXIT
 # primera vez DURANTE la partida recarga el dominio y congela el mundo: pasó de
 # verdad (73 muestras clavadas en el tick 105, sin un solo error en la consola).
 log "▶ Compilando las sondas (antes de Play, para no recargar el dominio en partida)…"
-for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample; do
+for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot; do
   UCMD run_script --file "$(winpath "$PROBE_DIR/$_probe.cs")" >/dev/null 2>&1 || true
 done
 wait_for_compiled || true
@@ -909,6 +1061,12 @@ UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeVisualSample.cs")" 2>/dev/nul
   | cmd_result 2>/dev/null > "$VIS_PLAY" || true
 UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeSceneInspect.cs")" 2>/dev/null \
   | cmd_result 2>/dev/null > "$VIS_SCENE" || true
+# Los ICONOS de la fuente del juego, recortados del frame REAL (F5.1). Va aquí,
+# con Play vivo, por el mismo motivo que la muestra visual: los iconos solo
+# existen pintados, y su legibilidad a 14 px no la ve ninguna muestra de estado.
+HUD_ICONS="${HUD_ICONS:-$ROOT/artifacts/playpass-hud-icons.txt}"
+UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeHudIconShot.cs")" 2>/dev/null \
+  | cmd_result 2>/dev/null > "$HUD_ICONS" || true
 
 UCMD editor_stop >/dev/null 2>&1 || true
 PLAY_STARTED=0
@@ -965,6 +1123,21 @@ if analyze_visual "$VIS_PLAY" "$VIS_EDIT" "$VIS_SCENE"; then
   log "✓ aspecto verificado (tablero terroso, hormigas visibles, HUD sin desbordes)"
 else
   RCF5=1
+fi
+
+# ── 6ter. Iconos del HUD (F5.1) ─────────────────────────────────────────────
+# Va ANTES del bloque 4 a propósito: esa fase reconstruye la escena con el
+# bootstrapper y vuelve a entrar en Play, así que los recortes de `Temp/` —que
+# son el objeto de esta medida— serían otros. Y el veredicto es propio, no de
+# aspecto: un fallo aquí es un GLIFO, no un texto que no cabe, y el resumen tiene
+# que decir cuál de los dos fue.
+RCICON=0
+log ""
+log "▶ Iconos del HUD: cada glifo contra su referencia del .ttf (F5.1)"
+if analyze_icons "$HUD_ICONS" "${ICONS_CROPS:-$PROJECT/Temp}"; then
+  log "✓ los iconos del HUD se clasifican como SU glifo (comparador scripts/playpass-icons.py en verde)"
+else
+  RCICON=1
 fi
 
 # ── 7. Bloque 4: interacción (entradas sin dispositivo) ─────────────────────
@@ -1090,6 +1263,15 @@ if [[ $BLOCK4 -eq 1 ]]; then
       # — C: se espera a que haya una alerta ANCLADA en pantalla (1ª descarga) —
       # Cada muestra se guarda como comentario: si el salto no encuentra ancla,
       # las líneas dicen en qué tick iba la partida y qué alertas había.
+      #
+      # OJO (MEDIDO 2026-10-07): en la partida canónica la ÚNICA alerta que se
+      # emite es `first-unload` y el Core la emite con x=-1,y=-1 — sin ancla—, así
+      # que este paso no puede pasar por ella (las muestras #C quedan en
+      # $B4_SAMPLES: toasts=1 con anchored=0 en dos vueltas seguidas). Para que el
+      # gate sea exigible hace falta UNA de las dos: que el hito lleve la posición
+      # de su descarga (el RelayTracker ya la está viendo) o que el escenario del
+      # bloque 4 produzca una alerta con ancla (`laying:*` y `relay-weak:*`
+      # llevan el nido). Ninguna de las dos es cosa de este comentario.
       CLINE=""
       for i in $(seq 1 120); do
         CLINE="$(b4_step C)"
@@ -1120,12 +1302,13 @@ fi
 
 # ── 8. Resumen ───────────────────────────────────────────────────────────────
 log ""
-if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 ]]; then
-  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto (F5.1) verificados en vivo" \
-                      || log "✓ bloques 3 y 5 + aspecto (F5.1) verificados en vivo"
+if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 ]]; then
+  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto e iconos (F5.1) verificados en vivo" \
+                      || log "✓ bloques 3 y 5 + aspecto e iconos (F5.1) verificados en vivo"
   exit 0
 fi
 [[ $RC35 -ne 0 ]] && echo "✗ el bloque 3/5 falló (ver arriba)" >&2
 [[ $RCF5 -ne 0 ]] && echo "✗ el aspecto falló (ver arriba)" >&2
+[[ $RCICON -ne 0 ]] && echo "✗ los iconos del HUD fallaron (ver arriba)" >&2
 [[ $RC4 -ne 0 ]] && echo "✗ el bloque 4 falló (ver arriba)" >&2
 exit 1
