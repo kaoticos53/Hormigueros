@@ -415,14 +415,14 @@ bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" -
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (604/604), incluido el pin del hash del stream canónico |
+| `dotnet test` | la suite headless (634/634), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
-| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 604 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 634 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
 | `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance. El MISMO chequeo es la **puerta 1** de `.githooks/pre-push`, con el rango sacado de las refs que el push manda |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
 | `.githooks/pre-push --selftest` | el veredicto de las **dos puertas locales**, en su orden: el churn de assets (sin editor) y los errores CS (con el editor). Solo un rojo de verdad bloquea —churn detectado o `error CS`—; «no pude comprobar» avisa y deja pasar. Cubre también la derivación de rangos desde las refs del push, incluida la **ref nueva** (arranca donde la rama diverge de lo publicado, no en `HEAD~1`) |
@@ -515,13 +515,24 @@ el Core puso en la alerta. Desde la pasada de pulido (F5.1) verifica también el
 y al abrir la escena) y tienen que verse hormigas, más ningún texto del HUD fuera
 de su panel. Ese bloque existe porque el defecto que reportó el jugador («el
 terreno es blanco y no se ven hormigas») pasaba en verde **todas** las muestras de
-estado. Falla con el primer invariante roto. No es un job de CI porque necesita un
+estado.
+
+Y los **iconos del HUD son un paso del pass, no un informe**: la sonda recorta la
+tarjeta del frame en vivo y `scripts/playpass-icons.py` clasifica cada glifo
+contra su referencia rasterizada del `.ttf` al tamaño del run (correlación
+normalizada, IoU de silueta y margen sobre el segundo glifo). Si algún icono no
+se clasifica como el suyo —o si no se pudo medir, porque la sonda no guardó el
+recorte o falta Pillow— el pass sale ≠ 0 con el glifo y sus números. Antes el
+comparador se ejecutaba a mano y un icono roto pasaba en verde.
+
+Falla con el primer invariante roto. No es un job de CI porque necesita un
 editor interactivo con licencia; se corre a mano:
 
 ```bash
-bash scripts/playpass-live.sh            # bloques 3, 4, 5 y aspecto, en vivo
+bash scripts/playpass-live.sh            # bloques 3, 4, 5 + aspecto e iconos, en vivo
 bash scripts/playpass-live.sh --no-block4     # solo 3, 5 y aspecto (más rápido)
 bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
+bash scripts/playpass-live.sh --analyze-icons   # solo los iconos (sobre la captura)
 bash scripts/playpass-live.sh --selftest # los analizadores, sin editor
 ```
 
