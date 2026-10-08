@@ -43,8 +43,8 @@
 #     entero. Es la evidencia para comparar los iconos del HUD contra la
 #     referencia del `.ttf` al tamaño efectivo (scripts/playpass-icons.py): la
 #     legibilidad a 14 px se había verificado sobre una muestra del .ttf, no
-#     sobre lo que la tarjeta pinta. La captura va a
-#     artifacts/playpass-hud-icons.txt (o $HUD_ICONS) y los PNG a Temp/.
+#     sobre lo que la tarjeta pinta. El volcado va a artifacts/playpass-hud-icons.txt
+#     (o $HUD_ICONS) y los PNG (frame y tarjetas) se conservan en artifacts/playpass-hud-icons/.
 #
 #     Y EL VEREDICTO CUENTA: `scripts/playpass-icons.py` no es un informe que se
 #     mira sino un PASO de este pass — si algún icono del HUD no se clasifica
@@ -56,6 +56,28 @@
 # el presenter lo reproduce con buffer, así que una sola lectura en el instante
 # equivocado no ve nada. Las muestras se acumulan cada segundo hasta el último
 # tick.
+##   + REFERENCIAS (F5.1): que el editor no dejara un asset sin su dato. La
+#     canonicalización arregla los BYTES (anclas, orden) y no mira el contenido:
+#     un material puede quedar canónico y sin su textura. Medido el 2026-10-08:
+#     al cerrarse, el editor dejó `PheromoneMat.mat` con el `_BaseMap` en
+#     `{fileID: 0}` y el quad de feromonas se pintó BLANCO OPACO tapando el
+#     tablero — con todas las muestras de estado en verde. Se comprueba justo
+#     después de generar y canonicalizar (scripts/unity-reference-check.py) y el
+#     paso FALLA CERRADO: una pérdida de verdad bloquea el pase.
+#
+#   + CANONICALIZACIÓN (el byte no cambia entre pasadas): justo DESPUÉS de que el
+#   bootstrapper genere la escena y los materiales, y ANTES de medir, el pase
+#   reescribe los assets con anclas derivadas del CONTENIDO
+#   (scripts/unity-canonicalize-assets.py). Unity asigna el
+#   `m_LocalIdentfierInFile` de un contador con base ALEATORIA por sesión —dos
+#   pases del mismo montaje dieron bases 54570640 y 8954272— y URP añade a cada
+#   `.mat` un bloque `AssetVersion` con un id de 64 bits que CAMBIA DE SITIO: sin
+#   esto, cada pasada reescribe 17 assets (16 `.mat` y `Game.unity`) con bytes
+#   distintos aunque la escena sea la misma, y el diff no dice nada de nadie.
+#   Canonicalizado, dos pasadas seguidas dan el MISMO `git diff`. El paso es un
+#   VEREDICTO, no un informe: si el canonicalizador no puede analizar un asset
+#   (cabecera que no entiende, fichero ilegible), el pase sale ≠ 0 en vez de
+#   dejar el ruido y parecer verde. Se salta con --no-canonicalize.
 #
 # Uso:
 #   scripts/playpass-live.sh                     # contra el editor abierto
@@ -73,7 +95,7 @@
 # --out FICHERO · --no-stream-check · --quiet · --no-block4 · --block4-speed N
 # (def. 2) · --block4-deadline SEG (def. 200) · --block4-samples FICHERO ·
 # --analyze-block4 FICHERO · --analyze-visual · --analyze-icons · --icons-dump
-# FICHERO · --icons-crops DIR.
+# FICHERO · --icons-crops DIR · --no-canonicalize.
 #
 # El comparador de iconos necesita Pillow (rasteriza el `.ttf`): se usa el primer
 # intérprete del PATH que lo tenga (medido: `python` sí, `python3` no) y se puede
@@ -135,8 +157,99 @@ ICONS_CROPS=""
 # entre los del PATH (ver python_with_pillow).
 ICONS_PY=""
 ICONS_SCRIPT="$ROOT/scripts/playpass-icons.py"
+# Dónde viven los recortes del HUD. La sonda `ProbeHudIconShot` los escribe en
+# `<proyecto>/Temp/`, que Unity BORRA al cerrar el editor, y son la evidencia que
+# el paso de iconos mira (el frame vivo, el PNG de cada tarjeta y la hoja de
+# comparación, que se genera en esta misma carpeta). Por eso se conservan aquí,
+# junto al volcado: un paso cuyo objeto de medida desaparece con la sesión deja
+# el veredicto sin nada que mirar después. `--icons-crops DIR` apunta a otros.
+ICONS_DIR="$ROOT/artifacts/playpass-hud-icons"
+
+# Canonicalización de los assets GENERADOS (ver el encabezado). 1 = activa.
+CANONICALIZE=1
+CANONICALIZE_SCRIPT="$ROOT/scripts/unity-canonicalize-assets.py"
+
+# Verificador de REFERENCIAS de los assets generados (ver el encabezado). 1 = activo.
+REFERENCES_SCRIPT="$ROOT/scripts/unity-reference-check.py"
 
 log() { [[ $QUIET -eq 1 ]] || echo "$@"; }
+
+# ── Canonicalización de los assets generados ─────────────────────────────────
+# El pase GENERA la escena y los materiales (menú del bootstrapper + guardar) y
+# eso basta para que Unity les dé anclas nuevas: MEDIDO, 78 de los 103 assets del
+# proyecto derivan del canónico después de generar. Se reescriben aquí —con
+# anclas derivadas del CONTENIDO, ver scripts/unity-canonicalize-assets.py— para
+# que lo que se mide y lo que queda en el árbol sea el byte estable: dos pasadas
+# seguidas dan el MISMO `git diff`.
+#
+# FALLA CERRADO: si el canonicalizador no puede analizar un asset, esto devuelve
+# ≠ 0 y el pase se planta. Un asset que no se pudo canonicalizar es exactamente
+# el ruido que este paso existe para quitar; dar por bueno el árbol sin mirarlo
+# sería el falso verde que ya nos mordió con los iconos.
+canonicalize_assets() {
+  local label="$1" py rc=0 out line
+  if [[ $CANONICALIZE -ne 1 ]]; then
+    log "  (canonicalización saltada con --no-canonicalize)"
+    return 0
+  fi
+  if [[ ! -f "$CANONICALIZE_SCRIPT" ]]; then
+    echo "✗ falta el canonicalizador: $CANONICALIZE_SCRIPT" >&2
+    return 1
+  fi
+  py="$(command -v python3 || command -v python || true)"
+  if [[ -z "$py" ]]; then
+    echo "✗ falta Python 3 (el canonicalizador de assets lo necesita)" >&2
+    return 1
+  fi
+  # PYTHONUTF8=1 no es opcional: sin él, imprimir ✓/✗ en la consola cp1252 de
+  # Windows revienta con UnicodeEncodeError aunque el trabajo esté hecho.
+  out="$(PYTHONUTF8=1 "$py" "$CANONICALIZE_SCRIPT" --project "$PROJECT" 2>&1)" || rc=$?
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && log "  ${line%$'\r'}"
+  done <<<"$out"
+  if [[ $rc -ne 0 ]]; then
+    echo "✗ el canonicalizador falló tras $label (rc=$rc) — el árbol no es estable" >&2
+    return 1
+  fi
+  return 0
+}
+
+# ── Verificación de REFERENCIAS de los assets generados ──────────────────────
+# Justo DESPUÉS de que el bootstrapper genere la escena y los materiales (y de
+# canonicalizarlos): es el momento en el que el editor REESCRIBE los assets, y el
+# único en el que una referencia se pierde sin dejar error. Medido: una pasada del
+# editor dejó `PheromoneMat.mat` con el `_BaseMap` en `{fileID: 0}` —sin su
+# textura de reposo— y el quad de feromonas se pintó BLANCO OPACO sobre el
+# tablero; el YAML era válido y ningún check de estado lo veía.
+#
+# FALLA CERRADO por el mismo motivo que la canonicalización: si el verificador no
+# puede leer el árbol (sin git, sin Python, un asset ilegible), el pase se planta
+# en vez de medir un mundo al que le falta un dato. Si el fallo es de ENTORNO y no
+# de referencias, el script lo distingue (3 = no medible) y se avisa sin romper el
+# paso; un 1 —referencia perdida de verdad— sí bloquea.
+check_references() {
+  local label="$1" py rc=0 out line
+  if [[ ! -f "$REFERENCES_SCRIPT" ]]; then
+    echo "✗ falta el verificador de referencias: $REFERENCES_SCRIPT" >&2
+    return 1
+  fi
+  py="$(command -v python3 || command -v python || true)"
+  if [[ -z "$py" ]]; then
+    echo "  (sin Python 3: no se comprueban las referencias de los assets)"
+    return 0
+  fi
+  out="$(PYTHONUTF8=1 "$py" "$REFERENCES_SCRIPT" --project "$PROJECT" --quiet 2>&1)" || rc=$?
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && log "  ${line%$'\r'}"
+  done <<<"$out"
+  case $rc in
+    0) return 0 ;;
+    3) echo "  (referencias NO comprobadas tras $label: el verificador no pudo medir, rc=3)" >&2; return 0 ;;
+    *)
+      echo "✗ referencias perdidas tras $label (rc=$rc): el editor dejó un asset sin su dato" >&2
+      return 1 ;;
+  esac
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -146,6 +259,7 @@ while [[ $# -gt 0 ]]; do
     --analyze-icons)  ICONS_ANALYZE=1; shift ;;
     --icons-dump)     HUD_ICONS="$2"; shift 2 ;;
     --icons-crops)    ICONS_CROPS="$2"; shift 2 ;;
+    --no-canonicalize) CANONICALIZE=0; shift ;;
     --selftest)  SELFTEST=1; shift ;;
     --speed)     SPEED="$2"; shift 2 ;;
     --ticks)     TICKS="$2"; shift 2 ;;
@@ -169,7 +283,7 @@ while [[ $# -gt 0 ]]; do
     --block4-deadline) B4_DEADLINE="$2"; shift 2 ;;
     --block4-samples)  B4_SAMPLES="$2"; shift 2 ;;
     --quiet)     QUIET=1; shift ;;
-    --help|-h)   sed -n '2,82p' "$0"; exit 0 ;;
+    --help|-h)   sed -n '2,97p' "$0"; exit 0 ;;
     *) echo "parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
@@ -543,6 +657,28 @@ python_with_pillow() {
   return 1
 }
 
+# preserve_icons <dir de la sonda> <destino> → copia los PNG del HUD (`antsim-hud-*`:
+# el frame vivo y el recorte de cada tarjeta) fuera de `Temp/` y devuelve ≠ 0 si no
+# había ninguno. FALLA CERRADO por el mismo motivo que el paso de iconos: si la
+# sonda no dejó recortes, no hay evidencia que conservar —y decir «conservada» sin
+# nada que conservar sería el falso verde que este pass persigue. El destino por
+# defecto es artifacts/playpass-hud-icons/ (ver $ICONS_DIR).
+preserve_icons() {
+  local from="$1" to="$2" n=0 f
+  mkdir -p "$to" || return 1
+  for f in "$from"/antsim-hud-*.png; do
+    [[ -f "$f" ]] || continue
+    cp -f "$f" "$to/" || return 1
+    n=$((n+1))
+  done
+  if [[ $n -eq 0 ]]; then
+    echo "✗ FALLO (iconos): la sonda no dejó ningún PNG en $from — sin recortes no hay evidencia que conservar" >&2
+    return 1
+  fi
+  log "  ✓ evidencia del HUD conservada en $to ($n PNG: frame vivo + recortes de tarjeta)"
+  return 0
+}
+
 # analyze_icons <volcado de la sonda> <dir de los recortes> → 0 solo si TODOS
 # los iconos del HUD se clasifican como el suyo y la procedencia del recorte
 # cuadra. Imprime el informe del comparador y, si falla, un veredicto propio.
@@ -718,8 +854,28 @@ if [[ $SELFTEST -eq 1 ]]; then
   ICONS_SCRIPT="$icons_ok"
   r=0; QUIET=1 analyze_icons "$tmp/no-existe-icons.txt" "$tmp" >/dev/null 2>&1 || r=$?
   if [[ $r -eq 0 ]]; then echo "✗ selftest(iconos): la falta de volcado pasó en verde" >&2; f6=1; fi
+
+  # La CONSERVACIÓN de la evidencia: los PNG del HUD salen de `Temp/` y quedan en
+  # el destino, y sin ningún PNG el paso falla (no puede decir «conservada» sin
+  # nada que conservar). Se prueba aquí porque es lo único de este paso que no
+  # depende de píxeles: la métrica y la captura sí necesitan editor.
+  sonda="$tmp/sonda"; mkdir -p "$sonda"
+  printf x > "$sonda/antsim-hud-frame.png"
+  printf x > "$sonda/antsim-hud-card0.png"
+  printf x > "$sonda/otro.png"
+  r=0; QUIET=1 preserve_icons "$sonda" "$tmp/evidencia" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 || ! -f "$tmp/evidencia/antsim-hud-frame.png" || ! -f "$tmp/evidencia/antsim-hud-card0.png" ]]; then
+    echo "✗ selftest(iconos): no se conservaron los PNG del HUD" >&2; f6=1
+  fi
+  if [[ -f "$tmp/evidencia/otro.png" ]]; then
+    echo "✗ selftest(iconos): se copió un PNG que no es del HUD" >&2; f6=1
+  fi
+  r=0; QUIET=1 preserve_icons "$tmp/sin-pngs" "$tmp/evidencia2" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then
+    echo "✗ selftest(iconos): sin PNGs la conservación pasó en verde" >&2; f6=1
+  fi
   if [[ $f6 -eq 0 ]]; then
-    echo "✓ selftest de los iconos ok (verde pasa · glifo roto falla · sin volcado falla)"
+    echo "✓ selftest de los iconos ok (verde pasa · glifo roto falla · sin volcado falla · PNG conservados)"
   fi
 
   rm -rf "$tmp"
@@ -743,7 +899,9 @@ fi
 # del pass se puede verificar en los dos sentidos (verde y roto).
 if [[ $ICONS_ANALYZE -eq 1 ]]; then
   HUD_ICONS="${HUD_ICONS:-$ROOT/artifacts/playpass-hud-icons.txt}"
-  ICONS_CROPS="${ICONS_CROPS:-$PROJECT/Temp}"
+  # Por defecto se analizan los recortes CONSERVADOS (artifacts/…): es justo lo
+  # que permite repetir el análisis sin editor, que `Temp/` ya no existe.
+  ICONS_CROPS="${ICONS_CROPS:-$ICONS_DIR}"
   log "▶ Clasificando los iconos del HUD: $HUD_ICONS · recortes en $ICONS_CROPS"
   if analyze_icons "$HUD_ICONS" "$ICONS_CROPS"; then exit 0; fi
   exit 1
@@ -957,6 +1115,20 @@ case "$SET" in
     ;;
 esac
 
+# Los assets que este paso acaba de GENERAR se canonicalizan AQUÍ, antes de
+# medir: es lo que hace que dos pasadas den el mismo diff (ver el encabezado).
+if ! canonicalize_assets "la construcción de la escena"; then
+  echo "✗ la canonicalización falló — no se mide sobre un árbol inestable" >&2
+  exit 1
+fi
+
+# Y las REFERENCIAS, que la canonicalización no mira: un asset puede quedar
+# perfectamente canónico y sin su textura (es exactamente el accidente medido).
+if ! check_references "la construcción de la escena"; then
+  echo "✗ no se mide sobre un árbol al que le falta una referencia" >&2
+  exit 1
+fi
+
 # ── 3. Play + muestreo hasta el último tick ──────────────────────────────────
 SAMPLES="${OUT:-$ROOT/artifacts/playpass-samples.txt}"
 mkdir -p "$(dirname "$SAMPLES")"
@@ -1067,6 +1239,14 @@ UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeSceneInspect.cs")" 2>/dev/nul
 HUD_ICONS="${HUD_ICONS:-$ROOT/artifacts/playpass-hud-icons.txt}"
 UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeHudIconShot.cs")" 2>/dev/null \
   | cmd_result 2>/dev/null > "$HUD_ICONS" || true
+# La evidencia en PÍXELES se saca de `Temp/` AHORA: con Play vivo, antes de que
+# nada más toque el editor y antes de que Unity barre `Temp/` al cerrar. El paso
+# de iconos (6ter) mide entonces sobre estas copias conservadas, no sobre un
+# directorio efímero — así el mismo análisis se puede repetir mañana sin editor.
+ICONS_CROPS="${ICONS_CROPS:-$ICONS_DIR}"
+# Si no había recortes, el paso 6ter lo dice con el nombre del fichero que falta
+# y el pass sale ≠ 0: el fallo de la sonda no se puede quedar en un aviso.
+preserve_icons "$PROJECT/Temp" "$ICONS_CROPS" || true
 
 UCMD editor_stop >/dev/null 2>&1 || true
 PLAY_STARTED=0
@@ -1127,14 +1307,14 @@ fi
 
 # ── 6ter. Iconos del HUD (F5.1) ─────────────────────────────────────────────
 # Va ANTES del bloque 4 a propósito: esa fase reconstruye la escena con el
-# bootstrapper y vuelve a entrar en Play, así que los recortes de `Temp/` —que
-# son el objeto de esta medida— serían otros. Y el veredicto es propio, no de
-# aspecto: un fallo aquí es un GLIFO, no un texto que no cabe, y el resumen tiene
-# que decir cuál de los dos fue.
+# bootstrapper y vuelve a entrar en Play, así que los recortes de esa sesión ya no
+# serían los que se capturaron con el HUD de la partida. Y el veredicto es propio,
+# no de aspecto: un fallo aquí es un GLIFO, no un texto que no cabe, y el resumen
+# tiene que decir cuál de los dos fue.
 RCICON=0
 log ""
 log "▶ Iconos del HUD: cada glifo contra su referencia del .ttf (F5.1)"
-if analyze_icons "$HUD_ICONS" "${ICONS_CROPS:-$PROJECT/Temp}"; then
+if analyze_icons "$HUD_ICONS" "${ICONS_CROPS:-$ICONS_DIR}"; then
   log "✓ los iconos del HUD se clasifican como SU glifo (comparador scripts/playpass-icons.py en verde)"
 else
   RCICON=1
@@ -1164,6 +1344,18 @@ if [[ $BLOCK4 -eq 1 ]]; then
   # perdería al recargarla y la segunda mitad de la fase correría con los
   # valores por defecto del bootstrapper.
   UCMD save_scene --path "Assets/Scenes/Game.unity" >/dev/null 2>&1 || true
+
+  # El bloque 4 RECONSTRUYE la escena y la vuelve a guardar: se canonicaliza otra
+  # vez, ya con la configuración del bloque 4 dentro, o ese guardado reintroduciría
+  # las anclas de sesión justo antes de sondear.
+  if ! canonicalize_assets "la reconstrucción del bloque 4"; then
+    echo "✗ la canonicalización falló antes del bloque 4 — no se sondea" >&2
+    RC4=1
+  fi
+  if ! check_references "la reconstrucción del bloque 4"; then
+    echo "✗ una referencia se perdió al reconstruir la escena del bloque 4 — no se sondea" >&2
+    RC4=1
+  fi
 
   STEP_FILE="$PROJECT/Temp/antsim-block4.step"
   b4_step() { # b4_step <paso>
@@ -1264,14 +1456,13 @@ if [[ $BLOCK4 -eq 1 ]]; then
       # Cada muestra se guarda como comentario: si el salto no encuentra ancla,
       # las líneas dicen en qué tick iba la partida y qué alertas había.
       #
-      # OJO (MEDIDO 2026-10-07): en la partida canónica la ÚNICA alerta que se
-      # emite es `first-unload` y el Core la emite con x=-1,y=-1 — sin ancla—, así
-      # que este paso no puede pasar por ella (las muestras #C quedan en
-      # $B4_SAMPLES: toasts=1 con anchored=0 en dos vueltas seguidas). Para que el
-      # gate sea exigible hace falta UNA de las dos: que el hito lleve la posición
-      # de su descarga (el RelayTracker ya la está viendo) o que el escenario del
-      # bloque 4 produzca una alerta con ancla (`laying:*` y `relay-weak:*`
-      # llevan el nido). Ninguna de las dos es cosa de este comentario.
+      # La partida canónica emite UNA sola alerta — `first-unload` — y va ANCLADA
+      # a la posición de su descarga desde 2026-10-07: el `RelayTracker` guarda la
+      # posición del primer `Unload` (FirstUnloadX/Y) y el `AlertDeriver` la usa
+      # para el hito. Antes salía en x=-1,y=-1 (muestras #C con anchored=0) y este
+      # paso —que exige a qué saltar— era inalcanzable. Si vuelve a llegar sin
+      # ancla, el fallo está en ese par (Unload con posición en el evento), no
+      # aquí: las muestras #C de $B4_SAMPLES dicen el tick y las alertas que había.
       CLINE=""
       for i in $(seq 1 120); do
         CLINE="$(b4_step C)"
