@@ -12,7 +12,7 @@ un bucle de jugador completo demostrado end-to-end.
 
 <!-- /cifras-historicas -->
 
-**Estado ACTUAL** (HEAD `v0.8.0`, suite **604/604**, **6 pines** de hash): las
+**Estado ACTUAL** (HEAD `v0.8.0`, suite **634/634**, **6 pines** de hash): las
 seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
 F5.2c y F5.3. Lo que sigue abierto es deuda menor de presentación (F5.1, §2) y el
 camino `unity: full` de CI. El registro cronológico con las cifras vive en
@@ -115,7 +115,24 @@ acabado):
    plano con glifos emoji que la fuente por defecto de uGUI **no tiene** y
    pintaba como cajas (🥚 🐛 🛑 🟢 🔘 · 🐝); ahora los niveles son glifos de
    forma (○ ◐ ● ■ ·) y el título de la tarjeta va en negrita por rich text.
-   Queda: fuente propia y sprites para hormiga/carga/huevo.
+   HECHO (2026-10-06) — **fuente y sprites propios**. El bootstrapper ya no
+   pide `LegacyRuntime.ttf`/`Arial.ttf` al motor: **escribe** su tipografía
+   (`Assets/Fonts/AntSim.ttf`, 142 glifos, 72 504 B) con `TtfWriter` —escritor
+   sfnt puro, fecha fija en `head` y checksum `0xB1B0AFBA`, así que es
+   determinista y byte a byte reproducible— a partir de la tabla de glifos de
+   `GameFontModel`, y la importa y asigna en las dos escenas (32 textos en
+   `Game.unity`, 8 en `MultiSim.unity`, cero referencias a la fuente del
+   motor). La tabla cubre el alfabeto castellano con acentos compuestos, los
+   **36 signos** que el HUD usa de verdad y tres iconos de uso privado
+   (U+E000–U+E002: hormiga, carga, huevo) que sustituyen el texto de las
+   líneas de cría y de flujo. Los actores dejan de ser primitivas: cápsula y
+   esfera son mallas propias (`AntMesh`/`ItemMesh`/`LeafMesh`, desde
+   `ActorMeshModel`) en la MISMA caja de 2 u × 1 u, y la hoja estrena pasada
+   propia (los mordiscos ya no comparten malla con la carga). 18 tests
+   headless nuevos (16 de `GameFontTests`/`ActorMeshTests` y 2 de la medición de
+   los iconos); 625/625 en total hoy. Los tres iconos van en un run `<size=28>`
+   —el doble del cuerpo— y la comparación contra la referencia del `.ttf` sobre
+   los píxeles del Play pass los clasifica a los tres como su propio glifo.
 5. **Aspecto del mundo y entrada del HUD** — ✅ HECHO (pasada de pulido,
    2026-09-12):
    - **El tablero se lee como tierra**: el quad de feromonas llevaba el
@@ -145,9 +162,15 @@ acabado):
    - **Puertas de aspecto en el Play pass**: `ProbeVisualSample` mide píxeles
      (tablero terroso, hormigas visibles) y `ProbeSceneInspect` cuenta los
      textos que no caben en su panel; `playpass-live.sh` falla si el tablero
-     no es terroso, si no se ve ninguna hormiga o si el HUD desborda. Todas
-     las muestras de ESTADO estaban en verde mientras el mundo se veía blanco:
-     el pass no podía fallar por algo que no medía.
+     no es terroso, si no se ve ninguna hormiga, si el HUD desborda o si algún
+     icono de la tarjeta recortada no se clasifica como SU glifo contra la
+     referencia del `.ttf` (`scripts/playpass-icons.py`). Todas las muestras de
+     ESTADO estaban en verde mientras el mundo se veía blanco: el pass no podía
+     fallar por algo que no medía — y con los iconos pasaba lo mismo, con el
+     comparador escrito y ejecutado a mano. El ajuste de los textos FIJOS (pistas
+     y las dos líneas del panel de aprendizaje) es además un test headless
+     (`TextosFijosDelHud_CabenEnLaCajaQueLaEscenaLesDa`, peor caso incluido),
+     porque el desborde de esos tres lo había medido solo la captura.
 6. **Feromonas por colonia** — ✅ HECHO (2026-09-12): el canal E clásico emitía
    home de la colonia 0, así que con dos colonias compitiendo se veía media
    partida. Ahora `--phero-every N --phero-layers 0:home,1:home,1:alarm` emite
@@ -473,7 +496,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 
 | Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 604/604 en Windows y Linux |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 634/634 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |

@@ -110,7 +110,8 @@ aquí.
 
 Al activar los avisos salieron **5 CS8618** en `SimPresenterBehaviour` — los
 campos de render (`AntMesh`, `AntMaterial`, `CarrierMaterial`, `ItemMesh`,
-`ItemMaterial`) que asigna la escena/bootstrapper, de modo que el compilador no ve
+`ItemMaterial` — y desde F5.1 §2 el `LeafMesh`) que asigna la
+escena/bootstrapper, de modo que el compilador no ve
 su inicialización. Se resolvieron con `null!`: neutro en comportamiento (el
 inicializador solo corre en la construcción, los valores serializados lo
 sobrescriben y `Draw` ya los guarda con `!= null`); marcarlos `?` habría propagado
@@ -159,6 +160,139 @@ idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
 
 Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
 stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
+
+### Qué entrada y qué config produjo cada escena (registro)
+
+Las dos escenas que el repo versiona **no** salen de los valores por defecto de su
+montador, y eso lo sabía sólo quien las ejecutó: el `.unity` guarda los campos, no
+su procedencia, y el montador dice otra cosa. El registro vive en
+`GeneratedSceneCatalog` (modelo puro, compilado también en la suite headless) y lo
+comprueba `GeneratedSceneContractTests` campo a campo contra el YAML serializado,
+así que un pase que deje otra configuración falla nombrando el campo, la escena y
+los dos valores:
+
+| Escena | Entrada que la escribió | grid | colonias | ticks | frameEvery | velocidad | semilla(s) | pool(s) |
+|---|---|---|---|---|---|---|---|---|
+| `Assets/Scenes/Game.unity` | **Play pass** (`scripts/playpass-live.sh`): el menú «Crear escena de juego» y la sonda `ProbeToastsSet` con `Temp/antsim-playpass.json`, ya guardada | 96 | 2 | 7200 | 1 | 2 | 42 | `pretrain-warm-v2` |
+| `Assets/Scenes/MultiSim.unity` | **Medidor de rendimiento**: `-executeMethod …MultiSimBootstrapper.CreateMultiSimPerfScene` | 256 | 2 por vista | 12000 | 5 | 10 | 42–45 (una por vista) | warm-v2 · warm-4 · warm3 · warm2 (autodetectados de `artifacts/`) |
+
+Lo que **no** hay que confundir, porque es justo lo que se perdía:
+
+- El menú **«Crear escena de juego»** (`SceneBootstrapper.CreateGameScene`) monta
+  con `LaunchSettings.Defaults()` —ticks **36000**, velocidad **3**—, así que
+  regenerar con el menú NO devuelve el `Game.unity` del repo: esa configuración la
+  deja el Play pass, y el contrato ata el registro a sus defaults (`TICKS`,
+  `B4_SPEED`, `GRID`, `COLONIES`, `SEED` y `SEED_POOL` de `scripts/playpass-live.sh`
+  tienen que coincidir con el catálogo). `frameEvery` y la especie no los toca el
+  pase: la escena conserva los del montador, y el registro los ancla a
+  `LaunchSettings` en vez de a la memoria.
+- El menú **«Crear escena multi-visor»** (`CreateMultiSimScene`) monta grid 96 /
+  36000 ticks / frameEvery 2 —la escena de F5.1bis—, y las variantes
+  `CreateMultiSimSmokeScene*`, `PerfSceneProbe.RunPerf` y
+  `PlayerBuild.BuildMultiViewPlayer` escriben **la misma ruta**
+  `Assets/Scenes/MultiSim.unity`. Regenerar «el multi-visor» con cualquiera de
+  ellas pisa la escena del medidor, y el contrato lo dice en la siguiente corrida.
+- **El byte no es estable y no se fija**: Unity renumera las anclas `&N` y los
+  `fileID` al recrear los assets (`CreateOrReplaceAsset` borra y vuelve a crear),
+  así que el `.unity` cambia aunque la escena sea la misma. Lo que este registro
+  fija es la equivalencia estructural —de eso decide
+  `scripts/check-unity-assets.sh`— y los valores de juego.
+
+### La fuente y los sprites son del juego (no del motor)
+
+El HUD no pide ninguna fuente prestada al motor. El bootstrapper **escribe** el
+`.ttf` del juego y lo importa (`GameAssetBuilder.EnsureFont` →
+`Assets/Fonts/AntSim.ttf`), y las siluetas de los actores son mallas propias
+(`GameAssetBuilder.EnsureActorMesh` → `AntMesh`/`ItemMesh`/`LeafMesh` en
+`Assets/Materials/`, una por vista en el multi-visor).
+
+- **La tipografía** sale de `GameFontModel`: 1000 upem, avance de 0,5 em (el
+  ancho de las tarjetas no cambia) y una tabla de ~142 glifos escrita en una DSL
+  corta y total —`p:` polilínea a trazo, `e:` anillo, `d:` disco, `o:` elipse,
+  `b:` caja, `t:` triángulo, `h:` medio disco, con `-`/`+` para adelgazar y
+  engrosar— y el castellano completo por acentos **compuestos** (una base más un
+  acento de la misma DSL, en vez de un dibujo por letra acentuada). Además de los
+  36 signos que el HUD usa de verdad, trae tres **iconos de uso privado**
+  (U+E000 hormiga, U+E001 carga, U+E002 huevo) con los que las tarjetas
+  sustituyen texto. Las tarjetas los pintan al **doble del cuerpo**
+  (`GameFontModel.CardIconSize` = 2 × `CardBodySize`): van en un run de rich text
+  `<size=28>` dentro del cuerpo de 14 px, así que el glifo crece sin mover el
+  avance del texto del que sale el ancho de la tarjeta. A 14 px medían 5–14 px y
+  se leían como manchas; al doble, la comparación contra la referencia del `.ttf`
+  —cada icono del recorte vivo frente a su glifo rasterizado a 28 px— los
+  clasifica a los tres como su propio glifo: silueta IoU 0,79–0,87 y 0,42–0,69 de
+  correlación, con los otros dos glifos ≤0,19 en el mismo sitio.
+
+### El avance del icono: 720 declarado, 643 es la tinta
+
+Si al medir aparece un «643» donde la fuente declara 720, hay dos cosas que
+decir, las dos medidas:
+
+- **643 es la caja de TINTA del icono**, no un avance: 0,643 em, o sea 9 px a
+  14 px y 18 px a 28 px. El avance declarado es 720 unidades (0,72 em) y la
+  tinta cabe dentro.
+- **El avance RESERVADO no es el declarado porque Unity carga el glifo con el
+  hinting de FreeType**, que ajusta el avance al píxel entero. Cargando la
+  fuente por el motor: sin hinting el icono da 719,76–719,87 unidades a 14, 15,
+  28, 29 y 31 px y una letra 500,00 clavadas; con hinting —lo que pinta uGUI—
+  reserva 10, 11, 20, 21 y 22 px (714, 733, 714, 724 y 710 unidades) y una letra
+  pasa a 8 px a 15 (500 → 533). En el HUD en vivo (canvas al 98,3 %, cara de
+  27,5 px) el generador reserva 19 px: el 95,9 % del avance declarado.
+
+### Lo generado tiene contrato con sus modelos
+
+Los modelos son la fuente de verdad, pero lo que el juego dibuja son los
+ARTEFACTOS: el `.ttf` y las mallas `.asset` que el bootstrapper deja en
+`Assets/`. Editarlos por separado no lo notaba nadie —la suite miraba los
+modelos y el Play pass miraba lo pintado, cada uno con su lado de la pareja—, así
+que `GeneratedAssetContractTests` (headless, sin editor) compara los dos: la
+fuente BYTE A BYTE contra `TtfWriter.BuildFromModel` (el escritor sella la fecha,
+por eso es determinista) y cada malla VÉRTICE A VÉRTICE contra
+`ActorMeshModel.Build(GameSpriteModel.Build(…))`, leyendo las posiciones del blob
+`_typelessdata` de la malla en YAML. El mensaje nombra el fichero y el vértice, y
+la reparación es siempre la misma: abrir el proyecto y dejar que el bootstrapper
+regenere.
+
+El ajuste `shouldRoundAdvanceValue` del importador no cambia nada de eso
+(probado en sus dos estados, avances idénticos), así que la cuenta del ancho
+vive en el modelo que sí decide: `HudLayoutTests.HintedAdvance` reserva como
+reserva uGUI —avance al tamaño del run redondeado al píxel— y un test ancla los
+nueve valores medidos. La sonda publica `units`, `decl` y `ofDecl` por icono,
+normalizando por el tamaño del RUN (hacerlo por el cuerpo del `Text` duplicaba
+las unidades justo en los iconos y hacía parecer que la fuente mentía).
+  `HudLayoutTests` fija las dos mitades: que los tres iconos viajan en su run
+  grande (y que ningún glifo crudo se cuela) y que las cinco líneas siguen
+  cabiendo en la caja útil de 406×135 px, contadas con los avances reales de la
+  fuente.
+- **El escritor** es `TtfWriter`: sfnt puro —10 tablas, `cmap` format 4, `glyf`
+  con puntos on-curve y sin instrucciones—, sin dependencias, con fecha FIJA en
+  `head` y el `checksumAdjustment` del sfnt. Es determinista: la misma entrada da
+  los mismos bytes, así que el `.ttf` se commitea y no se reescribe en cada
+  pasada. `.gitattributes` lo marca binario (`*.ttf -text`) justo por eso: un
+  filtro de texto le cambiaría bytes al payload y el checksum dejaría de cuadrar.
+- **Los sprites** salen de `GameSpriteModel` —contornos CONVEXOS, todos en el
+  mismo sentido, porque el relleno es NON-ZERO y los solapes suman— y
+  `ActorMeshModel` los extruye a una malla. Hormiga, carga y hoja se construyen
+  en la **misma caja** que la cápsula y la esfera que sustituyen (2 u × 1 u), de
+  modo que la escala y la orientación del presenter no cambian, y la hoja estrena
+  pasada propia (los mordiscos ya no comparten malla con la carga).
+- **Regenerar** es volver a correr el bootstrapper: `EnsureFont` sólo reescribe
+  el `.ttf` si los bytes difieren, y `EnsureActorMesh` usa
+  `EditorUtility.CopySerialized` para no cambiar el GUID del asset — cambiarlo
+  rompería las referencias de las escenas ya guardadas.
+
+Para mirar el `.ttf` sin abrir Unity, `python scripts/unity/validate-font.py
+<ruta>/AntSim.ttf` valida tablas, nombres, avances y `cmap` con fontTools y
+rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 634 tests de la
+suite incluyen `GameFontTests` —que cubre también el alfabeto contra los
+literales que el HUD usa de verdad, y **los avances LEÍDOS de la tabla `hmtx`**
+frente a los del modelo, glifo a glifo por la `cmap`— y
+`GeneratedMaterialContractTests`, que comprueba contra `GameMaterialModel` los
+**76 `.mat` y las 10 texturas** que el bootstrapper deja en `Assets/Materials`
+(color, tipo, textura a la que apunta y píxeles de esa textura),
+`ActorMeshTests`, que triangula y mide la malla, y `GeneratedSceneContractTests`,
+que contrasta cada escena versionada con `GeneratedSceneCatalog` —la entrada y la
+configuración que la produjeron— y con las constantes de sus productores.
 
 ### Multi-visor: varias simulaciones a la vez (F5.1bis)
 
