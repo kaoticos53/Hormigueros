@@ -123,22 +123,55 @@ namespace AntSim.Unity.Scripts.Streaming
                 for (int i = first; i < points.Count; i++) _points.Add(points[i]);
             }
 
-            /// <summary>Línea del panel: generación, cohorte, fitness y élite.</summary>
+            /// <summary>Línea 1 del panel (ver <see cref="LearningPanelModel.FitnessLine(int,int,int,float,float)"/>).</summary>
             public string FitnessLine()
-            {
-                string elite = EliteBest > 0f
-                    ? $"élite {Num(EliteBest)} (medio {Num(EliteAverage)})"
-                    : "élite —";
-                return $"gen {Generation} · {Births} nac. · cohorte {Ants} ({Dead} bajas) · " +
-                       $"fitness {Num(MeanFitness)} (máx {Num(BestFitness)}) · {elite}";
-            }
+                => LearningPanelModel.FitnessLine(Generation, Ants, Dead, MeanFitness, BestFitness);
 
-            /// <summary>Línea del mundo: cobertura, celdas y radio máximo.</summary>
+            /// <summary>Línea 2 del panel (ver <see cref="LearningPanelModel.WorldLine(float,float,int,int)"/>).</summary>
             public string WorldLine()
-                => $"cobertura {Coverage * 100f:0.0} % · {VisitedCells}/{TotalCells} celdas · radio {MaxDistance} u";
+                => LearningPanelModel.WorldLine(EliteBest, Coverage, VisitedCells, TotalCells);
 
-            private static string Num(float v) => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+            private static string Num(float v) => LearningPanelModel.Num(v);
         }
+
+        /// <summary>
+        /// Línea 1 del panel: la COHORTE y su fitness (medio y máximo). Con valores
+        /// explícitos para que el ajuste del texto se pueda comprobar headless.
+        ///
+        /// POR QUÉ TAN CORTA (49 caracteres de los 57 que caben): la caja de la
+        /// banda es de 406 px (`HudElementLayoutModel.LearningInfoWidth`) y a fs 14
+        /// la fuente reserva 7 px por carácter, así que 57 caracteres por línea son
+        /// el techo DURO. La primera versión medía 89 (623 px) y desbordaba el
+        /// panel: lo midió el Play pass —`hud.OVERFLOW LearningInfo_0 rect=406x34
+        /// pref=648x13`—, no un ojo. De aquella línea se cayeron los NACIMIENTOS,
+        /// que la tarjeta ya pinta en su ventana de 1 s, y el RADIO máximo, que
+        /// cuenta la línea 2 en celdas; el resto sigue. El test
+        /// `TextosFijosDelHud_CabenEnLaCajaQueLaEscenaLesDa` ancla el ajuste con el
+        /// PEOR caso de números.
+        /// </summary>
+        public static string FitnessLine(int generation, int ants, int dead,
+            float mean, float best)
+            => $"gen {generation} · cohorte {ants} ({dead} bajas) · " +
+               $"fit {Num(mean)} · máx {Num(best)}";
+
+        /// <summary>
+        /// Línea 2 del panel: la élite del pool y el mundo que conoce la colonia
+        /// (celdas pisadas de su huella CHC). Aquí caben los 48 caracteres que
+        /// necesita, con la misma cuenta de ancho que la línea 1. Sin élite
+        /// (colonia fría) el hueco se marca con «—» en vez de un 0.0 que parecería
+        /// una medida.
+        /// </summary>
+        public static string WorldLine(float eliteBest, float coverage, int visited, int total)
+        {
+            string elite = eliteBest > 0f ? Num(eliteBest) : "—";
+            return $"élite {elite} · cobertura {coverage * 100f:0.0} % · " +
+                   $"{visited}/{total} celdas";
+        }
+
+        /// <summary>Un decimal con punto, independiente del idioma del equipo (el
+        /// texto entra en una caja medida: la coma no puede cambiar el ancho).</summary>
+        private static string Num(float v)
+            => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
         private readonly Dictionary<int, ColonyPanel> _panels = new();
 

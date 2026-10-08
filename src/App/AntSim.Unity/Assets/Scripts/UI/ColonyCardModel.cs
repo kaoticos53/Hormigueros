@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using AntSim.Unity.Scripts.UI;
 
 namespace AntSim.Unity.Scripts.Streaming
 {
@@ -19,6 +20,16 @@ namespace AntSim.Unity.Scripts.Streaming
     public sealed class ColonyCardModel
     {
         public const int AdultsHardCap = 40;
+
+        // — La CAJA ÚTIL del cuerpo de la tarjeta (px de diseño del HUD) ———
+        // El panel mide 440×268 con 14 de margen interior y el cuerpo arranca 126
+        // px por encima del borde inferior (bandas de reserva y de aprendizaje):
+        // 440 − 20 − 14 = 406 de ancho y 268 − 7 − 126 = 135 de alto. Se declaran
+        // aquí, junto al texto que tiene que caber, y la suite los usa para medir
+        // las líneas con los AVANCES de la fuente — el tope que no se puede pasar
+        // lo comprueba un test, no la vista.
+        public const int CardBodyWidth = 406;
+        public const int CardBodyHeight = 135;
 
         /// <summary>Estado acumulado de UNA colonia para su tarjeta.</summary>
         public sealed class Card
@@ -147,10 +158,18 @@ namespace AntSim.Unity.Scripts.Streaming
             sb.AppendLine();
 
             // Adultas con tope duro del diseño + cría en chips.
-            // F5.1: sin emoji — la fuente por defecto de uGUI (LegacyRuntime) no
-            // tiene glifos de emoji y los pintaba como cajas vacías.
-            sb.Append("adultas ").Append(c.Adults).Append('/').Append(AdultsHardCap)
-              .Append("   huevos ").Append(c.Eggs)
+            // F5.1: los rótulos «adultas» y «huevos» son ICONOS de la fuente
+            // propia (hormiga y huevo). Sustituyen a DOS RÓTULOS, no a emoji: el
+            // icono es un glifo más de la tipografía del juego, así que se pinta
+            // por el mismo camino que las letras y no puede salir como caja
+            // vacía. Las larvas y las pupas se quedan en texto porque el juego
+            // no tiene sprite para ellas (los tres del proyecto son hormiga,
+            // carga y huevo).
+            // F5.1ter: y van al DOBLE del cuerpo (`AntLarge` = run `<size=28>`),
+            // porque a 14 px medían 5-14 px y se leían como manchas. El run es lo
+            // que permite el doble sin encoger el texto ni el avance de la línea.
+            sb.Append(GameFontModel.AntLarge).Append(' ').Append(c.Adults).Append('/').Append(AdultsHardCap)
+              .Append("   ").Append(GameFontModel.EggLarge).Append(' ').Append(c.Eggs)
               .Append("  ·  larvas ").Append(c.Larvae)
               .Append("  ·  pupas ").Append(c.Pupae).AppendLine();
 
@@ -170,9 +189,14 @@ namespace AntSim.Unity.Scripts.Streaming
                 // F5.1: se quitó el prefijo «1s:» y los «+» pegados a cada número
                 // (se lee igual y la línea cabe sin partirse en una tarjeta de
                 // 440 px; el ancho de la tarjeta sale de ESTA línea).
-                sb.Append("1s  ").Append(w.Pickups).Append(" rec  ").Append(w.Unloads)
+                // El icono de la CARGA delante de las recogidas, y el del huevo
+                // donde antes iba la palabra: dos rótulos menos y la línea sigue
+                // cabiendo (el icono avanza algo más que una letra).
+                sb.Append("1s  ").Append(GameFontModel.LoadLarge).Append(w.Pickups)
+                  .Append(" rec  ").Append(w.Unloads)
                   .Append(" desc  ").Append(w.Births).Append(" nac  −")
-                  .Append(w.Deaths).Append(" mue  ").Append(w.Eggs).Append(" huevos")
+                  .Append(w.Deaths).Append(" mue  ").Append(GameFontModel.EggLarge)
+                  .Append(' ').Append(w.Eggs)
                   .Append("  ").Append(w.Eclosed).Append(" eclos").AppendLine();
             }
             else
@@ -220,7 +244,9 @@ namespace AntSim.Unity.Scripts.Streaming
                     continue;
                 }
                 float frac = c.StockMax > 0 ? c.Stock / c.StockMax : 0f;
-                sb.Append("  ").Append(c.Adults).Append("h")
+                // El icono de la hormiga delante del censo (antes «12h»): a media
+                // pantalla el rótulo no cabe y el dibujo dice más que la «h».
+                sb.Append("  ").Append(GameFontModel.Ant).Append(c.Adults)
                   .Append(' ').Append(F1(frac * 100f)).Append('%');
                 if (frac < 0.20f) sb.Append(" ¡BAJA!");
                 // F5.1: chip en forma corta — en una vista de 1/4 de pantalla no

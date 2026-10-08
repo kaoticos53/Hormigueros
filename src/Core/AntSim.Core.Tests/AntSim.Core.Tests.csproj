@@ -44,10 +44,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneSelectorModel.cs" Link="UnityPure/PheromoneSelectorModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/MultiViewportModel.cs" Link="UnityPure/MultiViewportModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/LaunchSettings.cs" Link="UnityPure/LaunchSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/GeneratedSceneCatalog.cs" Link="UnityPure/GeneratedSceneCatalog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/ColonySparklineModel.cs" Link="UnityPure/ColonySparklineModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/LearningPanelModel.cs" Link="UnityPure/LearningPanelModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/SpeedControlModel.cs" Link="UnityPure/SpeedControlModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/InstancedDrawPlan.cs" Link="UnityPure/InstancedDrawPlan.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/GameShapeModel.cs" Link="UnityPure/GameShapeModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/GameFontModel.cs" Link="UnityPure/GameFontModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/GameMaterialModel.cs" Link="UnityPure/GameMaterialModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/TtfWriter.cs" Link="UnityPure/TtfWriter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Presenter/ActorMeshModel.cs" Link="UnityPure/ActorMeshModel.cs" />
   </ItemGroup>
 
 </Project>
