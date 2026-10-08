@@ -25,6 +25,17 @@ editor saldría «CAMBIA» por su `\r`. Si no se puede analizar (binario, sin
 documentos), la respuesta es DIFF: fallar cerrado, nunca un verde por no haber
 mirado.
 
+LA EXCEPCIÓN: EL CHURN QUE DEJA EL ASSET CANÓNICO. Un cambio equivalente (mismo
+contenido, otra forma) no siempre es ruido. Si el asset estaba commiteado en una
+forma NO canónica —el caso real: `PheromoneMat.mat` con el bloque `AssetVersion`
+delante y un ancla de sesión—, entonces el editor lo va a reescribir en su forma
+canónica en CADA pasada: el «churn» se repite para siempre y descartarlo deja la
+trampa puesta. Ese cambio —el que deja el asset en la forma que
+documenta scripts/unity-canonicalize-assets.py— se acepta y se etiqueta
+`CANONICALIZA`; el churn que sigue siendo ruido (re-anclar, reordenar) se rechaza
+como siempre. Sin el canonicalizador a mano, la excepción no se aplica y todo
+vuelve al criterio conservador (churn).
+
 Uso:
   python unity-asset-equivalence.py                    # los assets que el árbol tiene tocados, contra HEAD
   python unity-asset-equivalence.py --rev REV RUTAS…   # esas rutas, contra REV
@@ -67,6 +78,46 @@ ASSET_SUFFIXES = ('.mat', '.unity', '.asset', '.prefab', '.controller', '.anim',
 
 def es_asset(path):
     return path.lower().endswith(ASSET_SUFFIXES)
+
+
+# ── ¿el texto YA es la forma canónica? ──────────────────────────────────────
+# La excepción del churn necesita la MISMA definición de «canónico» que usa quien
+# lo escribe (scripts/unity-canonicalize-assets.py), no una copia que se
+# desincronice: se importa el script hermano por ruta (su nombre lleva guiones)
+# una sola vez. Si no se puede importar, la excepción no se aplica —lado
+# conservador— y el verificador sigue funcionando igual.
+_CANON = None
+_CANON_BUSCADO = False
+
+
+def _canonicalizador():
+    global _CANON, _CANON_BUSCADO
+    if _CANON_BUSCADO:
+        return _CANON
+    _CANON_BUSCADO = True
+    try:
+        import importlib.util
+        ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'unity-canonicalize-assets.py')
+        spec = importlib.util.spec_from_file_location('unity_canonicalize_assets', ruta)
+        modulo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(modulo)
+        _CANON = modulo
+    except Exception:
+        _CANON = None
+    return _CANON
+
+
+def es_canonico(texto):
+    """¿este texto YA es la forma canónica? `None` si no se puede decidir (sin
+    canonicalizador, o un fichero que no analiza)."""
+    canon = _canonicalizador()
+    if canon is None or texto is None:
+        return None
+    try:
+        return canon.canonical(texto)[0] == texto
+    except Exception:
+        return None
 
 ANCHOR = re.compile(r'^--- !u!(\d+) &(-?\d+)( stripped)?\s*$')
 REF = re.compile(r'\{fileID: (-?\d+)([^}]*)\}')
@@ -228,7 +279,7 @@ def read_worktree(path):
 # ── Modo 1: ¿los assets tocados del árbol son ruido? ────────────────────────
 
 def revisar(rev, paths):
-    ruido, reales, saltados = [], [], []
+    ruido, reales, saltados, canoniza = [], [], [], []
     for path in paths:
         old = show(rev, path)
         new = read_worktree(path)
@@ -239,29 +290,44 @@ def revisar(rev, paths):
             saltados.append((path, 'borrado en el árbol de trabajo'))
             continue
         same, detalle = compare(old, new)
-        if same:
-            ruido.append((path, detalle))
-        else:
+        if not same:
             reales.append((path, detalle))
+        elif es_canonico(new) and es_canonico(old) is False:
+            # El churn que deja el asset CANÓNICO no es ruido (ver el encabezado):
+            # es el que quita la trampa de un asset commiteado en forma no canónica.
+            canoniza.append((path, detalle))
+        else:
+            ruido.append((path, detalle))
 
     for path, detalle in rumbo_ordenado(ruido):
         print(f'IDÉNTICO  {path}  ({detalle})')
+    for path, detalle in canoniza:
+        print(f'CANONICALIZA  {path}  ({detalle}: queda en la forma canónica del editor)')
     for path, detalle in reales:
         print(f'CAMBIA    {path}  ({detalle})')
     for path, motivo in saltados:
         print(f'SALTADO   {path}  ({motivo})')
 
-    total = len(ruido) + len(reales) + len(saltados)
+    total = len(ruido) + len(reales) + len(saltados) + len(canoniza)
     print()
     if total == 0:
         print(f'✓ ningún asset de Unity tocado en el árbol de trabajo ({SCOPE})')
         return 0
-    print(f'{len(ruido)} idénticos (churn) · {len(reales)} con cambio real · {len(saltados)} saltados, de {total}')
+    print(f'{len(ruido)} idénticos (churn) · {len(canoniza)} que canonicalizan · '
+          f'{len(reales)} con cambio real · {len(saltados)} saltados, de {total}')
     if ruido:
         print('✅ los idénticos se pueden descartar sin perder nada:')
         print('   git checkout -- ' + ' '.join(p for p, _ in rumbo_ordenado(ruido)))
+    if canoniza:
+        print('✅ los que canonicalizan SÍ se commitean (no los descartes): son los que')
+        print('   dejan el árbol en la forma que el editor escribe, y el churn de esas')
+        print('   rutas se acaba con el commit:')
+        print('   git add -- ' + ' '.join(p for p, _ in rumbo_ordenado(canoniza)))
     if reales:
         print(f'✗ hay {len(reales)} asset(s) con cambio de verdad: revísalos antes de commitear')
+        return 1
+    if canoniza:
+        print(f'→ {len(canoniza)} asset(s) quedan en forma canónica: commitéalos para cerrar el churn')
         return 1
     return 0
 
@@ -323,7 +389,7 @@ def churn(rango, cwd=None):
     commits = [c for c in commits.split() if c]
     print(f'▶ Churn de re-serialización en {spec} ({len(commits)} commit(s), ámbito {SCOPE})')
 
-    sucios = []
+    sucios, canonizados = [], []
     for commit in commits:
         asunto = (git_ok('log', '-1', '--format=%h %s', commit, cwd=cwd) or '').strip()
         tocados = git_ok('diff-tree', '--no-commit-id', '--name-only', '--diff-filter=M', '-r',
@@ -337,11 +403,23 @@ def churn(rango, cwd=None):
             if old is None or new is None:
                 continue
             same, _ = compare(old, new)
-            if same:
+            if not same:
+                continue
+            # La EXCEPCIÓN (ver el encabezado): el cambio equivalente que DEJA el
+            # asset en su forma canónica no es ruido, es el que cierra el churn
+            # recurrente de un asset commiteado mal. Un re-anclado cualquiera, no.
+            if es_canonico(new) and es_canonico(old) is False:
+                canonizados.append((asunto, path))
+            else:
                 sucios.append((asunto, path))
 
+    if canonizados:
+        print()
+        for asunto, path in canonizados:
+            print(f'CANONICALIZA  {path}\n    en {asunto}  (queda en la forma que el editor escribe: no es ruido)')
     if not sucios:
-        print(f'✓ ningún commit de {spec} mete ruido de re-serialización')
+        extra = f' · {len(canonizados)} asset(s) canonicalizado(s), que sí entran' if canonizados else ''
+        print(f'✓ ningún commit de {spec} mete ruido de re-serialización{extra}')
         return 0
     print()
     for asunto, path in sucios:
@@ -350,6 +428,7 @@ def churn(rango, cwd=None):
     print(f'✗ {len(sucios)} asset(s) de Unity entraron en el rango sin cambiar nada de lo que')
     print('  significan (sólo anclas, orden de documentos o el bloque AssetVersion).')
     print('  Descártalos del commit: el editor los reescribirá igual la próxima vez.')
+    print('  (Uno que quedara en forma canónica no se cuenta aquí: eso es CANONICALIZA.)')
     return 1
 
 
@@ -473,8 +552,54 @@ def selftest():
             check('CI_RANGE inutilizable ⇒ cae al último commit y lo dice',
                   spec == 'HEAD~1..HEAD' and bool(aviso), f'(spec={spec}, aviso={aviso})')
 
+    # 7. LA EXCEPCIÓN: un cambio equivalente que DEJA el asset en su forma canónica
+    #    no es ruido — es el que cierra el churn recurrente de un asset commiteado
+    #    mal (el caso real: PheromoneMat.mat). Sin el canonicalizador a mano, la
+    #    excepción no se aplica y el criterio se queda en el conservador.
+    canon = _canonicalizador()
+    if canon is None:
+        print('  • sin el canonicalizador a mano: se salta el caso de la excepción')
+    else:
+        check('un re-anclado a mano NO es la forma canónica', not es_canonico(nuevo))
+        check('la salida del canonicalizador SÍ es canónica',
+              es_canonico(canon.canonical(viejo)[0]) is True)
+        check('un asset no canónico se reconoce como tal', es_canonico(viejo) is False)
+        check('un texto que no analiza no se decide (None, no False)',
+              es_canonico('PK\x03\x04\x00\x01\n') is None)
+        if not have_git():
+            print('  • git no está: se salta la excepción sobre un repo real')
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                env = dict(os.environ, GIT_AUTHOR_NAME='t', GIT_AUTHOR_EMAIL='t@t',
+                           GIT_COMMITTER_NAME='t', GIT_COMMITTER_EMAIL='t@t')
+
+                def correr(*args):
+                    return subprocess.run(['git'] + list(args), cwd=tmp,
+                                          capture_output=True, env=env)
+                destino = os.path.join(tmp, SCOPE, 'Assets', 'Materials')
+                os.makedirs(destino, exist_ok=True)
+                ruta = os.path.join(destino, 'X.mat')
+                correr('init', '-q')
+                with open(ruta, 'w', encoding='utf-8') as fh:
+                    fh.write(viejo)                       # commiteado mal: no canónico
+                correr('add', '-A'); correr('commit', '-q', '-m', 'mal')
+                with open(ruta, 'w', encoding='utf-8') as fh:
+                    fh.write(canon.canonical(viejo)[0])   # sólo la forma canónica
+                correr('add', '-A'); correr('commit', '-q', '-m', 'canonicaliza')
+                rc = churn('HEAD~1..HEAD', cwd=tmp)
+                check('un commit que canonicaliza ⇒ NO es churn (rc 0)', rc == 0, f'(rc={rc})')
+                # Y el ruido de verdad sigue bloqueando: mismo contenido, otra forma
+                # que NO es la canónica.
+                with open(ruta, 'w', encoding='utf-8') as fh:
+                    fh.write(nuevo)
+                correr('add', '-A'); correr('commit', '-q', '-m', 'churn')
+                rc = churn('HEAD~1..HEAD', cwd=tmp)
+                check('…y el re-anclado que NO canonicaliza sigue siendo churn (rc 1)',
+                      rc == 1, f'(rc={rc})')
+
     if fails == 0:
-        print('✓ selftest del verificador de assets ok (churn, cableado, escalares, documentos y rango)')
+        print('✓ selftest del verificador de assets ok (churn, cableado, escalares, '
+              'documentos, rango y la excepción del canónico)')
         return 0
     return 1
 
@@ -487,6 +612,10 @@ def listar():
     print('  · los finales de línea (el editor en Windows escribe CRLF y CI tiene LF):')
     print('    un asset que sólo cambia de finales de línea es churn, no un cambio.')
     print('  · en --churn, qué commits de un rango tocaron un asset sin cambiar nada.')
+    print('La excepción: un cambio equivalente que DEJA el asset en la forma canónica')
+    print('  (la de scripts/unity-canonicalize-assets.py) no es churn, es el que quita la')
+    print('  trampa de un asset commiteado mal — el editor lo reescribiría en cada pasada.')
+    print('  Se reporta aparte (CANONICALIZA) y no bloquea el push.')
     print('Qué NO comprueba:')
     print(f'  · nada fuera de {SCOPE}, y dentro sólo estos tipos: ' + ', '.join(ASSET_SUFFIXES))
     print('    (los .cs y el README del proyecto Unity no son assets: su contenido lo')

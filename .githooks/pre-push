@@ -7,7 +7,10 @@
 # escena reescribe assets SIN cambiar lo que significan: reordena documentos,
 # renumera anclas `&N` y mueve el bloque `AssetVersion` de sitio. Son miles de
 # líneas de diff que contaminan la historia del repo para siempre y esconden, si
-# acaso, un cambio pequeño (medido: 64 assets reescritos, 60 idénticos). Va la
+# acaso, un cambio pequeño (medido: 64 assets reescritos, 60 idénticos). La excepción la
+# decide el propio verificador: un asset que entra en su forma CANÓNICA no es
+# churn —es el que cierra el churn recurrente de un asset commiteado mal— y no
+# bloquea; sólo el ruido de verdad bloquea. Va la
 # PRIMERA porque no necesita el editor —segundos— y porque así protege también en
 # una máquina sin Unity instalado, donde la puerta 2 sólo puede avisar.
 #
