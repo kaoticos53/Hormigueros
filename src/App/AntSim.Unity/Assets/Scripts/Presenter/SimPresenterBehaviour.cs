@@ -84,6 +84,8 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Materiales de portadoras diferenciados por índice de colonia [0..N-1].")]
         public Material[]? ColonyCarrierMaterials;
         public Mesh ItemMesh = null!;
+        [Tooltip("Malla de la HOJA (F5.2a): silueta propia generada por el bootstrapper. Si falta, la hoja se dibuja con ItemMesh — el aspecto de antes, sin fallo.")]
+        public Mesh? LeafMesh;
         public Material ItemMaterial = null!;
 
         [Header("F5.2a: hojas con mordiscos (CutsLeft/CutsInitial del canal A)")]
@@ -482,59 +484,81 @@ namespace AntSim.Unity.Scripts.Presenter
 
             if (ItemMesh != null && ItemMaterial != null)
             {
-                // Ítem: esfera natural (1 u de diámetro) escalada por el diámetro
-                // querido; el tamaño insinúa la cantidad restante.
-                // F5.2a: las hojas (IsLeaf) se dibujan con material verde oscuro
-                // y mordiscos visibles — pequeñas esferas marrones en la superficie
-                // que representan los cortes consumidos (CutsInitial - CutsLeft).
+                // Ítem: silueta propia (la esfera la sustituye la CARGA generada
+                // por el bootstrapper) escalada por el diámetro querido; el tamaño
+                // insinúa la cantidad restante.
+                //
+                // F5.2a: las hojas (IsLeaf) van en su propia PASADA porque el
+                // agrupador de lotes dibuja TODAS las matrices de una pasada con
+                // UNA malla: con la hoja en la misma pasada que el ítem simple no
+                // podría tener silueta propia. Los mordiscos (cortes consumidos,
+                // CutsInitial − CutsLeft) siguen siendo muescas pequeñas en el
+                // borde, con la malla del ítem cuando la hoja ya tiene la suya.
                 int layer = RenderLayer > 0 ? RenderLayer : 0;
                 _drawer.Clear();
                 foreach (var it in state.Items)
                 {
+                    if (it.IsLeaf && LeafMaterial != null) continue;
                     var pos = new Vector3(it.X, lift * 0.7f, it.Y);
                     float s = itemS * (0.55f + 0.03f * it.Amount);
-
-                    if (it.IsLeaf && LeafMaterial != null)
-                    {
-                        // Hoja: esfera achatada (más plana que un ítem simple)
-                        // para insinuar la forma de hoja.
-                        var leafScale = new Vector3(s * 1.1f, s * 0.5f, s * 1.1f);
-                        _drawer.Add(LeafMaterial, Matrix4x4.TRS(pos, Quaternion.identity, leafScale));
-
-                        // Mordiscos: pequeñas esferas marrones en los bordes.
-                        // Cada corte consumido (CutsInitial - CutsLeft) se representa
-                        // como una muesca en la superficie, distribuida uniformemente
-                        // alrededor del perímetro de la hoja.
-                        if (BiteMaterial != null)
-                        {
-                            int bitesEaten = it.CutsInitial - it.CutsLeft;
-                            int totalBites = it.CutsInitial > 0 ? it.CutsInitial : 1;
-                            float biteRadius = s * 0.18f; // tamaño de cada mordisco
-                            float leafRadius = s * 0.55f; // radio de la hoja
-                            for (int b = 0; b < bitesEaten; b++)
-                            {
-                                float angle = (b / (float)totalBites) * Mathf.PI * 2f;
-                                float bx = pos.x + Mathf.Cos(angle) * leafRadius;
-                                float bz = pos.z + Mathf.Sin(angle) * leafRadius;
-                                float by = pos.y + (b % 2 == 0 ? 0.05f : -0.05f); // alternar arriba/abajo
-                                var bitePos = new Vector3(bx, by, bz);
-                                var biteMtx = Matrix4x4.TRS(bitePos, Quaternion.identity,
-                                    Vector3.one * biteRadius);
-                                _drawer.Add(BiteMaterial, biteMtx);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Ítem simple: esfera tal cual.
-                        _drawer.Add(ItemMaterial, Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s));
-                    }
+                    _drawer.Add(ItemMaterial, Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s));
                 }
                 LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
+
+                if (LeafMaterial != null)
+                {
+                    bool ownLeafMesh = LeafMesh != null;
+                    _drawer.Clear();
+                    foreach (var it in state.Items)
+                    {
+                        if (!it.IsLeaf) continue;
+                        var pos = new Vector3(it.X, lift * 0.7f, it.Y);
+                        float s = itemS * (0.55f + 0.03f * it.Amount);
+                        var leafScale = new Vector3(s * 1.1f, s * 0.5f, s * 1.1f);
+                        _drawer.Add(LeafMaterial, Matrix4x4.TRS(pos, Quaternion.identity, leafScale));
+                        // Sin malla propia los mordiscos comparten pasada (materiales
+                        // distintos, misma malla); con ella van aparte, más abajo.
+                        if (!ownLeafMesh && BiteMaterial != null)
+                            AddBites(it, pos, s);
+                    }
+                    LastDrawCalls += _drawer.Draw(ownLeafMesh ? LeafMesh! : ItemMesh, layer, instancing);
+
+                    if (ownLeafMesh && BiteMaterial != null)
+                    {
+                        _drawer.Clear();
+                        foreach (var it in state.Items)
+                        {
+                            if (!it.IsLeaf) continue;
+                            float s = itemS * (0.55f + 0.03f * it.Amount);
+                            AddBites(it, new Vector3(it.X, lift * 0.7f, it.Y), s);
+                        }
+                        LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
+                    }
+                }
             }
 
             LastInstancedCalls = _drawer.InstancedCalls;
             LastFallbackCalls = _drawer.FallbackCalls;
+        }
+
+        /// <summary>Las muescas de una hoja: un corte consumido por mordisco, en
+        /// el borde y alternando arriba/abajo para que se lean en vista cenital.</summary>
+        private void AddBites(Streaming.GameStreamParser.ItemView it, Vector3 pos, float s)
+        {
+            int bitesEaten = it.CutsInitial - it.CutsLeft;
+            int totalBites = it.CutsInitial > 0 ? it.CutsInitial : 1;
+            float biteRadius = s * 0.18f;
+            float leafRadius = s * 0.55f;
+            for (int b = 0; b < bitesEaten; b++)
+            {
+                float angle = (b / (float)totalBites) * Mathf.PI * 2f;
+                var bitePos = new Vector3(
+                    pos.x + Mathf.Cos(angle) * leafRadius,
+                    pos.y + (b % 2 == 0 ? 0.05f : -0.05f),
+                    pos.z + Mathf.Sin(angle) * leafRadius);
+                _drawer.Add(BiteMaterial!, Matrix4x4.TRS(bitePos, Quaternion.identity,
+                    Vector3.one * biteRadius));
+            }
         }
 
         /// <summary>

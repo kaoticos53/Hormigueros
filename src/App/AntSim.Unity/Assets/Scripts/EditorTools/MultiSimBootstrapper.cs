@@ -269,8 +269,11 @@ namespace AntSim.Unity.Scripts.EditorTools
             cam.depth = v.Index; // orden de render estable entre vistas
 
             // — El mundo de la vista, TODO en su capa —
-            var earth = new Color(0.42f, 0.33f, 0.23f);
-            var gridLine = new Color(0.34f, 0.26f, 0.18f);
+            // Los materiales no se eligen aquí: se piden al MISMO modelo que la
+            // escena simple, con el nombre de la vista (GameMaterialModel.View).
+            // Así las dos escenas no pueden pintar colores distintos del mismo
+            // material —antes estaban escritos dos veces— y el contrato de assets
+            // comprueba las dos familias de `.mat`.
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             floor.name = $"Floor_V{v.Index}";
             SetLayerRecursive(floor, layer);
@@ -278,7 +281,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             floor.transform.localScale = new Vector3(world / 10f, 1f, world / 10f);
             DestroyCollider(floor);
             floor.GetComponent<Renderer>().sharedMaterial =
-                NewGridMat($"FloorMat_V{v.Index}", earth, gridLine);
+                NewGridMat(UI.GameMaterialModel.ByName("FloorMat").View(v.Index),
+                    UI.GameMaterialModel.GridTextureName(v.Index));
 
             var table = GameObject.CreatePrimitive(PrimitiveType.Plane);
             table.name = $"Table_V{v.Index}";
@@ -287,12 +291,10 @@ namespace AntSim.Unity.Scripts.EditorTools
             table.transform.localScale = new Vector3(world * 2.6f / 10f, 1f, world * 2.6f / 10f);
             DestroyCollider(table);
             table.GetComponent<Renderer>().sharedMaterial =
-                NewFlatMat(new Color(0.22f, 0.175f, 0.13f), $"TableMat_V{v.Index}");
+                NewFlatMat(UI.GameMaterialModel.ByName("TableMat").View(v.Index));
 
             float nestR = world * 0.022f;
-            var moundMat = NewFlatMat(new Color(0.30f, 0.25f, 0.20f), $"NestMoundMat_V{v.Index}");
-            var accent0 = new Color(0.93f, 0.45f, 0.35f);
-            var accent1 = new Color(0.42f, 0.63f, 0.95f);
+            var moundMat = NewFlatMat(UI.GameMaterialModel.ByName("NestMoundMat").View(v.Index));
             // Los nidos van donde los pone el MUNDO (el barrido de colonias de §4.10
             // mueve cuántas hay): `WorldSim.CreateColony` usa
             // WorldWidth × (id+1)/(colonyCount+1) sobre la línea media, y con 2
@@ -318,7 +320,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 // (y el presenter solo reparte dos materiales por colonia), así que la
                 // decoración alterna en vez de inventar una paleta nueva.
                 nest.GetComponent<Renderer>().sharedMaterial =
-                    NewFlatMat(c % 2 == 0 ? accent0 : accent1, $"NestMat_V{v.Index}_{c}");
+                    NewFlatMat(UI.GameMaterialModel.Nest(c).View(v.Index));
             }
 
             // — Feromonas de la vista (misma receta que la escena simple) —
@@ -328,7 +330,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             pheroQuad.transform.position = new Vector3(world * 0.5f, PheroHeight, world * 0.5f);
             pheroQuad.transform.localScale = new Vector3(world / 10f, 1f, world / 10f);
             DestroyCollider(pheroQuad);
-            var pheroMat = NewTransparentMat($"PheromoneMat_V{v.Index}");
+            var pheroMat = NewTransparentMat(UI.GameMaterialModel.ByName("PheromoneMat").View(v.Index),
+                UI.GameMaterialModel.ReposeTextureName(v.Index));
             pheroQuad.GetComponent<Renderer>().sharedMaterial = pheroMat;
 
             // — Presenter de la vista: su stream, su capa de render —
@@ -346,19 +349,27 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.ReplayFile = replayFile; // smoke: reproducir archivo, no CLI
             presenter.PheroEvery = 30;
             presenter.RenderLayer = layer;
-            presenter.AntMesh = PrimitiveMeshAsset(PrimitiveType.Capsule, $"AntMesh_V{v.Index}");
-            presenter.ItemMesh = PrimitiveMeshAsset(PrimitiveType.Sphere, $"ItemMesh_V{v.Index}");
-            presenter.AntMaterial = NewFlatMat(new Color(0.35f, 0.16f, 0.10f), $"AntMat_V{v.Index}");
-            presenter.CarrierMaterial = NewFlatMat(new Color(0.98f, 0.72f, 0.16f), $"CarrierMat_V{v.Index}");
-            var antMat0 = NewFlatMat(new Color(0.85f, 0.35f, 0.20f), $"AntMatColony0_V{v.Index}");
-            var carrierMat0 = NewFlatMat(new Color(0.98f, 0.70f, 0.20f), $"CarrierMatColony0_V{v.Index}");
-            var antMat1 = NewFlatMat(new Color(0.25f, 0.55f, 0.90f), $"AntMatColony1_V{v.Index}");
-            var carrierMat1 = NewFlatMat(new Color(0.40f, 0.85f, 0.95f), $"CarrierMatColony1_V{v.Index}");
+            // Mismas siluetas PROPIAS que la escena simple, con nombre por vista
+            // (el generador es idempotente: si la malla ya está y coincide, no la
+            // toca). La caja es la de las primitivas, así que la escala de abajo
+            // sigue valiendo.
+            presenter.AntMesh = GameAssetBuilder.EnsureActorMesh(
+                UI.GameSpriteModel.Sprite.Ant, $"AntMesh_V{v.Index}");
+            presenter.ItemMesh = GameAssetBuilder.EnsureActorMesh(
+                UI.GameSpriteModel.Sprite.Load, $"ItemMesh_V{v.Index}");
+            presenter.LeafMesh = GameAssetBuilder.EnsureActorMesh(
+                UI.GameSpriteModel.Sprite.Leaf, $"LeafMesh_V{v.Index}");
+            presenter.AntMaterial = NewFlatMat(UI.GameMaterialModel.ByName("AntMat").View(v.Index));
+            presenter.CarrierMaterial = NewFlatMat(UI.GameMaterialModel.ByName("CarrierMat").View(v.Index));
+            var antMat0 = NewFlatMat(UI.GameMaterialModel.ByName("AntMatColony0").View(v.Index));
+            var carrierMat0 = NewFlatMat(UI.GameMaterialModel.ByName("CarrierMatColony0").View(v.Index));
+            var antMat1 = NewFlatMat(UI.GameMaterialModel.ByName("AntMatColony1").View(v.Index));
+            var carrierMat1 = NewFlatMat(UI.GameMaterialModel.ByName("CarrierMatColony1").View(v.Index));
             presenter.ColonyAntMaterials = new Material[] { antMat0, antMat1 };
             presenter.ColonyCarrierMaterials = new Material[] { carrierMat0, carrierMat1 };
-            presenter.ItemMaterial = NewFlatMat(new Color(0.36f, 0.78f, 0.36f), $"ItemMat_V{v.Index}");
-            presenter.LeafMaterial = NewFlatMat(new Color(0.15f, 0.50f, 0.12f), $"LeafMat_V{v.Index}");
-            presenter.BiteMaterial = NewFlatMat(new Color(0.30f, 0.15f, 0.05f), $"BiteMat_V{v.Index}");
+            presenter.ItemMaterial = NewFlatMat(UI.GameMaterialModel.ByName("ItemMat").View(v.Index));
+            presenter.LeafMaterial = NewFlatMat(UI.GameMaterialModel.ByName("LeafMat").View(v.Index));
+            presenter.BiteMaterial = NewFlatMat(UI.GameMaterialModel.ByName("BiteMat").View(v.Index));
             presenter.AntScale = 0f;
             presenter.ActorLift = world * 0.0008f;
 
@@ -555,14 +566,20 @@ namespace AntSim.Unity.Scripts.EditorTools
             EditorBuildSettings.scenes = scenes.ToArray();
         }
 
-        private static Texture2D NewGridTexture(Color fill, Color line, string name)
+        /// <summary>Misma rejilla que la escena simple, del MISMO modelo
+        /// (`GameMaterialModel`): una vista no inventa su suelo.</summary>
+        private static Texture2D NewGridTexture(string name)
         {
-            const int N = 64;
+            const int N = UI.GameMaterialModel.GridSize;
             var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { name = name };
+            var linea = UI.GameMaterialModel.GridLine;
+            var relleno = UI.GameMaterialModel.GridFill;
             var px = new Color32[N * N];
             for (int y = 0; y < N; y++)
                 for (int x = 0; x < N; x++)
-                    px[y * N + x] = (x == 0 || y == 0) ? (Color32)line : (Color32)fill;
+                    px[y * N + x] = UI.GameMaterialModel.IsGridLine(x, y)
+                        ? new Color32(linea.R, linea.G, linea.B, linea.A)
+                        : new Color32(relleno.R, relleno.G, relleno.B, relleno.A);
             tex.SetPixels32(px);
             tex.wrapMode = TextureWrapMode.Repeat;
             tex.filterMode = FilterMode.Bilinear;
@@ -571,26 +588,30 @@ namespace AntSim.Unity.Scripts.EditorTools
             return tex;
         }
 
-        private static Material NewGridMat(string name, Color fill, Color line)
+        private static Material NewGridMat(UI.GameMaterialModel.Spec spec, string textureName)
         {
-            var tex = NewGridTexture(fill, line, name + "_Tex");
+            var tex = NewGridTexture(textureName);
             Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (sh == null) sh = Shader.Find("Unlit/Texture");
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
 
-            var m = new Material(sh!) { name = name, mainTexture = tex };
-            m.mainTextureScale = new Vector2(24f, 24f); // GridTiles de la escena simple
+            float tiles = UI.GameMaterialModel.GridTiles;   // las mismas que la escena simple
+            var m = new Material(sh!) { name = spec.Name, mainTexture = tex };
+            m.mainTextureScale = new Vector2(tiles, tiles);
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-            if (m.HasProperty("_BaseMap_ST")) m.SetVector("_BaseMap_ST", new Vector4(24f, 24f, 0, 0));
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
-            if (m.HasProperty("_Color")) m.color = Color.white;
+            if (m.HasProperty("_BaseMap_ST")) m.SetVector("_BaseMap_ST", new Vector4(tiles, tiles, 0, 0));
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ToColor(spec.Color));
+            if (m.HasProperty("_Color")) m.color = ToColor(spec.Color);
             EnsureMaterialFolder();
-            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{spec.Name}.mat");
             return m;
         }
 
-        private static Material NewFlatMat(Color c, string name)
+        /// <summary>El color del MODELO, en el tipo del motor.</summary>
+        private static Color ToColor(UI.GameMaterialModel.Rgba c) => new Color(c.R, c.G, c.B, c.A);
+
+        private static Material NewFlatMat(UI.GameMaterialModel.Spec spec)
         {
             Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (sh == null) sh = Shader.Find("Unlit/Color");
@@ -598,13 +619,15 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
 
-            var m = new Material(sh!) { name = name };
+            var c = ToColor(spec.Color);
+            var m = new Material(sh!) { name = spec.Name };
             // Instancing por construcción (F5.3 rodaja 3): el presenter dibuja los
             // actores con Graphics.DrawMeshInstanced y ese API LANZA si el material
             // no lo tiene activado. Dejarlo al presenter era frágil: la escena
             // montada por el bootstrapper se quedaba sin hormigas con una excepción
-            // por frame (defecto destapado por el medidor de rendimiento).
-            m.enableInstancing = true;
+            // por frame (defecto destapado por el medidor de rendimiento). El flag
+            // sale del modelo (Flat ⇒ instancing).
+            m.enableInstancing = spec.Instancing;
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             m.color = c;
@@ -615,11 +638,11 @@ namespace AntSim.Unity.Scripts.EditorTools
                 m.SetColor("_EmissionColor", c);
             }
             EnsureMaterialFolder();
-            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{spec.Name}.mat");
             return m;
         }
 
-        private static Material NewTransparentMat(string name)
+        private static Material NewTransparentMat(UI.GameMaterialModel.Spec spec, string textureName)
         {
             Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (sh == null) sh = Shader.Find("Unlit/Transparent");
@@ -628,7 +651,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
 
-            var m = new Material(sh!) { name = name };
+            var m = new Material(sh!) { name = spec.Name };
             if (sh != null && sh.name.StartsWith("Universal Render Pipeline"))
             {
                 m.SetFloat("_Surface", 1f);
@@ -660,48 +683,28 @@ namespace AntSim.Unity.Scripts.EditorTools
             // instancia anterior serializa «m_Texture: {fileID: 0}» en la siguiente
             // salvada. El caso observado fue el quad de feromonas de la escena
             // simple; la corrección hermana lleva la misma razón.
-            var emptyPath = $"Assets/Materials/{name}_Empty.asset";
+            var emptyPath = $"Assets/Materials/{textureName}.asset";
             var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(emptyPath);
             if (tex == null)
             {
-                tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = name + "_Empty" };
-                tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
+                var px = UI.GameMaterialModel.ReposePixel;   // blanco, alpha 0: invisible
+                tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = textureName };
+                tex.SetPixels32(new[] { new Color32(px.R, px.G, px.B, px.A) });
                 tex.Apply();
                 EnsureMaterialFolder();
                 AssetDatabase.CreateAsset(tex, emptyPath);
             }
             m.mainTexture = tex;
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
-            if (m.HasProperty("_Color")) m.color = Color.white;
-            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
+            if (m.HasProperty("_Color")) m.color = ToColor(spec.Color);
+            CreateOrReplaceAsset(m, $"Assets/Materials/{spec.Name}.mat");
             return m;
         }
 
-        private static Mesh PrimitiveMeshAsset(PrimitiveType type, string name)
-        {
-            var go = GameObject.CreatePrimitive(type);
-            var mesh = Object.Instantiate(go.GetComponent<MeshFilter>().sharedMesh);
-            mesh.name = name;
-            Object.DestroyImmediate(go);
-            EnsureMaterialFolder();
-            CreateOrReplaceAsset(mesh, $"Assets/Materials/{name}.asset");
-            return mesh;
-        }
-
-        private static Font DefaultFont()
-        {
-            // La misma vía que la escena simple, con su mismo respaldo: Unity 6
-            // usa LegacyRuntime.ttf, versiones previas Arial.ttf (GetBuiltinResource
-            // lanza en vez de devolver null si el nombre no existe — probado en
-            // el Play pass; por eso el try y no el null-check).
-            try
-            {
-                var f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                if (f != null) return f;
-            }
-            catch { /* Unity < 6: cae a Arial */ }
-            return Resources.GetBuiltinResource<Font>("Arial.ttf");
-        }
+        /// <summary>La fuente del JUEGO, la misma que la escena simple (una sola
+        /// tipografía para las dos escenas: es la identidad del proyecto, no una
+        /// elección por montaje).</summary>
+        private static Font DefaultFont() => GameAssetBuilder.EnsureFont();
 
         /// <summary>Repo root desde el proyecto (la misma regla que
         /// RepoPathResolver usa para el CLI): sube hasta encontrar AntSim.slnx.</summary>
