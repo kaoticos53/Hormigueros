@@ -26,6 +26,15 @@
 #      es, y un commit de sólo anclas se detecta como churn. `--list` imprime el
 #      alcance para que nadie lo suponga.
 #
+# LA EXCEPCIÓN, en los dos modos: un cambio equivalente que DEJA el asset en su
+# forma canónica (la que escribe scripts/unity-canonicalize-assets.py) NO es
+# churn. Es el que cierra el churn recurrente de un asset commiteado mal —el caso
+# real: `PheromoneMat.mat`, cuyo bloque `AssetVersion` quedó delante y con ancla de
+# sesión, así que cada pasada del editor lo reescribía y el diff de forma volvía
+# para siempre—. Se reporta como CANONICALIZA: en el modo árbol se COMMITEA (no se
+# descarta) y en `--churn` no bloquea el push. El re-anclado o el reordenado que no
+# canonicaliza se rechaza como siempre.
+#
 # Uso:
 #   bash scripts/check-unity-assets.sh                      # el árbol, contra HEAD
 #   bash scripts/check-unity-assets.sh --rev v0.8.0         # el árbol, contra un tag
