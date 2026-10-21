@@ -203,12 +203,18 @@ public sealed class AlertDeriver
         }
 
         // — hito verde: primera descarga de la partida (disparo único) —
+        // Va ANCLADO a la posición de esa descarga (la que el RelayTracker ya ve):
+        // es el único punto del mundo que el hito puede señalar, y sin él la
+        // alerta no se podía saltar con la cámara — el bloque 4 del Play pass
+        // exigía justo eso («J y Alt+click saltan al ancla») y no había ninguna
+        // alerta anclada en la partida canónica. La colonia sigue siendo -1: el
+        // hito es global, no de una tarjeta.
         if (relay.HasUnload && _once.Add("first-unload"))
         {
             output.Add(new Alert("first-unload", Level.Green,
                 FormattableString.Invariant(
                     $"Primera descarga en t={relay.FirstUnloadTick} ({relay.FirstUnloadTick / 30}s de sim) — la colonia completa ciclos"),
-                -1, -1f, -1f, tick));
+                -1, relay.FirstUnloadX, relay.FirstUnloadY, tick));
         }
     }
 
