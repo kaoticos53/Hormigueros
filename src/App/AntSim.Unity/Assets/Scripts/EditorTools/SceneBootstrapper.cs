@@ -492,6 +492,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
             RegisterInBuildSettings(ScenePath);
+            // CIERRE CANÓNICO: la escena, los materiales y las texturas salen con
+            // anclas derivadas del CONTENIDO y no con las de sesión de Unity, que
+            // son la base aleatoria del contador de instancias (medido: el mismo
+            // montaje con dos bases distintas ⇒ 17 assets con bytes distintos).
+            // Antes lo hacía el Play pass DESPUÉS de generar; ahora lo cierra el
+            // generador (ver GeneratedAssets).
+            GeneratedAssets.CloseWithCanonicalForm(ScenePath);
             Debug.Log($"[SceneBootstrapper] Escena creada y guardada en {ScenePath}, registrada en " +
                       "build settings. Pulsa Play. Publica antes el CLI: " +
                       "dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");
