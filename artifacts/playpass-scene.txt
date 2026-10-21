@@ -1,65 +1,96 @@
 presenter.antMesh=AntMesh antMat=AntMat carrierMat=CarrierMat itemMesh=ItemMesh itemMat=ItemMat
-presenter.grid=96 speed=3 pheroEvery=30 antScale=0
-presenter.live tick=7200 ants=43 items=28
-world.PheromoneTiles mat=PheromoneMat shader=Unlit/Transparent tex=(96x96) color=sin-_Color active=1 pos=(384, 0.3, 384) scale=(76.8, 1, 76.8)
-world.Nest_1 mat=NestMat1 shader=Unlit/Color tex=NULL color=RGBA(0.420, 0.630, 0.950, 1.000) active=1 pos=(512, 0.5, 384) scale=(16.9, 0.3, 16.9)
-world.NestMound_0 mat=NestMoundMat shader=Unlit/Color tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(256, 0.2, 384) scale=(24.5, 0.2, 24.5)
-world.Floor mat=FloorMat shader=Unlit/Texture tex=GridTex(64x64) color=sin-_Color active=1 pos=(384, 0, 384) scale=(76.8, 1, 76.8)
-world.NestMound_1 mat=NestMoundMat shader=Unlit/Color tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(512, 0.2, 384) scale=(24.5, 0.2, 24.5)
-world.Nest_0 mat=NestMat0 shader=Unlit/Color tex=NULL color=RGBA(0.930, 0.450, 0.350, 1.000) active=1 pos=(256, 0.5, 384) scale=(16.9, 0.3, 16.9)
+presenter.grid=96 speed=2 pheroEvery=30 antScale=0
+presenter.live tick=7200 ants=58 items=24
+world.PheromoneTiles mat=PheromoneMat shader=Universal Render Pipeline/Unlit tex=(96x96) color=RGBA(1.000, 1.000, 1.000, 1.000) active=1 pos=(384, 0.3, 384) scale=(76.8, 1, 76.8)
+world.NestMound_0 mat=NestMoundMat shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(256, 0.2, 384) scale=(24.5, 0.2, 24.5)
+world.Floor mat=FloorMat shader=Universal Render Pipeline/Unlit tex=GridTex(64x64) color=RGBA(1.000, 1.000, 1.000, 1.000) active=1 pos=(384, 0, 384) scale=(76.8, 1, 76.8)
+world.NestMound_1 mat=NestMoundMat shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(512, 0.2, 384) scale=(24.5, 0.2, 24.5)
+world.Nest_1 mat=NestMat1 shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.420, 0.630, 0.950, 1.000) active=1 pos=(512, 0.5, 384) scale=(16.9, 0.3, 16.9)
+world.Nest_0 mat=NestMat0 shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.930, 0.450, 0.350, 1.000) active=1 pos=(256, 0.5, 384) scale=(16.9, 0.3, 16.9)
 canvas.mode=ScreenSpaceOverlay scaler=ScaleWithScreenSize refRes=(1920.00, 1080.00) match=0,5
-hud.ColonyCard_0 anchor=(0, 1)>(0, 1) pos=(16, 72) size=(440, 176) img=0,07,0,08,0,09,0,82+noSprite
+hud.ColonyCard_0 anchor=(0, 1)>(0, 1) pos=(16, -72) size=(440, 268) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,93,0,45,0,35,1+noSprite
-hud.  Body anchor=(0, 0)>(1, 1) pos=(3, 13.5) size=(-34, -41) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=LegacyRuntime body="<b>colonia 0  ●</b>/adultas 1/40   huevos 0  ·  larvas 0  ·…"
+hud.  Body anchor=(0, 0)>(1, 1) pos=(3, 59.5) size=(-34, -133) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=AntSim body="<b>colonia 0  ●</b>  <color=#4CAF50>[++] DESAHOGO 68.2s</col…"
 hud.  StockBar_0 anchor=(0, 0)>(1, 0) pos=(20, 14) size=(-34, 12) img=0,0,0,0,45+noSprite
-hud.    Fill anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-2, -2) img=0,9,0,2,0,15,1+noSprite
-hud.ColonyCard_1 anchor=(0, 1)>(0, 1) pos=(16, 260) size=(440, 176) img=0,07,0,08,0,09,0,82+noSprite
+hud.    Fill anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-2, -2) img=0,35,0,75,0,3,1+noSprite
+hud.  Sparkline_0 anchor=(0, 0)>(1, 0) pos=(20, 32) size=(-34, 26)
+hud.  FitnessCurve_0 anchor=(0, 0)>(1, 0) pos=(20, 62) size=(-34, 26)
+hud.  LearningInfo_0 anchor=(0, 0)>(0, 0) pos=(20, 90) size=(406, 34) text=0,72,0,71,0,66,1 fs=14 align=LowerLeft font=AntSim body="gen 0 · cohorte 32 (0 bajas) · fit 4.0 · máx 14.9/élite 428.…"
+hud.ColonyCard_1 anchor=(0, 1)>(0, 1) pos=(16, -352) size=(440, 268) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,42,0,63,0,95,1+noSprite
-hud.  Body anchor=(0, 0)>(1, 1) pos=(3, 13.5) size=(-34, -41) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=LegacyRuntime body="<b>colonia 1  ○</b>/adultas 3/40   huevos 0  ·  larvas 0  ·…"
+hud.  Body anchor=(0, 0)>(1, 1) pos=(3, 59.5) size=(-34, -133) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=AntSim body="<b>colonia 1  ○</b>  <color=#4CAF50>[++] DESAHOGO 101.1s</co…"
 hud.  StockBar_1 anchor=(0, 0)>(1, 0) pos=(20, 14) size=(-34, 12) img=0,0,0,0,45+noSprite
-hud.    Fill anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-2, -2) img=0,9,0,2,0,15,1+noSprite
+hud.    Fill anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-2, -2) img=0,35,0,75,0,3,1+noSprite
+hud.  Sparkline_1 anchor=(0, 0)>(1, 0) pos=(20, 32) size=(-34, 26)
+hud.  FitnessCurve_1 anchor=(0, 0)>(1, 0) pos=(20, 62) size=(-34, 26)
+hud.  LearningInfo_1 anchor=(0, 0)>(0, 0) pos=(20, 90) size=(406, 34) text=0,72,0,71,0,66,1 fs=14 align=LowerLeft font=AntSim body="gen 0 · cohorte 26 (0 bajas) · fit 1.6 · máx 2.4/élite — · c…"
 hud.StatusBar anchor=(0, 1)>(1, 1) pos=(16, 0) size=(-32, 40) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,52,0,84,0,78,1+noSprite
-hud.  Status anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-26, -10) text=0,93,0,91,0,86,1 fs=16 align=MiddleLeft font=LegacyRuntime body="tick 7200   ·   v×3   ·   2 colonias      colonia 0 ●  1ad  …"
-hud.Toasts anchor=(1, 1)>(1, 1) pos=(16, 72) size=(620, 200) text=0,93,0,91,0,86,1 fs=15 align=UpperRight font=LegacyRuntime body=""
+hud.  Status anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-26, -10) text=0,93,0,91,0,86,1 fs=16 align=MiddleLeft font=AntSim body="tick 7200   ·   v×2   ·   2 colonias      colonia 0 ●  32ad …"
+hud.Toasts anchor=(1, 1)>(1, 1) pos=(16, 72) size=(620, 200) text=0,93,0,91,0,86,1 fs=15 align=UpperRight font=AntSim body=""
 hud.DropPlanPanel anchor=(0, 0)>(0, 0) pos=(16, 16) size=(600, 70) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,52,0,84,0,78,1+noSprite
-hud.  DropPlan anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-30, -12) text=0,72,0,71,0,66,1 fs=14 align=UpperLeft font=LegacyRuntime body="drops: 0/5"
+hud.  DropPlan anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-30, -12) text=0,72,0,71,0,66,1 fs=14 align=UpperLeft font=AntSim body="drops: 0/5"
 hud.  RestartWithPlanBtn anchor=(1, 0)>(1, 0) pos=(-12, 14) size=(200, 40) img=0,16,0,42,0,34,0,95+noSprite ray BTN=off
-hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=LegacyRuntime body="Reiniciar con plan"
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=AntSim body="Reiniciar con plan"
 hud.CommandHistoryPanel anchor=(0, 0)>(0, 0) pos=(16, 94) size=(600, 92) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,52,0,84,0,78,1+noSprite
-hud.  CommandHistory anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-34, -14) text=0,72,0,71,0,66,1 fs=14 align=UpperLeft font=LegacyRuntime body="comandos: 0/"
-hud.AntInspectorPanel anchor=(1, 0)>(1, 0) pos=(16, 16) size=(460, 250) img=0,07,0,08,0,09,0,82+noSprite
+hud.  CommandHistory anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-34, -14) text=0,72,0,71,0,66,1 fs=14 align=UpperLeft font=AntSim body="comandos: 0/"
+hud.AntInspectorPanel anchor=(1, 0)>(1, 0) pos=(-16, 16) size=(460, 250) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,52,0,84,0,78,1+noSprite
-hud.  AntInspector anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-34, -14) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=LegacyRuntime body="inspección: sin selección"
-hud.Hints anchor=(0.5, 0)>(0.5, 0) pos=(0, 18) size=(1100, 26) text=0,72,0,71,0,66,1 fs=14 align=LowerCenter font=LegacyRuntime body="click: inspeccionar hormiga   ·   D: marcar drops (Z deshace…"
+hud.  AntInspector anchor=(0, 0)>(1, 1) pos=(3, 0) size=(-34, -14) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=AntSim body="inspección: sin selección"
+hud.Hints anchor=(0.5, 0)>(0.5, 0) pos=(0, 18) size=(1360, 26) text=0,72,0,71,0,66,1 fs=14 align=LowerCenter font=AntSim body="click: inspeccionar   ·   + / -: velocidad (1×–100×)   ·   E…"
 hud.DialogBackdrop anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) img=0,0,0,0,45+noSprite
 hud.ImportModal anchor=(0.5, 0.5)>(0.5, 0.5) pos=(0, 0) size=(860, 360) img=0,07,0,08,0,09,0,82+noSprite ray
 hud.  Edge anchor=(0, 1)>(1, 1) pos=(0, 0) size=(0, 3) img=0,52,0,84,0,78,1+noSprite ray
-hud.  Title anchor=(0, 1)>(1, 1) pos=(26, -18) size=(-46, 36) text=0,52,0,84,0,78,1 fs=19 align=UpperLeft font=LegacyRuntime body="IMPORTAR POOL PRE-ENTRENADO"
-hud.  PathCaption anchor=(0, 1)>(1, 1) pos=(26, -62) size=(-46, 24) text=0,72,0,71,0,66,1 fs=13 align=UpperLeft font=LegacyRuntime body="ruta del archivo .antgenome (relativa al repo o absoluta)"
+hud.  Title anchor=(0, 1)>(1, 1) pos=(26, -18) size=(-46, 36) text=0,52,0,84,0,78,1 fs=19 align=UpperLeft font=AntSim body="IMPORTAR POOL PRE-ENTRENADO"
+hud.  PathCaption anchor=(0, 1)>(1, 1) pos=(26, -62) size=(-46, 24) text=0,72,0,71,0,66,1 fs=13 align=UpperLeft font=AntSim body="ruta del archivo .antgenome (relativa al repo o absoluta)"
 hud.  PathField anchor=(0, 0)>(1, 1) pos=(3, -109) size=(-46, 38) img=0,03,0,04,0,05,0,9+noSprite ray
-hud.    Text anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-20, -4) text=0,93,0,91,0,86,1 fs=15 align=MiddleLeft font=LegacyRuntime body=""
-hud.    Placeholder anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-20, -4) text=0,72,0,71,0,66,1 fs=15 align=MiddleLeft font=LegacyRuntime body="artifacts/pretrain-warm-v2.antgenome"
-hud.  ImportDialog anchor=(0, 0)>(1, 1) pos=(3, -29) size=(-46, -222) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=LegacyRuntime body=""
+hud.    Text anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-20, -4) text=0,93,0,91,0,86,1 fs=15 align=MiddleLeft font=AntSim body=""
+hud.    Placeholder anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-20, -4) text=0,72,0,71,0,66,1 fs=15 align=MiddleLeft font=AntSim body="artifacts/pretrain-warm-v2.antgenome"
+hud.  ImportDialog anchor=(0, 0)>(1, 1) pos=(3, -29) size=(-46, -222) text=0,93,0,91,0,86,1 fs=14 align=UpperLeft font=AntSim body=""
 hud.  ImportInspectBtn anchor=(1, 0)>(1, 0) pos=(-20, 20) size=(170, 40) img=0,16,0,42,0,34,0,95+noSprite ray BTN=on
-hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=LegacyRuntime body="Inspeccionar"
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=AntSim body="Inspeccionar"
 hud.  ImportConfirmBtn anchor=(1, 0)>(1, 0) pos=(-202, 20) size=(170, 40) img=0,2,0,34,0,52,0,95+noSprite ray BTN=off
-hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=LegacyRuntime body="Confirmar"
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=AntSim body="Confirmar"
 hud.  ImportCancelBtn anchor=(1, 0)>(1, 0) pos=(-384, 20) size=(170, 40) img=0,16,0,17,0,2,0,95+noSprite ray BTN=on
-hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=LegacyRuntime body="Cancelar"
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=14 align=MiddleCenter font=AntSim body="Cancelar"
+hud.DragOverlay anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) img=0,1,0,4,0,2,0,6+noSprite
+hud.  DragText anchor=(0.5, 0.5)>(0.5, 0.5) pos=(0, 0) size=(600, 80) text=1,1,1,1 fs=24 align=MiddleCenter font=AntSim body="⬇  Soltar para importar pool .antgenome"
 hud.ToastContainer anchor=(1, 1)>(1, 1) pos=(-14, -14) size=(560, 200)
 hud.  ToastTemplate anchor=(0.5, 0.5)>(0.5, 0.5) pos=(0, 0) size=(560, 26) img=0,05,0,06,0,08,0,78+noSprite ray
 hud.    Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -6) img=0,52,0,84,0,78,1+noSprite ray
-hud.    Text anchor=(0, 0)>(1, 1) pos=(1, 0) size=(-22, -4) text=1,1,1,1 fs=15 align=MiddleLeft font=LegacyRuntime body=""
+hud.    Text anchor=(0, 0)>(1, 1) pos=(1, 0) size=(-22, -4) text=1,1,1,1 fs=15 align=MiddleLeft font=AntSim body=""
 hud.  Toast_first-unload anchor=(0.5, 0.5)>(0.5, 0.5) pos=(0, 0) size=(560, 0) img=0,05,0,06,0,08,0,78+noSprite ray
 hud.    Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -6) img=0,52,0,84,0,78,1+noSprite ray
-hud.    Text anchor=(0, 0)>(1, 1) pos=(1, 0) size=(-22, -4) text=0,1,0,1 fs=15 align=MiddleLeft font=LegacyRuntime body="Primera descarga en t=3943 (131s de sim) - la colonia comple…"
-hud.  Toast_laying:1 anchor=(0.5, 0.5)>(0.5, 0.5) pos=(0, 0) size=(560, 0) img=0,05,0,06,0,08,0,78+noSprite ray
-hud.    Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -6) img=0,52,0,84,0,78,1+noSprite ray
-hud.    Text anchor=(0, 0)>(1, 1) pos=(1, 0) size=(-22, -4) text=1,0,6,0,1,1 fs=15 align=MiddleLeft font=LegacyRuntime body="La colonia 1 no pone huevos: reserva baja"
-hud.  Toast_laying:0 anchor=(0.5, 0.5)>(0.5, 0.5) pos=(0, -30) size=(560, 0) img=0,05,0,06,0,08,0,78+noSprite ray
-hud.    Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -6) img=0,52,0,84,0,78,1+noSprite ray
-hud.    Text anchor=(0, 0)>(1, 1) pos=(1, 0) size=(-22, -4) text=1,0,6,0,1,1 fs=15 align=MiddleLeft font=LegacyRuntime body="La colonia 0 no pone huevos: reserva baja"
+hud.    Text anchor=(0, 0)>(1, 1) pos=(1, 0) size=(-22, -4) text=0,1,0,1 fs=15 align=MiddleLeft font=AntSim body="Primera descarga en t=3566 (118s de sim) - la colonia comple…"
+hud.SpeedControlPanel anchor=(0.5, 1)>(0.5, 1) pos=(0, -48) size=(810, 44) img=0,07,0,08,0,09,0,82+noSprite
+hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -8) img=0,52,0,84,0,78,1+noSprite ray
+hud.  PauseBtn anchor=(0, 0.5)>(0, 0.5) pos=(10, 0) size=(82, 30) img=0,2,0,34,0,52,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=13 align=MiddleCenter font=AntSim body="⏸ Pausa"
+hud.  SpeedMinusBtn anchor=(0, 0.5)>(0, 0.5) pos=(98, 0) size=(26, 30) img=0,18,0,2,0,24,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=15 align=MiddleCenter font=AntSim body="–"
+hud.  SpeedSlider anchor=(0, 0.5)>(0, 0.5) pos=(128, 0) size=(150, 20)
+hud.    Background anchor=(0, 0.35)>(1, 0.65) pos=(0, 0) size=(0, 0) img=0,12,0,13,0,16,0,95+noSprite ray
+hud.    Fill Area anchor=(0, 0.35)>(1, 0.65) pos=(0, 0) size=(-8, 0)
+hud.      Fill anchor=(0, 0)>(0.01, 1) pos=(0, 0) size=(0, 0) img=0,52,0,84,0,78,1+noSprite
+hud.    Handle Slide Area anchor=(0, 0)>(1, 1) pos=(0, 0) size=(-16, 0)
+hud.      Handle anchor=(0.01, 0)>(0.01, 1) pos=(0, 0) size=(16, 22) img=1,1,1,1+noSprite ray
+hud.  SpeedPlusBtn anchor=(0, 0.5)>(0, 0.5) pos=(282, 0) size=(26, 30) img=0,18,0,2,0,24,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=15 align=MiddleCenter font=AntSim body="+"
+hud.  SpeedLabel anchor=(0, 0.5)>(0, 0.5) pos=(312, 0) size=(110, 30) text=0,93,0,91,0,86,1 fs=13 align=MiddleCenter font=AntSim body="20% (2×)"
+hud.  Preset_1 anchor=(0, 0.5)>(0, 0.5) pos=(426, 0) size=(34, 26) img=0,14,0,28,0,25,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="1×"
+hud.  Preset_5 anchor=(0, 0.5)>(0, 0.5) pos=(464, 0) size=(34, 26) img=0,14,0,28,0,25,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="5×"
+hud.  Preset_10 anchor=(0, 0.5)>(0, 0.5) pos=(502, 0) size=(66, 26) img=0,18,0,42,0,28,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="10× Base"
+hud.  Preset_25 anchor=(0, 0.5)>(0, 0.5) pos=(572, 0) size=(38, 26) img=0,14,0,28,0,25,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="25×"
+hud.  Preset_50 anchor=(0, 0.5)>(0, 0.5) pos=(614, 0) size=(38, 26) img=0,14,0,28,0,25,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="50×"
+hud.  Preset_100 anchor=(0, 0.5)>(0, 0.5) pos=(656, 0) size=(46, 26) img=0,38,0,2,0,14,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="100×"
+hud.  NextGenBtn anchor=(0, 0.5)>(0, 0.5) pos=(708, 0) size=(76, 26) img=0,2,0,38,0,52,0,95+noSprite ray BTN=on
+hud.    Label anchor=(0, 0)>(1, 1) pos=(0, 0) size=(0, 0) text=1,1,1,1 fs=11 align=MiddleCenter font=AntSim body="↻ Sig. Gen"
 hud.overflow=0
