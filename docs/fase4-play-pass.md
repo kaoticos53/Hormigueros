@@ -370,12 +370,55 @@ En modo `--live` el editor se abre de verdad y se cierra solo cuando la sonda
 termina (si se cuelga, el script lo mata tras el límite); el informe va a
 `artifacts/perf-scene-live.json` para no pisar el de batch.
 
+**La huella del árbol** (paso 8bis) es la comprobación del supuesto en el que
+descansan todas las demás: que el pase **no acumula estado**, es decir que una
+segunda pasada del mismo montaje deja el árbol como lo dejó la primera. Toma
+`git status --porcelain -uall` sobre el ALCANCE —los volcados `artifacts/playpass-*`
+y los documentos de asset del proyecto (`.mat .unity .asset .prefab .controller .anim .meta`, la misma
+lista con la que `scripts/unity-asset-equivalence.py` decide qué es un asset; el
+`.cs` no es cosa del pase)— y, por cada fichero que difiere de HEAD, guarda su
+estado y su blob (`git hash-object`: el contenido que un commit guardaría, con sus
+filtros) en `artifacts/playpass-fingerprint.txt`, junto al MONTAJE (HEAD + semilla
++ grid + ticks + velocidad + pool). La pasada siguiente calcula la suya y las
+compara: mismo montaje ⇒ mismas líneas; si no, dice QUÉ fichero difiere. Los
+volcados de MEDIDA cambian con el reloj por construcción —una muestra por segundo,
+los recortes del frame vivo, la línea `presenter.live tick=…` de la inspección— y
+de ellos se compara el **nombre y el estado**, no el contenido; todo lo demás,
+incluida la evidencia en píxeles del rumbo, tiene que salir byte a byte igual. La
+maquinaria se prueba sin editor en `--selftest`, con un repositorio de mentira:
+idempotente, asset cambiado falla, fichero que aparece o desaparece falla, volcado
+de medida no, `.cs` fuera del alcance, y otro montaje no se compara.
+
 El bloque de aspecto guarda tres artefactos para poder revisarlos sin volver a
 jugar: `artifacts/playpass-visual.txt` (en vivo), `playpass-visual-edit.txt` (al
 abrir la escena) y `playpass-scene.txt` (materiales, rects y desbordes).
+
+Antes de entrar en Play, el pase mide además **en PÍXELES hacia dónde mira la
+hormiga**: `scripts/unity/ProbeAntHeadingPixels.cs` renderiza la malla y el
+material REALES de la escena con un rumbo fijo —una cámara de usar y tirar que
+copia la del juego y sólo ve la capa de la hormiga, así que la silueta es la
+diferencia entre el frame con ella y el mismo frame sin ella— y mide el eje de esa
+silueta (segundo momento) y el MORRO (el extremo ligero: el gáster pesa más que la
+cabeza). El eje se mide a la escala de la partida (~19 px de hormiga, donde manda el
+aliasing) y 6× más cerca; el morro sólo a zoom, porque a 19 px el reparto de área de
+los extremos deja **1 px** de margen en los rumbos diagonales (16 contra 15 px) y ahí
+se publica sin decidir. El mismo render con el giro que se coló (`−rumbo`) tiene que
+desviarse ~90° o la comprobación no estaría mirando el render. La evidencia se
+conserva en `artifacts/playpass-heading-pixels/antsim-heading-pixels.png`: una
+hormiga por rumbo con el rumbo ESPERADO pintado encima (magenta) y el morro medido
+(cian). Es un paso más de `scripts/playpass-live.sh`, y falla cerrado: un `ok` sin
+la imagen no es una medida de píxeles.
 `scripts/unity/ProbeWhiteDiag.cs` queda como diagnóstico: apaga los objetos del
 mundo uno a uno y mide el color del centro, para saber QUÉ superficie pinta el
 blanco sin depender de mirar un PNG.
+
+El paso `ProbeActorOrientation` mide además que las **muescas de una hoja comen
+del borde**: el limbo es una ELIPSE (0,30 × 0,62 s), así que repartir los cortes
+consumidos con un radio único de 0,55 s los dejaba FUERA por los costados y DENTRO
+por las puntas. El probe llama a `SimPresenterBehaviour.BiteOffset` —la misma
+función que usa el presenter, no una copia— y mide cada muesca contra el borde
+elíptico (r = 1, tolerancia 0,02), exigiendo que el círculo viejo falle o la
+comprobación sería decorativa.
 
 El bloque 4 necesita que la escena esté **registrada en build settings** (el
 reinicio la recarga): el harness la reconstruye con el bootstrapper, que la
@@ -389,12 +432,27 @@ un instante, así que el buffer avanza el cursor al ritmo de `Speed`. Con
 permanece 6 s de sim — una sola foto en el instante equivocado no ve nada, y de
 ahí que el check acumule muestras en lugar de mirar una vez.
 
-Dos trampas del CLI, aprendidas en este pass: (a) el intérprete `eval` NO
+Tres trampas del CLI, aprendidas en este pass: (a) el intérprete `eval` NO
 referencia `Assembly-CSharp`, así que para leer tipos del proyecto hay que usar
 `run_script` (compila un `.cs` con acceso a los tipos) o `get_serialized_fields`
 sobre componentes de escena; (b) en Git Bash hay que exportar
 `MSYS_NO_PATHCONV=1` para que `--target /HUD Canvas/…` no se convierta en una
-ruta de Windows.
+ruta de Windows; (c) **`unity status` lo sirve el registro del CLI, no el
+editor**: dice `ready` aunque el hilo principal esté parado esperando un diálogo
+modal —el medido, «The open scene(s) have been modified externally», que Unity
+levanta cuando algo escribe en disco una escena que el editor tiene abierta—, y
+entonces TODOS los comandos caducan a los 30 s y devuelven la salida **vacía**.
+Ese vacío no es «la escena no tiene HUD»: el pass pregunta `editor_status` antes
+de gastar la recompilación y CLASIFICA la respuesta (ok / error de la escena /
+mudo / bloqueado), de modo que un editor que no atiende sale con rc 3, diciendo
+qué pasó (envelope de error del CLI o «no devolvió ni JSON»), por qué NO es la
+escena y el remedio —cerrar el diálogo (Reload o Ignore) y repetir, o mirar
+`Logs/Editor.log` si la marca «Main thread operation timed out» está en su cola—.
+Medido con un CLI de mentira (sin editor): con el editor sordo el pass decía «la
+escena no tiene HUD presentable ()» y moría en «no se pudo configurar el
+presenter: », o —peor— se lo llevaba por delante `set -e` en silencio con rc 1 en
+el bucle de la recompilación. Detectarlo así (con un CLI falso que contesta por
+guion) es lo que destapó ese rc 1 mudo: ningún pase real lo había tocado nunca.
 
 ## 4. Riesgos conocidos (fuera de alcance de este pass)
 
