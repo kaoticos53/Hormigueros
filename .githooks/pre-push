@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# .githooks/pre-push — las puertas LOCALES del push (dos, y en este orden).
+# .githooks/pre-push — las puertas LOCALES del push (tres, y en este orden).
 #
 # PUERTA 1 — CHURN DE ASSETS DE UNITY (`scripts/check-unity-assets.sh --churn`).
 # Abrir el proyecto, construir un player o sólo dejar que el editor guarde la
@@ -12,9 +12,21 @@
 # churn —es el que cierra el churn recurrente de un asset commiteado mal— y no
 # bloquea; sólo el ruido de verdad bloquea. Va la
 # PRIMERA porque no necesita el editor —segundos— y porque así protege también en
-# una máquina sin Unity instalado, donde la puerta 2 sólo puede avisar.
+# una máquina sin Unity instalado, donde la puerta 3 sólo puede avisar.
 #
-# PUERTA 2 — COMPILACIÓN DE LA CAPA DE VISTA (`scripts/check-unity-compile.sh`).
+# PUERTA 2 — REFERENCIAS DE LOS ASSETS GENERADOS
+# (`scripts/check-unity-references.sh --range A..B`).
+# POR QUÉ EXISTE: al remoto llegan los COMMITS, no el árbol. Un editor de Unity
+# puede DESTRUIR una referencia sin cambiar nada más y sin dejar error —medido dos
+# veces: los materiales de feromonas que quedaron con `_BaseMap`/`_MainTex` en
+# `fileID: 0` (commiteado en d4aebc3; el material de reposo se pintaba BLANCO
+# OPACO sobre el tablero) y `PheromoneMat.mat` al cerrarse el editor el
+# 2026-10-08—. El YAML sigue siendo válido, así que nada más lo ve hasta que una
+# prueba se topa con la pérdida, a veces ya en el remoto. Esta puerta compara cada
+# commit del rango con SU PADRE —un árbol limpio no salva a un commit roto, ni un
+# arreglo sin commitear acusa a uno sano— y bloquea en segundos, sin editor.
+#
+# PUERTA 3 — COMPILACIÓN DE LA CAPA DE VISTA (`scripts/check-unity-compile.sh`).
 # POR QUÉ EXISTE: la suite headless (`dotnet test`) compila solo los scripts
 # PUROS; los MonoBehaviours no se compilan ahí, así que un `error CS` en la capa
 # de vista pasa todos los tests y solo revienta al abrir Unity. El job de CI que
@@ -25,29 +37,31 @@
 # editor licenciado de esta máquina— así que el veredicto es el mismo, solo que
 # antes de salir de casa.
 #
-# QUÉ ESCANEA LA PUERTA 1, y por qué así: los commits que este push MANDA, no el
-# árbol de trabajo (lo que se queda en la máquina no viaja). El rango sale de las
+# QUÉ ESCANEA LA PUERTA 1 —y la 2, con el mismo rango—, y por qué así: los commits
+# que este push MANDA, no el árbol de trabajo (lo que se queda en la máquina no
+# viaja). El rango sale de las
 # refs que git entrega por stdin: `<remoto>..<local>` en un push normal y —si la
 # ref es NUEVA— desde donde la rama diverge de lo ya publicado (`--not --remotes`),
 # porque ahí no hay extremo remoto y caer a `HEAD~1..HEAD` dejaría fuera del
 # escaneo justo al commit que se está empujando. Sin refs que usar, la puerta
 # delega en el resolutor del propio verificador (que ya sabe de `CI_RANGE`).
 #
-# DECISIÓN DE BLOQUEO, y por qué es ASIMÉTRICA (igual en las dos puertas): SOLO el
-# código 1 bloquea —errores de compilación en la puerta 2, churn detectado en la
-# puerta 1—. Los códigos 2/3/4/5 significan «no pude comprobar»: proyecto
-# inválido, editor ausente, sin licencia, sin Python, la instancia batch no llegó
-# a compilar. Se AVISA sin bloquear: un hook que impide empujar por no tener
-# Unity o Python instalado se desactiva el primer día, y entonces no protege nada.
-# Un rojo de verdad es rojo; «no medido» no es rojo.
+# DECISIÓN DE BLOQUEO, y por qué es ASIMÉTRICA (igual en las tres puertas): SOLO
+# el código 1 bloquea —churn detectado en la puerta 1, una referencia perdida en la
+# 2, errores de compilación en la 3—. Los códigos 2/3/4/5 significan «no pude
+# comprobar»: proyecto inválido, editor ausente, sin licencia, sin Python, un rango
+# que no se puede resolver, la instancia batch no llegó a compilar. Se AVISA sin
+# bloquear: un hook que impide empujar por no tener Unity o Python instalado se
+# desactiva el primer día, y entonces no protege nada. Un rojo de verdad es rojo;
+# «no medido» no es rojo.
 #
 # Uso:
 #   scripts/install-hooks.sh            # activa el hook (core.hooksPath)
 #   scripts/install-hooks.sh --off      # lo desactiva
 #   git push --no-verify                # saltarlo UNA vez
-#   .githooks/pre-push --selftest       # rangos, mapeo de códigos y las dos puertas, sin Unity
+#   .githooks/pre-push --selftest       # rangos, mapeo de códigos y las tres puertas, sin Unity
 #   ANT_GATE_CMD='exit 1' .githooks/pre-push             # seam: rojo de compilación
-#   PUSH_REFS='…' ANT_ASSET_CMD='…' .githooks/pre-push   # seams de la puerta 1 (los usa el selftest)
+#   PUSH_REFS='…' ANT_ASSET_CMD='…' .githooks/pre-push   # seams de las puertas 1 y 2 (los usa el selftest)
 # ─────────────────────────────────────────────────────────────────────────────
 set -uo pipefail
 
@@ -166,10 +180,11 @@ if [[ "${1:-}" == "--selftest" ]]; then
     rm -rf "$tmp"
   fi
 
-  # 4. Las dos puertas, de verdad y sin Unity: la orden de la puerta 1 se
-  #    sustituye por un doble y los comandos se ejecutan con las MISMAS refs que
-  #    git mandaría. Es lo que comprueba que el churn bloquee, que «no medido» no
-  #    bloquee, y que el rango llegue a la puerta 1 (no un HEAD~1 inventado).
+  # 4. Las TRES puertas, de verdad y sin Unity: se sustituye la orden de cada
+  #    verificador por un doble y los comandos se ejecutan con las MISMAS refs que
+  #    git mandaría. Es lo que comprueba que cada rojo bloquee, que «no medido» no
+  #    bloquee, que un rojo de la puerta 1 no llegue a las otras dos, y que el
+  #    rango del push llegue a las DOS puertas que escanean commits.
   SELF="$0"
   [[ "$SELF" != /* ]] && SELF="$PWD/$SELF"
   doble="$(mktemp)"
@@ -178,16 +193,27 @@ if [[ "${1:-}" == "--selftest" ]]; then
 echo "DOBLE_ASSET args=$*"
 exit "${FAKE_RC:-0}"
 EOF
+  doble_ref="$(mktemp)"
+  cat > "$doble_ref" <<'EOF'
+#!/usr/bin/env bash
+echo "DOBLE_REF args=$*"
+exit "${FAKE_REF_RC:-0}"
+EOF
 
   REFS='refs/heads/x aaaa1111 refs/heads/x bbbb2222'
-  probe() { # FAKE_RC, ANT_GATE_CMD, refs
-    PROBE_OUT="$(PUSH_REFS="$3" FAKE_RC="$1" ANT_ASSET_CMD="bash $doble" \
+  probe() { # FAKE_RC, ANT_GATE_CMD, refs, [FAKE_REF_RC]
+    PROBE_OUT="$(PUSH_REFS="$3" FAKE_RC="$1" FAKE_REF_RC="${4:-0}" \
+                 ANT_ASSET_CMD="bash $doble" ANT_REF_CMD="bash $doble_ref" \
                  ANT_GATE_CMD="$2" "$SELF" </dev/null 2>&1)"
     PROBE_RC=$?
   }
 
   probe 1 'echo GATE_RAN' "$REFS"
   check_eq "churn detectado ⇒ bloquea (rc 1)" "$PROBE_RC" "1"
+  case "$PROBE_OUT" in
+    *DOBLE_REF*) bad "churn detectado ⇒ NO debe llegar a la puerta de referencias" ;;
+    *) ok "churn detectado ⇒ no gasta ninguna de las otras dos puertas" ;;
+  esac
   case "$PROBE_OUT" in
     *GATE_RAN*) bad "churn detectado ⇒ NO debe llegar a la puerta de compilación" ;;
     *) ok "churn detectado ⇒ no gasta un arranque del editor" ;;
@@ -197,11 +223,29 @@ EOF
     *) bad "el rango del push no llegó a la puerta 1 ($PROBE_OUT)" ;;
   esac
 
+  probe 0 'echo GATE_RAN' "$REFS" 1
+  check_eq "referencia perdida ⇒ bloquea (rc 1)" "$PROBE_RC" "1"
+  case "$PROBE_OUT" in
+    *GATE_RAN*) bad "referencia perdida ⇒ NO debe llegar a la puerta de compilación" ;;
+    *) ok "referencia perdida ⇒ no gasta un arranque del editor" ;;
+  esac
+  case "$PROBE_OUT" in
+    *"DOBLE_REF args=--range bbbb2222..aaaa1111"*) ok "el rango del push llega a la puerta de referencias" ;;
+    *) bad "el rango del push no llegó a la puerta de referencias ($PROBE_OUT)" ;;
+  esac
+
   probe 3 'echo GATE_RAN' "$REFS"
   check_eq "sin Python/no medible ⇒ no bloquea (rc 0)" "$PROBE_RC" "0"
   case "$PROBE_OUT" in
-    *GATE_RAN*) ok "«no medido» no bloquea y la puerta 2 sí corre" ;;
-    *) bad "un aviso de la puerta 1 no debe saltarse la puerta 2" ;;
+    *GATE_RAN*) ok "«no medido» en la puerta 1 no salta las otras dos" ;;
+    *) bad "un aviso de la puerta 1 no debe saltarse las demás" ;;
+  esac
+
+  probe 0 'echo GATE_RAN' "$REFS" 3
+  check_eq "referencias no medibles ⇒ no bloquea (rc 0)" "$PROBE_RC" "0"
+  case "$PROBE_OUT" in
+    *GATE_RAN*) ok "«no medido» en referencias no salta la compilación" ;;
+    *) bad "un aviso de referencias no debe saltarse la compilación" ;;
   esac
 
   probe 0 'exit 1' "$REFS"
@@ -213,8 +257,12 @@ EOF
     *"args=--churn"*) ok "sin refs se llama al verificador sin --range" ;;
     *) bad "sin refs debía delegar en el resolutor del verificador ($PROBE_OUT)" ;;
   esac
+  case "$PROBE_OUT" in
+    *"DOBLE_REF args=--range"*) ok "sin refs, la puerta de referencias también resuelve su rango" ;;
+    *) bad "sin refs la puerta de referencias debía delegar ($PROBE_OUT)" ;;
+  esac
   if [[ "$FAIL" -eq 0 ]]; then
-    echo "✓ hook ok (rangos, mapeo de códigos y las dos puertas: churn bloquea, «no medido» avisa)"
+    echo "✓ hook ok (rangos, mapeo de códigos y las tres puertas: churn y referencias bloquean, «no medido» avisa)"
   else
     echo "✗ el hook tiene un fallo (arriba)"
   fi
@@ -234,10 +282,13 @@ ROOT="$(git rev-parse --show-toplevel)"
 # no el comando entero, para que el doble del selftest siga ejercitando el
 # traspaso del rango.
 ASSET_CMD="${ANT_ASSET_CMD:-bash scripts/check-unity-assets.sh}"
+# Seam de la puerta 2, igual que la 1: la ORDEN sin argumentos (el rango se le
+# añade detrás, y con `--range` pelado se le pide que lo resuelva él).
+REF_CMD="${ANT_REF_CMD:-bash scripts/check-unity-references.sh}"
 GATE_CMD="${ANT_GATE_CMD:-bash scripts/check-unity-compile.sh}"
 
 # ── Puerta 1: el churn de assets (sin editor, segundos) ─────────────────────
-echo "▶ pre-push 1/2: comprobando que ningún commit del push meta churn de assets de Unity…"
+echo "▶ pre-push 1/3: comprobando que ningún commit del push meta churn de assets de Unity…"
 ASSET_RC=0
 if [[ -z "${PUSH_REFS:-}" ]]; then
   echo "  · sin refs que leer: se deja que el verificador resuelva el rango (CI_RANGE o el último commit)"
@@ -285,8 +336,56 @@ case "$(verdict "$ASSET_RC")" in
     ;;
 esac
 
-# ── Puerta 2: la capa de vista compila ──────────────────────────────────────
-echo "▶ pre-push 2/2: comprobando que la capa de vista compila (el mismo script que el job de CI)…"
+# ── Puerta 2: las referencias de los assets generados (sin editor, segundos) ─
+# El mismo rango que la puerta 1: lo que viaja son los commits. Un rojo aquí (rc 1)
+# es una referencia que el commit PERDIÓ: el asset se dibujará con el valor por
+# defecto y ningún check de estado lo ve, así que no debe llegar al remoto.
+echo "▶ pre-push 2/3: comprobando que ningún commit del push deje un asset sin su referencia…"
+REF_RC=0
+if [[ -z "${PUSH_REFS:-}" ]]; then
+  echo "  · sin refs que leer: se deja que el verificador resuelva el rango (CI_RANGE o el último commit)"
+  ( cd "$ROOT" && $REF_CMD --range )
+  REF_RC=$?
+else
+  RANGOS=0
+  while read -r rango; do
+    [[ -z "$rango" ]] && continue
+    RANGOS=$((RANGOS + 1))
+    # shellcheck disable=SC2086
+    ( cd "$ROOT" && $REF_CMD --range "$rango" )
+    rc=$?
+    if [[ "$rc" -eq 1 ]]; then REF_RC=1
+    elif [[ "$rc" -ne 0 && "$REF_RC" -ne 1 ]]; then REF_RC="$rc"; fi
+  done < <(rangos_del_push | sort -u)
+  if [[ "$RANGOS" -eq 0 ]]; then
+    echo "  · ninguna ref de este push trae commits nuevos que escanear"
+  fi
+fi
+
+case "$(verdict "$REF_RC")" in
+  ok)
+    echo "✓ puerta 2: ningún commit dejó un asset sin la referencia que tenía"
+    ;;
+  block)
+    echo ""
+    echo "X PUSH DETENIDO: un commit de los que ibas a mandar dejó un asset SIN su dato."
+    echo "  No es churn: es una referencia PERDIDA (el detalle del slot y la guía está"
+    echo "  arriba). En Unity el objeto se queda con el valor por defecto y se dibuja"
+    echo "  con él —una textura perdida, un quad blanco opaco sobre el tablero— sin que"
+    echo "  el YAML ni ningún check de estado lo noten. Repara ese commit (o revierte el"
+    echo "  asset) y vuelve a empujar. Saltarlo UNA vez: git push --no-verify"
+    exit 1
+    ;;
+  *)
+    echo ""
+    echo "! Puerta 2 no medible (rc=$REF_RC): falta git o Python 3, o el rango no es usable."
+    echo "  NO bloqueo: «no medido» no es «roto». Compruébalo a mano con"
+    echo "  «bash scripts/check-unity-references.sh --selftest» si sospechas del entorno."
+    ;;
+esac
+
+# ── Puerta 3: la capa de vista compila ──────────────────────────────────────
+echo "▶ pre-push 3/3: comprobando que la capa de vista compila (el mismo script que el job de CI)…"
 ( cd "$ROOT" && eval "$GATE_CMD" )
 RC=$?
 

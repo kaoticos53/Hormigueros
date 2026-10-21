@@ -55,9 +55,12 @@ Uso:
 
 Salida: 0 hecho (o nada que hacer) · 1 con `--check`, algún asset derivaría · 2 uso.
 
-Lo llama `scripts/playpass-live.sh` justo después de que el bootstrapper genere la
-escena y los materiales, y antes de medir: así el árbol queda con el byte
-canónico y dos pasadas seguidas dan el MISMO `git diff`.
+Lo llama el GENERADOR al cerrar cada escritura —`Assets/Scripts/EditorTools/
+GeneratedAssets.cs`, que el bootstrapper invoca tras guardar la escena y los
+materiales—, para que lo que queda en disco ya sea canónico y dos pasadas
+seguidas den el MISMO `git diff`. El Play pass ya NO reescribe nada: comprueba
+(`--check`) que el generador cumplió y se planta si algún asset derivaría, con
+`--recanonicalize` para reparar un árbol que no venga del generador.
 """
 import argparse
 import hashlib
