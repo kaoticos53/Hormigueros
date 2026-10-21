@@ -54,6 +54,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/GameMaterialModel.cs" Link="UnityPure/GameMaterialModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/TtfWriter.cs" Link="UnityPure/TtfWriter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Presenter/ActorMeshModel.cs" Link="UnityPure/ActorMeshModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/AssetCanonicalizer.cs" Link="UnityPure/AssetCanonicalizer.cs" />
   </ItemGroup>
 
 </Project>
