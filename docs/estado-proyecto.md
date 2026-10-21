@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-07 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 634/634 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 658/658 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -36,7 +36,7 @@ vs scripted vs evolucionada en la misma arena).
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **634/634 tests** en Windows y verdes en Linux en CI en cada push,
+NEAT canónica. **658/658 tests** en Windows y verdes en Linux en CI en cada push,
 igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
@@ -56,7 +56,117 @@ de anclas de Unity no cuentan, y los finales de línea tampoco —desde el
 2026-09-20 los assets están fijados a LF por `.gitattributes`, así que el
 `autocrlf` de la máquina ya no los reescribe—. En CI recorre los commits del
 push y falla si alguno metió un asset que no cambia nada, con la lista de
-ficheros a descartar.
+ficheros a descartar. Desde el 2026-10-09 su `--discard` quita la forma de los
+dos casos: restaura el churn puro y, a los que cambian de verdad, les reescribe
+la forma canónica **sin tocar el contenido**, así que el diff queda reducido al
+cambio —medido en `Game.unity` (425 documentos), una pasada que re-ancla todo y
+cambia una línea escalar pasa de 10 669 líneas de diff a 2—. Sólo escribe si la
+forma canónica pasa su propio `compare`, y después vuelve a clasificar y a mirar
+el índice para confirmarlo.
+
+**El pase también ESCRIBE, y por eso cierra su escritura y descarta lo que deja**
+(2026-10-10, medido con el editor abierto, `Game.unity`, 425 documentos) — dos
+defectos que sólo aparecieron al correr el Play pass de verdad:
+
+  · la comprobación canónica del bloque 4 culpaba al **generador** de lo que había
+escrito el **pase**: un `save_scene` sobre una escena ya canónica la deja
+`DERIVARÍA` sin cambiarle el contenido (sólo anclas y orden), así que el bloque 4
+se plantaba sin sondear nada. Ahora el veredicto del generador se toma justo tras
+generar y ANTES de que el pase escriba, y cada `save_scene` del pase se cierra con
+el mismo canonicalizador —no arregla lo del generador, arregla lo suyo—;
+  · y ese cierre (y el descarte del churn al terminar) se hacen **desde dentro del
+editor** (sonda `scripts/unity/ProbeCanonicalizeAssets.cs`: canonicaliza y recarga
+la escena). Escribir la escena por detrás, con el editor teniéndola abierta, le
+hace notar el cambio al vigilante y levanta «The open scene(s) have been modified
+externally»: el editor deja de contestar a TODOS los comandos (`Main thread
+operation timed out after 30000ms`) hasta que alguien pulsa el diálogo, y la
+siguiente pasada muere en la primera sonda.
+
+**«El editor no responde» NO es «la escena no tiene HUD»** (2026-10-10) — cuando
+el hilo principal está parado en un diálogo, el CLI contesta con la salida
+**vacía** (y `unity status` sigue diciendo `ready`, porque eso lo sirve su
+registro, no el editor). El pass leía ese vacío como una respuesta y culpaba a la
+escena: «la escena no tiene HUD presentable ()» —con el motivo en blanco— y moría
+en «no se pudo configurar el presenter: » con rc 3, sin causa ni remedio. Costó ir
+a buscar la causa a mano (enumerando las ventanas del proceso). Ahora el pass
+CLASIFICA cada respuesta del CLI en cuatro cosas que no se pueden mezclar —`ok`,
+`error` (el editor habló y la escena tiene la culpa), `mudo` (ni JSON) y
+`bloqueado` (caducó)— y, si no responde, sale con rc 3 diciendo qué pasó, que NO
+es la escena y el remedio (cerrar el diálogo —Reload o Ignore— y repetir; o mirar
+`Logs/Editor.log` si la marca «Main thread operation timed out» está en su COLA,
+no en cualquier parte del fichero).
+
+Y al probarlo **sin editor** —un CLI de mentira que contesta por guion
+(`bloqueado`, `mudo`, mudo a partir de la recompilación, y una escena sin
+presenter)— salió un defecto que ningún pase real había tocado: `set -e` se
+llevaba el pase por delante **en silencio, con rc 1**, porque el bucle de la
+recompilación (y la función que configura el presenter) terminaban en una prueba
+`[[ … ]] && …` que da FALSO justo en el camino bueno. Un pase real siempre había
+pasado por ahí «con suerte»; el CLI falso lo destapó como un `rc 1` sin una línea
+de salida.
+
+**Las hormigas andaban DE LADO** (2026-10-10) — la caja del actor tiene el largo
+en Y (`GameSpriteModel`: «Y = el largo, que es el eje de avance», y en la hormiga
+la cabeza va hacia +Y) y el giro del presenter era `−rumbo` en vez de
+`90° − rumbo`, así que el morro caía 90° a la izquierda del avance. Medido con la
+matemática de Unity y la rotación del propio presenter, dentro del editor
+(`scripts/unity/ProbeActorOrientation.cs`): **90° justos en los ocho rumbos de
+prueba** antes del arreglo, 0° después. Lo que lo hacía peligroso es que no lo
+veía nadie — los tres lóbulos estaban, el mundo aparecía, el conteo de hormigas
+no cambiaba y las puertas de píxeles («se ven hormigas», «el tablero se lee como
+tierra») seguían en verde; lo vio el jugador. Ahora es un PASO del Play pass: se
+planta si el morro se desvía más de 2° del rumbo.
+
+**Y los ítems y las hojas salían DE CANTO** (2026-10-10) — el arte de una pieza
+es un sólido PLANO (se extruye en Z) y la cámara mira de arriba: dibujada con
+`Quaternion.identity`, desde arriba se ve su canto, o sea un rectángulo, y del
+dibujo no se lee nada. La hoja salía de 0,66 s × 1,10 s con su largo (1,24 u) en
+el eje vertical y el `1,1` de la escala —que iba, y va, al grosor— estirado en el
+plano: ni punta ni nervio, y el limbo apuntando al cielo. La carga, igual, y los
+mordiscos con ella. El arreglo es el MISMO ayudante de la hormiga:
+`FlatRotation` (que es `ActorRotation` con el rumbo que apunta al norte: no hay
+rumbo que seguir, porque el `FoodItem` del Core no guarda ángulo y el stream no
+lo lleva, así que inventarle un giro por pieza sería una decisión que el dato no
+tiene) y `FlatScale` (1:1 en el plano del tablero y el grosor a la mitad), usadas
+por ítem, hoja y mordisco a través de una sola `FlatTRS`. Medido en el editor por
+`ProbeActorOrientation`: la hoja acuesta su eje (0° del plano, 0° al norte) y
+deja **0,60 × 1,24 u** de planta con 0,50 u de alto, contra **0,66 × 1,10 u** de
+canto y 0,62 u de alto antes; la carga pasa de 0,71 × 1,00 u con 0,78 u de alto a
+0,71 × 0,78 u con 0,50 u. Y la sonda exige que la configuración VIEJA falle: si
+pasa, el bloque sería decorativo (el probe lo dice y se planta).
+
+**Y las muescas de la hoja comen del BORDE del limbo** (2026-10-10) — el borde de
+la hoja es una ELIPSE (semiejes 0,30 s de ancho × 0,62 s de largo, los extremos del
+polígono de `GameSpriteModel.Leaf()`), pero los cortes consumidos se repartían con
+un radio ÚNICO de 0,55 s. Un radio no cae en un borde elíptico en ningún sitio:
+por los costados queda FUERA del limbo (0,55 > 0,30) y por las puntas DENTRO
+(0,55 < 0,62), así que las muescas se veían flotando en el vacío junto a la hoja.
+Ahora `SimPresenterBehaviour.BiteOffset` las reparte sobre la elipse —los semiejes
+salen de `GameSpriteModel.LeafHalfWidth`/`LeafHalfLength`, una sola definición— y
+el PASO del Play pass que ya medía el acostado comprueba cada muesca contra el
+borde (r = 1, tolerancia 0,02), exigiendo que el círculo viejo falle.
+
+**Y el rumbo se mide también EN LOS PÍXELES** (2026-10-10) — la matriz correcta no
+prueba el render: entre la matriz del presenter y lo que ve el jugador quedan el
+encuadre de la cámara (¿mira al nadir? ¿su arriba es el norte de pantalla?), la
+proyección, el rasterizado y el aliasing, que es exactamente donde se coló el giro
+de 90° de la hormiga. `scripts/unity/ProbeAntHeadingPixels.cs` renderiza la malla y
+el material REALES de la escena con un rumbo fijo en una cámara de usar y tirar que
+copia la del juego (mismo `orthographicSize`, misma rotación) y que sólo ve la capa
+de la hormiga, así que el fondo es plano y la silueta es la DIFERENCIA entre el
+frame con ella y el mismo frame sin ella. Sobre esos píxeles mide el eje (segundo
+momento) a la escala de la partida —18,69 px de hormiga, la escala real de un
+viewport de 1080— y 6× más cerca, y el MORRO (el extremo LIGERO: el gáster pesa más
+que la cabeza) **sólo a zoom**: a 19 px el reparto de área de los dos extremos deja
+1 px de margen en los rumbos diagonales (medido: 16 px contra 15 px), y un dato así
+no decide nada, así que ahí se publica sin usarse. Medido: el eje desvía **0°** en
+los ocho rumbos a las dos escalas y el morro 0° a zoom; y el mismo render con el
+giro viejo (`−rumbo`) desvía **90°**, que es lo que hace que la comprobación tenga
+dientes en vez de ser decorativa. La
+evidencia se mira: `artifacts/playpass-heading-pixels/antsim-heading-pixels.png`
+(una hormiga por rumbo, el rumbo esperado pintado en magenta y el morro medido en
+cian). Es un paso del Play pass y falla cerrado: sin la imagen, «medido en píxeles»
+no se puede mirar.
 
 **Finales de línea fijados por el repo, no por la máquina** (2026-09-20) —
 `.gitattributes` fija el `eol` por tipo: **LF para todo el texto** —código,
@@ -192,15 +302,36 @@ la tarjeta del frame en vivo y `scripts/playpass-icons.py` busca la FORMA de
 cada glifo dentro del recorte (correlación cruzada normalizada sobre la tinta,
 que no depende del brillo del panel). MEDIDO: el icono mide **2,00×** el cuerpo
 (run 28 sobre cuerpo 14, leído del propio generador) y cada uno se clasifica
-como SU glifo —correlación 0,42-0,69 y silueta IoU 0,79-0,87 frente a la
-referencia rasterizada a 28 px— mientras que en ese mismo sitio los otros dos
-glifos puntúan ≤0,19. La correlación más baja es la de la hormiga (0,42) y
-tiene explicación medida: sus patas de ~1 px son lo que más cambia entre el
-rasterizador de Unity y el de FreeType, y por eso el instrumento publica además
-el IoU de siluetas, que sí sobrevive al cambio de rasterizador (0,79). El
+como SU glifo —correlación **0,51 · 0,57 · 0,81** y silueta IoU **0,79 · 0,85 ·
+0,90** (hormiga, carga, huevo) frente a la referencia rasterizada al tamaño
+EFECTIVO del icono— mientras que en ese mismo sitio los otros dos glifos puntúan
+**≤0,22**. La correlación más baja es la de la hormiga (0,51) y tiene explicación
+medida: sus patas de ~1 px son lo que más cambia entre el rasterizador de Unity y
+el de FreeType, y por eso el instrumento publica además el IoU de siluetas, que
+sí sobrevive al cambio de rasterizador (0,79). El
 instrumento trae `--selftest`
 (verifica la métrica sin capturas: una forma distinta tiene que puntuar bajo y
 una ventana plana, 0,00 — antes puntuaba 0,9 y hacía pasar cualquier cosa).
+
+**Y la referencia se redondeaba a píxel entero: escala disfrazada de forma**
+(2026-10-08). El paso de iconos salió en ROJO por la hormiga (0,32 < 0,35) y no
+era la hormiga: era la referencia. Con el canvas al 91,1 % el icono vivo mide
+28 × 0,911 = **25,508 px**, pero `int(round(…))` la rasterizaba a **26 px**, un
+1,9 % más grande — y en un glifo de patas de ~1 px un 1,9 % de escala no es un
+matiz, es otra forma. MEDIDO sobre los mismos recortes, con la misma ventana:
+contra la referencia a 26 px la hormiga puntúa 0,32 y contra la de 25,508 px
+(supermuestreo 8× y reducción LANCZOS) **0,51**; el huevo sube de 0,63 a 0,81 y
+la carga de 0,37 a 0,57. No es un defecto del HUD: la caja de tinta viva de la
+hormiga medida en su ventana es 16×24 px y la referencia al tamaño corregido
+(25,508 px) da 16×25, mientras la de 26 px da 17×26 — el icono se pinta al tamaño
+fraccionario y era la REFERENCIA la que estaba crecida. Arreglado en el instrumento: la referencia se
+rasteriza al tamaño FRACCIONARIO real, no a su redondeo (el hinting de FreeType
+ajusta el AVANCE al píxel entero, pero el contorno se rasteriza al tamaño
+fraccionario con antialiased — igual que hace el motor). **El mínimo NO se tocó**:
+bajarlo a ~0,27 habría dejado solo 0,02 de margen contra un glifo EQUIVOCADO
+(medido con el banco sintético del paso: con la hormiga sustituida por un huevo
+el glifo ajeno puntúa 0,25 y el propio 0,09) — es decir, habría aflojado justo la
+puerta que existe para cazar ese caso.
 El recorte se respalda con una comprobación de PROCEDENCIA —tiene que ser un
 trozo literal del frame en vivo, con la fila del PNG contada al revés que la
 coordenada de pantalla—; la búsqueda libre por el frame pasó a ser informativa
@@ -215,12 +346,17 @@ si alguno no se clasifica como el suyo — o si **no se pudo medir** (la sonda n
 guardó el recorte, o ningún python del PATH tiene Pillow), porque un paso que no
 corre no puede contar como verde. Es un veredicto propio, separado del de
 aspecto, así que el fallo no se confunde con un texto que no cabe; va ANTES del
-bloque 4 a propósito, que reconstruye la escena y volvería a escribir los
-recortes. El mismo análisis se puede repetir sin editor con
-`scripts/playpass-live.sh --analyze-icons` (y `--icons-crops` para apuntar a los
-recortes, que viven en `Temp/` y Unity barre al cerrar), y el cableado —no la
-métrica, que trae su propio `--selftest`— se verifica en `--selftest`: comparador
-en verde pasa, glifo que no se clasifica falla, y sin volcado no pasa.
+bloque 4 a propósito, que reconstruye la escena y volvería a escribir el HUD.
+La evidencia en píxeles —el frame vivo, el PNG de cada tarjeta y la hoja de
+comparación que genera el propio comparador— se **conserva en
+`artifacts/playpass-hud-icons/`**: la sonda los escribe en `Temp/`, que Unity
+barre al cerrar el editor, y un paso cuyo objeto de medida desaparece con la
+sesión deja el veredicto sin nada que mirar después. Con eso el mismo análisis se
+repite sin editor con `scripts/playpass-live.sh --analyze-icons` (y
+`--icons-crops` para apuntar a otros recortes), y el cableado —no la métrica, que
+trae su propio `--selftest`— se verifica en `--selftest`: comparador en verde
+pasa, glifo que no se clasifica falla, sin volcado no pasa y los PNG del HUD se
+conservan (sin ninguno que copiar, la conservación falla).
 
 **Tres textos desbordaban su panel — y el ajuste ahora es un TEST** (2026-10-07).
 El Play pass medía tres textos fuera de su caja: la barra de PISTAS
@@ -250,13 +386,14 @@ por defecto (6): la partida entera (7200 ticks) se consumía antes de que C
 empezara a sondear — su primera muestra salía ya en `tick=7200` con `toasts=0` —,
 así que el gate era inalcanzable por cronómetro. La velocidad por defecto del
 bloque 4 pasa a **2**, donde el toast vive ~3 s de reloj y C lo cazó en dos
-muestras seguidas (tick 335 y 435). Queda un defecto APARTE, medido y no
-arreglado: en la partida canónica la ÚNICA alerta emitida es `first-unload` y el
-Core la emite con `x=-1,y=-1`, sin ancla, así que el salto de cámara (`J`,
-Alt+click) no tiene a qué saltar y el paso C sigue en rojo. Las dos salidas
-posibles están escritas en el propio script: dar ancla al hito (el `RelayTracker`
-conoce la posición de esa descarga) o que el escenario del bloque 4 produzca una
-alerta con ancla (`laying:*` y `relay-weak:*` llevan el nido).
+muestras seguidas (tick 335 y 435). El defecto APARTE —la alerta sin ancla— está
+arreglado (2026-10-07): en la partida canónica la ÚNICA alerta emitida es
+`first-unload` y el Core la emitía con `x=-1,y=-1`, así que el salto de cámara
+(`J`, Alt+click) no tenía a qué saltar. Ahora el `RelayTracker` guarda la posición
+del primer `Unload` (`FirstUnloadX/Y`) y el `AlertDeriver` ancla el hito ahí —la
+salida que ya estaba escrita en el comentario del propio script—. Los pines de
+hash NO se mueven: el `AlertDeriver` es observador puro y el hash del stream es el
+del MUNDO (`sim.HashLine()`), así que la alerta no entra en él.
 
 **El avance del icono: 720 declarado, 643 es la TINTA** (2026-10-07) — la duda
 «uGUI reserva 643 unidades donde el `.ttf` declara 720» tiene una respuesta
