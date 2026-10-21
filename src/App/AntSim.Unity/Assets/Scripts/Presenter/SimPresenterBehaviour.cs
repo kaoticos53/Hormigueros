@@ -426,6 +426,107 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Escala efectiva del ítem.</summary>
         public float EffectiveItemScale => WorldSide * ItemWorldFraction;
 
+        /// <summary>
+        /// Rotación con la que se dibuja un actor a partir del RUMBO del stream
+        /// (radianes; el mismo del Core: `X += cos(rumbo)·v`, `Y += sin(rumbo)·v`).
+        ///
+        /// Está aquí, y en un solo sitio, a propósito: el bucle de dibujo no repite
+        /// la fórmula y la orientación se puede MEDIR desde fuera con la
+        /// matemática de Unity de verdad (`scripts/unity/ProbeActorOrientation.cs`,
+        /// que la ejecuta dentro del editor) — replicar a mano la convención de
+        /// `Euler` es justo cómo se cuela un giro de 90°.
+        ///
+        /// `Rx(90)` tumba la malla sobre el tablero: su +Y —el EJE DE AVANCE de la
+        /// caja del juego, la cabeza de la hormiga— pasa al +Z del mundo, que con la
+        /// cámara de arriba es «norte de pantalla». El mundo mapea `X→X` e `Y→Z`, así
+        /// que el giro sobre Y tiene que llevar ese morro del norte de pantalla al
+        /// rumbo, y eso son **90° menos el rumbo**: rumbo 0 (mapa +X, este de
+        /// pantalla) → 90° de giro; rumbo 90° (mapa +Y, norte) → 0°.
+        ///
+        /// MEDIDO (2026-10-10, proyecto real vía `ProbeActorOrientation`): con
+        /// `-rumbo` en vez de `90 − rumbo` el morro salía a **90° justos** del rumbo
+        /// en los ocho rumbos de prueba —la hormiga andaba de lado, que es lo que se
+        /// veía en pantalla—, y ni los conteos ni los píxeles de «hay hormigas» lo
+        /// decían.
+        /// </summary>
+        public static Quaternion ActorRotation(float headingRadians)
+            => Quaternion.Euler(90f, 90f - headingRadians * Mathf.Rad2Deg, 0f);
+
+        /// <summary>
+        /// Rotación de una silueta ACOSTADA sobre el tablero: `ActorRotation` con el
+        /// rumbo del Core que apunta al NORTE (+Y del mapa), no una segunda idea de
+        /// «cómo se acuesta una pieza». Los ítems y las hojas no traen rumbo —el
+        /// `FoodItem` del Core no guarda ángulo y el stream no lo lleva—, así que su
+        /// eje de dibujo (el +Y de la caja: la punta del limbo, el eje del grumo) se
+        /// acuesta y se queda al norte; inventarle un giro por pieza sería una
+        /// decisión que el dato no tiene.
+        /// </summary>
+        public static Quaternion FlatRotation => ActorRotation(Mathf.PI * 0.5f);
+
+        /// <summary>
+        /// Escala de una silueta acostada: 1:1 en el plano del tablero y el GROSOR a la
+        /// mitad. Con <see cref="FlatRotation"/> la caja del juego queda x = ancho,
+        /// y = largo, z = grosor —la misma convención que la hormiga—, así que escalar
+        /// `z` y no `y` es toda la diferencia entre una hoja y un canto.
+        ///
+        /// MEDIDO (2026-10-10, aritmética de la caja, sin editor) con `Quaternion.identity`
+        /// y las escalas que había: la hoja se dibujaba DE PIE —el eje de dibujo, su +Y,
+        /// caía en el eje VERTICAL, así que desde la cámara de arriba se veía su CANTO—
+        /// y el 1,1 iba al grosor (1,0 u) mientras el largo (1,24 u) recibía el 0,5: en el
+        /// plano salía un canto de 0,66 s × 1,10 s, el limbo no apuntaba a nada y no se
+        /// veía ni la punta ni el nervio. Lo mismo con la carga (0,68 s × 1,00 s de canto
+        /// y 0,80 s de alto) y con los mordiscos.
+        /// </summary>
+        public static Vector3 FlatScale(float s) => new Vector3(s, s, s * 0.5f);
+
+        /// <summary>
+        /// Matriz de una silueta acostada (posición + <see cref="FlatRotation"/> +
+        /// <see cref="FlatScale"/>), en UN solo sitio: la usan el ítem, la hoja y sus
+        /// mordiscos, y la sonda `scripts/unity/ProbeActorOrientation.cs` mide ESTA
+        /// matriz, no una copia de la fórmula.
+        /// </summary>
+        public static Matrix4x4 FlatTRS(Vector3 pos, float s)
+            => Matrix4x4.TRS(pos, FlatRotation, FlatScale(s));
+
+        /// <summary>
+        /// Centro de la muesca `b` (de `total`) sobre el BORDE del limbo: se reparte
+        /// sobre la ELIPSE del arte —semiejes 0,30·s (ancho, X) × 0,62·s (largo, Z),
+        /// los extremos de `GameSpriteModel.Leaf()` tras `FlatRotation`—, no sobre un
+        /// círculo. Un radio único no cae en el borde en ningún sitio: con 0,55 s, por
+        /// los costados queda FUERA del limbo (0,55 &gt; 0,30) y por las puntas DENTRO
+        /// (0,55 &lt; 0,62), así que las muescas flotaban en el vacío junto a la hoja en
+        /// vez de comer de ella. Devuelve el desplazamiento en el PLANO del tablero
+        /// (X, Z) respecto al centro de la hoja; el pequeño levantamiento que alterna
+        /// arriba/abajo para que se lean en cenital es de `AddBites`.
+        ///
+        /// Está aquí, y en un solo sitio, por lo mismo que `FlatTRS`: el paso del Play
+        /// pass que lo comprueba (`scripts/unity/ProbeActorOrientation.cs`) llama a
+        /// ESTA función, no a una copia de la fórmula —replicarla es cómo se cuela una
+        /// muesca que no toca la hoja.
+        /// </summary>
+        public static Vector2 BiteOffset(int b, int total, float s)
+        {
+            float angle = (b / (float)(total > 0 ? total : 1)) * Mathf.PI * 2f;
+            return new Vector2(
+                Mathf.Cos(angle) * (UI.GameSpriteModel.LeafHalfWidth * s),
+                Mathf.Sin(angle) * (UI.GameSpriteModel.LeafHalfLength * s));
+        }
+
+        /// <summary>
+        /// Escala de la CAJA del actor (la del modelo, `GameSpriteModel`: 2 u de largo
+        /// × 1 u de ancho × 1 u de grosor) a partir del LARGO en unidades que quiere
+        /// el dibujo — el de una hormiga es <see cref="EffectiveAntScale"/>.
+        ///
+        /// Está aquí, y en un solo sitio, por lo mismo que <see cref="ActorRotation"/>:
+        /// la sonda que mide la silueta EN PÍXELES
+        /// (`scripts/unity/ProbeAntHeadingPixels.cs`) dibuja la hormiga con esta
+        /// escala y con la malla real, y replicar la fórmula a mano es cómo se cuela
+        /// una hormiga de otro tamaño —que también es un defecto visual que ninguna
+        /// muestra de estado mira.
+        /// </summary>
+        public static Vector3 ActorBoxScale(float length)
+            => new Vector3(length * 0.33f, length * 0.5f, length * 0.16f);
+
         private void Draw(Streaming.RenderState state)
         {
             float world = WorldSide;
@@ -454,9 +555,9 @@ namespace AntSim.Unity.Scripts.Presenter
                 {
                     if (!a.Alive) continue;
                     float len = a.HasLoad ? antS * carrierBoost : antS;
-                    var scale = new Vector3(len * 0.33f, len * 0.5f, len * 0.16f);
+                    var scale = ActorBoxScale(len);
                     var pos = new Vector3(a.X, lift, a.Y);
-                    var rot = Quaternion.Euler(90f, -a.Heading * Mathf.Rad2Deg, 0f);
+                    var rot = ActorRotation(a.Heading);
 
                     Material mat;
                     if (a.HasLoad)
@@ -501,7 +602,7 @@ namespace AntSim.Unity.Scripts.Presenter
                     if (it.IsLeaf && LeafMaterial != null) continue;
                     var pos = new Vector3(it.X, lift * 0.7f, it.Y);
                     float s = itemS * (0.55f + 0.03f * it.Amount);
-                    _drawer.Add(ItemMaterial, Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s));
+                    _drawer.Add(ItemMaterial, FlatTRS(pos, s));
                 }
                 LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
 
@@ -514,8 +615,11 @@ namespace AntSim.Unity.Scripts.Presenter
                         if (!it.IsLeaf) continue;
                         var pos = new Vector3(it.X, lift * 0.7f, it.Y);
                         float s = itemS * (0.55f + 0.03f * it.Amount);
-                        var leafScale = new Vector3(s * 1.1f, s * 0.5f, s * 1.1f);
-                        _drawer.Add(LeafMaterial, Matrix4x4.TRS(pos, Quaternion.identity, leafScale));
+                        // La hoja con la MISMA matriz que el ítem: acostada, el limbo
+                        // 1:1 en el plano (su largo, 1,24 u de la caja, va al norte) y el
+                        // grosor a la mitad. Antes se dibujaba de canto y su escala
+                        // alargaba justo el eje equivocado.
+                        _drawer.Add(LeafMaterial, FlatTRS(pos, s));
                         // Sin malla propia los mordiscos comparten pasada (materiales
                         // distintos, misma malla); con ella van aparte, más abajo.
                         if (!ownLeafMesh && BiteMaterial != null)
@@ -541,23 +645,23 @@ namespace AntSim.Unity.Scripts.Presenter
             LastFallbackCalls = _drawer.FallbackCalls;
         }
 
-        /// <summary>Las muescas de una hoja: un corte consumido por mordisco, en
-        /// el borde y alternando arriba/abajo para que se lean en vista cenital.</summary>
+        /// <summary>Las muescas de una hoja: un corte consumido por mordisco, sobre el
+        /// BORDE del limbo (la elipse de `BiteOffset`, no un círculo) y alternando
+        /// arriba/abajo para que se lean en vista cenital.</summary>
         private void AddBites(Streaming.GameStreamParser.ItemView it, Vector3 pos, float s)
         {
             int bitesEaten = it.CutsInitial - it.CutsLeft;
             int totalBites = it.CutsInitial > 0 ? it.CutsInitial : 1;
             float biteRadius = s * 0.18f;
-            float leafRadius = s * 0.55f;
             for (int b = 0; b < bitesEaten; b++)
             {
-                float angle = (b / (float)totalBites) * Mathf.PI * 2f;
+                var off = BiteOffset(b, totalBites, s);
                 var bitePos = new Vector3(
-                    pos.x + Mathf.Cos(angle) * leafRadius,
+                    pos.x + off.x,
                     pos.y + (b % 2 == 0 ? 0.05f : -0.05f),
-                    pos.z + Mathf.Sin(angle) * leafRadius);
-                _drawer.Add(BiteMaterial!, Matrix4x4.TRS(bitePos, Quaternion.identity,
-                    Vector3.one * biteRadius));
+                    pos.z + off.y);
+                // El mordisco también es una silueta acostada: de canto no se veía.
+                _drawer.Add(BiteMaterial!, FlatTRS(bitePos, biteRadius));
             }
         }
 

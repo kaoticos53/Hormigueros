@@ -211,6 +211,21 @@ namespace AntSim.Unity.Scripts.UI
         /// <summary>Semigrosor de la caja normalizada (eje Z del presenter).</summary>
         public const float HalfThickness = 0.5f;
 
+        /// <summary>
+        /// Semiancho del LIMBO de la hoja (eje X normalizado): su borde lateral llega
+        /// a 0,30. El presenter reparte los MORDISCOS sobre ESTA elipse —0,30 × 0,62 s
+        /// en el plano del tablero tras <c>FlatRotation</c>—, no sobre un círculo: con
+        /// un radio único la muesca no cae en el borde en ningún sitio (queda FUERA por
+        /// los costados y DENTRO por las puntas), así que flota en el vacío junto a la
+        /// hoja en vez de comer de ella.
+        /// </summary>
+        public const float LeafHalfWidth = 0.30f;
+
+        /// <summary>Semilargo del LIMBO de la hoja (eje Y = eje de dibujo, que
+        /// <c>FlatRotation</c> lleva al eje Z del tablero): su punta llega a 0,62. Ver
+        /// <see cref="LeafHalfWidth"/>.</summary>
+        public const float LeafHalfLength = 0.62f;
+
         public enum Sprite { Ant, Load, Leaf, Egg }
 
         public static IReadOnlyList<Stamp> Build(Sprite sprite) => sprite switch
@@ -306,9 +321,9 @@ namespace AntSim.Unity.Scripts.UI
             {
                 new(new[]
                 {
-                    new V2(0f, 0.62f), new V2(0.22f, 0.30f), new V2(0.30f, -0.05f),
-                    new V2(0.16f, -0.45f), new V2(0f, -0.62f), new V2(-0.16f, -0.45f),
-                    new V2(-0.30f, -0.05f), new V2(-0.22f, 0.30f),
+                    new V2(0f, LeafHalfLength), new V2(0.22f, 0.30f), new V2(LeafHalfWidth, -0.05f),
+                    new V2(0.16f, -0.45f), new V2(0f, -LeafHalfLength), new V2(-0.16f, -0.45f),
+                    new V2(-LeafHalfWidth, -0.05f), new V2(-0.22f, 0.30f),
                 }),
                 Shapes.Pill(0f, -0.50f, 0f, 0.50f, 0.055f),
             };

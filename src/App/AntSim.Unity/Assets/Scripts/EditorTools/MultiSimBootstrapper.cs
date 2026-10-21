@@ -236,6 +236,12 @@ namespace AntSim.Unity.Scripts.EditorTools
                 AssetDatabase.CreateFolder("Assets", "Scenes");
             EditorSceneManager.SaveScene(scene, ScenePath);
             RegisterInBuildSettings(ScenePath);
+            // CIERRE CANÓNICO: TODAS las variantes de este montador (menú, smoke,
+            // medidor, atta) escriben la MISMA escena, así que el cierre va aquí,
+            // en el único camino que las guarda — si no, el medidor dejaría
+            // `MultiSim.unity` con anclas de sesión en cada pasada (ver
+            // GeneratedAssets).
+            GeneratedAssets.CloseWithCanonicalForm(ScenePath);
             Debug.Log($"[MultiSim] escena de {views} vistas creada y guardada en {ScenePath}. " +
                       "Pools: " + string.Join(", ", System.Array.ConvertAll(viewPools, p => p ?? "(sin)")));
         }
