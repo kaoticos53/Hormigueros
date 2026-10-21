@@ -83,7 +83,15 @@
 
 # Binarios: que git no los trate como texto ni intente convertir nada. Los
 # `.antgenome`/`.antsave` son formatos propios con payload binario.
+#
+# `.ttf` entra aquí por lo mismo, y además porque es GENERADO: la fuente del
+# HUD la escribe el bootstrapper (GameAssetBuilder.EnsureFont a través de
+# TtfWriter) y su md5 tiene que ser el mismo en Windows y en Linux para que la
+# segunda pasada no reescriba el asset ni ensucie el árbol. Un filtro de texto
+# —`text eol=lf`, o el `autocrlf` de turno— le cambiaría bytes al payload y
+# rompería justo eso: el checksum `0xB1B0AFBA` del sfnt deja de cuadrar.
 *.png           -text
+*.ttf           -text
 *.antgenome     -text
 *.antsave       -text
 
