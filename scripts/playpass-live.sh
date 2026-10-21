@@ -65,19 +65,85 @@
 #     después de generar y canonicalizar (scripts/unity-reference-check.py) y el
 #     paso FALLA CERRADO: una pérdida de verdad bloquea el pase.
 #
-#   + CANONICALIZACIÓN (el byte no cambia entre pasadas): justo DESPUÉS de que el
-#   bootstrapper genere la escena y los materiales, y ANTES de medir, el pase
-#   reescribe los assets con anclas derivadas del CONTENIDO
-#   (scripts/unity-canonicalize-assets.py). Unity asigna el
+#   + FORMA CANÓNICA (el byte no cambia entre pasadas): el generador CIERRA su
+#   propia escritura con anclas derivadas del CONTENIDO
+#   (Assets/Scripts/EditorTools/GeneratedAssets.cs →
+#   scripts/unity-canonicalize-assets.py), así que aquí no se arregla nada: se
+#   COMPRUEBA, justo después de generar y antes de medir. Unity asigna el
 #   `m_LocalIdentfierInFile` de un contador con base ALEATORIA por sesión —dos
 #   pases del mismo montaje dieron bases 54570640 y 8954272— y URP añade a cada
 #   `.mat` un bloque `AssetVersion` con un id de 64 bits que CAMBIA DE SITIO: sin
 #   esto, cada pasada reescribe 17 assets (16 `.mat` y `Game.unity`) con bytes
 #   distintos aunque la escena sea la misma, y el diff no dice nada de nadie.
-#   Canonicalizado, dos pasadas seguidas dan el MISMO `git diff`. El paso es un
-#   VEREDICTO, no un informe: si el canonicalizador no puede analizar un asset
-#   (cabecera que no entiende, fichero ilegible), el pase sale ≠ 0 en vez de
-#   dejar el ruido y parecer verde. Se salta con --no-canonicalize.
+#   Canónico, dos pasadas seguidas dan el MISMO `git diff`. Y el paso es un
+#   VEREDICTO: si algún asset derivaría —o la herramienta no puede analizarlo— el
+#   pase sale ≠ 0, porque eso es un fallo del generador y taparlo reescribiéndolo
+#   aquí volvería a hacer que los assets dependan de este paso. `--recanonicalize`
+#   reescribe lo que derive y sigue (árbol que no viene del generador), y
+#   `--no-canonicalize` se salta la comprobación.
+#
+#   Y EL PASE, QUE TAMBIÉN ESCRIBE, CIERRA LO SUYO: el bloque 4 guarda la escena
+#   con `save_scene` —esa configuración es la que se COMMITEA en `Game.unity`— y
+#   un guardado del editor deja las anclas de sesión aunque el contenido no
+#   cambie; medido el 2026-10-10, un `save_scene` sobre la escena ya canónica la
+#   deja derivando (425 documentos, sólo forma) y, con la comprobación puesta
+#   después, el pase se plantaba culpando al generador y el bloque 4 no llegaba a
+#   sondear. Por eso el veredicto del GENERADOR se toma justo después de generar
+#   y ANTES de que el pase escriba, y cada guardado del pase se cierra con el
+#   MISMO canonicalizador y desde DENTRO del editor (que además recarga la escena
+#   del fichero canónico): no arregla lo que dejó el generador, arregla lo suyo, y
+#   no escribe por detrás de una escena abierta.
+#
+#   Y EL EDITOR QUE NO RESPONDE TIENE SU PROPIO MENSAJE: que el editor ESTÉ abierto
+#   no es que CONTESTE —`unity status` lo sirve el registro del CLI, no el editor,
+#   y seguía diciendo «ready» con el hilo principal bloqueado por un diálogo—. Al
+#   empezar se le pregunta de verdad (`editor_status`) y CADA respuesta se CLASIFICA
+#   en cuatro cosas que no se pueden confundir: `ok` (contestó), `error` (contestó y
+#   la culpa es de la escena), `mudo` (ni JSON) y `bloqueado` (caducó, con el
+#   envelope de error del CLI). Las dos últimas NO son la escena: el pase se planta
+#   ahí mismo (rc 3) diciendo qué pasó, que no es la escena, y el remedio —con la
+#   marca «Main thread operation timed out» de la COLA de su log como evidencia—,
+#   en vez de seguir, hablar de la escena y morir más tarde con un campo vacío. Lo
+#   medido: «The open scene(s) have been modified externally», que Unity levanta
+#   cuando algo escribe en disco una escena abierta.
+#
+#   + ORIENTACIÓN DE LOS ACTORES (el morro al rumbo): la caja del actor tiene el
+#   largo en Y y la hormiga mira hacia +Y; el giro del presenter tiene que llevar
+#   ese eje al rumbo del Core —`90° menos el rumbo`— o el bicho anda de lado, que
+#   es lo que se veía en pantalla (medido el 2026-10-10: 90° justos de desvío) y
+#   lo que ningún check de estado ve. Lo mide dentro del editor
+#   `scripts/unity/ProbeActorOrientation.cs`, con la rotación del propio presenter.
+#
+#   + Y LA MISMA PREGUNTA, MEDIDA EN PÍXELES: la matriz correcta no prueba el
+#   RENDER. Entre la matriz y lo que ve el jugador quedan el encuadre de la cámara
+#   (¿mira al nadir? ¿su arriba es el norte de pantalla?), la proyección, el
+#   rasterizado y el aliasing —y el giro se cuela justo ahí—. `ProbeAntHeadingPixels`
+#   renderiza la malla y el material REALES con un rumbo fijo, a la escala de la
+#   partida (~19 px de hormiga) y 6× más cerca, y mide el eje y el MORRO de la
+#   silueta en los píxeles; la evidencia (una hormiga por rumbo con el rumbo
+#   esperado pintado encima) se conserva en artifacts/playpass-heading-pixels/.
+#
+#   + DESCARTE AL TERMINAR (el árbol no se queda sucio): el pase GENERA y GUARDA
+#   (bootstrapper, `save_scene`, la propia re-serialización al sondear y cerrar
+#   Play), y eso reescribe anclas, reordena documentos y mueve el `AssetVersion`.
+#   Si los assets NO se van a commitear, ese churn es ruido de forma que el
+#   siguiente `git diff` mezclaría con lo que el pase fue a verificar; así que al
+#   terminar se descarta, por el MISMO camino que el reparto de commits
+#   (`--discard-churn` de commit-layers.sh delega en check-unity-assets.sh: una
+#   sola idea de qué es churn) — y NO antes: descartar mientras se juega dejaría
+#   al editor reescribiendo lo recién limpiado. `--no-discard-churn` lo salta, para
+#   + LA HUELLA DEL ÁRBOL (el pase no acumula estado): todo lo anterior descansa en
+#   un supuesto que nadie comprobaba —que una SEGUNDA pasada del mismo montaje deja
+#   el árbol exactamente como lo dejó la primera—. El paso 8bis toma una huella
+#   (estado y blob de contenido de cada fichero del ALCANCE que difiere de HEAD: los
+#   volcados de `artifacts/` y los documentos de asset del proyecto) y la guarda en
+#   `artifacts/playpass-fingerprint.txt` junto al montaje (HEAD + semilla + grid +
+#   ticks + velocidad + pool). La pasada SIGUIENTE calcula la suya y las compara:
+#   mismo montaje ⇒ misma huella, y si no lo son dice QUÉ fichero difiere. Los
+#   volcados de MEDIDA (muestras vivas, aspecto, bloque 4, recortes del HUD) cambian
+#   con el reloj por construcción: de ellos se compara el nombre y el estado, no el
+#   contenido. La maquinaria se prueba sin editor en el selftest, con un repositorio
+#   de mentira.
 #
 # Uso:
 #   scripts/playpass-live.sh                     # contra el editor abierto
@@ -95,13 +161,17 @@
 # --out FICHERO · --no-stream-check · --quiet · --no-block4 · --block4-speed N
 # (def. 2) · --block4-deadline SEG (def. 200) · --block4-samples FICHERO ·
 # --analyze-block4 FICHERO · --analyze-visual · --analyze-icons · --icons-dump
-# FICHERO · --icons-crops DIR · --no-canonicalize.
+# FICHERO · --icons-crops DIR · --no-canonicalize · --recanonicalize ·
+# --no-discard-churn.
 #
 # El comparador de iconos necesita Pillow (rasteriza el `.ttf`): se usa el primer
 # intérprete del PATH que lo tenga (medido: `python` sí, `python3` no) y se puede
 # forzar con $ICONS_PY.
 #
-# Salida: 0 ok · 1 invariante roto · 2 uso · 3 no hay editor/CLI disponible.
+# Salida: 0 ok · 1 invariante roto · 2 uso · 3 no se puede conducir el editor (no
+# hay ninguno abierto, no está el CLI, o NO RESPONDE: un diálogo modal o el hilo
+# principal atascado — que se dice con la evidencia y con el remedio, y nunca como
+# «la escena no tiene HUD»).
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -165,31 +235,75 @@ ICONS_SCRIPT="$ROOT/scripts/playpass-icons.py"
 # el veredicto sin nada que mirar después. `--icons-crops DIR` apunta a otros.
 ICONS_DIR="$ROOT/artifacts/playpass-hud-icons"
 
-# Canonicalización de los assets GENERADOS (ver el encabezado). 1 = activa.
+# Dónde vive la evidencia en PÍXELES del rumbo (`ProbeAntHeadingPixels` la escribe en
+# `<proyecto>/Temp/`, que Unity borra al cerrar el editor): el PNG con una hormiga por
+# rumbo y el rumbo esperado pintado encima es lo que se mira para creerse la medida.
+HEADING_DIR="$ROOT/artifacts/playpass-heading-pixels"
+
+# ── La HUELLA del árbol (paso 8bis): ¿dos pasadas del mismo montaje dejan el MISMO
+# diff contra HEAD? El ALCANCE es lo que el PASE escribe: los volcados de
+# `artifacts/` y los DOCUMENTOS DE ASSET del proyecto —la misma lista de extensiones
+# con la que `scripts/unity-asset-equivalence.py` decide qué es un asset; el `.cs` es
+# código de quien edita, no cosa del pase—. Los volcados de MEDIDA cambian con el
+# reloj por construcción: de ellos se compara el NOMBRE y el estado, no el contenido.
+FP_FILE="artifacts/playpass-fingerprint.txt"
+# El alcance de `artifacts/` es `playpass-*` —lo que el pase escribe—, NO el
+# directorio entero: cualquier otra cosa que viva ahí (un log, una prueba a mano, un
+# artefacto viejo) no es del pase, y meterla haría que su simple presencia o su
+# desaparición rompiera la comparación con un falso fallo.
+FP_SCOPE=("artifacts/playpass-*" src/App/AntSim.Unity/Assets src/App/AntSim.Unity/ProjectSettings)
+FP_ASSET_SUFFIXES=(".mat" ".unity" ".asset" ".prefab" ".controller" ".anim" ".meta")
+FP_LIVE=(artifacts/playpass-samples.txt artifacts/playpass-visual.txt \
+         artifacts/playpass-visual-edit.txt artifacts/playpass-block4.txt \
+         artifacts/playpass-scene.txt artifacts/playpass-hud-icons.txt \
+         artifacts/playpass-hud-icons/)
+# (`playpass-scene.txt` entra en la lista por su línea `presenter.live tick=… ants=…`,
+# que es una lectura del mundo EN MARCHA; lo que describe —materiales, rects— son
+# ASSETS, y ésos sí se comparan, como ficheros del alcance.)
+#
+# Lo que NO está en la lista se compara por CONTENIDO, y eso incluye la evidencia en
+# píxeles del rumbo (`artifacts/playpass-heading-pixels/`): es un render fuera de
+# pantalla de una malla fija con un giro fijo, así que dos pasadas tienen que dejar
+# el mismo PNG — si no, el propio invariante lo dice.
+
+# Comprobación de la forma canónica de los assets GENERADOS (ver el encabezado).
+# 1 = se comprueba; con --recanonicalize además se reescriben los que deriven.
 CANONICALIZE=1
+RECANONICALIZE=0
 CANONICALIZE_SCRIPT="$ROOT/scripts/unity-canonicalize-assets.py"
 
 # Verificador de REFERENCIAS de los assets generados (ver el encabezado). 1 = activo.
 REFERENCES_SCRIPT="$ROOT/scripts/unity-reference-check.py"
 
+# Descarte del churn de re-serialización AL TERMINAR (ver el encabezado). 1 = se
+# descarta; `--no-discard-churn` lo deja como lo dejó el pase (assets que sí se
+# van a commitear).
+DISCARD_CHURN=1
+ASSETS_SCRIPT="$ROOT/scripts/check-unity-assets.sh"
+
 log() { [[ $QUIET -eq 1 ]] || echo "$@"; }
 
-# ── Canonicalización de los assets generados ─────────────────────────────────
-# El pase GENERA la escena y los materiales (menú del bootstrapper + guardar) y
-# eso basta para que Unity les dé anclas nuevas: MEDIDO, 78 de los 103 assets del
-# proyecto derivan del canónico después de generar. Se reescriben aquí —con
-# anclas derivadas del CONTENIDO, ver scripts/unity-canonicalize-assets.py— para
-# que lo que se mide y lo que queda en el árbol sea el byte estable: dos pasadas
-# seguidas dan el MISMO `git diff`.
+# ── La forma canónica de los assets generados: VEREDICTO, no reparación ──────
+# El generador CIERRA su propia escritura canonicalizando lo que escribe
+# (Assets/Scripts/EditorTools/GeneratedAssets.cs, que llama a este mismo
+# scripts/unity-canonicalize-assets.py), así que aquí ya no hay nada que
+# arreglar: se COMPRUEBA, y si algún asset derivaría del canónico el pase se
+# planta. Eso es un fallo del GENERADOR —dejó anclas de sesión en la escena o en
+# los materiales— y taparlo reescribiéndolos aquí sería volver a depender de que
+# este paso lo arregle, que es justo lo que se quitó.
 #
-# FALLA CERRADO: si el canonicalizador no puede analizar un asset, esto devuelve
-# ≠ 0 y el pase se planta. Un asset que no se pudo canonicalizar es exactamente
-# el ruido que este paso existe para quitar; dar por bueno el árbol sin mirarlo
-# sería el falso verde que ya nos mordió con los iconos.
-canonicalize_assets() {
-  local label="$1" py rc=0 out line
+#   · `--recanonicalize`: reescribe lo que derive y SIGUE, avisando. Es para un
+#     árbol que NO viene del generador (un checkout viejo, assets tocados a mano);
+#     con el generador de hoy no debería hacer falta nunca.
+#   · `--no-canonicalize`: se salta la comprobación entera.
+#
+# FALLA CERRADO también cuando la herramienta no puede dar veredicto (un asset
+# ilegible devuelve el mismo rc 1): dar por bueno un árbol sin mirarlo sería el
+# falso verde que ya nos mordió con los iconos.
+check_canonical() {
+  local label="$1" py rc=0 out line modo="--check"
   if [[ $CANONICALIZE -ne 1 ]]; then
-    log "  (canonicalización saltada con --no-canonicalize)"
+    log "  (comprobación del canónico saltada con --no-canonicalize)"
     return 0
   fi
   if [[ ! -f "$CANONICALIZE_SCRIPT" ]]; then
@@ -198,20 +312,94 @@ canonicalize_assets() {
   fi
   py="$(command -v python3 || command -v python || true)"
   if [[ -z "$py" ]]; then
-    echo "✗ falta Python 3 (el canonicalizador de assets lo necesita)" >&2
+    echo "✗ falta Python 3 (la forma canónica de los assets se comprueba con él)" >&2
     return 1
   fi
+  [[ $RECANONICALIZE -eq 1 ]] && modo=""
   # PYTHONUTF8=1 no es opcional: sin él, imprimir ✓/✗ en la consola cp1252 de
   # Windows revienta con UnicodeEncodeError aunque el trabajo esté hecho.
-  out="$(PYTHONUTF8=1 "$py" "$CANONICALIZE_SCRIPT" --project "$PROJECT" 2>&1)" || rc=$?
+  out="$(PYTHONUTF8=1 "$py" "$CANONICALIZE_SCRIPT" --project "$PROJECT" $modo 2>&1)" || rc=$?
   while IFS= read -r line; do
     [[ -n "$line" ]] && log "  ${line%$'\r'}"
   done <<<"$out"
-  if [[ $rc -ne 0 ]]; then
-    echo "✗ el canonicalizador falló tras $label (rc=$rc) — el árbol no es estable" >&2
+  if [[ $rc -eq 0 ]]; then
+    [[ $RECANONICALIZE -eq 1 ]] && \
+      log "  (--recanonicalize: reparación del canónico OK tras $label)"
+    return 0
+  fi
+  if [[ $RECANONICALIZE -eq 1 ]]; then
+    echo "✗ el canonicalizador no pudo repararlo tras $label (rc=$rc) — no se mide" >&2
     return 1
   fi
-  return 0
+  echo "✗ los assets generados NO quedaron en forma canónica tras $label (rc=$rc):" >&2
+  echo "  o algún asset deriva del canónico, o la herramienta no pudo analizarlo (mismo" >&2
+  echo "  rc; su salida de arriba dice cuál). Es un fallo del generador: GeneratedAssets" >&2
+  echo "  cierra cada escritura, así que" >&2
+  echo "  su log del editor dice qué pasó (¿ANTSIM_CANONICALIZE=0? ¿sin Python?)." >&2
+  echo "  Si el árbol NO viene del generador (checkout viejo, assets a mano), repite" >&2
+  echo "  el pase con --recanonicalize para reescribirlos y seguir." >&2
+  return 1
+}
+
+# ── El pase también ESCRIBE: cierra su propia escritura ──────────────────────
+# `save_scene` no lo hace el generador: lo hace el pase, y ahí quien escribe es el
+# serializador del EDITOR, que numera las anclas con el contador de SESIÓN. O sea
+# que lo que el pase acaba de guardar no es canónico aunque la generación lo
+# fuera. Medido (2026-10-10, proyecto real): un `save_scene` sobre una escena YA
+# canónica, sin cambiarle el contenido, la deja DERIVANDO (425 documentos, sólo
+# anclas y blancos) — y con la comprobación DESPUÉS del guardado el pase se
+# plantaba culpando al generador de lo que había escrito él mismo, y el bloque 4
+# no llegaba a sondear nada.
+#
+# Así que cada `save_scene` del pase se cierra con el MISMO canonicalizador (una
+# sola definición de «canónico», la del generador) y sólo después se comprueba.
+# El generador conserva su veredicto aparte y SIN reparación, inmediatamente
+# después de generar —que es lo que este paso NO hace: no arregla lo que dejó el
+# generador, arregla lo que dejó el pase.
+#
+# Y SE CIERRA DESDE DENTRO DEL EDITOR, no desde fuera (sonda
+# `scripts/unity/ProbeCanonicalizeAssets.cs`), por lo mismo que el generador lo
+# hace desde dentro: escribir la escena por detrás con el editor teniéndola
+# abierta le hace notar el cambio al vigilante y levanta el modal «The open
+# scene(s) have been modified externally», que deja el editor sordo a TODOS los
+# comandos (medido: el pipeline devolviendo «Main thread operation timed out»
+# hasta que alguien pulsa el diálogo). La sonda canonicaliza y, si la escena es
+# la abierta, la RECARGA del fichero canónico: el editor queda mirando el fichero
+# y su siguiente guardado escribe anclas canónicas.
+cerrar_escritura_propia() {
+  local label="$1" out kind detalle
+  if [[ $CANONICALIZE -ne 1 ]]; then
+    log "  (la forma de lo que guarda el pase no se cierra: --no-canonicalize)"
+    return 0
+  fi
+  # `aviso|` (no medible: sin Python 3, sin la herramienta) no es fallo —«no
+  # medido» no es «roto», como en las puertas del pre-push—; `error|` sí: la
+  # herramienta corrió y dijo que algún asset deriva.
+  out="$(UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeCanonicalizeAssets.cs")" \
+           2>/dev/null | cmd_result 2>/dev/null || true)"
+  kind="${out%%|*}"
+  detalle="${out#*|}"
+  case "$kind" in
+    ok)
+      log "  (lo que guardó el pase tras $label quedó en forma canónica, cerrado dentro del editor: ${detalle:-sin detalle})"
+      return 0 ;;
+    aviso)
+      log "  (la forma de lo que guardó el pase tras $label NO se pudo medir: ${detalle:-sin detalle})"
+      return 0 ;;
+    error)
+      echo "✗ no se pudo cerrar la forma de lo que guardó el pase tras $label: ${detalle:-sin detalle}" >&2
+      return 1 ;;
+    *)
+      echo "✗ el editor no respondió al cerrar la forma de lo que guardó el pase tras $label" >&2
+      return 1 ;;
+  esac
+}
+
+# Guardar y cerrar, en ese orden y sin que nada se cuele en medio: separarlos fue
+# justo lo que dejó la escena del bloque 4 derivando con el veredicto puesto.
+guardar_escena() { # guardar_escena <ruta> <etiqueta>
+  UCMD save_scene --path "$1" >/dev/null 2>&1 || true
+  cerrar_escritura_propia "$2"
 }
 
 # ── Verificación de REFERENCIAS de los assets generados ──────────────────────
@@ -251,6 +439,175 @@ check_references() {
   esac
 }
 
+# ── Descarte del churn de re-serialización al TERMINAR ──────────────────────
+# El pase GENERA (bootstrapper), GUARDA (`save_scene`) y sondea en Play, y el
+# editor re-serializa mientras tanto: anclas nuevas, otro orden, el `AssetVersion`
+# de cada `.mat` movido. Si los assets NO se van a commitear, ese churn es ruido
+# de forma que el siguiente `git diff` mezclaría con lo que el pase fue a
+# verificar — así que al terminar se descarta.
+#
+# Se descarta AQUÍ, al final, y no antes: mientras hay Play vivo, el editor sigue
+# reescribiendo y limpiar a mitad sería escribir y volver a ensuciar. Y se hace por
+# el MISMO camino que el reparto de commits (`commit-layers.py --discard-churn`
+# delega en `check-unity-assets.sh`, que a su vez usa el verificador de
+# equivalencia), para que no haya dos ideas de qué es churn ni de qué se puede
+# tirar: los idénticos vuelven a REV y los que CAMBIAN de verdad se quedan, sólo
+# sin la forma que les puso la pasada.
+#
+# `--no-discard-churn` lo salta (el árbol se queda como lo dejó el pase): es lo
+# que quieres cuando SÍ vas a commitear los assets.
+#
+# El rc del descarte NO se confunde con el veredicto del pase: 0 es «nada
+# pendiente» y 1 es «además del churn hay cambios de VERDAD» —los dos son un
+# descarte correcto, y el 1 sólo dice que hay algo que revisar. 3 (no puede
+# actuar) y 4 (no quedó como afirmó) sí son un fallo de este paso: se dice y el
+# pase sale ≠ 0, porque un árbol a medio limpiar es peor que uno sucio a la vista.
+discard_churn() {
+  local rc=0 out line
+  if [[ $DISCARD_CHURN -ne 1 ]]; then
+    log "  (descarte del churn saltado con --no-discard-churn: el árbol se queda como lo dejó el pase)"
+    return 0
+  fi
+  if [[ ! -f "$ASSETS_SCRIPT" ]]; then
+    echo "✗ falta el verificador de assets: $ASSETS_SCRIPT" >&2
+    return 1
+  fi
+  # PYTHONUTF8=1 por el mismo motivo que en la forma canónica: los ✓/✗ de su
+  # salida revientan en la consola cp1252 de Windows.
+  out="$(PYTHONUTF8=1 bash "$ASSETS_SCRIPT" --discard 2>&1)" || rc=$?
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && log "  ${line%$'\r'}"
+  done <<<"$out"
+  case $rc in
+    0) log "  (el churn de re-serialización quedó descartado: el árbol no se queda sucio)" ;;
+    1) log "  (descartado el churn; queda algún cambio de VERDAD de los assets, en forma canónica, para revisar — el pase sí se puede commitear)" ;;
+    *) echo "✗ el descarte del churn no dejó el árbol en condiciones (rc=$rc) — revísalo antes de seguir" >&2
+       return 1 ;;
+  esac
+  return 0
+}
+
+# ── La ORIENTACIÓN de los actores: el morro tiene que apuntar al rumbo ───────
+# La caja del actor (`GameSpriteModel`) tiene el LARGO en Y y en la hormiga la
+# cabeza va hacia +Y, así que el presentador tiene que llevar ese +Y al rumbo del
+# Core (que mapea `X→X` e `Y→Z`). Si el giro está mal, el bicho sale andando DE
+# LADO —patas y antenas perpendiculares al rumbo— y NINGÚN check de estado lo ve:
+# los tres lóbulos están, el mundo aparece, el conteo de hormigas no cambia.
+# Medido el 2026-10-10 en el proyecto real: con `-rumbo` en vez de `90 − rumbo` el
+# morro salía a 90° justos del rumbo en los ocho rumbos de prueba.
+#
+# La medida la hace DENTRO del editor una sonda que llama a la rotación del propio
+# presenter (`ProbeActorOrientation` → `SimPresenterBehaviour.ActorRotation`), con
+# la matemática de Unity: aquí no se reimplementa la convención de `Euler`, que es
+# exactamente cómo se cuela el giro.
+#
+# ── Y lo mismo para las OTRAS siluetas: ítem, hoja y mordiscos ───────────────
+# El arte es un sólido PLANO (se extruye en Z) y la cámara mira de arriba, así que
+# una pieza dibujada sin acostar enseña el CANTO: con `Quaternion.identity` el ítem
+# y la hoja se veían como rectángulos —la hoja de 0,66 s × 1,10 s, con su largo de
+# 1,24 u en el eje vertical y el 1,1 del grosor en el plano— sin punta, sin nervio
+# y sin apuntar a nada. El eje de dibujo (su +Y) tiene que quedar en el plano y al
+# norte: no hay rumbo que seguir —el `FoodItem` del Core no guarda ángulo y el
+# stream no lo lleva—, así que inventarle un giro por pieza sería una decisión que
+# el dato no tiene.
+#
+# Y las MUESCAS tienen que COMER DEL BORDE del limbo: el borde de la hoja es una
+# ELIPSE (0,30 × 0,62 s), así que repartirlas con un radio ÚNICO de 0,55 s las
+# dejaba FUERA por los costados (0,55 > 0,30) y DENTRO por las puntas (0,55 < 0,62)
+# —flotando en el vacío junto a la hoja—; ahora `SimPresenterBehaviour.BiteOffset`
+# las reparte sobre la elipse. El probe mide cada muesca contra el borde (r = 1,
+# tolerancia 0,02) y comprueba que su comprobación tiene dientes: la configuración
+# vieja —el canto y el círculo de 0,55 s— tiene que FALLAR.
+check_actor_orientation() {
+  local out kind detalle
+  out="$(UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeActorOrientation.cs")" \
+           2>/dev/null | cmd_result 2>/dev/null || true)"
+  kind="${out%%|*}"
+  detalle="${out#*|}"
+  case "$kind" in
+    ok)
+      log "  ✓ ${detalle%% | *}"
+      return 0 ;;
+    error)
+      echo "✗ ${detalle%% | *}" >&2
+      echo "  (el morro de la malla es su +Y, el eje de avance de la caja del juego, y
+  el giro del presenter tiene que llevarlo al rumbo: 90° menos el rumbo. El arte de
+  ítems y hojas es un sólido PLANO: su eje de dibujo tiene que quedar acostado en el
+  tablero —al norte, que es el único que el dato no obliga a inventar—, o desde
+  arriba se ve el canto. Y las muescas de una hoja tienen que caer sobre el BORDE del
+  limbo, que es una ELIPSE (0,30 × 0,62 s): con un radio único (0,55 s) quedan fuera
+  por los costados y dentro por las puntas. Los desvíos y las extensiones del probe
+  dicen cuánto se va.)" >&2
+      return 1 ;;
+    *)
+      echo "✗ el editor no respondió a la orientación de los actores" >&2
+      return 1 ;;
+  esac
+}
+
+# ── Y LO MISMO, MEDIDO EN PÍXELES ────────────────────────────────────────────
+# La matriz correcta NO prueba el render: entre la matriz y lo que ve el jugador
+# quedan el encuadre de la cámara (¿mira al nadir? ¿su arriba es el norte de
+# pantalla?), la proyección, el rasterizado y el aliasing. El defecto que este paso
+# persigue (la hormiga andando de lado, con su morro a 90° del rumbo) vivía justo
+# ahí: la malla y la rotación podían estar bien y el bicho verse mal.
+#
+# `ProbeAntHeadingPixels` renderiza la MALLA y el MATERIAL reales de la escena con un
+# rumbo FIJO y mide en los píxeles el eje de la silueta (segundo momento) a la escala
+# de la partida (~19 px de hormiga, donde manda el aliasing) y 6× más cerca, más el
+# MORRO (el extremo LIGERO: el gáster pesa más que la cabeza) en el render de zoom,
+# que es donde el reparto de área de los extremos tiene margen —a 19 px deja 1 px de
+# diferencia en los diagonales, así que ahí se publica pero no decide—. Comprueba
+# además que la comprobación tiene dientes: el mismo render con el giro que se coló
+# (-rumbo) tiene que desviarse ~90°.
+#
+# Un `ok` sin la imagen no es una medida de píxeles: la evidencia se conserva fuera
+# de `Temp/` (que Unity borra al cerrar) o el paso falla.
+check_actor_heading_pixels() {
+  local out kind detalle
+  out="$(UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeAntHeadingPixels.cs")" \
+           2>/dev/null | cmd_result 2>/dev/null || true)"
+  kind="${out%%|*}"
+  detalle="${out#*|}"
+  case "$kind" in
+    ok)
+      log "  ✓ ${detalle%% | *}"
+      preserve_heading "$PROJECT/Temp" "${HEADING_DIR:-$ROOT/artifacts/playpass-heading-pixels}" || return 1
+      return 0 ;;
+    error)
+      echo "✗ ${detalle%% | *}" >&2
+      echo "  (el eje y el morro de la silueta se miden sobre la MALLA REAL: si no caen en el
+  rumbo del Core —que el mundo mapea X→X, Y→Z—, lo que se ve en pantalla no es lo que
+  dice la simulación. Se mide a la escala de partida y a zoom 6×, y el probe dice el
+  desvío de cada rumbo; el giro viejo (-rumbo) tiene que fallar ~90° o la comprobación
+  no mira el render.)" >&2
+      return 1 ;;
+    *)
+      echo "✗ el editor no respondió a la medida en píxeles del rumbo" >&2
+      return 1 ;;
+  esac
+}
+
+# preserve_heading <dir de la sonda> <destino> → copia el PNG de la evidencia en
+# píxeles (`antsim-heading-*.png`) fuera de `Temp/` y devuelve ≠ 0 si no había
+# ninguno. FALLA CERRADO por el mismo motivo que la conservación de los iconos: un
+# «medido en píxeles» sin la imagen que se mira es una afirmación sin nada detrás.
+preserve_heading() {
+  local from="$1" to="$2" n=0 f
+  mkdir -p "$to" || return 1
+  for f in "$from"/antsim-heading-*.png; do
+    [[ -f "$f" ]] || continue
+    cp -f "$f" "$to/" || return 1
+    n=$((n+1))
+  done
+  if [[ $n -eq 0 ]]; then
+    echo "✗ FALLO (píxeles del rumbo): la sonda no dejó ningún PNG en $from — sin la imagen, la medida de píxeles no se puede mirar" >&2
+    return 1
+  fi
+  log "  ✓ evidencia en píxeles conservada en $to ($n PNG: la hormiga por rumbo, arriba a escala de partida y abajo a zoom)"
+  return 0
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --samples)   SAMPLES="$2"; ANALYZE_ONLY=1; shift 2 ;;
@@ -260,6 +617,8 @@ while [[ $# -gt 0 ]]; do
     --icons-dump)     HUD_ICONS="$2"; shift 2 ;;
     --icons-crops)    ICONS_CROPS="$2"; shift 2 ;;
     --no-canonicalize) CANONICALIZE=0; shift ;;
+    --recanonicalize)  RECANONICALIZE=1; shift ;;
+    --no-discard-churn) DISCARD_CHURN=0; shift ;;
     --selftest)  SELFTEST=1; shift ;;
     --speed)     SPEED="$2"; shift 2 ;;
     --ticks)     TICKS="$2"; shift 2 ;;
@@ -283,7 +642,10 @@ while [[ $# -gt 0 ]]; do
     --block4-deadline) B4_DEADLINE="$2"; shift 2 ;;
     --block4-samples)  B4_SAMPLES="$2"; shift 2 ;;
     --quiet)     QUIET=1; shift ;;
-    --help|-h)   sed -n '2,97p' "$0"; exit 0 ;;
+    # El encabezado entero, hasta la primera línea que NO es comentario (`set -euo
+    # pipefail`). Antes era `2,97p` y añadir un párrafo al encabezado dejaba el
+    # bloque «Uso:»/«Opciones:» fuera del --help, en silencio.
+    --help|-h)   sed -n '2,/^[^#]/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "parámetro desconocido: $1 (ver --help)" >&2; exit 2 ;;
   esac
 done
@@ -723,6 +1085,125 @@ analyze_icons() {
   return 1
 }
 
+# ── 8bis. La HUELLA del árbol: el pase no acumula estado ─────────────────────
+# POR QUÉ. Todo lo que este pase afirma —«los assets quedaron canónicos», «el árbol
+# no se queda sucio»— descansa en un supuesto que hasta ahora nadie comprobaba: que
+# una SEGUNDA pasada del mismo montaje deja el árbol exactamente como lo dejó la
+# primera. Si el pase acumulara estado (un asset que se reescribe cada vez, un
+# fichero que aparece, un volcado que crece), el diff contra HEAD de cada corrida
+# sería otro y ninguna medida sería comparable con la de la pasada anterior.
+#
+# CÓMO. Se toma una HUELLA —estado y blob (`git hash-object`: el contenido que un
+# commit guardaría, con sus filtros) de cada fichero del ALCANCE que difiere de
+# HEAD— y se guarda en `artifacts/playpass-fingerprint.txt` junto al MONTAJE (HEAD +
+# semilla + grid + ticks + velocidad + pool). La pasada SIGUIENTE calcula la suya y
+# la compara: mismo montaje ⇒ mismas líneas, y si no lo son el pase dice QUÉ fichero
+# difiere (la línea «-» es lo que había y la «+» lo que hay).
+#
+# LA EXCEPCIÓN, declarada y comprobada: los volcados de MEDIDA (muestras vivas,
+# aspecto, bloque 4, recortes del HUD) cambian con el reloj por construcción, así que
+# su CONTENIDO no se compara; de ellos se exige que estén, que no estén vacíos y que
+# su nombre y su estado salgan en las dos pasadas. Un fichero que aparece o
+# desaparece, o que cambia fuera de esa lista, es un fallo de esta comprobación.
+#
+# Va DESPUÉS del descarte del churn porque es el estado FINAL del árbol el que tiene
+# que coincidir con el que dejó la pasada anterior.
+FP_COMPARED=0
+
+fp_es_medida() { # ¿el contenido de este fichero cambia con el reloj?
+  local p="$1" pre
+  for pre in "${FP_LIVE[@]}"; do case "$p" in "$pre"*) return 0 ;; esac; done
+  return 1
+}
+
+fp_es_alcance() { # ¿este camino es de los que el PASE escribe?
+  local p="$1" s
+  case "$p" in artifacts/playpass-*) return 0 ;; esac
+  for s in "${FP_ASSET_SUFFIXES[@]}"; do case "$p" in *"$s") return 0 ;; esac; done
+  return 1
+}
+
+fp_listado() { # "<estado> <blob|medida> <camino>" por fichero del alcance que difiere de HEAD
+  git -C "$ROOT" status --porcelain -uall -- "${FP_SCOPE[@]}" 2>/dev/null | while IFS= read -r linea; do
+    [[ -n "$linea" ]] || continue
+    local xy p sha
+    xy="${linea:0:2}"
+    p="${linea:3}"
+    [[ "$p" == "$FP_FILE" ]] && continue
+    fp_es_alcance "$p" || continue
+    if fp_es_medida "$p"; then
+      sha="medida"
+    elif [[ -f "$ROOT/$p" ]]; then
+      sha="$(git -C "$ROOT" hash-object -- "$p" 2>/dev/null || echo '?')"
+    else
+      sha="-"
+    fi
+    printf '%s %s %s\n' "$xy" "$sha" "$p"
+  done | LC_ALL=C sort
+}
+
+fp_montaje() { # lo que hace comparables (o no) dos pasadas
+  printf 'HEAD %s seed=%s grid=%s ticks=%s speed=%s pool=%s' \
+    "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo '?')" \
+    "$SEED" "$GRID" "$TICKS" "$SPEED" "$SEED_POOL"
+}
+
+fp_blob() { git -C "$ROOT" hash-object --stdin 2>/dev/null || true; }
+
+fp_cuenta() { # cuántos ficheros y cuántos de ellos son de medida
+  FP_N="$(printf '%s\n' "$1" | grep -c . || true)"
+  FP_MED="$(printf '%s\n' "$1" | grep -c ' medida ' || true)"
+}
+
+check_tree_fingerprint() {
+  local abs="$ROOT/$FP_FILE" montaje nuevo previo="" prev_montaje huella prev_listado
+  montaje="$(fp_montaje)"
+  if [[ -f "$abs" ]]; then previo="$(cat "$abs")"; fi
+  nuevo="$(fp_listado)"
+  huella="$(printf '%s\n' "$nuevo" | fp_blob)"
+  fp_cuenta "$nuevo"
+
+  # La huella de ESTA pasada se escribe siempre: describe el estado que deja, y es la
+  # que comparará la siguiente. Sin fechas dentro: dos pasadas idénticas tienen que
+  # dejar el fichero byte a byte igual (si no, la huella no podría converger).
+  {
+    printf '# Huella del árbol del Play pass — la compara la pasada SIGUIENTE si el montaje coincide.\n'
+    printf '# montaje: %s\n' "$montaje"
+    printf '# alcance: %s (assets: %s)\n' "${FP_SCOPE[*]}" "${FP_ASSET_SUFFIXES[*]}"
+    printf '# medida (sólo nombre y estado se comparan): %s\n' "${FP_LIVE[*]}"
+    printf '# huella: %s\n' "$huella"
+    printf '%s\n' "$nuevo"
+  } > "$abs" || return 1
+
+  if [[ -z "$previo" ]]; then
+    log "  ✓ huella guardada en $FP_FILE ($FP_N ficheros del alcance, $FP_MED de medida): primera pasada de este montaje, no hay con qué comparar — la compara la siguiente"
+    return 0
+  fi
+
+  prev_montaje="$(printf '%s\n' "$previo" | sed -n 's/^# montaje: //p' | head -1)"
+  if [[ "$prev_montaje" != "$montaje" ]]; then
+    log "  (huella NO comparable: el montaje cambió — es otra corrida)"
+    log "    antes: $prev_montaje"
+    log "    ahora: $montaje"
+    return 0
+  fi
+
+  prev_listado="$(printf '%s\n' "$previo" | grep -v '^#' || true)"
+  if [[ "$prev_listado" == "$nuevo" ]]; then
+    FP_COMPARED=1
+    log "  ✓ huella IDÉNTICA a la pasada anterior (${huella:0:12}…): los $FP_N ficheros del alcance quedan igual — el pase no acumula estado (de ellos, $FP_MED volcados de medida, que sólo se comparan por nombre)"
+    return 0
+  fi
+
+  echo "✗ el árbol NO quedó igual que en la pasada anterior (mismo montaje): cambió algo del alcance" >&2
+  # `|| true`: `diff` sale con 1 cuando los ficheros difieren —que es justo el caso—
+  # y con `set -o pipefail` ese 1 sería el del pipeline.
+  diff <(printf '%s\n' "$prev_listado") <(printf '%s\n' "$nuevo") 2>/dev/null | sed 's/^/      /' | head -20 >&2 || true
+  echo "    (línea «-» = lo que dejó la pasada anterior; «+» = lo que deja ésta. Un fichero que cambia fuera de los volcados de medida, o uno que aparece o desaparece, rompe la idempotencia del pase.)" >&2
+  return 1
+}
+
+
 # ── Selftest: el analizador, sin editor ──────────────────────────────────────
 if [[ $SELFTEST -eq 1 ]]; then
   # El temporal se borra AL FINAL, de forma explícita: un `trap … EXIT`
@@ -878,8 +1359,91 @@ if [[ $SELFTEST -eq 1 ]]; then
     echo "✓ selftest de los iconos ok (verde pasa · glifo roto falla · sin volcado falla · PNG conservados)"
   fi
 
+  # — Huella del árbol: el invariante «dos pasadas dejan el mismo diff» —
+  # Las funciones son `git status` + `git hash-object` sobre el alcance, así que se
+  # prueban con GIT de verdad, en un repositorio de mentira: el caso «cambió un asset»
+  # y el caso «cambió un volcado de medida» se distinguen por lo que las funciones
+  # HACEN, no por lo que dicen que hacen.
+  f7=0
+  fp_repo="$tmp/fp-repo"
+  mkdir -p "$fp_repo"
+  (
+    cd "$fp_repo" || exit 1
+    git init -q . && git config user.email t@t && git config user.name t
+    mkdir -p artifacts src/App/AntSim.Unity/Assets/Scripts src/App/AntSim.Unity/ProjectSettings
+    printf 'escena\n' > src/App/AntSim.Unity/Assets/Escena.unity
+    printf 'build\n'  > src/App/AntSim.Unity/ProjectSettings/EditorBuildSettings.asset
+    printf 'codigo\n' > src/App/AntSim.Unity/Assets/Scripts/Algo.cs
+    git add -A && git commit -qm base
+  ) >/dev/null 2>&1
+  fp_root_save="$ROOT"; fp_seed_save="$SEED"
+  ROOT="$fp_repo"; SEED=42
+
+  # (1) Primera pasada: guarda la huella y NO compara (no hay con qué).
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]] || ! grep -q 'primera pasada de este montaje' <<<"$out"; then
+    echo "✗ selftest(huella): la primera pasada no dijo que no había con qué comparar (rc=$rc)" >&2; f7=1
+  fi
+
+  # (2) Segunda pasada idéntica: huella idéntica… y el fichero de la huella converge
+  # (dos pasadas iguales tienen que dejarlo byte a byte igual).
+  cp -f "$fp_repo/$FP_FILE" "$tmp/fp-1.txt"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]] || ! grep -q 'huella IDÉNTICA' <<<"$out"; then
+    echo "✗ selftest(huella): dos pasadas iguales no dieron huella idéntica (rc=$rc)" >&2; f7=1
+  fi
+  if ! cmp -s "$tmp/fp-1.txt" "$fp_repo/$FP_FILE"; then
+    echo "✗ selftest(huella): el fichero de la huella no es byte a byte el mismo entre dos pasadas iguales" >&2; f7=1
+  fi
+
+  # (3) Un ASSET que cambia entre pasadas: falla y dice CUÁL.
+  printf 'escena cambiada\n' > "$fp_repo/src/App/AntSim.Unity/Assets/Escena.unity"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]] || ! grep -q 'Escena.unity' <<<"$out"; then
+    echo "✗ selftest(huella): un asset cambiado no rompió la huella (rc=$rc)" >&2; f7=1
+  fi
+
+  # (4) El CONTENIDO de un volcado de MEDIDA no se compara: cambia con el reloj.
+  printf 'muestra 1\n' > "$fp_repo/artifacts/playpass-samples.txt"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  printf 'muestra 2, distinta\n' > "$fp_repo/artifacts/playpass-samples.txt"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo "✗ selftest(huella): un volcado de medida que cambia rompió la huella (rc=$rc)" >&2; f7=1
+  fi
+
+  # (5) Un fichero del alcance que APARECE, y otro que DESAPARECE: las dos cosas fallan.
+  printf 'nuevo\n' > "$fp_repo/src/App/AntSim.Unity/Assets/Otro.mat"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]] || ! grep -q 'Otro.mat' <<<"$out"; then
+    echo "✗ selftest(huella): un fichero que aparece no rompió la huella (rc=$rc)" >&2; f7=1
+  fi
+  rm -f "$fp_repo/src/App/AntSim.Unity/Assets/Otro.mat"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]]; then
+    echo "✗ selftest(huella): un fichero que desaparece no rompió la huella (rc=$rc)" >&2; f7=1
+  fi
+
+  # (6) El CÓDIGO no es cosa del pase: cambiarlo no rompe la huella.
+  printf 'codigo distinto\n' > "$fp_repo/src/App/AntSim.Unity/Assets/Scripts/Algo.cs"
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    echo "✗ selftest(huella): cambiar un .cs rompió la huella (no es del alcance) (rc=$rc)" >&2; f7=1
+  fi
+
+  # (7) Otro MONTAJE (otra semilla): no se compara — y no falla, porque es otra corrida.
+  SEED=43
+  rc=0; out="$(check_tree_fingerprint 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]] || ! grep -q 'NO comparable' <<<"$out"; then
+    echo "✗ selftest(huella): con otro montaje no dijo que no era comparable (rc=$rc)" >&2; f7=1
+  fi
+  ROOT="$fp_root_save"; SEED="$fp_seed_save"
+  if [[ $f7 -eq 0 ]]; then
+    echo "✓ selftest de la huella del árbol ok (idempotente · asset cambiado falla · medida no · aparece/desaparece falla · el .cs no es del alcance · montaje distinto no compara)"
+  fi
+
   rm -rf "$tmp"
-  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 ]] || exit 1
+  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 ]] || exit 1
   exit 0
 fi
 
@@ -997,6 +1561,101 @@ sys.stdout.buffer.flush()
 command -v python3 >/dev/null 2>&1 \
   || { echo "✗ falta python3 (se usa para leer el JSON del CLI)" >&2; exit 3; }
 
+# ── «El editor no respondió» NO es «la escena no tiene HUD» ───────────────────
+# El CLI contesta al instante cuando el editor está vivo; si el HILO PRINCIPAL del
+# editor está esperando a un DIÁLOGO, TODOS los comandos caducan a los 30 s. El
+# medido: «The open scene(s) have been modified externally», que Unity levanta
+# cuando algo escribe en disco una escena abierta (el descarte de churn de un pase
+# anterior, un `git checkout`, otro editor).
+#
+# Y el síntoma no se parece al problema: la salida útil queda VACÍA. Con eso el
+# pase decía «la escena no tiene HUD presentable ()» —culpando a la escena— y
+# moría en «no se pudo configurar el presenter: » con rc 3: sin causa y sin
+# remedio, y con un campo vacío donde iba el motivo. Costó ir a buscar la causa a
+# mano (enumerando ventanas del proceso) el 2026-10-10.
+#
+# `cli_error_msg`: el mensaje del CLI (su sobre trae `errors[]`, que es donde va
+# «Pipeline command 'x' timed out after 30000ms») o vacío.
+cli_error_msg() {
+  python3 -c "
+import sys, json
+try: d = json.loads(sys.stdin.buffer.read().decode('utf-8'))
+except Exception: sys.exit(0)
+errs = d.get('errors') or []
+if errs and isinstance(errs[0], dict):
+    m = str(errs[0].get('message') or errs[0].get('code') or '')
+    sys.stdout.buffer.write(m.encode('utf-8'))
+"
+}
+
+# `clasificar_respuesta <rc> <salida cruda>` — las cuatro cosas que puede pasar,
+# sin confundirlas:
+#   ok|VALOR      el editor respondió y VALOR es lo que contestó (la sonda, o el
+#                 objeto de `editor_status`)
+#   error|MOTIVO  el editor RESPONDIÓ con un error (p. ej. la sonda dice que en la
+#                 escena no hay presenter): es una respuesta, no un mudo, y el
+#                 llamante puede hacer algo con ella (construir la escena)
+#   mudo          no hubo respuesta legible: sin JSON, o el CLI murió sin decir
+#                 nada. No se sabe NADA de la escena — y eso es lo que hay que
+#                 decir en vez de inventarse el motivo.
+#   bloqueado|M   el CLI caducó: el editor está ahí pero no atiende (diálogo o hilo
+#                 atascado). M es el mensaje del CLI.
+clasificar_respuesta() { # clasificar_respuesta <rc> <salida cruda>
+  local rc="$1" crudo="$2" payload msg
+  payload="$(printf '%s' "$crudo" | cmd_result)"
+  case "$payload" in
+    '') msg="$(printf '%s' "$crudo" | cli_error_msg)"
+        case "$msg" in
+          '') if [[ "$rc" == 0 ]]; then printf 'mudo'
+              else printf 'bloqueado|el CLI salió con rc=%s y sin salida' "$rc"; fi ;;
+          *timed\ out*|*[Tt]imeout*|*timeout*) printf 'bloqueado|%s' "$msg" ;;
+          *) printf 'error|%s' "$msg" ;;
+        esac ;;
+    error\|*) printf 'error|%s' "${payload#error|}" ;;
+    *)       printf 'ok|%s' "$payload" ;;
+  esac
+}
+
+# El DETALLE de una clasificación. Ojo con `${x#*|}` a pelo: SIN `|` devuelve la
+# cadena ENTERA, así que un `mudo` suelto acababa imprimiéndose como motivo
+# («✗ el editor NO respondió: mudo») — que es el campo vacío que se quería evitar,
+# pero con una palabra dentro. Con `|` hay motivo; sin `|` no hay nada que decir.
+detalle_clasif() { # detalle_clasif <clasificación>
+  if [[ "$1" == *'|'* ]]; then printf '%s' "${1#*|}"; fi
+}
+
+# El otro lado del error: decir QUÉ es y QUÉ HACER. Con evidencia, no con una
+# corazonada: la marca que el propio paquete del pipeline deja en el log del
+# editor cuando su hilo principal no llega a atender la petición.
+diagnostico_editor_bloqueado() { # diagnostico_editor_bloqueado [detalle del CLI]
+  local detalle="${1:-}" log="$PROJECT/Logs/Editor.log" marca=0
+  # `mudo`/`bloqueado`/… son CLAVES, no motivos: si llega una aquí es que el
+  # llamante pasó la clasificación entera, y el motivo se quedaría en esa palabra.
+  case "$detalle" in mudo|bloqueado|error|ok) detalle="" ;; esac
+  # Nunca un campo vacío: si el CLI no dijo por qué, se dice ESO.
+  if [[ -n "$detalle" ]]; then echo "✗ el editor NO respondió: $detalle" >&2
+  else echo "✗ el editor NO respondió: el CLI no devolvió ni JSON" >&2; fi
+  echo "  (no es la escena: el editor no llegó a decir nada de la escena)" >&2
+  # La marca se busca en la COLA del log: es de este intento, no de una vez que
+  # pasó hace media hora (el log no se vacía y la marca de ayer seguiría ahí).
+  if [[ -f "$log" ]] && tail -n 400 "$log" 2>/dev/null | grep -q 'Main thread operation timed out'; then
+    marca=1
+    echo "  su log lo confirma: «Main thread operation timed out» en las últimas líneas de $log" >&2
+  fi
+  echo "  Casi siempre es un DIÁLOGO modal esperando en la ventana del editor. El medido:" >&2
+  echo "  «The open scene(s) have been modified externally», que sale cuando algo escribe" >&2
+  echo "  en disco una escena que el editor tiene abierta (el descarte de churn de otro" >&2
+  echo "  pase, un \`git checkout\` a mano, otro editor sobre el mismo proyecto)." >&2
+  echo "  remedio: cierra ese diálogo en la ventana del editor (Reload o Ignore) y repite" >&2
+  if [[ $marca -eq 0 ]]; then
+    echo "  el pase. Si no hay ningún diálogo, el hilo está atascado: mira $log y, si no" >&2
+    echo "  avanza, reinicia el editor." >&2
+  else
+    echo "  el pase (con el diálogo ya cerrado, Unity tiene que volver a atender)." >&2
+  fi
+  return 1
+}
+
 # Al entrar en Play el editor recarga el dominio y el servidor del pipeline
 # reinicia: la PRIMERA llamada puede salir ≠ 0 sin salida alguna. Se espera a
 # que Play esté vivo y se reintenta, en vez de abortar (comprobado: exit 6 a la
@@ -1004,13 +1663,31 @@ command -v python3 >/dev/null 2>&1 \
 # `grep -q` cierra el pipe, el productor muere con SIGPIPE y `pipefail` da la
 # tubería por fallida.
 # `editor_status` trae un objeto (no un run_script) — se leen sus campos a mano.
+# DÓNDE viven esos campos se pregunta al sobre REAL, no a la memoria: el editor
+# contesta `{"data":{"command":"editor_status","result":{"compiling":false,…}}}`,
+# así que buscar `compiling` en `data` (y no en `data.result`) devolvía vacío
+# SIEMPRE y `wait_for_compiled` no esperaba nunca — que es justo el paso que evita
+# medir con el dominio recargándose en Play (mundo congelado). Se miran los dos
+# sitios para no volver a depender de cuál de ellos usa hoy el paquete.
 editor_field() {
   UCMD editor_status 2>/dev/null | python3 -c "
 import sys, json
 try: d = json.load(sys.stdin)
 except Exception: sys.exit(0)
 r = d.get('data') or {}
-print(r.get('$1', ''))
+v = r.get('$1')
+if v is None:
+    v = (r.get('result') or {}).get('$1')
+# Los booleanos en MINÚSCULA, como los escribe el JSON del CLI: print(True) saca
+# «True» y el case «… in *true*)» de wait_for_compiled no lo veía, así que la
+# espera por recarga de dominio era un no-op silencioso. (Y ojo con las COMILLAS
+# INVERTIDAS dentro de este bloque: el fuente va dentro de unas comillas dobles de
+# bash, así que unas comillas invertidas ejecutarían aquí dentro lo que encierran.
+# Medido: se colaron en un comentario y cada llamada imprimía un error de sintaxis
+# y el bucle de espera se quedaba 120 s durmiendo por una letra.)
+if v is True: sys.stdout.write('true')
+elif v is False: sys.stdout.write('false')
+elif v is not None: sys.stdout.write(str(v))
 " 2>/dev/null || true
 }
 
@@ -1061,16 +1738,47 @@ log "▶ Play pass: bloques 3 (stream vivo) y 5 (pool sembrado)"
 log "   editor:   $UNITY_CLI_BIN"
 log "   proyecto: $PROJECT"
 
+# Que HAYA un editor abierto no es que CONTESTE: `unity status` lo sirve el
+# registro del CLI, no el editor (medido: seguía diciendo «ready» con el hilo
+# principal bloqueado por el diálogo). Así que se le pregunta de verdad una vez
+# —`editor_status`, lo más barato— ANTES de gastar la recompilación y de hablar de
+# la escena: si no contesta, el pase se planta diciendo qué pasa y qué hacer.
+ED_RC=0
+ED_RAW="$(UCMD editor_status 2>/dev/null)" || ED_RC=$?
+ED="$(clasificar_respuesta "$ED_RC" "$ED_RAW")"
+case "$ED" in
+  mudo|bloqueado*) diagnostico_editor_bloqueado "$(detalle_clasif "$ED")" || true; exit 3 ;;
+esac
+
 # Se compila ANTES de jugar: verificar contra una Assembly-CSharp vieja no
 # valdría de nada. Si la compilación falla, el sitio del error está en
 # scripts/check-unity-compile.sh.
 log "▶ Recompilando los scripts del editor…"
 UCMD recompile >/dev/null 2>&1 || true
+# `*) break` y no `[[ -n "$RC" ]] && break`: con el editor mudo, esa prueba
+# falsa dejaba el bucle con rc 1 y `set -e` se llevaba el pase por delante SIN
+# decir nada. Un estado que no llega lo trata el reintento de abajo, que sí
+# puede hablar.
 RC=""
 for i in $(seq 1 90); do
   RC="$(UCMD recompile_status 2>/dev/null | cmd_result 2>/dev/null || true)"
-  case "$RC" in *compiling*) sleep 1 ;; *) [[ -n "$RC" ]] && break ;; esac
+  case "$RC" in *compiling*) sleep 1 ;; *) break ;; esac
 done
+# Un estado que no llega NO es «compila»: antes, con `RC` vacío, el chequeo de
+# abajo salía en verde y el pase medía contra una Assembly-CSharp que no sabía
+# cuál era. Se reintenta (el editor puede estar recargando el dominio) y, si sigue
+# sin llegar, se dice: es el mismo síntoma del editor que no atiende.
+if [[ -z "$RC" ]]; then
+  for i in $(seq 1 10); do
+    RC="$(UCMD recompile_status 2>/dev/null | cmd_result 2>/dev/null || true)"
+    if [[ -n "$RC" ]]; then break; fi
+    sleep 1
+  done
+fi
+if [[ -z "$RC" ]]; then
+  diagnostico_editor_bloqueado "no llegó el estado de la recompilación" || true
+  exit 3
+fi
 # El estado llega como string JSON sin espacios (lo serializa Unity).
 if ! printf '%s' "$RC" | python3 -c "
 import sys, json
@@ -1084,8 +1792,7 @@ sys.exit(1 if (d.get('compilationFailed') or d.get('failed')) else 0)
   exit 3
 fi
 
-STATUS="$(UCMD editor_status 2>/dev/null | cmd_result 2>/dev/null || true)"
-case "$STATUS" in
+case "$ED" in
   *playing*) log "   (había Play activo: se detiene)"; UCMD editor_stop >/dev/null 2>&1 || true ;;
 esac
 
@@ -1099,26 +1806,58 @@ mkdir -p "$PROJECT/Temp"
 printf '{"seed":%s,"grid":%s,"colonies":%s,"ticks":%s,"speed":%s,"seedPool":"%s","replay":""}\n' \
   "$SEED" "$GRID" "$COLONIES" "$TICKS" "$SPEED" "${SEED_POOL:--}" > "$CONFIG"
 
-set_probe() { UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeToastsSet.cs")" \
-                 2>/dev/null | cmd_result 2>/dev/null || true; }
+# La sonda del presenter, con la respuesta CLASIFICADA (`set_probe` deja la clave
+# en SET_CLAVE y el detalle en SET_DETALLE): «la escena no tiene presenter» es una
+# RESPUESTA del editor; «no contestó» es otra cosa, y el pase no puede hablar de
+# la escena cuando nadie ha dicho nada de la escena.
+set_probe() {
+  local rc=0 raw c
+  raw="$(UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeToastsSet.cs")" 2>/dev/null)" || rc=$?
+  c="$(clasificar_respuesta "$rc" "$raw")"
+  SET_CLAVE="${c%%|*}"
+  SET_DETALLE="$(detalle_clasif "$c")"
+  # `return 0` explícito: el camino BUENO termina en una prueba que da FALSO, y
+  # con `set -e` eso mataba el pase en silencio (rc 1, sin ningún mensaje) justo
+  # después de «Recompilando los scripts del editor…» — medido con el CLI falso.
+  return 0
+}
 
-SET="$(set_probe)"
-case "$SET" in
-  ok*) log "   config:   ${SET#ok|}" ;;
+set_probe
+case "$SET_CLAVE" in
+  ok) log "   config:   $SET_DETALLE" ;;
+  mudo|bloqueado)
+    diagnostico_editor_bloqueado "$SET_DETALLE" || true; exit 3 ;;
   *)
-    echo "   la escena no tiene HUD presentable ($SET) — se construye con el bootstrapper…"
+    echo "   la escena no tiene HUD presentable ($SET_DETALLE) — se construye con el bootstrapper…"
     UCMD menu "AntSim/Crear escena de juego" >/dev/null 2>&1 || true
-    UCMD save_scene --path "Assets/Scenes/Game.unity" >/dev/null 2>&1 || true
-    SET="$(set_probe)"
-    case "$SET" in ok*) log "   config:   ${SET#ok|}" ;; *)
-      echo "✗ no se pudo configurar el presenter: $SET" >&2; exit 3 ;; esac
+    # El veredicto del GENERADOR se toma aquí, antes de que el pase guarde nada:
+    # después, la escena la habría escrito el editor y el fallo del generador
+    # quedaría tapado —o, al revés, se le culparía de lo que escribió el pase—.
+    if ! check_canonical "la generación de la escena"; then
+      echo "✗ el generador no dejó la escena en forma canónica — no se mide" >&2
+      exit 1
+    fi
+    if ! guardar_escena "Assets/Scenes/Game.unity" "la construcción de la escena"; then
+      echo "✗ no se pudo cerrar la forma de lo que guardó el pase — no se mide" >&2
+      exit 1
+    fi
+    set_probe
+    case "$SET_CLAVE" in
+      ok) log "   config:   $SET_DETALLE" ;;
+      mudo|bloqueado)
+        diagnostico_editor_bloqueado "$SET_DETALLE" || true; exit 3 ;;
+      *)
+        echo "✗ la escena construida no tiene presenter configurable: ${SET_DETALLE:-sin motivo que el editor haya dicho}" >&2
+        exit 3 ;;
+    esac
     ;;
 esac
 
-# Los assets que este paso acaba de GENERAR se canonicalizan AQUÍ, antes de
-# medir: es lo que hace que dos pasadas den el mismo diff (ver el encabezado).
-if ! canonicalize_assets "la construcción de la escena"; then
-  echo "✗ la canonicalización falló — no se mide sobre un árbol inestable" >&2
+# La forma canónica de lo que acaba de GENERAR el bootstrapper se COMPRUEBA aquí
+# (no se repara: la cierra el propio generador) para que no se mida sobre un árbol
+# inestable — dos pasadas del mismo montaje tienen que dar el mismo diff.
+if ! check_canonical "la construcción de la escena"; then
+  echo "✗ el árbol no está en forma canónica — no se mide sobre bytes inestables" >&2
   exit 1
 fi
 
@@ -1145,10 +1884,26 @@ trap cleanup_play EXIT
 # primera vez DURANTE la partida recarga el dominio y congela el mundo: pasó de
 # verdad (73 muestras clavadas en el tick 105, sin un solo error en la consola).
 log "▶ Compilando las sondas (antes de Play, para no recargar el dominio en partida)…"
-for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot; do
+for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
   UCMD run_script --file "$(winpath "$PROBE_DIR/$_probe.cs")" >/dev/null 2>&1 || true
 done
 wait_for_compiled || true
+
+# Los actores, ya compilados: ¿el morro apunta al rumbo? Va aquí y no antes para
+# no provocar una recarga de dominio entre las comprobaciones del árbol.
+if ! check_actor_orientation; then
+  echo "✗ las siluetas no apuntan a su eje — no se mide un mundo que se dibuja de lado o de canto" >&2
+  exit 1
+fi
+
+# Y la misma pregunta EN EL RENDER: la matriz correcta no prueba lo que se ve (el
+# encuadre de la cámara, la proyección, el rasterizado y el aliasing quedan en medio).
+# Va aquí, con las sondas ya compiladas y sin Play, por el mismo motivo que la de
+# arriba: el render de la hormiga no necesita la partida para ser el render del juego.
+if ! check_actor_heading_pixels; then
+  echo "✗ el eje de la silueta no cae sobre el rumbo en los píxeles — no se mide un mundo que el jugador ve torcido" >&2
+  exit 1
+fi
 
 UCMD editor_play >/dev/null 2>&1 || true
 if ! wait_for_play; then
@@ -1333,23 +2088,45 @@ if [[ $BLOCK4 -eq 1 ]]; then
   # registra en build settings, sin lo cual «reiniciar con plan» no puede
   # recargarla (defecto que encontró este mismo check).
   UCMD menu "AntSim/Crear escena de juego" >/dev/null 2>&1 || true
-  UCMD save_scene --path "Assets/Scenes/Game.unity" >/dev/null 2>&1 || true
+  # El veredicto del GENERADOR, antes de que el pase guarde (mismo paso que en la
+  # construcción de la escena: sin esto, el guardado del pase taparía su fallo y
+  # el del generador se atribuiría al pase).
+  if ! check_canonical "la generación de la escena (bloque 4)"; then
+    echo "✗ el generador no dejó la escena en forma canónica — no se sondea" >&2
+    RC4=1
+  fi
+  if ! guardar_escena "Assets/Scenes/Game.unity" "la reconstrucción de la escena (bloque 4)"; then
+    echo "✗ no se pudo cerrar la forma de lo que guardó el pase — no se sondea" >&2
+    RC4=1
+  fi
 
   printf '{"seed":%s,"grid":%s,"colonies":%s,"ticks":%s,"speed":%s,"seedPool":"%s","replay":""}\n' \
     "$SEED" "$GRID" "$COLONIES" "$TICKS" "$B4_SPEED" "${SEED_POOL:--}" > "$CONFIG"
-  SET="$(set_probe)"
-  case "$SET" in ok*) ;; *) echo "✗ no se pudo configurar el presenter para el bloque 4: $SET" >&2; RC4=1 ;; esac
+  set_probe
+  case "$SET_CLAVE" in
+    ok) ;;
+    mudo|bloqueado) diagnostico_editor_bloqueado "$SET_DETALLE" || true; RC4=1 ;;
+    *) echo "✗ no se pudo configurar el presenter para el bloque 4: $SET_DETALLE" >&2; RC4=1 ;;
+  esac
   # El config se GUARDA en la escena: el reinicio con plan la recarga desde el
   # asset, así que lo que solo viva en memoria (velocidad, semilla, pool) se
   # perdería al recargarla y la segunda mitad de la fase correría con los
-  # valores por defecto del bootstrapper.
-  UCMD save_scene --path "Assets/Scenes/Game.unity" >/dev/null 2>&1 || true
+  # valores por defecto del bootstrapper. Guardar y cerrar la escritura del pase
+  # van juntos: este es el guardado que decide la configuración que se COMMITEA
+  # en `Game.unity` (lo dice `GeneratedSceneCatalog`), así que su forma canónica
+  # la tiene que cerrar quien escribe.
+  if ! guardar_escena "Assets/Scenes/Game.unity" "el guardado del bloque 4"; then
+    echo "✗ no se pudo cerrar la forma de lo que guardó el pase — no se sondea" >&2
+    RC4=1
+  fi
 
-  # El bloque 4 RECONSTRUYE la escena y la vuelve a guardar: se canonicaliza otra
-  # vez, ya con la configuración del bloque 4 dentro, o ese guardado reintroduciría
-  # las anclas de sesión justo antes de sondear.
-  if ! canonicalize_assets "la reconstrucción del bloque 4"; then
-    echo "✗ la canonicalización falló antes del bloque 4 — no se sondea" >&2
+  # El bloque 4 RECONSTRUYE la escena y la vuelve a guardar con la configuración
+  # del bloque 4 dentro. El generador ya dio su veredicto al generar y cada
+  # guardado del pase se cerró al guardarlo; aquí se comprueba que el árbol quedó
+  # canónico de verdad — si no, la sonda mediría sobre bytes inestables y dos
+  # pasadas del mismo montaje no darían el mismo diff.
+  if ! check_canonical "la reconstrucción del bloque 4"; then
+    echo "✗ el árbol no está en forma canónica antes del bloque 4 — no se sondea" >&2
     RC4=1
   fi
   if ! check_references "la reconstrucción del bloque 4"; then
@@ -1491,15 +2268,46 @@ else
   log "(bloque 4 saltado con --no-block4)"
 fi
 
-# ── 8. Resumen ───────────────────────────────────────────────────────────────
+# ── 8. Churn de re-serialización del editor: se descarta ─────────────────────
+# Va antes del resumen y por TODAS las salidas que llegan hasta aquí (verde o
+# rojo): lo que se limpia es lo que escribió el editor, y eso no depende del
+# veredicto. Los caminos que salen ANTES de jugar (sin editor, forma canónica
+# derivada, referencia perdida) no lo llaman a propósito: ahí el árbol es la
+# evidencia del fallo y tocarlo la borraría.
+if [[ $ANALYZE_ONLY -eq 0 ]]; then
+  log ""
+  log "▶ Churn de re-serialización: descartando lo que dejó el editor (--no-discard-churn lo salta)"
+  RCDISCARD=0
+  discard_churn || RCDISCARD=1
+fi
+
+# ── 8bis. La HUELLA del árbol: el pase no acumula estado ─────────────────────
+# La maquinaria (`fp_*` y `check_tree_fingerprint`) vive junto a los analizadores,
+# antes del selftest: es donde se prueba sin editor, con un repositorio de mentira.
+# Aquí sólo se LLAMA, y después del descarte del churn porque es el estado FINAL
+# del árbol el que tiene que coincidir con el que dejó la pasada anterior.
+if [[ $ANALYZE_ONLY -eq 0 ]]; then
+  log ""
+  log "▶ Huella del árbol: ¿una segunda pasada del mismo montaje deja el MISMO diff contra HEAD?"
+  RCFP=0
+  check_tree_fingerprint || RCFP=1
+fi
+
+# ── 9. Resumen ───────────────────────────────────────────────────────────────
 log ""
-if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 ]]; then
+if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
   [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto e iconos (F5.1) verificados en vivo" \
                       || log "✓ bloques 3 y 5 + aspecto e iconos (F5.1) verificados en vivo"
+  [[ $FP_COMPARED -eq 1 ]] && log "  ✓ y el árbol quedó con la MISMA huella que la pasada anterior ($FP_FILE): el pase no acumula estado"
   exit 0
 fi
-[[ $RC35 -ne 0 ]] && echo "✗ el bloque 3/5 falló (ver arriba)" >&2
-[[ $RCF5 -ne 0 ]] && echo "✗ el aspecto falló (ver arriba)" >&2
-[[ $RCICON -ne 0 ]] && echo "✗ los iconos del HUD fallaron (ver arriba)" >&2
-[[ $RC4 -ne 0 ]] && echo "✗ el bloque 4 falló (ver arriba)" >&2
+# Con `|| true` cada línea: una prueba FALSA (`[[ ]]`) deja el status en 1 y, con
+# `set -e`, el pase salía antes de imprimir los demás veredictos (el bloque que
+# falló sí se nombra arriba, pero el resumen se quedaba a medias).
+[[ $RC35 -ne 0 ]] && echo "✗ el bloque 3/5 falló (ver arriba)" >&2 || true
+[[ $RCF5 -ne 0 ]] && echo "✗ el aspecto falló (ver arriba)" >&2 || true
+[[ $RCICON -ne 0 ]] && echo "✗ los iconos del HUD fallaron (ver arriba)" >&2 || true
+[[ $RC4 -ne 0 ]] && echo "✗ el bloque 4 falló (ver arriba)" >&2 || true
+[[ $RCDISCARD -ne 0 ]] && echo "✗ el descarte del churn no dejó el árbol limpio (ver arriba)" >&2 || true
+[[ $RCFP -ne 0 ]] && echo "✗ la huella del árbol cambió entre dos pasadas del mismo montaje (ver arriba)" >&2 || true
 exit 1
