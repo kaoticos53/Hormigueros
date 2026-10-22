@@ -21,6 +21,37 @@ namespace AntSim.Unity.Scripts.Streaming
         public const int StockBarSegments = 10; // granularidad visual de la barra
         public const float LowStockThreshold = 0.20f; // «¡RESERVA BAJA!» del contrato
 
+        // ── Cajas de TEXTO FIJO del HUD: su ancho sale de la FUENTE, no a ojo ──
+        // A fs 14 la fuente del juego (GameFontModel: em 1000, avance 500) reserva
+        // 7 px por carácter —redondeo del hinting incluido: lo ancla
+        // `HudLayoutTests.AvanceReservado_EsElDeLaFuenteConElRedondeoDelHinting`—,
+        // así que una caja de W px admite W/7 caracteres y el desborde de un texto
+        // se puede CALCULAR y probar sin editor. Las pistas y las dos líneas de la
+        // banda de aprendizaje viven aquí por eso: el Play pass las midió
+        // desbordando su caja (pistas 1325 > 1100; líneas 648 y 513 > 406) y solo
+        // lo veía una captura. Con estas constantes el ajuste es un test headless.
+
+        /// <summary>Ancho de la barra de pistas: 194 caracteres a 7 px. Las pistas
+        /// actuales miden 1302 px, así que quedan 58 px de aire — y el texto de la
+        /// escena se mide, no se supone (antes la caja era de 1100: 157 chars).</summary>
+        public const float HintsWidth = 1360f;
+        public const float HintsHeight = 26f;
+
+        /// <summary>Pistas de teclado (el único texto FIJO del HUD). Texto y caja
+        /// juntos: así el ajuste se comprueba contra la misma constante que la
+        /// escena usa, y no contra una copia que puede derivar.</summary>
+        public const string HintsText =
+            "click: inspeccionar   ·   + / -: velocidad (1×–100×)   ·   Espacio: pausa   ·   " +
+            "D: drops (Z deshace)   ·   F: feromonas   ·   G: colonia   ·   I: importar pool   ·   " +
+            "\u2b07: soltar .antgenome";
+
+        /// <summary>Caja de las DOS líneas del panel de aprendizaje: la banda que la
+        /// tarjeta reserva entre la curva de fitness (62–88) y la base. Mismo ancho
+        /// que el cuerpo de la tarjeta, y el modelo tuvo que recortar su texto para
+        /// caber (medido: 648 px de una línea de 89 caracteres).</summary>
+        public const int LearningInfoWidth = ColonyCardModel.CardBodyWidth;   // 406 px
+        public const int LearningInfoHeight = 34;                             // 2 líneas
+
         /// <summary>Spec de UN toast como elemento: rect clicable exacto.</summary>
         public sealed class ToastElement
         {

@@ -41,9 +41,9 @@ quedaba 8× fuera de cámara).
 | `--pool` | `pretrain-warm-v2` | nombre en `artifacts/` o ruta a un `.antgenome` |
 | `--grid` | `96` | `16`–`1024` (el mundo mide grid × 8 u) |
 | `--colonies` | `2` | `1`–`2` (la escena monta dos tarjetas) |
-| `--ticks` | `36000` | `30`–`4000000` |
+| `--ticks` | `216000` (2 h de simulación) | `30`–`4000000` |
 | `--species` | `lasius` | `lasius`, `atta`, `eciton` o combinaciones con coma |
-| `--speed` | `3` | `1`–`100` |
+| `--speed` | `120` | `10`–`160` |
 | `--frame-every` | `1` | `1`–`60` |
 | `--dry-run` | — | imprime los ajustes y el comando, sin abrir Unity |
 

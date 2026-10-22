@@ -11,7 +11,7 @@
 #   bash scripts/play-game.sh                                warm-v2, grid 96
 #   bash scripts/play-game.sh --pool pretrain-neat
 #   bash scripts/play-game.sh --grid 256 --ticks 12000
-#   bash scripts/play-game.sh --species lasius,eciton --speed 6
+#   bash scripts/play-game.sh --species lasius,eciton --speed 60
 #   bash scripts/play-game.sh --dry-run                      no abre Unity
 #
 # CONTROLES EN JUEGO:
@@ -33,9 +33,9 @@ PROJECT="$ROOT/src/App/AntSim.Unity"
 POOL="pretrain-warm-v2"
 GRID=96
 COLONIES=2
-TICKS=36000
+TICKS=216000
 SPECIES="lasius"
-SPEED=3
+SPEED=120
 FRAME_EVERY=1
 DRY_RUN=0
 
@@ -43,13 +43,13 @@ usage() {
   cat <<'EOF'
 
   play-game.sh [--pool nombre] [--grid 96|256] [--colonies 1|2]
-               [--ticks N] [--species lasius|atta|eciton] [--speed 1-100]
+               [--ticks N] [--species lasius|atta|eciton] [--speed 10-160]
                [--frame-every N] [--dry-run]
 
   Ejemplos:
     bash scripts/play-game.sh
     bash scripts/play-game.sh --pool pretrain-neat --grid 256 --ticks 12000
-    bash scripts/play-game.sh --species lasius,eciton --speed 6
+    bash scripts/play-game.sh --species lasius,eciton --speed 30
 
 EOF
 }
@@ -85,7 +85,7 @@ fail() { echo "✗ $1" >&2; exit 2; }
 [[ "$COLONIES" =~ ^[0-9]+$ ]] && (( COLONIES >= 1 && COLONIES <= 2 )) || fail "--colonies fuera de rango [1, 2]: $COLONIES"
 [[ "$TICKS" =~ ^[0-9]+$ ]] && (( TICKS >= 30 ))                      || fail "--ticks fuera de rango [30, 4000000]: $TICKS"
 [[ "$FRAME_EVERY" =~ ^[0-9]+$ ]] && (( FRAME_EVERY >= 1 && FRAME_EVERY <= 60 )) || fail "--frame-every fuera de rango [1, 60]: $FRAME_EVERY"
-awk -v s="$SPEED" 'BEGIN{exit !(s+0>=1 && s+0<=100)}'               || fail "--speed fuera de rango [1, 100]: $SPEED"
+awk -v s="$SPEED" 'BEGIN{exit !(s+0>=10 && s+0<=160)}'              || fail "--speed fuera de rango [10, 160]: $SPEED"
 [[ "$SPECIES" =~ ^[A-Za-z]+(,[A-Za-z]+)*$ ]]                         || fail "--species inválida: '$SPECIES' (p. ej. lasius o lasius,eciton)"
 
 # ── Resolver pool ───────────────────────────────────────────────────────────
@@ -117,6 +117,7 @@ SETTINGS_FILE="$SETTINGS_DIR/antsim-launch.txt"
     echo "species=$SPECIES"
     echo "speed=$SPEED"
     echo "frameEvery=$FRAME_EVERY"
+    echo "maze=1"
 } > "$SETTINGS_FILE"
 
 # ── Buscar Unity ────────────────────────────────────────────────────────────

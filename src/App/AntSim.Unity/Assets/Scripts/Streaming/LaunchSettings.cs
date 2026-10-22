@@ -23,18 +23,20 @@ namespace AntSim.Unity.Scripts.Streaming
         public string PoolPath = "";             // ruta RESUELTA por el lanzador (tiene prioridad)
         public int Grid = 96;          // celdas; el mundo mide Grid × 8 u
         public int Colonies = 2;
-        public int Ticks = 36000;
+        public int Ticks = 216000; // 2 h de simulación
         public string Species = "lasius";
-        public float Speed = 3f;
+        public float Speed = 120f; // 40 × los 3× del lanzador anterior
         public int FrameEvery = 1;
+        /// <summary>F6: terreno con laberinto (barreras visibles generadas de la semilla).</summary>
+        public bool Maze = true;
 
         // Rangos: los mismos que acepta el mundo/CLI (WorldUnits, SpeedControlModel).
         public const int MinGrid = 16;
         public const int MaxGrid = 1024;
         public const int MinTicks = 30;
         public const int MaxTicks = 4_000_000;
-        public const float MinSpeed = 1f;
-        public const float MaxSpeed = 100f;
+        public const float MinSpeed = 10f;
+        public const float MaxSpeed = 160f;
         public const int MinFrameEvery = 1;
         public const int MaxFrameEvery = 60;
         /// <summary>La escena monta marcadores y tarjetas para 2 colonias como máximo.</summary>
@@ -53,6 +55,7 @@ namespace AntSim.Unity.Scripts.Streaming
             sb.Append("species=").Append(Species).Append('\n');
             sb.Append("speed=").Append(Speed.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
             sb.Append("frameEvery=").Append(FrameEvery.ToString(CultureInfo.InvariantCulture)).Append('\n');
+            sb.Append("maze=").Append(Maze ? '1' : '0').Append('\n');
             return sb.ToString();
         }
 
@@ -97,6 +100,9 @@ namespace AntSim.Unity.Scripts.Streaming
                     case "speed":
                         if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out settings.Speed))
                         { error = $"speed no es un número: «{value}»"; return false; }
+                        break;
+                    case "maze":
+                        settings.Maze = value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
                     default:
                         break; // clave desconocida: se ignora (compatibilidad)
@@ -156,7 +162,7 @@ namespace AntSim.Unity.Scripts.Streaming
                         : (!string.IsNullOrEmpty(Pool) ? Pool : "(sin sembrar)");
             return $"pool={pool} · grid={Grid} ({Grid * 8} u) · colonias={Colonies} · " +
                    $"ticks={Ticks} · especie={Species} · velocidad={Speed.ToString("0.#", CultureInfo.InvariantCulture)}x · " +
-                   $"frame-every={FrameEvery}";
+                   $"frame-every={FrameEvery} · laberinto={(Maze ? "sí" : "no")}";
         }
     }
 }

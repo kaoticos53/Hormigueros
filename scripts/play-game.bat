@@ -11,7 +11,7 @@ REM    play-game.bat                                    warm-v2, grid 96, 2 colo
 REM    play-game.bat --pool pretrain-neat               otro pool
 REM    play-game.bat --grid 256 --ticks 12000           mundo grande
 REM    play-game.bat --species lasius,eciton            invasión
-REM    play-game.bat --speed 6 --frame-every 2          más rápido, menos frames
+REM    play-game.bat --speed 60 --frame-every 2          más rápido, menos frames
 REM    play-game.bat --dry-run                          muestra lo que aplicaría
 REM
 REM  Este bat NO parsea nada: pasa los argumentos CRUDOS (%*) al .ps1. Motivo:

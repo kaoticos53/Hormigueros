@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using AntSim.Core.Scenario;
 using AntSim.Unity.Scripts.Streaming;
 using Xunit;
@@ -25,6 +26,20 @@ namespace AntSim.Core.Tests
             foreach (var c in colonies)
                 v.Colonies.Add(new GameStreamParser.ColonyView(
                     c.Id, 0f, 0f, c.Stock, c.Max, 0, 0, 0, 0, 0));
+            return v;
+        }
+
+        /// <summary>Canal B: `Unload = 5` — un evento por descarga, con su colonia.
+        /// Las colonias 0 y 1 van siempre en el canal A para que la muestra exista.</summary>
+        private const int KindUnload = 5;
+
+        private static GameStreamParser.TickView TickWithUnloads(ulong tick,
+            params (int Colony, int Count)[] unloads)
+        {
+            var v = Tick(tick, (0, 5f, 10f), (1, 5f, 10f));
+            foreach (var u in unloads)
+                for (int i = 0; i < u.Count; i++)
+                    v.Events.Add(new GameStreamParser.EventView(KindUnload, u.Colony, 1, 0f, 0f, 0));
             return v;
         }
 
@@ -89,6 +104,120 @@ namespace AntSim.Core.Tests
             m.Clear();
             Assert.Empty(m.SeriesByColony);
             Assert.Equal(0, m.For(0).Count);
+        }
+
+        // ————— descargas por ventana (canal B) —————
+
+        [Fact]
+        public void Descargas_SeCuentanPorVentanaYPorColonia()
+        {
+            var m = new ColonySparklineModel();
+            m.Observe(TickWithUnloads(0, (0, 1)));          // muestra en t=0, cuenta su evento
+            m.Observe(TickWithUnloads(10, (0, 2), (1, 1))); // ventana de la colonia 0
+            m.Observe(TickWithUnloads(20, (1, 3)));
+            m.Observe(TickWithUnloads(30, (0, 1)));         // segunda muestra
+
+            var c0 = m.For(0);
+            var c1 = m.For(1);
+            Assert.Equal(2, c0.Count);
+            Assert.Equal(1, c0.DropsAt(0));   // la del tick 0, en su propia muestra
+            Assert.Equal(3, c0.DropsLatest);  // 2 + 1: la ventana 0..30
+            Assert.Equal(0, c1.DropsAt(0));   // la colonia 1 no descargó antes
+            Assert.Equal(4, c1.DropsLatest);  // 1 + 3, la misma ventana
+        }
+
+        [Fact]
+        public void Descargas_ElMismoTickVistoDosVecesNoCuentaDoble()
+        {
+            // La vista lee `CurrentTick` más de una vez por tick de simulación: sin
+            // la guarda, cada descarga se apuntaría dos veces y la barra mentiría.
+            var m = new ColonySparklineModel();
+            var v = TickWithUnloads(30, (0, 2));
+            Assert.True(m.Observe(v));
+            Assert.False(m.Observe(v));
+
+            Assert.Equal(1, m.For(0).Count);
+            Assert.Equal(2, m.For(0).DropsLatest);
+        }
+
+        [Fact]
+        public void Descargas_LaVentanaSiguienteEmpiezaACero()
+        {
+            var m = new ColonySparklineModel();
+            m.Observe(TickWithUnloads(30, (0, 3)));
+            m.Observe(TickWithUnloads(60));       // ventana sin descargas
+
+            Assert.Equal(3, m.For(0).DropsAt(0));
+            Assert.Equal(0, m.For(0).DropsLatest);
+        }
+
+        [Fact]
+        public void Descargas_TambienSePuedenAportarPorMuestra()
+        {
+            var m = new ColonySparklineModel();
+            m.For(0).Push(0.5f, 2, 30);
+            m.For(0).Push(0.5f, 30);      // sobrecarga sin descargas: la ventana a 0
+
+            Assert.Equal(2, m.For(0).DropsAt(0));
+            Assert.Equal(0, m.For(0).DropsLatest);
+            Assert.Equal(2, m.For(0).DropsMax);
+        }
+
+        [Fact]
+        public void RenderDrops_SinDescargas_EsTransparente()
+        {
+            var m = new ColonySparklineModel();
+            m.For(0).Push(0.5f, 30);
+            var px = m.RenderDrops(0, W, H);
+            for (int i = 3; i < px.Length; i += 4) Assert.Equal(0, px[i]);
+        }
+
+        [Fact]
+        public void RenderDrops_LaVentanaSeEscalaALaMayorCuenta()
+        {
+            var m = new ColonySparklineModel();
+            m.For(0).Push(0.5f, 1, 30);
+            m.For(0).Push(0.5f, 4, 60);   // el máximo de la ventana: 4
+
+            var px = m.RenderDrops(0, W, H);
+            // 2 muestras en 8 columnas ⇒ columnas 0–3 y 4–7. Altura: 1/4·3 ⇒ 1 y
+            // 4/4·3 ⇒ 3, que es la fila de arriba (H−1).
+            Assert.NotEqual(0, AlphaAt(px, W, 0, 1));
+            Assert.Equal(0, AlphaAt(px, W, 0, 2));
+            Assert.NotEqual(0, AlphaAt(px, W, 7, 3));
+        }
+
+        [Fact]
+        public void RenderDrops_LasBarrasCaenSobreSuMuestra()
+        {
+            // 3 muestras en 9 columnas: columnas 0–2, 3–5 y 6–8 (el MISMO reparto
+            // del área). Si las barras mapearan por su cuenta podrían caer entre
+            // dos muestras y la gráfica mentiría sobre qué ventana explica qué.
+            var m = new ColonySparklineModel();
+            m.For(0).Push(0.5f, 0, 30);
+            m.For(0).Push(0.5f, 2, 60);
+            m.For(0).Push(0.5f, 0, 90);
+
+            var px = m.RenderDrops(0, 9, 4);
+            for (int x = 0; x < 3; x++) Assert.Equal(0, AlphaAt(px, 9, x, 0));
+            for (int x = 3; x < 6; x++) Assert.NotEqual(0, AlphaAt(px, 9, x, 3));
+            for (int x = 6; x < 9; x++) Assert.Equal(0, AlphaAt(px, 9, x, 0));
+        }
+
+        [Fact]
+        public void RenderDrops_UnaDescargaPequena_SeVeConUnPixel()
+        {
+            // Con una banda de 2 px, 1 de 4 descargas redondea a 0 filas y la
+            // barra desaparecería: «una descarga» tiene que verse, porque es
+            // justo la información que la reserva no da.
+            var m = new ColonySparklineModel();
+            m.For(0).Push(0.5f, 1, 30);
+            m.For(0).Push(0.5f, 4, 60);
+
+            var px = m.RenderDrops(0, 2, 2);
+            Assert.NotEqual(0, AlphaAt(px, 2, 0, 0));  // la de 1, al menos la base
+            Assert.Equal(0, AlphaAt(px, 2, 0, 1));
+            Assert.NotEqual(0, AlphaAt(px, 2, 1, 1));  // la de 4 llega arriba
         }
 
         // ————— textura —————
@@ -194,6 +323,51 @@ namespace AntSim.Core.Tests
                 for (int i = 0; i < s.Count; i++)
                     Assert.InRange(s.At(i), 0f, 1f);
             }
+        }
+
+        [Fact]
+        public void ConStreamReal_LasDescargasSumanLoQueTraeElCanalB()
+        {
+            // La serie no puede inventar ni perder descargas: la suma de las
+            // barras de la ventana es EXACTAMENTE el número de eventos `Unload`
+            // que el Core emitió en esos ticks, por colonia. Es el contrato entre
+            // el canal B y la gráfica, medido contra el mundo de verdad.
+            // El warm-v2 del fixture descarga por primera vez en el tick 3858
+            // (medido: 37 descargas en 24000 ticks, grid 256); con 3900 hay al
+            // menos una y la ventana de 90 s cabe entera en la serie.
+            const int Ticks = 3900;
+            string fixture = TestPaths.WarmV2PoolPath();
+            Assert.True(File.Exists(fixture), $"fixture ausente: {fixture}");
+            string stream = GameScenario.Run(42, ticks: Ticks, colonies: 1, grid: 256,
+                frameEvery: 1, seedPoolPath: fixture);
+            var parser = new GameStreamParser();
+            var m = new ColonySparklineModel();
+            var emitidas = new Dictionary<int, int>();
+            int desde = Ticks - ColonySparklineModel.Capacity * ColonySparklineModel.SampleEveryTicks;
+
+            foreach (var line in stream.Split('\n'))
+            {
+                var v = parser.ParseLine(line.TrimEnd('\r'));
+                if (v == null) continue;
+                foreach (var ev in v.Events)
+                {
+                    if (ev.Kind != KindUnload) continue;
+                    if (v.Tick < (ulong)desde) continue; // fuera de la ventana que se dibuja
+                    emitidas.TryGetValue(ev.ColonyId, out int n);
+                    emitidas[ev.ColonyId] = n + 1;
+                }
+                m.Observe(v);
+            }
+
+            int total = 0;
+            foreach (var kv in emitidas) total += kv.Value;
+            Assert.True(total > 0, "la partida no emitió ni una descarga en la ventana: el test no mediría nada");
+
+            var serie = m.For(0);
+            int enSerie = 0;
+            for (int i = 0; i < serie.Count; i++) enSerie += serie.DropsAt(i);
+            emitidas.TryGetValue(0, out int enStream);
+            Assert.Equal(enStream, enSerie);
         }
     }
 }

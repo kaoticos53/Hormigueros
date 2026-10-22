@@ -1,0 +1,97 @@
+# El chip de runway EN PANTALLA — la paleta entera, medida en píxeles (F5.1)
+
+Fecha: 2026-09-20 · montaje: player del multi-visor (4 vistas × 2 colonias, grid 256,
+pools de Fase A) · sonda: `PlayerPerfProbe` → `artifacts/perf-player.json` · puerta:
+`HudInkModel` (modelo puro, probado en la suite headless).
+
+POR QUÉ UNA ESCALERA Y NO UNA CORRIDA. El chip se pinta de UN color por tramo y el
+tramo depende del estado de la colonia en el tick capturado: una sola corrida solo
+prueba el tramo en el que estaba la partida. En grid 256 la escalera se recorre al
+final del horizonte —DESAHOGO hasta ~t6100, RESERVA ~t8000, OOFAGIA/CRÍTICO ~t9500,
+CRÍTICO/CANÍBAL ~t12000—, así que la paleta completa se mide variando SOLO el
+horizonte, sin tocar el HUD ni la sonda:
+
+    bash scripts/player-perf.sh --ticks 3000    # y 6000 / 8000 / 9500 · el canónico es 12000
+
+## Lo medido (todas las corridas con la puerta verde)
+
+| ticks | tramos vistos en pantalla (hex y cobertura medida) | línea más ancha | tinta en la franja | tinta en la barra |
+|---|---|---|---|---|
+| 3000  | DESAHOGO `#4CAF50` α 0,70–0,84 | 155/601 px | 0 px | 0 px |
+| 6000  | DESAHOGO `#4CAF50` α 0,77–0,91 | 200/601 px | 0 px | 0 px |
+| 8000  | RESERVA `#7ED07E` α 0,70–0,84 · DESAHOGO `#4CAF50` α 0,67–0,88 | 178/601 px | 0 px | 0 px |
+| 9500  | CRÍTICO `#E03A3A` α 0,74–0,89 · OOFAGIA `#D8B02A` α 0,78–0,89 · CANÍBAL `#E07A2A` α 0,75–0,90 | 175/601 px | 0 px | 0 px |
+| 12000 | CRÍTICO `#E03A3A` α 0,73–0,90 · CANÍBAL `#E07A2A` α 0,90 | 172/601 px | 0 px | 0 px |
+
+25 chips medidos sobre 20 medidas de tarjeta (4 por corrida), **las cinco entradas de
+la paleta** con su color declarado en pantalla y **ni un píxel de texto** dentro de la
+franja que separa el texto de la barra ni dentro de la barra de reserva.
+
+## Las tres cosas que se pedían, y qué dicen los números
+
+1. **Color del tramo.** El chip que ve el jugador lleva el hex del tramo que el Core
+   ordenó: la sonda contrasta las etiquetas `<color=…#RRGGBB>` del TEXTO pintado
+   contra los `runwayLevel` del canal A (multiconjunto: dos colonias en el mismo
+   tramo exigen dos chips) y clasifica los píxeles por COBERTURA sobre el fondo
+   medido de la tarjeta, no por igualdad de color. Medido: el color llega al
+   0,67–0,91 de su valor declarado — el rasterizador del atlas de la fuente dinámica
+   no garantiza el color puro en glifos finos, y exigirlo rechazaba como «sin
+   pintar» un texto legible.
+2. **Ancho real de la línea del título.** 139–200 px pintados sobre 601 px
+   reservados por la tarjeta: entre 401 y 452 px de aire, y 2/2 líneas en las 20
+   medidas — el chip cabe en la línea del título sin envolver la tarjeta ni empujar
+   nada.
+3. **Que no invada la barra de reserva.** 0 px de tinta de texto tanto en la franja
+   de separación como dentro de las barras, en todas las corridas. Ojo con un
+   detalle que el número crudo engaña: la tarjeta compacta del multi-visor mete las
+   barras DENTRO del rect del texto (el layout se solapa), pero el texto se pinta a
+   su derecha: el aire medido entre la tinta más cercana y la barra es de 1 px. El
+   solape de RECTS es del layout; el de TINTA —que es lo que se ve— es cero, y por
+   eso la medida cuenta píxeles y no cajas.
+
+## Las líneas crudas de la sonda (una por vista, por corrida)
+
+### `--ticks 3000` (4 chips)
+   [PlayerPerf] HUD vista ViewCard_0: DESAHOGO×2 #4CAF50 251px α 0.84 · línea más ancha 155/601 px (446 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_1: DESAHOGO×2 #4CAF50 231px α 0.78 · línea más ancha 154/601 px (447 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_2: DESAHOGO×2 #4CAF50 278px α 0.84 · línea más ancha 155/601 px (446 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_3: DESAHOGO×2 #4CAF50 262px α 0.7 · línea más ancha 154/601 px (447 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] ✓ HUD: 4 chips medidos en pantalla sobre 4 tarjetas · cobertura del chip 0,7–0,84 · línea más ancha 155/601 px (aire 446) · tinta en la franja 0 px · dentro de la barra 0 px
+
+### `--ticks 6000` (4 chips)
+   [PlayerPerf] HUD vista ViewCard_0: DESAHOGO×2 #4CAF50 208px α 0.83 · línea más ancha 200/601 px (401 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_1: DESAHOGO×2 #4CAF50 204px α 0.78 · línea más ancha 154/601 px (447 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_2: DESAHOGO×2 #4CAF50 240px α 0.91 · línea más ancha 155/601 px (446 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_3: DESAHOGO×2 #4CAF50 197px α 0.77 · línea más ancha 154/601 px (447 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] ✓ HUD: 4 chips medidos en pantalla sobre 4 tarjetas · cobertura del chip 0,77–0,91 · línea más ancha 200/601 px (aire 401) · tinta en la franja 0 px · dentro de la barra 0 px
+
+### `--ticks 8000` (6 chips, dos tramos en la misma tarjeta)
+   [PlayerPerf] HUD vista ViewCard_0: RESERVA×1 #7ED07E 85px α 0.84 · DESAHOGO×1 #4CAF50 102px α 0.88 · línea más ancha 178/601 px (423 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_1: DESAHOGO×2 #4CAF50 187px α 0.77 · línea más ancha 139/601 px (418 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_2: DESAHOGO×2 #4CAF50 207px α 0.87 · línea más ancha 149/601 px (452 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_3: RESERVA×1 #7ED07E 93px α 0.7 · DESAHOGO×1 #4CAF50 106px α 0.67 · línea más ancha 177/601 px (424 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] ✓ HUD: 6 chips medidos en pantalla sobre 4 tarjetas · cobertura del chip 0,67–0,88 · línea más ancha 178/601 px (aire 418) · tinta en la franja 0 px · dentro de la barra 0 px
+
+### `--ticks 9500` (6 chips, tres tramos)
+   [PlayerPerf] HUD vista ViewCard_0: CANÍBAL×2 #E07A2A 183px α 0.9 · línea más ancha 172/601 px (429 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_1: CRÍTICO×1 #E03A3A 73px α 0.74 · OOFAGIA×1 #D8B02A 91px α 0.78 · línea más ancha 168/601 px (433 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_2: CRÍTICO×1 #E03A3A 87px α 0.89 · OOFAGIA×1 #D8B02A 101px α 0.89 · línea más ancha 175/601 px (426 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_3: CANÍBAL×2 #E07A2A 186px α 0.75 · línea más ancha 171/601 px (430 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] ✓ HUD: 6 chips medidos en pantalla sobre 4 tarjetas · cobertura del chip 0,74–0,9 · línea más ancha 175/601 px (aire 426) · tinta en la franja 0 px · dentro de la barra 0 px
+
+### `--ticks 12000` (la corrida canónica del criterio: `artifacts/perf-player.json`)
+   [PlayerPerf] HUD vista ViewCard_0: CRÍTICO×1 #E03A3A 80px α 0.9 · CANÍBAL×1 #E07A2A 99px α 0.9 · línea más ancha 172/601 px (429 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_1: CRÍTICO×2 #E03A3A 141px α 0.74 · línea más ancha 150/601 px (451 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_2: CRÍTICO×2 #E03A3A 159px α 0.89 · línea más ancha 151/601 px (450 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] HUD vista ViewCard_3: CRÍTICO×2 #E03A3A 150px α 0.73 · línea más ancha 150/601 px (451 de aire) · líneas 2/2 · franja solapada por las barras · barra 0 px de tinta · aire a la barra 1 px → ok
+   [PlayerPerf] ✓ HUD: 5 chips medidos en pantalla sobre 4 tarjetas · cobertura del chip 0,73–0,9 · línea más ancha 172/601 px (aire 429) · tinta en la franja 0 px · dentro de la barra 0 px
+
+## El caso que solo los píxeles pueden probar
+
+El verde del DESAHOGO (`#4CAF50`) está a **27** de distancia euclídea del verde de la
+barra de reserva (`115,204,102`): por color son casi el mismo. La medida los separa
+por COBERTURA —explicar la barra sobre el panel pediría tres alfas incompatibles,
+residuo 23— y además la ventana del chip EXCLUYE la geometría de las barras. Medido
+en las dos corridas de la fase verde (t3000 y t6000, 8 chips): los píxeles contados
+como chip son del verde del chip y la barra no aportó ni un voto. Sin mirar píxeles
+esto habría sido una suposición.

@@ -343,7 +343,9 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
 
 ## Jugar en Unity (modo visual)
 
-El juego tiene un modo visual completo: hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
+El juego tiene un modo visual completo: laberinto con paredes dibujadas desde la semilla, hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
+
+La partida arranca a **120×** (100 % de la base del control de velocidad, rango 10×–160×) y dura **216 000 ticks = 2 h de simulación**. No hay botón de «siguiente generación»: la evolución ocurre sola, porque los nacimientos salen del torneo sobre la élite ordenada por fitness de por vida y cada muerte la actualiza; al terminar el horizonte la élite se guarda en `artifacts/evolved-<semilla>.antgenome` (`ExportElite` del presenter).
 
 ```bash
 # Lanzar Unity con la escena lista para Play (los ajustes se inyectan
@@ -376,8 +378,10 @@ bash scripts/play-game.sh                                # Linux/macOS
 - `SeedPoolPath` = `artifacts/pretrain-warm-v2.antgenome` (o `pretrain-neat.antgenome`)
 - `Species` = `lasius` (o `lasius,eciton` para invasión)
 - `Grid` = 96 (grid 96² = 768 u) o 256 (grid 256² = 2048 u)
-- `Ticks` = 7200 (2 horas de juego) o más
-- `Speed` = 3 (velocidad del presenter, 3× real)
+- `Ticks` = 216000 (2 h de simulación; 30 min de reloj a 120×)
+- `Speed` = 120 (100 % de la base; 10×–160× en el control)
+- `Maze` = laberinto con bucles generado de la semilla (sin él, el tablero es el plano clásico)
+- `ExportElite` = guarda la élite evolucionada al acabar la partida
 - `InspectId` = id de la hormiga a inspeccionar
 
 **Pools disponibles:**
@@ -411,20 +415,51 @@ bash scripts/pipeline.sh --pop 6 --gens 2 --seeds "42 7"  # humo rápido (~45 s)
 bash scripts/pipeline.sh --verify --pools "artifacts/pretrain-warm2.antgenome" --seeds "42 7"  # regresión del relevo (exit ≠ 0 si falla)
 ```
 
+## Repartir el árbol en commits (`scripts/commit-layers.sh`)
+
+El árbol casi nunca tiene una sola cosa pendiente: los assets que reescribió el
+editor, los scripts de una hebra, el modelo de otra, los documentos y el volcado
+del play pass. Repartir eso a mano se hace mal —y se hace tarde— cuando hay
+veinticinco rutas de seis naturalezas. `scripts/commit-layers.sh` clasifica cada
+ruta en una **capa** por su sitio en el repo y commitea capa por capa, en el
+orden en que unas se apoyan en otras (reglas de forma → herramientas → modelo →
+vista → assets → documentos → evidencia). Sin argumentos **no escribe nada**:
+primero el plan, con el asunto propuesto para cada commit y sus rutas.
+
+Las tres cosas que ensucian un árbol están tratadas: lo que ya está **preparado
+en el índice** no se mezcla con lo que se reparte (el reparto se planta y dice
+qué hay, o `--include-index` lo commitea primero tal cual se preparó), lo que
+está **en el árbol** va cada cosa a su capa, y el **churn de assets** lo decide
+el verificador de assets de siempre: la capa de assets se planta si el editor
+sólo reescribió, y `--discard-churn` deja que el descarte ocurra antes del
+commit en vez de reimplementar su veredicto. `--json` guarda el plan con el hash
+de cada ruta y `--apply-plan` lo aplica sólo si nada cambió desde que se revisó;
+tras cada commit comprueba que contiene exactamente lo previsto. Es una
+herramienta de trabajo, no una puerta de CI.
+
+```bash
+bash scripts/commit-layers.sh                  # el plan (no toca nada)
+bash scripts/commit-layers.sh --apply          # commitea por capas
+bash scripts/commit-layers.sh --list           # las capas y sus reglas
+bash scripts/commit-layers.sh --selftest       # el reparto entero, en un repo de usar y tirar
+```
+
 ## CI (`.github/workflows/ci.yml`)
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (536/536), incluido el pin del hash del stream canónico |
+| `dotnet test` | la suite headless (681/681), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
-| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 536 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 681 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance. `--discard` da el paso siguiente y ACTÚA, por los dos caminos que hacen falta para que el diff contra HEAD sea lo que cambió: restaura las rutas que certifica idénticas (el churn puro) y a las que **cambian de verdad** les quita la forma —anclas de sesión, orden, blancos— reescribiéndolas en canónico **sin tocar el contenido**, que es exactamente lo que hace el generador al cerrar una escritura; funciona porque el ancla canónica es el hash del contenido, así que un documento intacto vuelve a ser el mismo byte que en HEAD (medido en `Game.unity`, 425 documentos: una pasada que re-ancla todo y cambia UNA línea escalar pasa de 10 669 líneas de diff a 2). No toca las que canonicalizan —son las que quitan la trampa— y sólo escribe si la forma canónica pasa el `compare` (si no significa lo mismo, se planta y lo dice); después vuelve a clasificar y a mirar el índice para confirmarlo. `--dry-run` mide lo mismo sin tocar nada. El MISMO chequeo es la **puerta 1** de `.githooks/pre-push`, con el rango sacado de las refs que el push manda |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
-| `.githooks/pre-push --selftest` | el veredicto de la puerta local: solo un rojo de verdad (errores CS) bloquea un push; «no pude comprobar» avisa y deja pasar |
+| `scripts/check-unity-references.sh` | **un commit no deja un asset sin su dato**: un editor puede destruir una referencia sin cambiar nada más y sin dejar error —medido dos veces: los materiales de feromonas que quedaron con `_BaseMap`/`_MainTex` en `fileID: 0` (commiteados en `d4aebc3`, el material de reposo pintado BLANCO OPACO sobre el tablero) y `PheromoneMat.mat` al cerrarse el editor el 2026-10-08—. El YAML sigue siendo válido, así que nada lo veía hasta que una prueba se topaba con la pérdida. `--range A..B` compara cada commit con SU PADRE —lo que empuja un push son los commits, no el árbol— y nombra el slot y la guía perdidos; sin argumentos comprueba el árbol contra HEAD, `--watch` espera al cierre del editor y `--selftest` verifica los dos detectores y el modo del push sin repo. Un borrado deliberado de un objeto con su propia guía (p. ej. el botón «Sig. Gen» de F6, que se llevó consigo su `Text`) se declara CON MOTIVO en `scripts/unity-reference-allowlist.txt`, con alcance ruta+guía. Es la **puerta 2** de `.githooks/pre-push` |
+| `.githooks/pre-push --selftest` | el veredicto de las **tres puertas locales**, en su orden: el churn de assets y las referencias perdidas (sin editor) y los errores CS (con el editor). Solo un rojo de verdad bloquea —churn detectado, una referencia perdida o `error CS`—; «no pude comprobar» avisa y deja pasar. Cubre también la derivación de rangos desde las refs del push, incluida la **ref nueva** (arranca donde la rama diverge de lo publicado, no en `HEAD~1`), y que el rango llegue a las dos puertas que escanean commits |
 | `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor. El job está dormido y con licencia Personal no puede encenderse en un runner alojado, así que la cobertura diaria es ese mismo script en local, vía `.githooks/pre-push` |
 
 El job `unity-compile` está **dormido**: descargar Unity en cada push es caro y
@@ -488,6 +523,14 @@ no dependa de acordarse, `.githooks/pre-push` lo corre antes de cada push:
 o instancia que no llegó a compilar AVISAN y dejan pasar, porque «no medido» no
 es «roto».
 
+Ese hook tiene **tres puertas**, y van en este orden porque las dos primeras no
+necesitan el editor: (1) el **churn de assets** —`scripts/check-unity-assets.sh
+--churn`—, (2) las **referencias perdidas** —`scripts/check-unity-references.sh
+--range`, que compara cada commit con su padre— sobre el rango de commits que el
+push manda, así que también protegen en una máquina sin Unity instalado, y (3) la
+compilación de la capa de vista. Las tres comparten la misma decisión asimétrica:
+solo el exit 1 bloquea, el resto avisa.
+
 ```bash
 bash scripts/install-hooks.sh     # activa el pre-push del repo (idempotente)
 scripts/check-unity.bat           # (Windows) la misma comprobación a mano
@@ -506,15 +549,100 @@ pero el raycast sale de la cámara real, el plan es el real y el ancla es la que
 el Core puso en la alerta. Desde la pasada de pulido (F5.1) verifica también el
 **aspecto** midiendo PÍXELES: el tablero tiene que leerse como tierra (en partida
 y al abrir la escena) y tienen que verse hormigas, más ningún texto del HUD fuera
-de su panel. Ese bloque existe porque el defecto que reportó el jugador («el
+de su panel. Y mide también hacia dónde MIRAN: la caja del actor tiene el largo en
+Y y la hormiga mira hacia +Y, así que el giro del presenter tiene que llevar ese
+eje al rumbo del stream (`90° − rumbo`); con el giro a 90° el bicho anda de lado y
+**ningún check de estado lo ve** —lo destapó el jugador, y ahora lo mide
+`scripts/unity/ProbeActorOrientation.cs` en ocho rumbos, con la matemática de
+Unity y la rotación del propio presenter—. El mismo paso mide las otras
+siluetas: el arte de ítems y hojas es un sólido PLANO y con `Quaternion.identity`
+se dibujaba **de canto** —desde la cámara de arriba se veía un rectángulo, y la
+hoja llevaba su largo de 1,24 u al eje vertical con el `1,1` de la escala en el
+grosor—, así que las tres usan el mismo ayudante de la hormiga (`FlatRotation` =
+`ActorRotation(π/2)`, `FlatScale` = 1:1 en el plano y el grosor a la mitad) y el
+probe exige además que la configuración vieja falle, para que la comprobación no
+sea decorativa. Ese mismo paso comprueba que las **muescas de una hoja comen del
+borde**: el limbo es una elipse (0,30 × 0,62 s), así que repartirlas con un radio
+único (0,55 s) las dejaba fuera por los costados y dentro por las puntas —ahora
+caen sobre la elipse, y el círculo viejo tiene que fallar—.
+
+La matriz correcta, con todo, no prueba lo que se VE: entre la matriz del presenter
+y el píxel que dibuja el jugador quedan el encuadre de la cámara (¿mira al nadir?
+¿su arriba es el norte de pantalla?), la proyección, el rasterizado y el aliasing, y
+un giro se cuela justo ahí. Por eso el pass mide lo mismo **en PÍXELES**: la sonda
+`scripts/unity/ProbeAntHeadingPixels.cs` renderiza la malla y el material reales con
+un rumbo fijo —a la escala de la partida, unos 19 px de hormiga, y 6× más cerca—,
+saca la silueta de la diferencia entre el frame con la hormiga y el mismo frame sin
+ella, y mide su eje (y su morro a zoom, que es donde el reparto de área de los
+extremos tiene margen: a 19 px deja 1 px y no decide); el giro viejo tiene que fallar
+~90° o la comprobación no estaría mirando el render. La evidencia queda en
+`artifacts/playpass-heading-pixels/` (una hormiga por rumbo con el rumbo esperado
+pintado encima). Ese bloque existe porque el defecto que reportó el jugador («el
 terreno es blanco y no se ven hormigas») pasaba en verde **todas** las muestras de
-estado. Falla con el primer invariante roto. No es un job de CI porque necesita un
+estado.
+
+Y los **iconos del HUD son un paso del pass, no un informe**: la sonda recorta la
+tarjeta del frame en vivo y `scripts/playpass-icons.py` clasifica cada glifo
+contra su referencia rasterizada del `.ttf` al tamaño del run (correlación
+normalizada, IoU de silueta y margen sobre el segundo glifo). Si algún icono no
+se clasifica como el suyo —o si no se pudo medir, porque la sonda no guardó el
+recorte o falta Pillow— el pass sale ≠ 0 con el glifo y sus números. Antes el
+comparador se ejecutaba a mano y un icono roto pasaba en verde.
+
+La **serie de descargas de la gráfica** también se mide ahí, y por el mismo
+motivo: el modelo puro puede producir una textura perfecta que la tarjeta no
+pinte. La sonda inyecta una serie conocida (ventanas de 1, 3, 5 y 7 descargas),
+deja dibujar un frame y recorta la banda de la gráfica del frame real; el
+analizador exige una barra por ventana en las columnas de SU muestra, la altura
+creciente con la cuenta, todo nacido en la base (un PNG del revés no pasa) y
+ningún píxel ámbar fuera de la banda. La serie de la partida se restaura en la
+misma sonda, y la evidencia —el frame, la banda de cada tarjeta y una hoja de
+medida— queda en `artifacts/playpass-sparkline-pixels/` para repetirla sin
+editor con `--analyze-sparkline`.
+
+El pass también cuida el ÁRBOL que deja. El generador cierra su escritura
+(canonicaliza y recarga la escena), y el pase cierra la suya —el bloque 4 guarda
+la escena con la configuración que se commitea— **desde dentro del editor**
+(`scripts/unity/ProbeCanonicalizeAssets.cs`), no escribiéndola por detrás: con la
+escena abierta, un cambio hecho desde fuera le levanta a Unity el modal «The open
+scene(s) have been modified externally» y el editor deja de contestar a todos los
+comandos: caducan a los 30 s y devuelven la salida **vacía** — con `unity status`
+diciendo `ready` igual, porque ese `status` lo sirve el registro del CLI y no el
+editor. Ese vacío NO es «la escena no tiene HUD», y el pass ya no los confunde:
+clasifica cada respuesta (ok / error de la escena / mudo / bloqueado) y, si el
+editor no atiende, sale con **rc 3 diciendo qué pasó, que no es la escena y el
+remedio** (cerrar el diálogo —Reload o Ignore— y repetir; o mirar `Logs/Editor.log`
+si la marca «Main thread operation timed out» está en su cola), en vez de morir
+con el motivo en blanco. Y al terminar descarta el churn de re-serialización que haya quedado
+—por el mismo verificador de assets que el reparto de commits, no por una copia
+de su criterio— cuando esos assets no se van a commitear; `--no-discard-churn` lo
+salta, que es lo que quieres si sí vas a commitearlos.
+
+Y comprueba el supuesto en el que descansan todos los demás: que **el pase no
+acumula estado**, o sea que una segunda pasada del mismo montaje deja el árbol
+exactamente como lo dejó la primera. Toma una HUELLA —estado y contenido (`git
+hash-object`) de cada fichero del alcance que difiere de HEAD: los volcados
+`artifacts/playpass-*` y los documentos de asset del proyecto— y la guarda en
+`artifacts/playpass-fingerprint.txt` junto al montaje (HEAD + semilla + grid +
+ticks + velocidad + pool); la pasada siguiente calcula la suya y las compara, y si
+difieren **dice qué fichero** (la línea vieja contra la nueva). Los volcados de
+MEDIDA —muestras vivas, aspecto, bloque 4, el estado del mundo en marcha, los
+recortes del HUD— cambian con el reloj por construcción, así que de ellos se compara
+el nombre y el estado, no el contenido; el resto, incluida la evidencia en píxeles
+del rumbo (un render fuera de pantalla con una malla y un giro fijos), tiene que
+salir **byte a byte igual**.
+
+Falla con el primer invariante roto. No es un job de CI porque necesita un
 editor interactivo con licencia; se corre a mano:
 
 ```bash
-bash scripts/playpass-live.sh            # bloques 3, 4, 5 y aspecto, en vivo
+bash scripts/playpass-live.sh            # bloques 3, 4, 5 + aspecto e iconos, en vivo
 bash scripts/playpass-live.sh --no-block4     # solo 3, 5 y aspecto (más rápido)
+bash scripts/playpass-live.sh --no-discard-churn  # deja el árbol como quedó (vas a commitear los assets)
+bash scripts/playpass-live.sh --recanonicalize # reescribe lo que derive y sigue (árbol que no viene del generador)
 bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
+bash scripts/playpass-live.sh --analyze-icons   # solo los iconos (sobre la captura)
+bash scripts/playpass-live.sh --analyze-sparkline # solo las barras de la gráfica
 bash scripts/playpass-live.sh --selftest # los analizadores, sin editor
 ```
 

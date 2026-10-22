@@ -52,7 +52,7 @@ public static class WorldSimSave
     /// v4 (F5.2a.2): añade la reserva de hongo. v5 (F5.3): añade la cuarta capa
     /// de feromona (huella CHC) — los v2–v4 se siguen leyendo y llegan con la
     /// huella a cero, que es el estado de un mundo donde nadie ha andado aún.</summary>
-    public const int FormatVersion = 5;
+    public const int FormatVersion = 6;
     private static readonly byte[] Magic = { (byte)'A', (byte)'N', (byte)'T', (byte)'S', (byte)'A', (byte)'V', (byte)'E', (byte)'1' };
 
     // Recompensas configurables de WorldSim: son parte del estado (la arena
@@ -82,6 +82,29 @@ public static class WorldSimSave
         w.WriteU64(sim.Seed);
         w.WriteU64(sim.Tick);
         w.WriteI32(sim.GridCells);
+        // v6 (F6): terreno. El bitmap se guarda EMPAQUETADO (1 bit por celda,
+        // 1.152 B en un grid de 96): cargar reconstruye la MISMA colisión, los
+        // mismos sensores y el mismo hash sin depender de volver a generarlo.
+        // Sin laberinto se escribe 0 y no hay bytes.
+        bool[]? mazeCells = sim.Maze?.CopyCells();
+        w.WriteBool(mazeCells != null);
+        if (mazeCells != null)
+        {
+            w.WriteI32(sim.Maze!.Width);
+            w.WriteI32(sim.Maze.Height);
+            int packed = (mazeCells.Length + 7) / 8;
+            w.WriteI32(packed);
+            for (int i = 0; i < packed; i++)
+            {
+                byte b = 0;
+                for (int k = 0; k < 8; k++)
+                {
+                    int idx = i * 8 + k;
+                    if (idx < mazeCells.Length && mazeCells[idx]) b |= (byte)(1 << k);
+                }
+                w.WriteByte(b);
+            }
+        }
         w.WriteI32(sim.TargetItems);
         for (int i = 0; i < RewardGetters.Length; i++) w.WriteF32(RewardGetters[i](sim));
 
@@ -225,8 +248,32 @@ public static class WorldSimSave
         ulong seed = r.ReadU64();
         ulong tick = r.ReadU64();
         int gridCells = r.ReadI32();
-        int targetItems = r.ReadI32();
         if (gridCells < 16) throw new FormatException($"Grid inválido: {gridCells}.");
+
+        // v6 (F6): terreno con obstáculos. Se reconstruye ANTES del WorldSim
+        // para que el respawn inicial del constructor ya respete las paredes.
+        MazeLayout? maze = null;
+        if (version >= 6)
+        {
+            bool hasMaze = r.ReadBool();
+            if (hasMaze)
+            {
+                int mw = r.ReadI32();
+                int mh = r.ReadI32();
+                int packed = r.ReadI32();
+                if (mw < 4 || mh < 4 || mw != gridCells || mh != gridCells)
+                    throw new FormatException($"Laberinto inválido: {mw}×{mh} para un grid de {gridCells}.");
+                if (packed != (mw * mh + 7) / 8)
+                    throw new FormatException($"Laberinto inválido: {packed} bytes para {mw}×{mh} celdas.");
+                var bytes = r.ReadBytes(packed);
+                var cells = new bool[mw * mh];
+                for (int i = 0; i < cells.Length; i++)
+                    cells[i] = (bytes[i >> 3] & (1 << (i & 7))) != 0;
+                maze = MazeLayout.FromCells(cells, mw, mh);
+            }
+        }
+
+        int targetItems = r.ReadI32();
 
         float[] rewards = new float[RewardGetters.Length];
         for (int i = 0; i < rewards.Length; i++)
@@ -239,7 +286,7 @@ public static class WorldSimSave
         uint nextAntId = r.ReadU32();
         uint nextItemId = r.ReadU32();
 
-        var sim = new WorldSim(seed, gridCells, colonyCount: 1)
+        var sim = new WorldSim(seed, gridCells, colonyCount: 1, mazeLayout: maze)
         {
             TargetItems = targetItems,
             RewardPickup = rewards[0],

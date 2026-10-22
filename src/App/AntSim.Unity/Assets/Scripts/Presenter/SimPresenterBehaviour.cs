@@ -33,6 +33,12 @@ namespace AntSim.Unity.Scripts.Presenter
         public string Species = "lasius";
         public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome (relativa al repo root)
 
+        [Header("Terreno (F6)")]
+        [Tooltip("Laberinto con obstáculos: la CLI lo genera desde la semilla y la cabecera del stream trae los rectángulos que se pintan aquí. Sin él, el tablero es el plano clásico.")]
+        public bool Maze = false;
+        [Tooltip("Al terminar el horizonte, guarda la élite evolucionada en artifacts/evolved-<semilla>.antgenome (la evolución es por nacimientos; no hay botón de generación).")]
+        public bool ExportElite = false;
+
         [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
         [Tooltip("Canal E (F4.5): feromonas de la colonia 0 cada N ticks. 0 = desactivado.")]
         public int PheroEvery = 0;
@@ -84,7 +90,21 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Materiales de portadoras diferenciados por índice de colonia [0..N-1].")]
         public Material[]? ColonyCarrierMaterials;
         public Mesh ItemMesh = null!;
+        [Tooltip("Malla de la HOJA (F5.2a): silueta propia generada por el bootstrapper. Si falta, la hoja se dibuja con ItemMesh — el aspecto de antes, sin fallo.")]
+        public Mesh? LeafMesh;
         public Material ItemMaterial = null!;
+
+        [Header("Terreno (F6)")]
+        [Tooltip("Quad unitario en XZ para las paredes del laberinto (assets generados por el bootstrapper).")]
+        public Mesh? WallMesh;
+        [Tooltip("Material de las paredes (unlit, piedra oscura).")]
+        public Material? WallMaterial;
+
+        private readonly System.Collections.Generic.List<Matrix4x4> _wallMatrices = new();
+        private bool _wallsBuilt;
+
+        /// <summary>Paredes pintadas en la última presentación (0 = sin laberinto).</summary>
+        public int LastWallDraws { get; private set; }
 
         [Header("F5.2a: hojas con mordiscos (CutsLeft/CutsInitial del canal A)")]
         [Tooltip("Material de la hoja (verde oscuro, distinto del ítem simple).")]
@@ -152,8 +172,8 @@ namespace AntSim.Unity.Scripts.Presenter
         public float ActorLift = 0.6f;
 
         [Header("Tiempo")]
-        [Tooltip("Velocidad de simulación/reproducción en rango 1.0× (10% base) a 100.0× (1000% base). 10.0× = base normal. 0 = pausa.")]
-        [Range(1f, 100f)] public float Speed = 10f;
+        [Tooltip("Velocidad de simulación/reproducción en rango 10× a 160×. 120× = base normal (40 × los 3× del lanzador). 0 = pausa.")]
+        [Range(10f, 160f)] public float Speed = 120f;
         [Tooltip("Multiplicador adicional (1 por defecto).")]
         public float SpeedBoost = 1f;
         [Tooltip("Tecla para aumentar la velocidad (+ / = / Keypad +).")]
@@ -165,7 +185,7 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Tecla para pausar / reanudar la simulación.")]
         public KeyCode PauseKey = KeyCode.Space;
 
-        private float _pausedSpeed = 10f;
+        private float _pausedSpeed = 120f;
 
         private readonly Streaming.GameStreamPresenter _presenter = new();
         private Streaming.StreamSource? _source;
@@ -247,35 +267,6 @@ namespace AntSim.Unity.Scripts.Presenter
             SetSpeed(Streaming.SpeedControlModel.StepDown(Speed));
         }
 
-        /// <summary>Generación evolutiva actual acumulada en la sesión.</summary>
-        public static int GenerationCount = 1;
-
-        /// <summary>Récord histórico de supervivencia en segundos.</summary>
-        public static float AllTimeBestSurvivalSeconds = 0f;
-
-        /// <summary>Generación actual del presentador.</summary>
-        public int Generation => GenerationCount;
-
-        /// <summary>Tiempo de supervivencia transcurrido en la generación actual (s).</summary>
-        public float CurrentSurvivalSeconds => _simTime;
-
-        /// <summary>Mejor tiempo histórico de supervivencia (s).</summary>
-        public float BestSurvivalSeconds => AllTimeBestSurvivalSeconds;
-
-        /// <summary>
-        /// Avanza inmediatamente a la siguiente generación evolutiva: registra el récord
-        /// de supervivencia, incrementa la generación y relanza el escenario sembrado con la élite acumulada.
-        /// </summary>
-        public void TriggerNextGeneration()
-        {
-            if (_simTime > AllTimeBestSurvivalSeconds)
-                AllTimeBestSurvivalSeconds = _simTime;
-
-            GenerationCount++;
-            UnityEngine.SceneManagement.SceneManager.LoadScene(
-                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
-        }
-
         /// <summary>Alterna entre pausa y la velocidad previa.</summary>
         public void TogglePause()
         {
@@ -330,9 +321,26 @@ namespace AntSim.Unity.Scripts.Presenter
                 ? Streaming.RepoPathResolver.Resolve(SeedPoolPath, baseDir: null, repoRoot)
                 : SeedPoolPath ?? "";
             _source = new Streaming.StreamSource(CliPath, repoRoot);
+            // Contrapresión (F6): el stream de 2 h se presenta a 120×, y el CLI
+            // produce más rápido de lo que se consume. Sin tope, la cola acumula
+            // ticks durante una hora. 600 ticks = 20 s de simulación de colchón.
+            _presenter.MaxPending = 600;
             _streaming = true;
-            // El stream se bombea en un hilo: el juego no se congela mientras el CLI corre.
-            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+
+            // La élite se guarda al terminar el horizonte (evolución por
+            // nacimientos: no hay reinicio de generación que la conserve).
+            string? exportPath = null;
+            if (ExportElite && string.IsNullOrEmpty(ReplayFile))
+            {
+                exportPath = repoRoot != null
+                    ? System.IO.Path.Combine(repoRoot, "artifacts", $"evolved-{Seed}.antgenome")
+                    : null;
+            }
+
+            // Hilo DEDICADO (no del pool): una partida de 2 h bloquea este hilo
+            // esperando la contrapresión; ocupar un hilo del pool una hora no es
+            // aceptable.
+            var pump = new System.Threading.Thread(() =>
             {
                 try
                 {
@@ -347,7 +355,8 @@ namespace AntSim.Unity.Scripts.Presenter
                         _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery,
                             seedPool.Length > 0 ? seedPool : null,
                             line => _presenter.Feed(line), PendingDropArgs,
-                            PheroEvery, ActivEvery, InspectId, Species);
+                            PheroEvery, ActivEvery, InspectId, Species,
+                            maze: Maze, exportPath: exportPath);
                 }
                 catch (Exception ex)
                 {
@@ -359,7 +368,28 @@ namespace AntSim.Unity.Scripts.Presenter
                 {
                     _streaming = false;
                 }
-            });
+            })
+            { IsBackground = true, Name = "AntSimStream" };
+            pump.Start();
+        }
+
+        /// <summary>
+        /// F6 — Parar Play cierra el CLI y despierta al hilo atascado en la
+        /// contrapresión. Sin esto el hijo queda huérfano bloqueado en la tubería
+        /// (el caso no existía con un horizonte de 7.200 ticks: el CLI terminaba
+        /// solo en un segundo).
+        /// </summary>
+        private void OnDestroy()
+        {
+            _source?.Stop();
+            _presenter.Close();
+            _streaming = false;
+        }
+
+        private void OnApplicationQuit()
+        {
+            _source?.Stop();
+            _presenter.Close();
         }
 
         private void Update()
@@ -390,6 +420,31 @@ namespace AntSim.Unity.Scripts.Presenter
             var state = _presenter.Sample(Frac());
             _lastState = state;
             Draw(state);
+        }
+
+        /// <summary>
+        /// Construye las matrices de las paredes una sola vez, cuando llega la
+        /// cabecera. Las celdas vienen en coordenadas de rejilla (celda = 8 u) y
+        /// el quad unitario se escala al rectángulo; Y del mundo va a Z de Unity
+        /// (el tablero se ve en cenital), como el resto de la vista.
+        /// </summary>
+        private void BuildWallsIfNeeded()
+        {
+            if (_wallsBuilt) return;
+            var header = Presenter.Header;
+            if (header == null) return; // aún no llegó la cabecera
+            _wallsBuilt = true;
+            _wallMatrices.Clear();
+            float cell = Streaming.WorldUnits.PerCell;
+            const float wallLift = 0.35f; // sobre el quad de feromonas (0,25), bajo los actores
+            for (int i = 0; i < header.Maze.Count; i++)
+            {
+                var r = header.Maze[i];
+                float w = r.W * cell;
+                float h = r.H * cell;
+                var pos = new Vector3((r.X * cell) + w * 0.5f, wallLift, (r.Y * cell) + h * 0.5f);
+                _wallMatrices.Add(Matrix4x4.TRS(pos, Quaternion.identity, new Vector3(w, 1f, h)));
+            }
         }
 
         private float Frac()
@@ -424,6 +479,107 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Escala efectiva del ítem.</summary>
         public float EffectiveItemScale => WorldSide * ItemWorldFraction;
 
+        /// <summary>
+        /// Rotación con la que se dibuja un actor a partir del RUMBO del stream
+        /// (radianes; el mismo del Core: `X += cos(rumbo)·v`, `Y += sin(rumbo)·v`).
+        ///
+        /// Está aquí, y en un solo sitio, a propósito: el bucle de dibujo no repite
+        /// la fórmula y la orientación se puede MEDIR desde fuera con la
+        /// matemática de Unity de verdad (`scripts/unity/ProbeActorOrientation.cs`,
+        /// que la ejecuta dentro del editor) — replicar a mano la convención de
+        /// `Euler` es justo cómo se cuela un giro de 90°.
+        ///
+        /// `Rx(90)` tumba la malla sobre el tablero: su +Y —el EJE DE AVANCE de la
+        /// caja del juego, la cabeza de la hormiga— pasa al +Z del mundo, que con la
+        /// cámara de arriba es «norte de pantalla». El mundo mapea `X→X` e `Y→Z`, así
+        /// que el giro sobre Y tiene que llevar ese morro del norte de pantalla al
+        /// rumbo, y eso son **90° menos el rumbo**: rumbo 0 (mapa +X, este de
+        /// pantalla) → 90° de giro; rumbo 90° (mapa +Y, norte) → 0°.
+        ///
+        /// MEDIDO (2026-10-10, proyecto real vía `ProbeActorOrientation`): con
+        /// `-rumbo` en vez de `90 − rumbo` el morro salía a **90° justos** del rumbo
+        /// en los ocho rumbos de prueba —la hormiga andaba de lado, que es lo que se
+        /// veía en pantalla—, y ni los conteos ni los píxeles de «hay hormigas» lo
+        /// decían.
+        /// </summary>
+        public static Quaternion ActorRotation(float headingRadians)
+            => Quaternion.Euler(90f, 90f - headingRadians * Mathf.Rad2Deg, 0f);
+
+        /// <summary>
+        /// Rotación de una silueta ACOSTADA sobre el tablero: `ActorRotation` con el
+        /// rumbo del Core que apunta al NORTE (+Y del mapa), no una segunda idea de
+        /// «cómo se acuesta una pieza». Los ítems y las hojas no traen rumbo —el
+        /// `FoodItem` del Core no guarda ángulo y el stream no lo lleva—, así que su
+        /// eje de dibujo (el +Y de la caja: la punta del limbo, el eje del grumo) se
+        /// acuesta y se queda al norte; inventarle un giro por pieza sería una
+        /// decisión que el dato no tiene.
+        /// </summary>
+        public static Quaternion FlatRotation => ActorRotation(Mathf.PI * 0.5f);
+
+        /// <summary>
+        /// Escala de una silueta acostada: 1:1 en el plano del tablero y el GROSOR a la
+        /// mitad. Con <see cref="FlatRotation"/> la caja del juego queda x = ancho,
+        /// y = largo, z = grosor —la misma convención que la hormiga—, así que escalar
+        /// `z` y no `y` es toda la diferencia entre una hoja y un canto.
+        ///
+        /// MEDIDO (2026-10-10, aritmética de la caja, sin editor) con `Quaternion.identity`
+        /// y las escalas que había: la hoja se dibujaba DE PIE —el eje de dibujo, su +Y,
+        /// caía en el eje VERTICAL, así que desde la cámara de arriba se veía su CANTO—
+        /// y el 1,1 iba al grosor (1,0 u) mientras el largo (1,24 u) recibía el 0,5: en el
+        /// plano salía un canto de 0,66 s × 1,10 s, el limbo no apuntaba a nada y no se
+        /// veía ni la punta ni el nervio. Lo mismo con la carga (0,68 s × 1,00 s de canto
+        /// y 0,80 s de alto) y con los mordiscos.
+        /// </summary>
+        public static Vector3 FlatScale(float s) => new Vector3(s, s, s * 0.5f);
+
+        /// <summary>
+        /// Matriz de una silueta acostada (posición + <see cref="FlatRotation"/> +
+        /// <see cref="FlatScale"/>), en UN solo sitio: la usan el ítem, la hoja y sus
+        /// mordiscos, y la sonda `scripts/unity/ProbeActorOrientation.cs` mide ESTA
+        /// matriz, no una copia de la fórmula.
+        /// </summary>
+        public static Matrix4x4 FlatTRS(Vector3 pos, float s)
+            => Matrix4x4.TRS(pos, FlatRotation, FlatScale(s));
+
+        /// <summary>
+        /// Centro de la muesca `b` (de `total`) sobre el BORDE del limbo: se reparte
+        /// sobre la ELIPSE del arte —semiejes 0,30·s (ancho, X) × 0,62·s (largo, Z),
+        /// los extremos de `GameSpriteModel.Leaf()` tras `FlatRotation`—, no sobre un
+        /// círculo. Un radio único no cae en el borde en ningún sitio: con 0,55 s, por
+        /// los costados queda FUERA del limbo (0,55 &gt; 0,30) y por las puntas DENTRO
+        /// (0,55 &lt; 0,62), así que las muescas flotaban en el vacío junto a la hoja en
+        /// vez de comer de ella. Devuelve el desplazamiento en el PLANO del tablero
+        /// (X, Z) respecto al centro de la hoja; el pequeño levantamiento que alterna
+        /// arriba/abajo para que se lean en cenital es de `AddBites`.
+        ///
+        /// Está aquí, y en un solo sitio, por lo mismo que `FlatTRS`: el paso del Play
+        /// pass que lo comprueba (`scripts/unity/ProbeActorOrientation.cs`) llama a
+        /// ESTA función, no a una copia de la fórmula —replicarla es cómo se cuela una
+        /// muesca que no toca la hoja.
+        /// </summary>
+        public static Vector2 BiteOffset(int b, int total, float s)
+        {
+            float angle = (b / (float)(total > 0 ? total : 1)) * Mathf.PI * 2f;
+            return new Vector2(
+                Mathf.Cos(angle) * (UI.GameSpriteModel.LeafHalfWidth * s),
+                Mathf.Sin(angle) * (UI.GameSpriteModel.LeafHalfLength * s));
+        }
+
+        /// <summary>
+        /// Escala de la CAJA del actor (la del modelo, `GameSpriteModel`: 2 u de largo
+        /// × 1 u de ancho × 1 u de grosor) a partir del LARGO en unidades que quiere
+        /// el dibujo — el de una hormiga es <see cref="EffectiveAntScale"/>.
+        ///
+        /// Está aquí, y en un solo sitio, por lo mismo que <see cref="ActorRotation"/>:
+        /// la sonda que mide la silueta EN PÍXELES
+        /// (`scripts/unity/ProbeAntHeadingPixels.cs`) dibuja la hormiga con esta
+        /// escala y con la malla real, y replicar la fórmula a mano es cómo se cuela
+        /// una hormiga de otro tamaño —que también es un defecto visual que ninguna
+        /// muestra de estado mira.
+        /// </summary>
+        public static Vector3 ActorBoxScale(float length)
+            => new Vector3(length * 0.33f, length * 0.5f, length * 0.16f);
+
         private void Draw(Streaming.RenderState state)
         {
             float world = WorldSide;
@@ -434,6 +590,24 @@ namespace AntSim.Unity.Scripts.Presenter
             LastDrawCalls = 0;
             LastInstancedCalls = 0;
             LastFallbackCalls = 0;
+            LastWallDraws = 0;
+
+            // — Terreno (F6): ANTES de actores e ítems, para que éstos se pinten
+            //   encima. Una sola pasada instanciada con los rectángulos de la
+            //   cabecera: las paredes son las mismas celdas que colisionan. —
+            if (WallMesh != null && WallMaterial != null)
+            {
+                BuildWallsIfNeeded();
+                if (_wallMatrices.Count > 0)
+                {
+                    int wallLayer = RenderLayer > 0 ? RenderLayer : 0;
+                    _drawer.Clear();
+                    for (int i = 0; i < _wallMatrices.Count; i++)
+                        _drawer.Add(WallMaterial, _wallMatrices[i]);
+                    LastDrawCalls += _drawer.Draw(WallMesh, wallLayer, instancing);
+                    LastWallDraws = _wallMatrices.Count;
+                }
+            }
 
             if (AntMesh != null && AntMaterial != null)
             {
@@ -452,9 +626,9 @@ namespace AntSim.Unity.Scripts.Presenter
                 {
                     if (!a.Alive) continue;
                     float len = a.HasLoad ? antS * carrierBoost : antS;
-                    var scale = new Vector3(len * 0.33f, len * 0.5f, len * 0.16f);
+                    var scale = ActorBoxScale(len);
                     var pos = new Vector3(a.X, lift, a.Y);
-                    var rot = Quaternion.Euler(90f, -a.Heading * Mathf.Rad2Deg, 0f);
+                    var rot = ActorRotation(a.Heading);
 
                     Material mat;
                     if (a.HasLoad)
@@ -482,59 +656,84 @@ namespace AntSim.Unity.Scripts.Presenter
 
             if (ItemMesh != null && ItemMaterial != null)
             {
-                // Ítem: esfera natural (1 u de diámetro) escalada por el diámetro
-                // querido; el tamaño insinúa la cantidad restante.
-                // F5.2a: las hojas (IsLeaf) se dibujan con material verde oscuro
-                // y mordiscos visibles — pequeñas esferas marrones en la superficie
-                // que representan los cortes consumidos (CutsInitial - CutsLeft).
+                // Ítem: silueta propia (la esfera la sustituye la CARGA generada
+                // por el bootstrapper) escalada por el diámetro querido; el tamaño
+                // insinúa la cantidad restante.
+                //
+                // F5.2a: las hojas (IsLeaf) van en su propia PASADA porque el
+                // agrupador de lotes dibuja TODAS las matrices de una pasada con
+                // UNA malla: con la hoja en la misma pasada que el ítem simple no
+                // podría tener silueta propia. Los mordiscos (cortes consumidos,
+                // CutsInitial − CutsLeft) siguen siendo muescas pequeñas en el
+                // borde, con la malla del ítem cuando la hoja ya tiene la suya.
                 int layer = RenderLayer > 0 ? RenderLayer : 0;
                 _drawer.Clear();
                 foreach (var it in state.Items)
                 {
+                    if (it.IsLeaf && LeafMaterial != null) continue;
                     var pos = new Vector3(it.X, lift * 0.7f, it.Y);
                     float s = itemS * (0.55f + 0.03f * it.Amount);
-
-                    if (it.IsLeaf && LeafMaterial != null)
-                    {
-                        // Hoja: esfera achatada (más plana que un ítem simple)
-                        // para insinuar la forma de hoja.
-                        var leafScale = new Vector3(s * 1.1f, s * 0.5f, s * 1.1f);
-                        _drawer.Add(LeafMaterial, Matrix4x4.TRS(pos, Quaternion.identity, leafScale));
-
-                        // Mordiscos: pequeñas esferas marrones en los bordes.
-                        // Cada corte consumido (CutsInitial - CutsLeft) se representa
-                        // como una muesca en la superficie, distribuida uniformemente
-                        // alrededor del perímetro de la hoja.
-                        if (BiteMaterial != null)
-                        {
-                            int bitesEaten = it.CutsInitial - it.CutsLeft;
-                            int totalBites = it.CutsInitial > 0 ? it.CutsInitial : 1;
-                            float biteRadius = s * 0.18f; // tamaño de cada mordisco
-                            float leafRadius = s * 0.55f; // radio de la hoja
-                            for (int b = 0; b < bitesEaten; b++)
-                            {
-                                float angle = (b / (float)totalBites) * Mathf.PI * 2f;
-                                float bx = pos.x + Mathf.Cos(angle) * leafRadius;
-                                float bz = pos.z + Mathf.Sin(angle) * leafRadius;
-                                float by = pos.y + (b % 2 == 0 ? 0.05f : -0.05f); // alternar arriba/abajo
-                                var bitePos = new Vector3(bx, by, bz);
-                                var biteMtx = Matrix4x4.TRS(bitePos, Quaternion.identity,
-                                    Vector3.one * biteRadius);
-                                _drawer.Add(BiteMaterial, biteMtx);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Ítem simple: esfera tal cual.
-                        _drawer.Add(ItemMaterial, Matrix4x4.TRS(pos, Quaternion.identity, Vector3.one * s));
-                    }
+                    _drawer.Add(ItemMaterial, FlatTRS(pos, s));
                 }
                 LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
+
+                if (LeafMaterial != null)
+                {
+                    bool ownLeafMesh = LeafMesh != null;
+                    _drawer.Clear();
+                    foreach (var it in state.Items)
+                    {
+                        if (!it.IsLeaf) continue;
+                        var pos = new Vector3(it.X, lift * 0.7f, it.Y);
+                        float s = itemS * (0.55f + 0.03f * it.Amount);
+                        // La hoja con la MISMA matriz que el ítem: acostada, el limbo
+                        // 1:1 en el plano (su largo, 1,24 u de la caja, va al norte) y el
+                        // grosor a la mitad. Antes se dibujaba de canto y su escala
+                        // alargaba justo el eje equivocado.
+                        _drawer.Add(LeafMaterial, FlatTRS(pos, s));
+                        // Sin malla propia los mordiscos comparten pasada (materiales
+                        // distintos, misma malla); con ella van aparte, más abajo.
+                        if (!ownLeafMesh && BiteMaterial != null)
+                            AddBites(it, pos, s);
+                    }
+                    LastDrawCalls += _drawer.Draw(ownLeafMesh ? LeafMesh! : ItemMesh, layer, instancing);
+
+                    if (ownLeafMesh && BiteMaterial != null)
+                    {
+                        _drawer.Clear();
+                        foreach (var it in state.Items)
+                        {
+                            if (!it.IsLeaf) continue;
+                            float s = itemS * (0.55f + 0.03f * it.Amount);
+                            AddBites(it, new Vector3(it.X, lift * 0.7f, it.Y), s);
+                        }
+                        LastDrawCalls += _drawer.Draw(ItemMesh, layer, instancing);
+                    }
+                }
             }
 
             LastInstancedCalls = _drawer.InstancedCalls;
             LastFallbackCalls = _drawer.FallbackCalls;
+        }
+
+        /// <summary>Las muescas de una hoja: un corte consumido por mordisco, sobre el
+        /// BORDE del limbo (la elipse de `BiteOffset`, no un círculo) y alternando
+        /// arriba/abajo para que se lean en vista cenital.</summary>
+        private void AddBites(Streaming.GameStreamParser.ItemView it, Vector3 pos, float s)
+        {
+            int bitesEaten = it.CutsInitial - it.CutsLeft;
+            int totalBites = it.CutsInitial > 0 ? it.CutsInitial : 1;
+            float biteRadius = s * 0.18f;
+            for (int b = 0; b < bitesEaten; b++)
+            {
+                var off = BiteOffset(b, totalBites, s);
+                var bitePos = new Vector3(
+                    pos.x + off.x,
+                    pos.y + (b % 2 == 0 ? 0.05f : -0.05f),
+                    pos.z + off.y);
+                // El mordisco también es una silueta acostada: de canto no se veía.
+                _drawer.Add(BiteMaterial!, FlatTRS(bitePos, biteRadius));
+            }
         }
 
         /// <summary>

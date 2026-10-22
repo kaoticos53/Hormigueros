@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using AntSim.Core.Scenario;
 using AntSim.Core.World;
 
 namespace AntSim.Core.Telemetry;
@@ -63,15 +64,24 @@ public static class SimSnapshot
         // F5.2a.2: hongo (0/0 = especies sin hongo — default tolerante).
         public readonly float Fungus;
         public readonly float FungusMax;
+        // F5.1: autonomía (T_runway = S / consumoEMA) y el tramo de la escalera
+        // de escasez que le corresponde (RunwayVerdict). -1 / 0 = SIN MEDIDA:
+        // la EMA de consumo es degenerada (0 o NaN) y el chip no se pinta.
+        // Un juego normal nunca cae aquí — la colonia nace con ConsumeEma = 1 y
+        // desde el primer frame hay medida (medido: 400/400 frames en seed 42).
+        public readonly float Runway;
+        public readonly byte RunwayLevel;
 
         public ColonyView(int id, float nestX, float nestY, int adultsAlive,
             int eggs, int larvae, int pupae, float stock, float stockMax, int eliteCount,
-            float fungus = 0f, float fungusMax = 0f)
+            float fungus = 0f, float fungusMax = 0f,
+            float runway = -1f, byte runwayLevel = 0)
         {
             Id = id; NestX = nestX; NestY = nestY; AdultsAlive = adultsAlive;
             Eggs = eggs; Larvae = larvae; Pupae = pupae;
             Stock = stock; StockMax = stockMax; EliteCount = eliteCount;
             Fungus = fungus; FungusMax = fungusMax;
+            Runway = runway; RunwayLevel = runwayLevel;
         }
     }
 
@@ -115,10 +125,20 @@ public static class SimSnapshot
         for (int c = 0; c < sim.Colonies.Count; c++)
         {
             var colony = sim.Colonies[c];
+            // F5.1: la autonomía solo significa algo con EMA de consumo. ColonyController
+            // .Runway divide por max(EMA, 1e-4): con una EMA degenerada (0 tras
+            // apagarse la ingesta, o NaN) la división daría un runway gigante y el
+            // chip diría «desahogo» con la colonia seca — el centinela −1/Unknown
+            // cubre justo ese caso.
+            bool hayMedida = RunwayVerdict.HasMeasure(colony.ConsumeEma);
+            float runway = hayMedida ? ColonyController.Runway(colony) : -1f;
+            byte nivel = hayMedida
+                ? (byte)RunwayVerdict.StateOf(runway, colony.Species)
+                : (byte)RunwayState.Unknown;
             colonies.Add(new ColonyView(colony.Id, colony.NestX, colony.NestY,
                 colony.AdultCountAlive, colony.Eggs.Count, colony.Larvae.Count,
                 colony.Pupae.Count, colony.Stock, colony.StockMax, colony.Pool.EliteCount,
-                colony.Fungus, colony.FungusMax));
+                colony.Fungus, colony.FungusMax, runway, nivel));
         }
 
         return new Frame(sim.Tick, ants, sim.Items, colonies);
