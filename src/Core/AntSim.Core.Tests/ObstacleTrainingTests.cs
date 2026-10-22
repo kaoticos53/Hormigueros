@@ -369,6 +369,49 @@ public class ObstacleTrainingTests
     }
 
     [Fact]
+    public void Trainer_ClassicTail_ClosesWithOpenFieldGenerations()
+    {
+        // F7: el mantenimiento intercalado no recupera la competencia clásica — el
+        // pool exportado es una evaluación de COL A sin terreno, en el régimen de la
+        // partida, para que el archivo que siembra el juego traiga las dos.
+        var seeds = new List<MlpGenome> { DrawGenome(7, 0), DrawGenome(7, 1) };
+        CurriculumTrainer Build(int tail) => new(77UL, 2, new[] { TinyStage(2) },
+            onGeneration: null, seedGenomes: seeds,
+            obstacleCurriculum: new ObstacleCurriculum(adaptive: false),
+            hiddenLadder: new[] { 8 }, parallel: false, classicEvery: 0, classicTail: tail);
+
+        var conCola = Build(2);
+        conCola.Run();
+
+        Assert.Equal(4, conCola.Report.Count);
+        Assert.All(conCola.Report.Take(2), s => Assert.False(s.ClassicGen));
+        Assert.All(conCola.Report.Skip(2), s => Assert.True(s.ClassicGen));
+        Assert.All(conCola.Report.Skip(2), s => Assert.Equal(0, s.GrownHidden));
+
+        var sinCola = Build(0);
+        sinCola.Run();
+        Assert.Equal(2, sinCola.Report.Count);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Build(-1));
+    }
+
+    [Fact]
+    public void Trainer_WarmStartWiderThanTheLadder_KeepsTheSeedWidth()
+    {
+        // Continuar un pool de 24 ocultas con `--hidden 8` (el default del script)
+        // no puede encoger la red: la escalera no tiene peldaño de bajada.
+        var wide = DrawGenome(9, 0).Expand(new[] { Sizes[0], 24, Sizes[2] });
+        var trainer = new CurriculumTrainer(91UL, 2, new[] { TinyStage(1, ticks: 1) },
+            onGeneration: null, seedGenomes: new List<MlpGenome> { wide, wide.Clone() },
+            obstacleCurriculum: new ObstacleCurriculum(adaptive: false),
+            hiddenLadder: new[] { 8, 16, 24 }, parallel: false);
+
+        var trained = trainer.Run();
+
+        Assert.Equal(24, trainer.Hidden);
+        Assert.All(trained, g => Assert.Equal(24, g.Sizes[1]));
+    }
+
+    [Fact]
     public void Trainer_ObstacleRuns_AreDeterministic()
     {
         var seeds = Enumerable.Range(0, 4).Select(i => DrawGenome(5, i)).ToList();
