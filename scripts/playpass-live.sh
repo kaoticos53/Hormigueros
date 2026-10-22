@@ -52,6 +52,22 @@
 #     glifo y tinta), el pass sale ≠ 0 con el glifo y sus números. Antes el
 #     comparador se ejecutaba a mano y un icono roto pasaba en verde.
 #
+#   + DESCARGAS EN LA GRÁFICA (F5.1): la serie de descargas por ventana —las
+#     barras ámbar sobre el área de reserva— se verificó headless sobre el modelo
+#     puro (`ColonySparklineModel`). Eso prueba la TEXTURA, no que la tarjeta la
+#     pinte. `scripts/unity/ProbeSparklinePixels.cs` inyecta una serie CONOCIDA
+#     en el modelo real de cada tarjeta (cuatro ventanas con 1, 3, 5 y 7
+#     descargas, separadas por ceros), deja dibujar un frame y recorta del frame
+#     REAL la banda de la gráfica; `scripts/playpass-sparkline.py` mide los
+#     píxeles: exactamente una barra por ventana con descargas, cada una en las
+#     columnas de SU muestra, la altura creciendo con la cuenta, todo naciendo en
+#     la base (la orientación se comprueba, no se supone) y ni un píxel ámbar
+#     fuera de la banda. La serie real se restaura en la misma sonda, así que el
+#     HUD no se queda con la de prueba. Volcado en
+#     artifacts/playpass-sparkline-pixels.txt y PNG (frame, banda por tarjeta y
+#     hoja de medida) en artifacts/playpass-sparkline-pixels/. Falla cerrado: sin
+#     captura o sin PNG conservados, el paso NO es verde.
+#
 # LA SEÑAL ES LA MUESTRA, NO UNA FOTO: el stream del CLI llega entero de golpe y
 # el presenter lo reproduce con buffer, así que una sola lectura en el instante
 # equivocado no ve nada. Las muestras se acumulan cada segundo hasta el último
@@ -152,6 +168,7 @@
 #   scripts/playpass-live.sh --analyze-block4 F  # solo analiza pasos del bloque 4
 #   scripts/playpass-live.sh --analyze-visual    # solo analiza el aspecto (F5.1)
 #   scripts/playpass-live.sh --analyze-icons     # solo clasifica los iconos (F5.1)
+#   scripts/playpass-live.sh --analyze-sparkline # solo mide las barras de la gráfica
 #   scripts/playpass-live.sh --selftest          # verifica los analizadores (sin editor)
 #
 # Opciones: --speed N (def. 3) · --ticks N (def. 7200) · --grid N (def. 96) ·
@@ -161,12 +178,14 @@
 # --out FICHERO · --no-stream-check · --quiet · --no-block4 · --block4-speed N
 # (def. 2) · --block4-deadline SEG (def. 200) · --block4-samples FICHERO ·
 # --analyze-block4 FICHERO · --analyze-visual · --analyze-icons · --icons-dump
-# FICHERO · --icons-crops DIR · --no-canonicalize · --recanonicalize ·
+# FICHERO · --icons-crops DIR · --analyze-sparkline · --spark-dump FICHERO ·
+# --spark-crops DIR · --no-canonicalize · --recanonicalize ·
 # --no-discard-churn.
 #
-# El comparador de iconos necesita Pillow (rasteriza el `.ttf`): se usa el primer
-# intérprete del PATH que lo tenga (medido: `python` sí, `python3` no) y se puede
-# forzar con $ICONS_PY.
+# El comparador de iconos y el medidor de la gráfica necesitan Pillow (el
+# primero rasteriza el `.ttf`; el segundo lee los PNG de la captura): se usa el
+# primer intérprete del PATH que lo tenga (medido: `python` sí, `python3` no) y
+# se puede forzar con $ICONS_PY / $SPARK_PY.
 #
 # Salida: 0 ok · 1 invariante roto · 2 uso · 3 no se puede conducir el editor (no
 # hay ninguno abierto, no está el CLI, o NO RESPONDE: un diálogo modal o el hilo
@@ -235,6 +254,15 @@ ICONS_SCRIPT="$ROOT/scripts/playpass-icons.py"
 # el veredicto sin nada que mirar después. `--icons-crops DIR` apunta a otros.
 ICONS_DIR="$ROOT/artifacts/playpass-hud-icons"
 
+# Lo mismo para la gráfica de descargas: la sonda deja en `Temp/` el frame vivo y
+# el recorte de la banda de CADA tarjeta, y el medidor trabaja sobre esas copias.
+SPARK_DUMP=""
+SPARK_ANALYZE=0
+SPARK_CROPS=""
+SPARK_PY=""
+SPARK_SCRIPT="$ROOT/scripts/playpass-sparkline.py"
+SPARK_DIR="$ROOT/artifacts/playpass-sparkline-pixels"
+
 # Dónde vive la evidencia en PÍXELES del rumbo (`ProbeAntHeadingPixels` la escribe en
 # `<proyecto>/Temp/`, que Unity borra al cerrar el editor): el PNG con una hormiga por
 # rumbo y el rumbo esperado pintado encima es lo que se mira para creerse la medida.
@@ -256,7 +284,8 @@ FP_ASSET_SUFFIXES=(".mat" ".unity" ".asset" ".prefab" ".controller" ".anim" ".me
 FP_LIVE=(artifacts/playpass-samples.txt artifacts/playpass-visual.txt \
          artifacts/playpass-visual-edit.txt artifacts/playpass-block4.txt \
          artifacts/playpass-scene.txt artifacts/playpass-hud-icons.txt \
-         artifacts/playpass-hud-icons/)
+         artifacts/playpass-hud-icons/ artifacts/playpass-sparkline-pixels.txt \
+         artifacts/playpass-sparkline-pixels/)
 # (`playpass-scene.txt` entra en la lista por su línea `presenter.live tick=… ants=…`,
 # que es una lectura del mundo EN MARCHA; lo que describe —materiales, rects— son
 # ASSETS, y ésos sí se comparan, como ficheros del alcance.)
@@ -616,6 +645,9 @@ while [[ $# -gt 0 ]]; do
     --analyze-icons)  ICONS_ANALYZE=1; shift ;;
     --icons-dump)     HUD_ICONS="$2"; shift 2 ;;
     --icons-crops)    ICONS_CROPS="$2"; shift 2 ;;
+    --analyze-sparkline) SPARK_ANALYZE=1; shift ;;
+    --spark-dump)     SPARK_DUMP="$2"; shift 2 ;;
+    --spark-crops)    SPARK_CROPS="$2"; shift 2 ;;
     --no-canonicalize) CANONICALIZE=0; shift ;;
     --recanonicalize)  RECANONICALIZE=1; shift ;;
     --no-discard-churn) DISCARD_CHURN=0; shift ;;
@@ -1085,6 +1117,69 @@ analyze_icons() {
   return 1
 }
 
+# ── Gráfica de DESCARGAS de la tarjeta (F5.1) ───────────────────────────────
+# Mismo reparto que los iconos: la sonda captura y guarda, el medidor
+# (`scripts/playpass-sparkline.py`, con Pillow) clasifica los píxeles, y ESTE
+# script aplica la política — un fallo del medidor, o no poder medir, deja el
+# pass en ≠ 0. Es el tramo que el modelo puro no puede ver: la textura puede
+# estar perfecta y la tarjeta no pintarla (banda fuera de la tarjeta, color
+# tapado, gráfica del revés).
+preserve_sparkline() {
+  local from="$1" to="$2" n=0 f
+  mkdir -p "$to" || return 1
+  for f in "$from"/antsim-spark-*.png; do
+    [[ -f "$f" ]] || continue
+    cp -f "$f" "$to/" || return 1
+    n=$((n+1))
+  done
+  if [[ $n -eq 0 ]]; then
+    echo "✗ FALLO (barras de la gráfica): la sonda no dejó ningún PNG en $from — sin la captura no hay píxeles que medir" >&2
+    return 1
+  fi
+  log "  ✓ evidencia de la gráfica conservada en $to ($n PNG: frame vivo + banda de cada tarjeta)"
+  return 0
+}
+
+# analyze_sparkline <volcado> <dir de los recortes> → 0 solo si TODAS las
+# tarjetas pasan las reglas del medidor. El informe se publica entero.
+analyze_sparkline() {
+  local dump="$1" crops="$2" py="${SPARK_PY:-}" rc=0 out line
+
+  if [[ -z "$py" ]]; then py="$(python_with_pillow || true)"; fi
+  if [[ ! -f "$SPARK_SCRIPT" ]]; then
+    echo "  ✗ FALLO (gráfica): falta el medidor $SPARK_SCRIPT" >&2
+    return 1
+  fi
+  if [[ -z "$py" ]]; then
+    echo "  ✗ FALLO (gráfica): ningún python del PATH tiene Pillow — sin él no se leen los PNG de la captura" >&2
+    echo "    (comprobación: python -c 'import PIL'; o fija el intérprete con \$SPARK_PY)" >&2
+    return 1
+  fi
+  if [[ ! -f "$dump" ]]; then
+    echo "  ✗ FALLO (gráfica): no hay volcado de la sonda ($dump)" >&2
+    echo "    (sin el volcado no se mide ninguna barra: ¿corrió ProbeSparklinePixels con Play vivo?)" >&2
+    return 1
+  fi
+
+  out="$("$py" "$SPARK_SCRIPT" "$dump" "$crops" 2>&1)" || rc=$?
+  while IFS= read -r line; do log "  ${line%$'\r'}"; done <<<"$out"
+
+  if [[ $rc -eq 0 ]]; then
+    log "  ✓ las barras de descargas se ven en la tarjeta: una por ventana, en sus columnas, nacidas en la base"
+    return 0
+  fi
+  if [[ $rc -eq 2 ]]; then
+    echo "  ✗ FALLO (gráfica): el medidor NO pudo medir (rc=2: falta Pillow o uso incorrecto) — el pass no puede dar esto por verde" >&2
+    return 1
+  fi
+  local detalle
+  detalle="$(printf '%s' "$out" | tr -d '\r' | grep -E '✗|fallo' | tail -5 || true)"
+  echo "  ✗ FALLO (gráfica): las barras de descargas no se miden como deben en la tarjeta" >&2
+  echo "    (número de barras, columnas de su muestra, altura por cuenta, base o fuga fuera de la banda; medidor rc=$rc)" >&2
+  if [[ -n "$detalle" ]]; then printf '%s\n' "$detalle" | sed 's/^/    /' >&2; fi
+  return 1
+}
+
 # ── 8bis. La HUELLA del árbol: el pase no acumula estado ─────────────────────
 # POR QUÉ. Todo lo que este pase afirma —«los assets quedaron canónicos», «el árbol
 # no se queda sucio»— descansa en un supuesto que hasta ahora nadie comprobaba: que
@@ -1359,6 +1454,50 @@ if [[ $SELFTEST -eq 1 ]]; then
     echo "✓ selftest de los iconos ok (verde pasa · glifo roto falla · sin volcado falla · PNG conservados)"
   fi
 
+  # — Barras de descargas de la gráfica: el CABLEADO, no la métrica —
+  # La métrica trae su propio `--selftest` en scripts/playpass-sparkline.py (con
+  # imágenes sintéticas); aquí se prueba la POLÍTICA: un veredicto ≠ 0 rompe el
+  # paso, un 0 no, no poder medir no es verde, y la evidencia se conserva (o el
+  # paso falla). Se sustituyen medidor e intérprete por dobles, como en iconos.
+  f8=0
+  spark_dump="$tmp/spark-dump.txt"
+  printf 'SPARKPREP|cards=1|pattern=0,3|injected=1\nSPARK|stage=measure|row0=top|cards=1\n' > "$spark_dump"
+  spark_ok="$tmp/spark-ok"; spark_fail="$tmp/spark-fail"
+  printf '#!/usr/bin/env bash\necho "  ✓ Sparkline_0: 4 barra(s) ámbar, cada una en las columnas de su muestra"\nexit 0\n' > "$spark_ok"
+  printf '#!/usr/bin/env bash\necho "  ✗ Sparkline_0: 0 barra(s) ámbar, esperadas 4"\nexit 1\n' > "$spark_fail"
+
+  SPARK_PY=bash
+  SPARK_SCRIPT="$spark_ok"
+  r=0; QUIET=1 analyze_sparkline "$spark_dump" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 ]]; then echo "✗ selftest(gráfica): el medidor en verde rompió el paso" >&2; f8=1; fi
+  SPARK_SCRIPT="$spark_fail"
+  r=0; QUIET=1 analyze_sparkline "$spark_dump" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(gráfica): unas barras que no se miden pasaron en verde" >&2; f8=1; fi
+  SPARK_SCRIPT="$spark_ok"
+  r=0; QUIET=1 analyze_sparkline "$tmp/no-existe-spark.txt" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(gráfica): la falta de volcado pasó en verde" >&2; f8=1; fi
+
+  # La evidencia de la captura: sale de `Temp/` y queda en el destino; sin PNGs
+  # el paso falla (no puede decir «medida» sin nada que mirar).
+  spark_sonda="$tmp/spark-sonda"; mkdir -p "$spark_sonda"
+  printf x > "$spark_sonda/antsim-spark-frame.png"
+  printf x > "$spark_sonda/antsim-spark-card0.png"
+  printf x > "$spark_sonda/otro.png"
+  r=0; QUIET=1 preserve_sparkline "$spark_sonda" "$tmp/spark-evidencia" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 || ! -f "$tmp/spark-evidencia/antsim-spark-frame.png" || ! -f "$tmp/spark-evidencia/antsim-spark-card0.png" ]]; then
+    echo "✗ selftest(gráfica): no se conservaron los PNG de la captura" >&2; f8=1
+  fi
+  if [[ -f "$tmp/spark-evidencia/otro.png" ]]; then
+    echo "✗ selftest(gráfica): se copió un PNG que no es de la gráfica" >&2; f8=1
+  fi
+  r=0; QUIET=1 preserve_sparkline "$tmp/spark-sin-pngs" "$tmp/spark-evidencia2" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then
+    echo "✗ selftest(gráfica): sin PNGs la conservación pasó en verde" >&2; f8=1
+  fi
+  if [[ $f8 -eq 0 ]]; then
+    echo "✓ selftest de la gráfica ok (verde pasa · barras rotas fallan · sin volcado falla · PNG conservados)"
+  fi
+
   # — Huella del árbol: el invariante «dos pasadas dejan el mismo diff» —
   # Las funciones son `git status` + `git hash-object` sobre el alcance, así que se
   # prueban con GIT de verdad, en un repositorio de mentira: el caso «cambió un asset»
@@ -1443,7 +1582,7 @@ if [[ $SELFTEST -eq 1 ]]; then
   fi
 
   rm -rf "$tmp"
-  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 ]] || exit 1
+  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 && $f8 -eq 0 ]] || exit 1
   exit 0
 fi
 
@@ -1468,6 +1607,18 @@ if [[ $ICONS_ANALYZE -eq 1 ]]; then
   ICONS_CROPS="${ICONS_CROPS:-$ICONS_DIR}"
   log "▶ Clasificando los iconos del HUD: $HUD_ICONS · recortes en $ICONS_CROPS"
   if analyze_icons "$HUD_ICONS" "$ICONS_CROPS"; then exit 0; fi
+  exit 1
+fi
+
+# ── Modo solo-análisis (barras de descargas de la gráfica) ──────────────────
+# La MISMA medida que decide el paso de la ruta viva, sobre la captura ya en
+# disco: así una barra rota se reproduce sin abrir Unity y el paso se puede
+# verificar en los dos sentidos.
+if [[ $SPARK_ANALYZE -eq 1 ]]; then
+  SPARK_DUMP="${SPARK_DUMP:-$ROOT/artifacts/playpass-sparkline-pixels.txt}"
+  SPARK_CROPS="${SPARK_CROPS:-$SPARK_DIR}"
+  log "▶ Midiendo las barras de la gráfica: $SPARK_DUMP · captura en $SPARK_CROPS"
+  if analyze_sparkline "$SPARK_DUMP" "$SPARK_CROPS"; then exit 0; fi
   exit 1
 fi
 
@@ -1884,7 +2035,7 @@ trap cleanup_play EXIT
 # primera vez DURANTE la partida recarga el dominio y congela el mundo: pasó de
 # verdad (73 muestras clavadas en el tick 105, sin un solo error en la consola).
 log "▶ Compilando las sondas (antes de Play, para no recargar el dominio en partida)…"
-for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
+for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeSparklinePixels ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
   UCMD run_script --file "$(winpath "$PROBE_DIR/$_probe.cs")" >/dev/null 2>&1 || true
 done
 wait_for_compiled || true
@@ -2003,6 +2154,35 @@ ICONS_CROPS="${ICONS_CROPS:-$ICONS_DIR}"
 # y el pass sale ≠ 0: el fallo de la sonda no se puede quedar en un aviso.
 preserve_icons "$PROJECT/Temp" "$ICONS_CROPS" || true
 
+# Las DESCARGAS de la gráfica, medidas en píxeles de la tarjeta (F5.1). En DOS
+# invocaciones a propósito: lo que se escribe en la textura de la gráfica no está
+# en el framebuffer hasta que el motor dibuja OTRO frame, y `run_script` corre
+# entero dentro de un frame. `prepare` inyecta la serie conocida y congela la
+# alimentación del HUD; entre las dos llamadas pasan frames de verdad; `measure`
+# captura, guarda y RESTAURA la serie real. `restore` queda como red de
+# seguridad (si `measure` murió antes de restaurar, el HUD no se queda mintiendo).
+SPARK_DUMP="${SPARK_DUMP:-$ROOT/artifacts/playpass-sparkline-pixels.txt}"
+mkdir -p "$(dirname "$SPARK_DUMP")"
+SPARK_STEP="$PROJECT/Temp/antsim-spark.step"
+printf 'prepare' > "$SPARK_STEP"
+UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeSparklinePixels.cs")" 2>/dev/null \
+  | cmd_result 2>/dev/null > "$SPARK_DUMP" || true
+# `cmd_result` imprime el resultado SIN salto final (lo sirve una sustitución de
+# comandos), así que dos volcados seguidos quedaban pegados: `injected=1SPARK|…`
+# y el analizador no encontraba la línea de MEDIDA. Cada paso cierra su línea.
+printf '\n' >> "$SPARK_DUMP"
+sleep 2
+printf 'measure' > "$SPARK_STEP"
+UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeSparklinePixels.cs")" 2>/dev/null \
+  | cmd_result 2>/dev/null >> "$SPARK_DUMP" || true
+printf '\n' >> "$SPARK_DUMP"
+printf 'restore' > "$SPARK_STEP"
+UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeSparklinePixels.cs")" >/dev/null 2>&1 || true
+# La evidencia sale de `Temp/` con Play todavía vivo: el paso 6quater mide sobre
+# estas copias, no sobre un directorio que Unity barre al cerrar.
+SPARK_CROPS="${SPARK_CROPS:-$SPARK_DIR}"
+preserve_sparkline "$PROJECT/Temp" "$SPARK_CROPS" || true
+
 UCMD editor_stop >/dev/null 2>&1 || true
 PLAY_STARTED=0
 log "▶ Play detenido tras ${samples} muestras ($(( $(date +%s) - start )) s)$([[ $finished -eq 1 ]] && echo ' — reproducción completa' || echo ' — TOPE de tiempo, sin llegar al final')."
@@ -2073,6 +2253,20 @@ if analyze_icons "$HUD_ICONS" "${ICONS_CROPS:-$ICONS_DIR}"; then
   log "✓ los iconos del HUD se clasifican como SU glifo (comparador scripts/playpass-icons.py en verde)"
 else
   RCICON=1
+fi
+
+# ── 6quater. Descargas de la gráfica, en píxeles (F5.1) ──────────────────────
+# También antes del bloque 4: esa fase reconstruye la escena y vuelve a entrar en
+# Play, así que la captura de ESTA partida ya no sería la misma. Veredicto
+# propio: un fallo aquí es una BARRA (color, columnas, base o fuga), no un glifo
+# ni un texto que no cabe.
+RCSPARK=0
+log ""
+log "▶ Descargas en la tarjeta: barras ámbar medidas en los píxeles del HUD (F5.1)"
+if analyze_sparkline "$SPARK_DUMP" "${SPARK_CROPS:-$SPARK_DIR}"; then
+  log "✓ la serie de descargas se ve en la tarjeta (medidor scripts/playpass-sparkline.py en verde)"
+else
+  RCSPARK=1
 fi
 
 # ── 7. Bloque 4: interacción (entradas sin dispositivo) ─────────────────────
@@ -2295,9 +2489,9 @@ fi
 
 # ── 9. Resumen ───────────────────────────────────────────────────────────────
 log ""
-if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
-  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto e iconos (F5.1) verificados en vivo" \
-                      || log "✓ bloques 3 y 5 + aspecto e iconos (F5.1) verificados en vivo"
+if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCSPARK -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
+  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto, iconos y gráfica (F5.1) verificados en vivo" \
+                      || log "✓ bloques 3 y 5 + aspecto, iconos y gráfica (F5.1) verificados en vivo"
   [[ $FP_COMPARED -eq 1 ]] && log "  ✓ y el árbol quedó con la MISMA huella que la pasada anterior ($FP_FILE): el pase no acumula estado"
   exit 0
 fi
@@ -2307,6 +2501,7 @@ fi
 [[ $RC35 -ne 0 ]] && echo "✗ el bloque 3/5 falló (ver arriba)" >&2 || true
 [[ $RCF5 -ne 0 ]] && echo "✗ el aspecto falló (ver arriba)" >&2 || true
 [[ $RCICON -ne 0 ]] && echo "✗ los iconos del HUD fallaron (ver arriba)" >&2 || true
+[[ $RCSPARK -ne 0 ]] && echo "✗ las barras de descargas de la gráfica fallaron (ver arriba)" >&2 || true
 [[ $RC4 -ne 0 ]] && echo "✗ el bloque 4 falló (ver arriba)" >&2 || true
 [[ $RCDISCARD -ne 0 ]] && echo "✗ el descarte del churn no dejó el árbol limpio (ver arriba)" >&2 || true
 [[ $RCFP -ne 0 ]] && echo "✗ la huella del árbol cambió entre dos pasadas del mismo montaje (ver arriba)" >&2 || true
