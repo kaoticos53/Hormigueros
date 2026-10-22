@@ -133,3 +133,13 @@ colonia 0) y la línea `end` declara `"exported":true`.
 - El editor compila la capa de vista (`recompile_status: completed, failed:false`).
 - El contrato de escenas y el de materiales/mallas pasan con los assets nuevos
   (`WallMat.mat`, `WallMesh.asset`) versionados.
+- **Las paredes se miden en los píxeles del frame vivo** (paso del Play pass, no
+  un check de estado): `ProbeWallPixels` compara el render con el mapa de la
+  cabecera celda a celda (8 836/8 836 de acuerdo, 1 202 celdas de muro, 0 sin
+  pintar) y `scripts/playpass-walls.py` exige `draws == rects` (313/313), el
+  color del material en 32 paredes y en ningún control, cajas 94–100 % llenas y
+  escala de 9,61 px/celda. Evidencia reanalizable en
+  `artifacts/playpass-wall-pixels/` (`--analyze-walls` la repite sin editor).
+  Las paredes del borde quedan tapadas por el marco del tablero (`RimMat`), así
+  que la medida celda a celda se hace sobre el interior y las muestras descartan
+  los rectángulos que tocan el anillo exterior.
