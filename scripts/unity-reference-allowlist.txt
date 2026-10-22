@@ -1,0 +1,15 @@
+# Pérdidas de referencia ACEPTADAS — borrados deliberados de assets.
+#
+# `scripts/unity-reference-check.sh` cuenta las referencias por GUÍA dentro de
+# cada asset: borrar un objeto a propósito baja la cuenta de la guía que sólo él
+# usaba y parece la firma de un editor que dejó el slot vacío. Aquí se declara
+# cada borrado intencionado con su motivo; el alcance es (ruta | guía), así que
+# cualquier OTRA pérdida en el mismo fichero sigue fallando.
+#
+# Formato:  ruta/relativa/al/repo | guía | motivo
+#
+# F6 (2026-10-22): el HUD perdió el botón «↻ Sig. Gen» y con él el único Text
+# que quedaba sin el resto del par de botones; la fuente propia sigue siendo la
+# de los otros 31 Text de la escena (no es una fuente perdida, es un objeto que
+# ya no existe). La evolución va por nacimientos: no hay «siguiente generación».
+src/App/AntSim.Unity/Assets/Scenes/Game.unity | 3efcb8ae799af274db314354257640b4 | botón «↻ Sig. Gen» eliminado en F6 (evolución por nacimientos)

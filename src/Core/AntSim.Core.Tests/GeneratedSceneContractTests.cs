@@ -62,7 +62,7 @@ namespace AntSim.Core.Tests
         private static readonly string[] KnownFields =
         {
             "RenderLayer", "Seed", "Grid", "Colonies", "Ticks", "FrameEvery",
-            "Species", "SeedPoolPath", "Speed",
+            "Species", "SeedPoolPath", "Speed", "Maze",
         };
 
         [Fact]
@@ -195,12 +195,11 @@ namespace AntSim.Core.Tests
                     "otras vistas y MultiSim.unity dejaría de ser la escena del catálogo. " +
                     "Regenera el medidor con la cadena completa o añade los que falten a artifacts/.");
             }
-            // La velocidad del medidor es el default SERIALIZADO del presenter: el
-            // montador no la fija (la sube el boost de la sonda).
-            float presenterDefault = ConstanteFloat(Path.Combine(root, PresenterScriptFile), "Speed");
-            Assert.True(Math.Abs(multi.Speed - presenterDefault) <= 1e-6f,
-                $"MultiSim.unity declara velocidad {multi.Speed} y el default del presenter es " +
-                $"{presenterDefault}: el montador del medidor no la fija.");
+            // La velocidad del medidor es explícita desde F6: heredarla del
+            // presenter (que ahora arranca a 120×) cambiaría la carga que mide.
+            Igual("velocidad del medidor",
+                ConstanteFloat(bootstrapper, "PerfSpeed").ToString("0.###", CultureInfo.InvariantCulture),
+                multi.Speed.ToString("0.###", CultureInfo.InvariantCulture));
         }
 
         /// <summary>
@@ -228,18 +227,18 @@ namespace AntSim.Core.Tests
                 Assert.Empty(Discrepancias(GeneratedSceneCatalog.Game,
                     ReadPresenters(intacto, presenterGuid)));
 
-                // (2) Con ticks y velocidad de los DEFAULTS del montador (el fallo
-                //     que este contrato persigue: regenerar con el bootstrapper y
-                //     creer que la escena es la misma) el contraste lo dice.
-                Assert.Contains("  Ticks: 7200", text);
-                Assert.Contains("  Speed: 2", text);
-                string mutado = Path.Combine(tmp, "Game-defaults.unity");
+                // (2) Con ticks y velocidad de una partida VIEJA (el fallo que este
+                //     contrato persigue: regenerar con otra configuración y creer
+                //     que la escena es la misma) el contraste lo dice.
+                Assert.Contains("  Ticks: 216000", text);
+                Assert.Contains("  Speed: 120", text);
+                string mutado = Path.Combine(tmp, "Game-vieja.unity");
                 File.WriteAllText(mutado, text
-                    .Replace("  Ticks: 7200", "  Ticks: 36000")
-                    .Replace("  Speed: 2", "  Speed: 3"));
+                    .Replace("  Ticks: 216000", "  Ticks: 36000")
+                    .Replace("  Speed: 120", "  Speed: 3"));
 
                 var presenters = ReadPresenters(mutado, presenterGuid);
-                Assert.Equal(7200, ReadPresenters(intacto, presenterGuid)[0].Int("Ticks"));  // el lector ancla
+                Assert.Equal(216000, ReadPresenters(intacto, presenterGuid)[0].Int("Ticks")); // el lector ancla
                 Assert.Equal(36000, presenters[0].Int("Ticks"));                            // y VE la mutación
 
                 var bad = Discrepancias(GeneratedSceneCatalog.Game, presenters);
@@ -290,6 +289,12 @@ namespace AntSim.Core.Tests
                 if (Math.Abs(p.Float("Speed") - scene.Speed) > 1e-4f)
                     bad.Add($"Speed{donde}: la escena dice «{p.Get("Speed")}» y el catálogo " +
                             $"«{scene.Speed.ToString("0.###", CultureInfo.InvariantCulture)}»");
+
+                // F6: el terreno es parte de la partida. Una escena sin el campo
+                // (serializada por un presenter anterior) equivale a 0-«sin
+                // laberinto»; la simple tiene que declararlo a 1.
+                string mazeScene = p.Get("Maze") == "" ? "0" : p.Get("Maze");
+                Campo(bad, "Maze", scene.Maze ? "1" : "0", mazeScene, donde);
 
                 string esperado = Normaliza(view.PoolPath);
                 string real = Normaliza(p.Get("SeedPoolPath"));
@@ -441,7 +446,7 @@ namespace AntSim.Core.Tests
         {
             Assert.True(File.Exists(scriptPath), "no existe " + scriptPath);
             var m = Regex.Match(File.ReadAllText(scriptPath),
-                @"public float " + Regex.Escape(name) + @" = ([0-9.]+)f;");
+                @"public (?:const )?float " + Regex.Escape(name) + @" = ([0-9.]+)f;");
             Assert.True(m.Success,
                 $"no encontré el campo float «{name}» en {Path.GetFileName(scriptPath)}: si se " +
                 "renombró, ajusta este contrato y el catálogo a la vez.");

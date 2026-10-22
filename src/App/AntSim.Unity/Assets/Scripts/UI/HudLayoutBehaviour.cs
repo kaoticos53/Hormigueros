@@ -177,10 +177,8 @@ namespace AntSim.Unity.Scripts.Presenter
             if (StatusText == null) return;
             string? line = _cards.StatusLine(_lastTick, _lastSpeed);
             if (line == null) return;
-            if (Presenter != null && (Presenter.Generation > 1 || Presenter.BestSurvivalSeconds > 0f))
-            {
-                line = $"[Gen #{Presenter.Generation} · Récord: {Presenter.BestSurvivalSeconds:0.0}s] " + line;
-            }
+            // F6: sin contador de generación de sesión. La generación que importa
+            // es la de NACIMIENTOS (LearningPanel, births/64), que vive sola.
             if (StatusText.text != line) StatusText.text = line;
         }
 

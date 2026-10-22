@@ -209,7 +209,14 @@ SELFTEST=0
 QUIET=0
 STREAM_CHECK=1
 SPEED=3
-TICKS=7200
+# F6: el horizonte y la velocidad del bloque 4 son los de la PARTIDA publicada
+# (`LaunchSettings.Defaults`: 216.000 ticks a 120×), porque el bloque 4 GUARDA la
+# escena: si el pase midiera otra configuración, el `Game.unity` versionado
+# volvería al horizonte viejo en la siguiente pasada. Los valores viejos (7200 /
+# 2×) se quedaron cortos para la partida de 2 h; la velocidad alta no le quita
+# nada a los gates —la alerta del paso C llega en menos de un segundo de reloj y
+# el pase sondea muestras, no instantes únicos—.
+TICKS=216000
 GRID=96
 COLONIES=2
 SEED=42
@@ -222,16 +229,14 @@ OUT=""
 INTERVAL=1
 STREAM_FILE=""
 BLOCK4=1
-# Velocidad del bloque 4. NO es un número a gusto: el paso C espera a que salga
-# una alerta en pantalla y la sonda tarda ~1 s por vuelta, mientras la partida
-# dura 7200 ticks. MEDIDO con 6: la corrida entera se consumía antes de que C
-# empezara a sondear (su primera muestra salía ya en tick=7200, toasts=0) → el
-# gate no podía ni VER la alerta, que el mundo había pasado durante A2/B.
-# A 2 el toast se ve en ~3 s de reloj (6 s de sim) y C lo cazó en 2 muestras
-# seguidas (tick 335 y 435), que es lo que el paso necesita para juzgarlo.
-# (Que la alerta de la partida canónica traiga ancla es otra cosa: se mide aparte
-# y hoy sale SIN ancla — ver el comentario del paso C.)
-B4_SPEED=2
+# Velocidad del bloque 4: la de la escena publicada (120×). Antes era 2× para
+# que la partida de 7200 ticks no se consumiera antes de que el paso C empezara
+# a sondear; con el horizonte de F6 (216.000 ticks) el problema desaparece y lo
+# que hay que garantizar es que `save_scene` deje la MISMA configuración que el
+# bootstrapper (`LaunchSettings.Defaults`), o el `Game.unity` versionado
+# derivaría en cada pasada. El paso C sigue viendo la alerta: con 120× el
+# primer toast cae en la primera muestra.
+B4_SPEED=120
 B4_DEADLINE=200
 B4_SAMPLES=""
 B4_ANALYZE=""

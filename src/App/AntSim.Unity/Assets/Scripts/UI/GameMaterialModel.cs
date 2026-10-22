@@ -183,6 +183,11 @@ namespace AntSim.Unity.Scripts.UI
             // como límite y no como sombra. Es el único material sin variantes
             // por vista (las vistas del multi-visor no llevan marco).
             new Spec("RimMat", Kind.Flat, new Rgba(0.56f, 0.45f, 0.31f), inViews: false),
+            // F6: paredes del laberinto. Piedra oscura, más fría que la tierra del
+            // suelo y que la mesa: el obstáculo tiene que leerse como muro y no
+            // como una mancha de sombra. Sin variantes por vista (el medidor
+            // corre mundos clásicos, sin terreno).
+            new Spec("WallMat", Kind.Flat, new Rgba(0.32f, 0.29f, 0.26f), inViews: false),
 
             // — Actores (hormiga, hormiga con carga) —
             new Spec("AntMat", Kind.Flat, new Rgba(0.35f, 0.16f, 0.10f)),

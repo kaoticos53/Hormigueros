@@ -11,10 +11,12 @@ namespace AntSim.Unity.Scripts.Streaming
     /// POR QUÉ EXISTE. Las dos escenas del proyecto NO salen de los valores por
     /// defecto de su montador:
     ///
-    ///   · `Assets/Scenes/Game.unity` pide ticks 7200 y velocidad 2 —la
-    ///     configuración del Play pass (`scripts/playpass-live.sh`: `TICKS=7200`,
-    ///     `B4_SPEED=2`)—, mientras `SceneBootstrapper.CreateGameScene` monta con
-    ///     `LaunchSettings.Defaults()`: ticks 36000 y velocidad 3.
+    ///   · `Assets/Scenes/Game.unity` es la PARTIDA (F6): ticks 216.000, velocidad
+    ///     120×, laberinto desde la semilla, grid 96 y 2 colonias — exactamente
+    ///     `LaunchSettings.Defaults()`, que es lo que monta
+    ///     `SceneBootstrapper.CreateGameScene` y lo que el Play pass aplica antes
+    ///     de guardarla (`TICKS` / `B4_SPEED` de `scripts/playpass-live.sh`
+    ///     siguen a los defaults por eso).
     ///   · `Assets/Scenes/MultiSim.unity` pide grid 256, 12000 ticks, frameEvery 5
     ///     y velocidad 10 —la escena del MEDIDOR (`CreateMultiSimPerfScene`)—,
     ///     mientras el menú «Crear escena multi-visor» monta grid 96 / 36000 ticks
@@ -30,13 +32,13 @@ namespace AntSim.Unity.Scripts.Streaming
     ///
     /// MEDIDO (2026-10-07, editor 6000.6.0f1, siete pases headless): la
     /// configuración de aquí es EXACTAMENTE la que reproduce el `.unity`
-    /// versionado —la salida de `CreateGameScene` con `Ticks 7200 / Speed 2` es
-    /// equivalente al `Game.unity` del árbol (425 documentos) y
-    /// `CreateMultiSimPerfScene` reproduce `MultiSim.unity` (353), y repetir el
-    /// pase no cambia la equivalencia—. El BYTE no es estable (Unity renumera
-    /// anclas y `fileID` al recrear los assets, ver `CreateOrReplaceAsset`): lo
-    /// que este registro fija es la equivalencia estructural, que es lo que
-    /// significa «la misma escena».
+    /// versionado —`CreateGameScene` con `LaunchSettings.Defaults()` reproduce el
+    /// `Game.unity` del árbol (416 documentos tras F6: la escena pierde el botón
+    /// «Sig. Gen» y gana las paredes) y `CreateMultiSimPerfScene` reproduce
+    /// `MultiSim.unity` (353), y repetir el pase no cambia la equivalencia—. El
+    /// BYTE no es estable (Unity renumera anclas y `fileID` al recrear los
+    /// assets, ver `CreateOrReplaceAsset`): lo que este registro fija es la
+    /// equivalencia estructural, que es lo que significa «la misma escena».
     ///
     /// Vive junto a `LaunchSettings` porque es su misma cosa —la configuración de
     /// una escena— más la procedencia que el montador no guarda.
@@ -109,6 +111,8 @@ namespace AntSim.Unity.Scripts.Streaming
             public int FrameEvery;
             public float Speed;
             public string Species = "";
+            /// <summary>F6: terreno con laberinto (campo `Maze` del presenter).</summary>
+            public bool Maze;
 
             public IReadOnlyList<ViewSpec> Views = System.Array.Empty<ViewSpec>();
         }
@@ -123,24 +127,27 @@ namespace AntSim.Unity.Scripts.Streaming
         {
             Path = Paths.GameScene,
             EntryPoint = "AntSim/Crear escena de juego (SceneBootstrapper.CreateGameScene)",
-            Producer = "Play pass: scripts/playpass-live.sh (bloque 4 reconstruye la escena con el menú " +
-                       "y la sonda ProbeToastsSet aplica Temp/antsim-playpass.json antes de guardarla)",
-            Regenerate = "bash scripts/playpass-live.sh   (editor abierto + com.unity.pipeline; " +
-                         "el bloque 4 es el que deja la escena guardada con esta configuración)",
+            Producer = "SceneBootstrapper.CreateGameScene con LaunchSettings.Defaults() (F6: la partida " +
+                       "de 2 h a 120× con laberinto). El Play pass la reescribe al final del bloque 4, " +
+                       "aplicando `TICKS` / `B4_SPEED`, que siguen a los defaults",
+            Regenerate = "Unity -batchmode -executeMethod AntSim.Unity.Scripts.EditorTools.SceneBootstrapper.CreateGameScene " +
+                         "(con el editor abierto: bash scripts/unity-cli.sh run_script --file <sonda que llame " +
+                         "a CreateGameScene>). scripts/playpass-live.sh la reproduce en su bloque 4",
             OtherWriters = new[]
             {
-                "SceneBootstrapper.CreateGameScene + guardar en el editor: monta con los defaults " +
-                "(ticks 36000, velocidad 3) — NO reproduce este fichero",
+                "scripts/playpass-live.sh (bloque 4): aplica TICKS=216000 y B4_SPEED=120 con la sonda " +
+                "ProbeToastsSet y guarda — la misma configuración que los defaults",
                 "SceneBootstrapper.PlayFromLaunchSettings (-antsimSettings <archivo>): monta con lo que " +
                 "traiga el lanzador y entra en Play sin guardar",
                 "asistente «Crear escena y Jugar» y «Configuración rápida» (menús de SceneBootstrapper)",
             },
             Grid = 96,
             Colonies = 2,
-            Ticks = 7200,
+            Ticks = 216000,
             FrameEvery = 1,
-            Speed = 2f,
+            Speed = 120f,
             Species = "lasius",
+            Maze = true,
             Views = new[]
             {
                 // La escena simple va en la capa Default (0), no en una Sim<n>: solo
@@ -174,10 +181,13 @@ namespace AntSim.Unity.Scripts.Streaming
             Colonies = 2,
             Ticks = 12000,
             FrameEvery = 5,
-            // Velocidad 10 = el default serializado de SimPresenterBehaviour: el
-            // montador no la fija y el medidor no la toca (el boost lo aplica la sonda).
+            // Velocidad 10: el medidor no la toca (el boost lo aplica la sonda).
             Speed = 10f,
             Species = "lasius",
+            // El medidor corre mundos clásicos: no pide laberinto ni exporta élite.
+            // Su escena es anterior a F6 y no serializa el campo (el contrato lo
+            // lee como «sin laberinto», que es lo que monta).
+            Maze = false,
             Views = new[]
             {
                 ViewSpec.MultiView(0, MultiViewBaseSeed, "artifacts/pretrain-warm-v2.antgenome"),

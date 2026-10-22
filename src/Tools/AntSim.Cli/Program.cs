@@ -51,6 +51,12 @@ namespace AntSim.Cli;
 /// futuras); --seed-pool SIEMBRA la élite con un .antgenome pre-entrenado (Fase 3):
 /// los nacimientos —incluidas las fundadoras del tick 0— usan esa población.
 ///
+/// --maze (solo --mode game, F6) genera el laberinto con bucles desde la semilla:
+/// paredes visibles, colisión con deslizamiento y canales táctiles reales. En
+/// modo game el stream se escribe tick a tick; --export guarda la élite de la
+/// colonia 0 al terminar el horizonte (la evolución por nacimientos no necesita
+/// botón de nueva generación).
+///
 /// Todos emiten hashes de hito por tick (o reportes deterministas): misma semilla ⇒
 /// salida idéntica.
 /// </summary>
@@ -83,6 +89,7 @@ internal static class Program
         string? warmStartPath = null;
         string? exportPath = null;
         bool neat = false; // F5.2c rodaja 7: pre-entrenar pool NEAT y exportar v2
+        bool maze = false; // F6: laberinto con obstáculos en el mundo del juego
         string? savePath = null;      // Fase 4: checkpoint .antsave
         int saveTick = 0;             // 0 = guardar al final de la ejecución
         string? antlogPath = null;    // Fase 4: registro de eventos .antlog
@@ -265,6 +272,11 @@ internal static class Program
                 case "--export":
                     exportPath = Next(args, ref i);
                     break;
+                case "--maze":
+                    // F6: terreno con obstáculos. Opt-in: sin la bandera, el mundo
+                    // y el stream son byte a byte los clásicos (pines intactos).
+                    maze = true;
+                    break;
                 case "--neat": // F5.2c rodaja 7
                     neat = true;
                     break;
@@ -363,14 +375,30 @@ internal static class Program
                 }
             }
 
+            if (maze && mode != "game")
+                return Fail("--maze solo tiene sentido con --mode game (es el terreno de la partida).");
+
+            // F6: el modo juego escribe TICK A TICK en stdout. Construirlo como
+            // string (216.000 ticks) son gigabytes: el lanzador de la escena
+            // pide una partida de 2 h y el proceso tiene que poder con ella.
+            if (mode == "game")
+            {
+                using var stdout = new System.IO.StreamWriter(
+                    Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false), 1 << 16)
+                { AutoFlush = false };
+                GameScenario.RunTo(stdout, seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
+                    cloneFromElite: false,
+                    pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery,
+                    pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null,
+                    leafFraction: leafFraction, species: species,
+                    maze: maze, exportPath: exportPath);
+                return 0;
+            }
+
             string output = mode switch
             {
                 "world" => WorldScenario.Run(seed, ticks, colonies, grid, leafFraction, antlogPath, savePath, saveTick),
                 "evolve" => RunEvolve(seed, ticks, colonies, grid, importPath, seedPoolPath, exportPath),
-                "game" => GameScenario.Run(seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
-                    pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery,
-                    pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null,
-                    leafFraction: leafFraction, species: species),
                 "presets" => PresetScenario.RenderCards(json: presetsJson),
                 "genome-info" => importPath == null
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
@@ -784,6 +812,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze]");
     }
 }

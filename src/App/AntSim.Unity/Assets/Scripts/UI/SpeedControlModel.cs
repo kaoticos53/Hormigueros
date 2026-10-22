@@ -5,29 +5,34 @@ namespace AntSim.Unity.Scripts.Streaming
 {
     /// <summary>
     /// Modelo PURO para el control de velocidad de simulación/reproducción.
-    /// Define el rango permitido (10% a 1000% sobre base normal de 10.0× / 1.0× a 100.0×),
+    /// Define el rango permitido (10× a 160×, con 120× como base normal = 100 %),
     /// presets rápidos, pasos de aceleración/desaceleración y conversiones/formateo de texto sin
     /// dependencias de UnityEngine (testeable headless con xUnit).
+    ///
+    /// La base es 120× porque es 40 × los 3× que el lanzador usaba como
+    /// «normal» y la partida anterior se percibía lenta. El techo (160×) sale de
+    /// la medición del CLI: ~6.000 ticks/s por núcleo en 96² (0,165 ms/tick), y
+    /// 160× pide 4.800 ticks/s — por debajo, con margen para el laberinto.
     /// </summary>
     public static class SpeedControlModel
     {
-        /// <summary>Velocidad mínima: 10% de base (1.0×).</summary>
-        public const float MinSpeed = 1.00f;
+        /// <summary>Velocidad mínima: 10× (8 % de la base).</summary>
+        public const float MinSpeed = 10.00f;
 
-        /// <summary>Velocidad máxima: 1000% de base (100.0×).</summary>
-        public const float MaxSpeed = 100.00f;
+        /// <summary>Velocidad máxima: 160× (133 % de la base).</summary>
+        public const float MaxSpeed = 160.00f;
 
-        /// <summary>Velocidad normal/base de simulación: 100% (10.0×).</summary>
-        public const float NormalSpeed = 10.00f;
+        /// <summary>Velocidad normal/base de simulación: 120× (100 %).</summary>
+        public const float NormalSpeed = 120.00f;
 
-        /// <summary>Velocidad por defecto en el arranque del visualizador: 100% base (10.0×).</summary>
-        public const float DefaultSpeed = 10.00f;
+        /// <summary>Velocidad por defecto en el arranque del visualizador: 120×.</summary>
+        public const float DefaultSpeed = 120.00f;
 
         /// <summary>
         /// Presets de velocidad estándar en escala progresiva:
-        /// 10% (1.0×), 25% (2.5×), 50% (5.0×), 100% (10.0× Base), 250% (25.0×), 500% (50.0×), 1000% (100.0×).
+        /// 10× (8 %), 30× (25 %), 60× (50 %), 90× (75 %), 120× (100 % Base), 160× (133 %).
         /// </summary>
-        public static readonly float[] Presets = { 1.0f, 2.5f, 5.0f, 10.0f, 25.0f, 50.0f, 100.0f };
+        public static readonly float[] Presets = { 10.0f, 30.0f, 60.0f, 90.0f, 120.0f, 160.0f };
 
         /// <summary>
         /// Limita una velocidad al rango [MinSpeed, MaxSpeed], salvo que sea 0 (pausa).
@@ -88,7 +93,7 @@ namespace AntSim.Unity.Scripts.Streaming
 
         /// <summary>
         /// Formatea la velocidad con indicador de multiplicador y porcentaje respecto a la base.
-        /// Ejemplos: "10% (1×)", "100% (10× Base)", "500% (50×)", "1000% (100×)", "EN PAUSA".
+        /// Ejemplos: "8% (10×)", "100% (120× Base)", "133% (160×)", "EN PAUSA".
         /// </summary>
         public static string FormatSpeed(float speed)
         {

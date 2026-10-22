@@ -143,12 +143,15 @@ public sealed class WorldSim
 
     private readonly List<Colony> _colonies = new();
     private readonly List<FoodItem> _items = new();
+    private readonly MazeLayout? _maze;
 
     public WorldSim(ulong seed, int gridCells = 256, int colonyCount = 2,
         IReadOnlyList<SpeciesDescriptor>? species = null,
         bool cloneFromElite = false,
         float leafFraction = 0f,
-        int lodBlockSize = PheromoneLayer.DefaultLodBlockSize)
+        int lodBlockSize = PheromoneLayer.DefaultLodBlockSize,
+        bool maze = false,
+        MazeLayout? mazeLayout = null)
     {
         if (gridCells < 16) throw new ArgumentOutOfRangeException(nameof(gridCells));
         if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
@@ -171,10 +174,22 @@ public sealed class WorldSim
             _colonies.Add(colony);
         }
 
-        int initialItems = DensityScaledTargetItems;
+        // — F6: terreno con obstáculos —
+        // Se construye DESPUÉS de las colonias (necesita sus nidos para despejar
+        // las plazas) y ANTES del spawn inicial (ningún ítem dentro de una
+        // pared). Sin laberinto, `_maze` queda null y el mundo es el de siempre.
+        _maze = mazeLayout ?? (maze ? MazeLayout.Braided(seed, gridCells, colonyCount) : null);
+        // Con terreno, el objetivo de comida sube: las paredes recortan el área
+        // útil y alargan cada viaje (ver MazeLayout.ItemDensityFactor).
+        if (_maze != null) TargetItems = Math.Max(1, (int)MathF.Round(DensityScaledTargetItems * MazeLayout.ItemDensityFactor));
+
+        int initialItems = _maze != null ? TargetItems : DensityScaledTargetItems;
         for (int i = 0; i < initialItems; i++)
             SpawnItem();
     }
+
+    /// <summary>Laberinto activo del mundo (null = terreno clásico sin obstáculos).</summary>
+    public MazeLayout? Maze => _maze;
 
     private Colony CreateColony(int id, SpeciesDescriptor sp, int colonyCount, bool cloneFromElite = false)
     {
@@ -467,7 +482,8 @@ public sealed class WorldSim
         float dt = SimConstants.FixedDtSeconds;
 
         var sensors = AntSenses.Build(colony, ant, _items, WorldWidth, WorldHeight,
-            rivals: sp.ContactRadius > 0f && _colonies.Count > 1 ? _colonies : null);
+            rivals: sp.ContactRadius > 0f && _colonies.Count > 1 ? _colonies : null,
+            maze: _maze);
         var decision = AntDecision.Neutral();
         ant.Brain.Evaluate(in sensors, ref decision);
         // — F5.3: tropotaxis repelente por huella CHC (reflejo periférico) —
@@ -489,8 +505,37 @@ public sealed class WorldSim
         float v = decision.Speed * sp.VMax * ant.SpeedScale * loadFactor * speedCircadian;
         // CanonMath (F5.2c): Cos/Sin cross-platform bit-exact — el movimiento
         // alimenta TODO el estado posterior del mundo.
-        ant.X = Math.Clamp(ant.X + CanonMath.Cos(ant.Heading) * v * dt, 0f, WorldWidth);
-        ant.Y = Math.Clamp(ant.Y + CanonMath.Sin(ant.Heading) * v * dt, 0f, WorldHeight);
+        float nx = ant.X + CanonMath.Cos(ant.Heading) * v * dt;
+        float ny = ant.Y + CanonMath.Sin(ant.Heading) * v * dt;
+        if (_maze == null)
+        {
+            ant.X = Math.Clamp(nx, 0f, WorldWidth);
+            ant.Y = Math.Clamp(ny, 0f, WorldHeight);
+        }
+        else
+        {
+            // F6 — Pared con deslizamiento: el intento completo; si choca, solo
+            // X y luego solo Y. Deslizar (en vez de bloquear el paso entero) es
+            // lo que permite recorrer un corredor pegado a la pared sin que el
+            // cerebro tenga que calcular el ángulo exacto.
+            nx = Math.Clamp(nx, 0f, WorldWidth);
+            ny = Math.Clamp(ny, 0f, WorldHeight);
+            if (!_maze.Blocked(nx, ny, MazeLayout.AntRadius))
+            {
+                ant.X = nx;
+                ant.Y = ny;
+            }
+            else if (!_maze.Blocked(nx, ant.Y, MazeLayout.AntRadius))
+            {
+                ant.X = nx;
+            }
+            else if (!_maze.Blocked(ant.X, ny, MazeLayout.AntRadius))
+            {
+                ant.Y = ny;
+            }
+            // Si los tres fallan se queda donde estaba: la pared de enfrente la
+            // ven las antenas y el cerebro decide girar (o no, y paga el coste).
+        }
         ant.LifetimeDistanceExplored += v * dt;
         ant.Energy = Math.Max(0f, ant.Energy - (sp.CostMove * v * dt * metabolismCircadian) / ant.EnergyCapacity);
 
@@ -801,11 +846,16 @@ public sealed class WorldSim
         {
             case SimCommandKind.DropFood:
             {
+                float dropX = Math.Clamp(command.X, 0f, WorldWidth);
+                float dropY = Math.Clamp(command.Y, 0f, WorldHeight);
+                // F6: una gota sobre una pared sería comida inalcanzable — se
+                // reubica en la celda abierta más cercana (determinista).
+                if (_maze != null) (dropX, dropY) = _maze.NearestOpen(dropX, dropY);
                 var item = new FoodItem
                 {
                     Id = _nextItemId++,
-                    X = Math.Clamp(command.X, 0f, WorldWidth),
-                    Y = Math.Clamp(command.Y, 0f, WorldHeight),
+                    X = dropX,
+                    Y = dropY,
                     Amount = SimCommand.DropFoodAmount
                 };
                 _items.Add(item);
@@ -847,17 +897,22 @@ public sealed class WorldSim
             float x = (float)(_worldRng.NextDouble01() * WorldWidth);
             float y = (float)(_worldRng.NextDouble01() * WorldHeight);
             bool ok = true;
+            float minDist = _maze != null ? MazeLayout.ItemSpawnMinDistance : NestMinSpawnDistance;
             for (int c = 0; c < _colonies.Count; c++)
             {
                 float dx = x - _colonies[c].NestX;
                 float dy = y - _colonies[c].NestY;
-                if (dx * dx + dy * dy < NestMinSpawnDistance * NestMinSpawnDistance)
+                if (dx * dx + dy * dy < minDist * minDist)
                 {
                     ok = false;
                     break;
                 }
             }
             if (!ok) continue;
+            // F6: ni dentro de una pared ni pegado a ella (el pickup tiene radio
+            // 12 u, pero un ítem a 3 u del muro obliga a la hormiga a meterse en
+            // él). Con laberinto, un punto así se descarta y se reintenta.
+            if (_maze != null && !_maze.ItemFits(x, y)) continue;
 
             // F5.2a.1: ¿hoja o ítem simple? La tirada SOLO se consume con
             // LeafFraction > 0 — con 0 el flujo de RNG es el de siempre.
@@ -926,6 +981,10 @@ public sealed class WorldSim
         using var h = new CanonicalHasher();
         h.AppendUInt64(_seed);
         h.AppendUInt64(Tick);
+        // F6: el terreno forma parte del mundo — dos partidas con la misma
+        // semilla y laberintos distintos NO son el mismo mundo. Solo se añade
+        // con laberinto: los hashes clásicos (y sus pines) no se mueven.
+        if (_maze != null) h.AppendUInt64(_maze.LayoutHash);
 
         (ulong w0, ulong w1, ulong w2, ulong w3) = _worldRng.State;
         h.AppendUInt64(w0); h.AppendUInt64(w1); h.AppendUInt64(w2); h.AppendUInt64(w3);

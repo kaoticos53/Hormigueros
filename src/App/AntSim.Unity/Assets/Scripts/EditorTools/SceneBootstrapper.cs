@@ -129,6 +129,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.Ticks = settings.Ticks;
             presenter.FrameEvery = settings.FrameEvery;
             presenter.Species = settings.Species;
+            presenter.Maze = settings.Maze;             // F6: terreno con obstáculos
+            presenter.ExportElite = true;              // la élite se guarda al acabar
             // PoolPath (ruta absoluta del lanzador) manda; si no, el nombre se
             // resuelve como el default histórico: artifacts/<nombre>.antgenome.
             presenter.SeedPoolPath = !string.IsNullOrEmpty(settings.PoolPath)
@@ -168,6 +170,12 @@ namespace AntSim.Unity.Scripts.EditorTools
             // oscuro para las muescas de corte (CutsLeft/CutsInitial del canal A).
             presenter.LeafMaterial = NewMat(UI.GameMaterialModel.ByName("LeafMat"));
             presenter.BiteMaterial = NewMat(UI.GameMaterialModel.ByName("BiteMat"));
+            // F6: paredes del laberinto — quad unitario en XZ + material de piedra.
+            // La geometría de cada pared llega en la cabecera del stream (los
+            // MISMOS rectángulos que colisionan en el Core): la escena no guarda
+            // un laberinto que pueda quedar desincronizado del mundo.
+            presenter.WallMesh = EditorTools.GameAssetBuilder.EnsureWallMesh("WallMesh");
+            presenter.WallMaterial = NewMat(UI.GameMaterialModel.ByName("WallMat"));
             // Canal E activo por defecto en la escena: el quad de feromonas ya
             // existe — sin este campo el canal quedaría apagado y el quad vacío.
             presenter.PheroEvery = 30;
@@ -1159,16 +1167,15 @@ namespace AntSim.Unity.Scripts.EditorTools
             speedLabel.text = Streaming.SpeedControlModel.FormatSpeed(startSpeed);
             speedLabel.raycastTarget = false;
 
-            // 6. Botones de preset rápido (1×, 5×, 10× Base, 25×, 50×, 100×)
-            var p1 = MakeBtn(panelRt, "Preset_1", "1×", new Vector2(426f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p5 = MakeBtn(panelRt, "Preset_5", "5×", new Vector2(464f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p10 = MakeBtn(panelRt, "Preset_10", "10× Base", new Vector2(502f, 0f), new Vector2(66f, 26f), new Color(0.18f, 0.42f, 0.28f, 0.95f), 11);
-            var p25 = MakeBtn(panelRt, "Preset_25", "25×", new Vector2(572f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p50 = MakeBtn(panelRt, "Preset_50", "50×", new Vector2(614f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p100 = MakeBtn(panelRt, "Preset_100", "100×", new Vector2(656f, 0f), new Vector2(46f, 26f), new Color(0.38f, 0.20f, 0.14f, 0.95f), 11);
-
-            // 7. Botón de Siguiente Generación (bucle evolutivo continuo)
-            var nextGenBtn = MakeBtn(panelRt, "NextGenBtn", "\u21bb Sig. Gen", new Vector2(708f, 0f), new Vector2(76f, 26f), new Color(0.20f, 0.38f, 0.52f, 0.95f), 11);
+            // 6. Botones de preset rápido (10×, 30×, 60×, 90×, 120× Base, 160×)
+            //    F6: la base es 120× (40 × los 3× de antes). No hay botón de
+            //    «siguiente generación»: la evolución va por nacimientos.
+            var p1 = MakeBtn(panelRt, "Preset_1", "10×", new Vector2(426f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p5 = MakeBtn(panelRt, "Preset_5", "30×", new Vector2(464f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p10 = MakeBtn(panelRt, "Preset_10", "60×", new Vector2(502f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p25 = MakeBtn(panelRt, "Preset_25", "90×", new Vector2(540f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p50 = MakeBtn(panelRt, "Preset_50", "120× Base", new Vector2(582f, 0f), new Vector2(66f, 26f), new Color(0.18f, 0.42f, 0.28f, 0.95f), 11);
+            var p100 = MakeBtn(panelRt, "Preset_100", "160×", new Vector2(652f, 0f), new Vector2(46f, 26f), new Color(0.38f, 0.20f, 0.14f, 0.95f), 11);
 
             // Añadir controlador interactivo en tiempo de ejecución (asegura listeners en Play mode)
             var speedCtrl = panelGo.AddComponent<UI.SpeedControlBehaviour>();
@@ -1185,7 +1192,6 @@ namespace AntSim.Unity.Scripts.EditorTools
             speedCtrl.Preset25 = p25;
             speedCtrl.Preset50 = p50;
             speedCtrl.Preset100 = p100;
-            speedCtrl.NextGenButton = nextGenBtn;
 
             hud.SpeedSlider = slider;
             hud.SpeedText = speedLabel;

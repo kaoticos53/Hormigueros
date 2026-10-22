@@ -11,7 +11,7 @@
 #   .\scripts\play-game.ps1 --pool pretrain-neat     otro pool
 #   .\scripts\play-game.ps1 --grid 256 --ticks 12000 mundo grande
 #   .\scripts\play-game.ps1 --species lasius,eciton  invasion
-#   .\scripts\play-game.ps1 --speed 6                mas rapido
+#   .\scripts\play-game.ps1 --speed 60                mas rapido
 #   .\scripts\play-game.ps1 --dry-run                solo muestra lo que aplica
 #
 # NOTA: este archivo es ASCII puro a proposito. PowerShell 5.1 lee los .ps1
@@ -31,9 +31,9 @@ param(
     [string]$Pool = "pretrain-warm-v2",
     [int]$Grid = 96,
     [int]$Colonies = 2,
-    [int]$Ticks = 36000,
+    [int]$Ticks = 216000,
     [string]$Species = "lasius",
-    [float]$Speed = 3,
+    [float]$Speed = 120,
     [int]$FrameEvery = 1,
     [switch]$DryRun,
     # play-game.bat delega el texto CRUDO (%*): cmd parte los argumentos por
@@ -104,13 +104,13 @@ if ($DryRunFlag) { $DryRun = $true }
 if ($HelpFlag) {
     Write-Host ""
     Write-Host "  play-game.ps1 [--pool nombre] [--grid 96|256] [--colonies 1|2]"
-    Write-Host "                [--ticks N] [--species lasius|atta|eciton] [--speed 1-100]"
+    Write-Host "                [--ticks N] [--species lasius|atta|eciton] [--speed 10-160]"
     Write-Host "                [--frame-every N] [--dry-run]"
     Write-Host ""
     Write-Host "  Ejemplos:"
     Write-Host "    .\scripts\play-game.ps1"
     Write-Host "    .\scripts\play-game.ps1 --pool pretrain-neat --grid 256 --ticks 12000"
-    Write-Host "    .\scripts\play-game.ps1 --species lasius,eciton --speed 6"
+    Write-Host "    .\scripts\play-game.ps1 --species lasius,eciton --speed 60"
     Write-Host ""
     exit 0
 }
@@ -144,7 +144,7 @@ if (-not (Test-Path $bootstrapper)) {
 if ($Grid -lt 16 -or $Grid -gt 1024)      { Write-Host "  X --grid fuera de rango [16, 1024]: $Grid" -ForegroundColor Red; exit 2 }
 if ($Colonies -lt 1 -or $Colonies -gt 2)  { Write-Host "  X --colonies fuera de rango [1, 2]: $Colonies" -ForegroundColor Red; exit 2 }
 if ($Ticks -lt 30 -or $Ticks -gt 4000000) { Write-Host "  X --ticks fuera de rango [30, 4000000]: $Ticks" -ForegroundColor Red; exit 2 }
-if ($Speed -lt 1 -or $Speed -gt 100)      { Write-Host "  X --speed fuera de rango [1, 100]: $Speed" -ForegroundColor Red; exit 2 }
+if ($Speed -lt 10 -or $Speed -gt 160)      { Write-Host "  X --speed fuera de rango [10, 160]: $Speed" -ForegroundColor Red; exit 2 }
 if ($FrameEvery -lt 1 -or $FrameEvery -gt 60) { Write-Host "  X --frame-every fuera de rango [1, 60]: $FrameEvery" -ForegroundColor Red; exit 2 }
 if (-not $Species -or $Species -notmatch '^[A-Za-z]+(,[A-Za-z]+)*$') {
     Write-Host "  X --species invalida: '$Species' (p. ej. lasius o lasius,eciton)" -ForegroundColor Red
@@ -183,6 +183,7 @@ $lines = @(
     "pool=$Pool",
     "poolPath=$PoolPath",
     "grid=$Grid",
+    "maze=1",
     "colonies=$Colonies",
     "ticks=$Ticks",
     "species=$Species",

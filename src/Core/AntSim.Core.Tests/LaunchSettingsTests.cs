@@ -17,10 +17,11 @@ namespace AntSim.Core.Tests
             var s = LaunchSettings.Defaults();
             Assert.Equal(96, s.Grid);
             Assert.Equal(2, s.Colonies);
-            Assert.Equal(36000, s.Ticks);
+            Assert.Equal(216000, s.Ticks); // F6: 2 h de simulación a 120×
             Assert.Equal("lasius", s.Species);
-            Assert.Equal(3f, s.Speed);
+            Assert.Equal(120f, s.Speed);
             Assert.Equal(1, s.FrameEvery);
+            Assert.True(s.Maze); // F6: el terreno de la partida lleva laberinto
             Assert.True(s.TryValidate(out var err), err);
         }
 
@@ -35,8 +36,9 @@ namespace AntSim.Core.Tests
                 "colonies=1\n" +
                 "ticks=12000\n" +
                 "species=lasius,eciton\n" +
-                "speed=2.5\n" +
-                "frameEvery=2\n";
+                "speed=90\n" +
+                "frameEvery=2\n" +
+                "maze=0\n";
 
             Assert.True(LaunchSettings.TryParse(text, out var s, out var err), err);
             Assert.Equal("pretrain-neat", s.Pool);
@@ -45,8 +47,9 @@ namespace AntSim.Core.Tests
             Assert.Equal(1, s.Colonies);
             Assert.Equal(12000, s.Ticks);
             Assert.Equal("lasius,eciton", s.Species);
-            Assert.Equal(2.5f, s.Speed);
+            Assert.Equal(90f, s.Speed);
             Assert.Equal(2, s.FrameEvery);
+            Assert.False(s.Maze); // el lanzador puede desactivar el laberinto
         }
 
         [Fact]
@@ -60,8 +63,9 @@ namespace AntSim.Core.Tests
                 Colonies = 2,
                 Ticks = 7200,
                 Species = "atta",
-                Speed = 4.5f,
-                FrameEvery = 3
+                Speed = 120f,
+                FrameEvery = 3,
+                Maze = false
             };
 
             Assert.True(LaunchSettings.TryParse(original.Serialize(), out var back, out var err), err);
@@ -73,6 +77,7 @@ namespace AntSim.Core.Tests
             Assert.Equal(original.Species, back.Species);
             Assert.Equal(original.Speed, back.Speed);
             Assert.Equal(original.FrameEvery, back.FrameEvery);
+            Assert.Equal(original.Maze, back.Maze);
         }
 
         [Fact]
@@ -88,6 +93,7 @@ namespace AntSim.Core.Tests
         [InlineData("grid=4096", "grid fuera de rango")]
         [InlineData("ticks=1", "ticks fuera de rango")]
         [InlineData("speed=0", "velocidad fuera de rango")]
+        [InlineData("speed=200", "velocidad fuera de rango")]
         [InlineData("speed=500", "velocidad fuera de rango")]
         [InlineData("colonies=3", "colonies fuera de rango")]
         [InlineData("frameEvery=0", "frameEvery fuera de rango")]
@@ -121,6 +127,7 @@ namespace AntSim.Core.Tests
             Assert.Contains("pretrain-warm-v2.antgenome", d);
             Assert.Contains("768 u", d);      // grid 96 × 8 u
             Assert.Contains("lasius", d);
+            Assert.Contains("laberinto=sí", d);
 
             var sinPool = LaunchSettings.Defaults();
             sinPool.Pool = "";

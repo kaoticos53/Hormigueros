@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace AntSim.Unity.Scripts.Streaming
 {
@@ -40,6 +41,27 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>Ticks recibidos y aún no presentados (0 si no hay buffer).</summary>
         public int BufferedTicks { get { lock (_gate) return _pending.Count; } }
 
+        /// <summary>
+        /// Tope de ticks en cola (F6). 0 = sin tope (tests y consumidores
+        /// cortos). Con una partida de 2 h a 120× el CLI produce más rápido de
+        /// lo que el reproductor consume: sin tope la cola crece durante una hora
+        /// y se come la RAM. Al llegar al tope, el hilo del stream ESPERA —la
+        /// tubería hace de contrapresión y el CLI baja a nuestro ritmo—.
+        /// </summary>
+        public int MaxPending { get; set; }
+
+        private bool _closed;
+
+        /// <summary>Despierta al hilo que espera por contrapresión (parada de Play).</summary>
+        public void Close()
+        {
+            lock (_gate)
+            {
+                _closed = true;
+                Monitor.PulseAll(_gate);
+            }
+        }
+
         /// <summary>Ticks presentados pendientes de reparto a la UI.</summary>
         public int PresentedCount { get { lock (_gate) return _presented.Count; } }
 
@@ -63,7 +85,14 @@ namespace AntSim.Unity.Scripts.Streaming
             if (Buffered)
             {
                 // La presentación la decide AdvanceTo; aquí solo se encola.
-                lock (_gate) _pending.Enqueue(view);
+                lock (_gate)
+                {
+                    while (!_closed && MaxPending > 0 && _pending.Count >= MaxPending)
+                        Monitor.Wait(_gate);
+                    if (_closed) return view;
+                    _pending.Enqueue(view);
+                    Monitor.PulseAll(_gate);
+                }
             }
             else
             {
@@ -93,6 +122,7 @@ namespace AntSim.Unity.Scripts.Streaming
                     _presented.Enqueue(v);
                     changed = true;
                 }
+                if (changed) Monitor.PulseAll(_gate); // hueco para el hilo del stream
             }
             return changed;
         }
