@@ -177,18 +177,18 @@ los dos valores:
 
 | Escena | Entrada que la escribió | grid | colonias | ticks | frameEvery | velocidad | semilla(s) | pool(s) |
 |---|---|---|---|---|---|---|---|---|
-| `Assets/Scenes/Game.unity` | **Play pass** (`scripts/playpass-live.sh`): el menú «Crear escena de juego» y la sonda `ProbeToastsSet` con `Temp/antsim-playpass.json`, ya guardada | 96 | 2 | 7200 | 1 | 2 | 42 | `pretrain-warm-v2` |
+| `Assets/Scenes/Game.unity` | **`SceneBootstrapper.CreateGameScene`** con `LaunchSettings.Defaults()` (F6). El Play pass la reescribe en su bloque 4 con `TICKS`/`B4_SPEED`, que siguen a esos defaults | 96 | 2 | 216000 | 1 | 120 | 42 | `pretrain-warm-v2` |
 | `Assets/Scenes/MultiSim.unity` | **Medidor de rendimiento**: `-executeMethod …MultiSimBootstrapper.CreateMultiSimPerfScene` | 256 | 2 por vista | 12000 | 5 | 10 | 42–45 (una por vista) | warm-v2 · warm-4 · warm3 · warm2 (autodetectados de `artifacts/`) |
 
 Lo que **no** hay que confundir, porque es justo lo que se perdía:
 
 - El menú **«Crear escena de juego»** (`SceneBootstrapper.CreateGameScene`) monta
-  con `LaunchSettings.Defaults()` —ticks **36000**, velocidad **3**—, así que
-  regenerar con el menú NO devuelve el `Game.unity` del repo: esa configuración la
-  deja el Play pass, y el contrato ata el registro a sus defaults (`TICKS`,
-  `B4_SPEED`, `GRID`, `COLONIES`, `SEED` y `SEED_POOL` de `scripts/playpass-live.sh`
-  tienen que coincidir con el catálogo). `frameEvery` y la especie no los toca el
-  pase: la escena conserva los del montador, y el registro los ancla a
+  con `LaunchSettings.Defaults()` —F6: ticks **216000**, velocidad **120×** y
+  laberinto desde la semilla—, y ésa es EXACTAMENTE la configuración del
+  `Game.unity` del repo. El Play pass la reproduce en su bloque 4: sus `TICKS`,
+  `B4_SPEED`, `GRID`, `COLONIES`, `SEED` y `SEED_POOL` tienen que coincidir con el
+  catálogo, o el pase guardaría otra partida. `frameEvery` y la especie no los
+  toca el pase: la escena conserva los del montador, y el registro los ancla a
   `LaunchSettings` en vez de a la memoria.
 - El menú **«Crear escena multi-visor»** (`CreateMultiSimScene`) monta grid 96 /
   36000 ticks / frameEvery 2 —la escena de F5.1bis—, y las variantes
@@ -304,7 +304,7 @@ las unidades justo en los iconos y hacía parecer que la fuente mentía).
 
 Para mirar el `.ttf` sin abrir Unity, `python scripts/unity/validate-font.py
 <ruta>/AntSim.ttf` valida tablas, nombres, avances y `cmap` con fontTools y
-rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 667 tests de la
+rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 681 tests de la
 suite incluyen `GameFontTests` —que cubre también el alfabeto contra los
 literales que el HUD usa de verdad, y **los avances LEÍDOS de la tabla `hmtx`**
 frente a los del modelo, glifo a glifo por la `cmap`— y

@@ -1,14 +1,15 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-22 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 667/667 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 681/681 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
 índice con veredicto. Enlaces: [`arquitectura.md`](arquitectura.md) (plan
 global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
-[`fase5-plan.md`](fase5-plan.md) (plan vigente de Fase 5),
+[`fase5-plan.md`](fase5-plan.md) (plan de Fase 5),
+[`fase6-terreno.md`](fase6-terreno.md) (F6: laberinto, ritmo 120× y evolución por nacimientos),
 [`ideas-externas.md`](ideas-externas.md) (revisión de cuatro simuladores
 afines con propuestas priorizadas por valor/coste) y
 [`politicas-benchmark.md`](politicas-benchmark.md) (la vara externa: aleatoria
@@ -28,7 +29,17 @@ vs scripted vs evolucionada en la misma arena).
 | **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** `v0.7.0` | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** | ✅ `v0.6.1` | `arquitectura.md` §CI |
 | **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje, LOD + instancing** | ✅ **CERRADO** `v0.8.0` (exit medido en un build de jugador) | `fase5-3-escala.md` |
-| 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
+| **6** | **Terreno con laberinto, ritmo 120× (216 000 ticks) y evolución por nacimientos** | ✅ **CERRADO** | `fase6-terreno.md` |
+| 6bis | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
+
+**F6 (cerrada, sin tag todavía)**: el tablero es un laberinto con bucles generado
+de la semilla (paredes visibles, colisión con deslizamiento, antenas que ven el
+muro de su lado), la partida arranca a **120×** y dura **216 000 ticks = 2 h de
+simulación**, y la evolución va por nacimientos —sin botón de «siguiente
+generación»— guardando la élite en `artifacts/evolved-<semilla>.antgenome` al
+terminar. Sin `--maze` el mundo y el stream son byte a byte los de antes: los 6
+pines de CI no se mueven. Detalle y medidas en
+[`fase6-terreno.md`](fase6-terreno.md).
 
 ## Lo que ya funciona (verificado, no prometido)
 
@@ -36,7 +47,7 @@ vs scripted vs evolucionada en la misma arena).
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **667/667 tests** en Windows y verdes en Linux en CI en cada push,
+NEAT canónica. **681/681 tests** en Windows y verdes en Linux en CI en cada push,
 igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
