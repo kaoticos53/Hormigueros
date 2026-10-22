@@ -1,12 +1,12 @@
 presenter.antMesh=AntMesh antMat=AntMat carrierMat=CarrierMat itemMesh=ItemMesh itemMat=ItemMat
 presenter.grid=96 speed=2 pheroEvery=30 antScale=0
 presenter.live tick=7200 ants=58 items=24
-world.PheromoneTiles mat=PheromoneMat shader=Universal Render Pipeline/Unlit tex=(96x96) color=RGBA(1.000, 1.000, 1.000, 1.000) active=1 pos=(384, 0.3, 384) scale=(76.8, 1, 76.8)
-world.NestMound_0 mat=NestMoundMat shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(256, 0.2, 384) scale=(24.5, 0.2, 24.5)
-world.Floor mat=FloorMat shader=Universal Render Pipeline/Unlit tex=GridTex(64x64) color=RGBA(1.000, 1.000, 1.000, 1.000) active=1 pos=(384, 0, 384) scale=(76.8, 1, 76.8)
-world.NestMound_1 mat=NestMoundMat shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(512, 0.2, 384) scale=(24.5, 0.2, 24.5)
-world.Nest_1 mat=NestMat1 shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.420, 0.630, 0.950, 1.000) active=1 pos=(512, 0.5, 384) scale=(16.9, 0.3, 16.9)
 world.Nest_0 mat=NestMat0 shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.930, 0.450, 0.350, 1.000) active=1 pos=(256, 0.5, 384) scale=(16.9, 0.3, 16.9)
+world.NestMound_0 mat=NestMoundMat shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(256, 0.2, 384) scale=(24.5, 0.2, 24.5)
+world.Nest_1 mat=NestMat1 shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.420, 0.630, 0.950, 1.000) active=1 pos=(512, 0.5, 384) scale=(16.9, 0.3, 16.9)
+world.PheromoneTiles mat=PheromoneMat shader=Universal Render Pipeline/Unlit tex=(96x96) color=RGBA(1.000, 1.000, 1.000, 1.000) active=1 pos=(384, 0.3, 384) scale=(76.8, 1, 76.8)
+world.NestMound_1 mat=NestMoundMat shader=Universal Render Pipeline/Unlit tex=NULL color=RGBA(0.300, 0.250, 0.200, 1.000) active=1 pos=(512, 0.2, 384) scale=(24.5, 0.2, 24.5)
+world.Floor mat=FloorMat shader=Universal Render Pipeline/Unlit tex=GridTex(64x64) color=RGBA(1.000, 1.000, 1.000, 1.000) active=1 pos=(384, 0, 384) scale=(76.8, 1, 76.8)
 canvas.mode=ScreenSpaceOverlay scaler=ScaleWithScreenSize refRes=(1920.00, 1080.00) match=0,5
 hud.ColonyCard_0 anchor=(0, 1)>(0, 1) pos=(16, -72) size=(440, 268) img=0,07,0,08,0,09,0,82+noSprite
 hud.  Accent anchor=(0, 0)>(0, 1) pos=(1, 0) size=(4, -12) img=0,93,0,45,0,35,1+noSprite

@@ -1,19 +1,20 @@
 # Huella del árbol del Play pass — la compara la pasada SIGUIENTE si el montaje coincide.
-# montaje: HEAD 0710271d28cf87d06f41dd73cdb64a4d44994ec5 seed=42 grid=96 ticks=7200 speed=3 pool=artifacts/pretrain-warm-v2.antgenome
+# montaje: HEAD e76a449266bfea6081e880f2cb4c075b0422b263 seed=42 grid=96 ticks=7200 speed=3 pool=artifacts/pretrain-warm-v2.antgenome
 # alcance: artifacts/playpass-* src/App/AntSim.Unity/Assets src/App/AntSim.Unity/ProjectSettings (assets: .mat .unity .asset .prefab .controller .anim .meta)
-# medida (sólo nombre y estado se comparan): artifacts/playpass-samples.txt artifacts/playpass-visual.txt artifacts/playpass-visual-edit.txt artifacts/playpass-block4.txt artifacts/playpass-scene.txt artifacts/playpass-hud-icons.txt artifacts/playpass-hud-icons/
-# huella: d3b961329f73eb9a34d9ce73edbfc3f36116d513
- M 5b0a32f3175f0bf8634f7e668a1ee22e354df110 artifacts/playpass-stream.jsonl
+# medida (sólo nombre y estado se comparan): artifacts/playpass-samples.txt artifacts/playpass-visual.txt artifacts/playpass-visual-edit.txt artifacts/playpass-block4.txt artifacts/playpass-scene.txt artifacts/playpass-hud-icons.txt artifacts/playpass-hud-icons/ artifacts/playpass-sparkline-pixels.txt artifacts/playpass-sparkline-pixels/
+# huella: a288f0393c9d26c3017d13c5498c2ed0e603d3ef
+ M f89c6226420ec6897a216a5bad402072eca9b9b2 src/App/AntSim.Unity/Assets/Scenes/Game.unity
  M medida artifacts/playpass-block4.txt
+ M medida artifacts/playpass-hud-icons.txt
+ M medida artifacts/playpass-hud-icons/antsim-hud-card0.png
+ M medida artifacts/playpass-hud-icons/antsim-hud-card1.png
+ M medida artifacts/playpass-hud-icons/antsim-hud-frame.png
+ M medida artifacts/playpass-hud-icons/antsim-hud-icons-compare.png
  M medida artifacts/playpass-samples.txt
  M medida artifacts/playpass-scene.txt
- M medida artifacts/playpass-visual-edit.txt
  M medida artifacts/playpass-visual.txt
-?? 4a4b3e33cafeaa432b508b6629be6a4fb4884bbb src/App/AntSim.Unity/Assets/Scripts/EditorTools/GeneratedAssets.cs.meta
-?? 5474617ffde132ff10913abf65eb24800927fd98 artifacts/playpass-heading-pixels/antsim-heading-pixels.png
-?? c5d4a22a118648e00453df828bcf41a0230edd1f src/App/AntSim.Unity/Assets/Scripts/Streaming/AssetCanonicalizer.cs.meta
-?? medida artifacts/playpass-hud-icons.txt
-?? medida artifacts/playpass-hud-icons/antsim-hud-card0.png
-?? medida artifacts/playpass-hud-icons/antsim-hud-card1.png
-?? medida artifacts/playpass-hud-icons/antsim-hud-frame.png
-?? medida artifacts/playpass-hud-icons/antsim-hud-icons-compare.png
+?? medida artifacts/playpass-sparkline-pixels.txt
+?? medida artifacts/playpass-sparkline-pixels/antsim-spark-card0.png
+?? medida artifacts/playpass-sparkline-pixels/antsim-spark-card1.png
+?? medida artifacts/playpass-sparkline-pixels/antsim-spark-compare.png
+?? medida artifacts/playpass-sparkline-pixels/antsim-spark-frame.png
