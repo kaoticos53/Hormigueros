@@ -343,7 +343,9 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
 
 ## Jugar en Unity (modo visual)
 
-El juego tiene un modo visual completo: hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
+El juego tiene un modo visual completo: laberinto con paredes dibujadas desde la semilla, hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
+
+La partida arranca a **120×** (100 % de la base del control de velocidad, rango 10×–160×) y dura **216 000 ticks = 2 h de simulación**. No hay botón de «siguiente generación»: la evolución ocurre sola, porque los nacimientos salen del torneo sobre la élite ordenada por fitness de por vida y cada muerte la actualiza; al terminar el horizonte la élite se guarda en `artifacts/evolved-<semilla>.antgenome` (`ExportElite` del presenter).
 
 ```bash
 # Lanzar Unity con la escena lista para Play (los ajustes se inyectan
@@ -376,8 +378,10 @@ bash scripts/play-game.sh                                # Linux/macOS
 - `SeedPoolPath` = `artifacts/pretrain-warm-v2.antgenome` (o `pretrain-neat.antgenome`)
 - `Species` = `lasius` (o `lasius,eciton` para invasión)
 - `Grid` = 96 (grid 96² = 768 u) o 256 (grid 256² = 2048 u)
-- `Ticks` = 7200 (2 horas de juego) o más
-- `Speed` = 3 (velocidad del presenter, 3× real)
+- `Ticks` = 216000 (2 h de simulación; 30 min de reloj a 120×)
+- `Speed` = 120 (100 % de la base; 10×–160× en el control)
+- `Maze` = laberinto con bucles generado de la semilla (sin él, el tablero es el plano clásico)
+- `ExportElite` = guarda la élite evolucionada al acabar la partida
 - `InspectId` = id de la hormiga a inspeccionar
 
 **Pools disponibles:**
@@ -444,17 +448,17 @@ bash scripts/commit-layers.sh --selftest       # el reparto entero, en un repo d
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (667/667), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
+| `dotnet test` | la suite headless (681/681), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
-| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 667 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 681 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
 | `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance. `--discard` da el paso siguiente y ACTÚA, por los dos caminos que hacen falta para que el diff contra HEAD sea lo que cambió: restaura las rutas que certifica idénticas (el churn puro) y a las que **cambian de verdad** les quita la forma —anclas de sesión, orden, blancos— reescribiéndolas en canónico **sin tocar el contenido**, que es exactamente lo que hace el generador al cerrar una escritura; funciona porque el ancla canónica es el hash del contenido, así que un documento intacto vuelve a ser el mismo byte que en HEAD (medido en `Game.unity`, 425 documentos: una pasada que re-ancla todo y cambia UNA línea escalar pasa de 10 669 líneas de diff a 2). No toca las que canonicalizan —son las que quitan la trampa— y sólo escribe si la forma canónica pasa el `compare` (si no significa lo mismo, se planta y lo dice); después vuelve a clasificar y a mirar el índice para confirmarlo. `--dry-run` mide lo mismo sin tocar nada. El MISMO chequeo es la **puerta 1** de `.githooks/pre-push`, con el rango sacado de las refs que el push manda |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
-| `scripts/check-unity-references.sh` | **un commit no deja un asset sin su dato**: un editor puede destruir una referencia sin cambiar nada más y sin dejar error —medido dos veces: los materiales de feromonas que quedaron con `_BaseMap`/`_MainTex` en `fileID: 0` (commiteados en `d4aebc3`, el material de reposo pintado BLANCO OPACO sobre el tablero) y `PheromoneMat.mat` al cerrarse el editor el 2026-10-08—. El YAML sigue siendo válido, así que nada lo veía hasta que una prueba se topaba con la pérdida. `--range A..B` compara cada commit con SU PADRE —lo que empuja un push son los commits, no el árbol— y nombra el slot y la guía perdidos; sin argumentos comprueba el árbol contra HEAD, `--watch` espera al cierre del editor y `--selftest` verifica los dos detectores y el modo del push sin repo. Es la **puerta 2** de `.githooks/pre-push` |
+| `scripts/check-unity-references.sh` | **un commit no deja un asset sin su dato**: un editor puede destruir una referencia sin cambiar nada más y sin dejar error —medido dos veces: los materiales de feromonas que quedaron con `_BaseMap`/`_MainTex` en `fileID: 0` (commiteados en `d4aebc3`, el material de reposo pintado BLANCO OPACO sobre el tablero) y `PheromoneMat.mat` al cerrarse el editor el 2026-10-08—. El YAML sigue siendo válido, así que nada lo veía hasta que una prueba se topaba con la pérdida. `--range A..B` compara cada commit con SU PADRE —lo que empuja un push son los commits, no el árbol— y nombra el slot y la guía perdidos; sin argumentos comprueba el árbol contra HEAD, `--watch` espera al cierre del editor y `--selftest` verifica los dos detectores y el modo del push sin repo. Un borrado deliberado de un objeto con su propia guía (p. ej. el botón «Sig. Gen» de F6, que se llevó consigo su `Text`) se declara CON MOTIVO en `scripts/unity-reference-allowlist.txt`, con alcance ruta+guía. Es la **puerta 2** de `.githooks/pre-push` |
 | `.githooks/pre-push --selftest` | el veredicto de las **tres puertas locales**, en su orden: el churn de assets y las referencias perdidas (sin editor) y los errores CS (con el editor). Solo un rojo de verdad bloquea —churn detectado, una referencia perdida o `error CS`—; «no pude comprobar» avisa y deja pasar. Cubre también la derivación de rangos desde las refs del push, incluida la **ref nueva** (arranca donde la rama diverge de lo publicado, no en `HEAD~1`), y que el rango llegue a las dos puertas que escanean commits |
 | `scripts/check-unity-compile.sh` (job `unity-compile`) | **la capa de vista de Unity compila**: los MonoBehaviours no están en la suite headless, así que un `error CS` solo se veía al abrir el editor. El job está dormido y con licencia Personal no puede encenderse en un runner alojado, así que la cobertura diaria es ese mismo script en local, vía `.githooks/pre-push` |
 
