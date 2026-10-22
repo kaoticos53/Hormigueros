@@ -169,6 +169,7 @@
 #   scripts/playpass-live.sh --analyze-visual    # solo analiza el aspecto (F5.1)
 #   scripts/playpass-live.sh --analyze-icons     # solo clasifica los iconos (F5.1)
 #   scripts/playpass-live.sh --analyze-sparkline # solo mide las barras de la gráfica
+#   scripts/playpass-live.sh --analyze-walls     # solo mide las paredes del terreno
 #   scripts/playpass-live.sh --selftest          # verifica los analizadores (sin editor)
 #
 # Opciones: --speed N (def. 3) · --ticks N (def. 7200) · --grid N (def. 96) ·
@@ -179,13 +180,13 @@
 # (def. 2) · --block4-deadline SEG (def. 200) · --block4-samples FICHERO ·
 # --analyze-block4 FICHERO · --analyze-visual · --analyze-icons · --icons-dump
 # FICHERO · --icons-crops DIR · --analyze-sparkline · --spark-dump FICHERO ·
-# --spark-crops DIR · --no-canonicalize · --recanonicalize ·
-# --no-discard-churn.
+# --spark-crops DIR · --analyze-walls · --wall-dump FICHERO · --wall-crops DIR ·
+# --no-canonicalize · --recanonicalize · --no-discard-churn.
 #
-# El comparador de iconos y el medidor de la gráfica necesitan Pillow (el
-# primero rasteriza el `.ttf`; el segundo lee los PNG de la captura): se usa el
-# primer intérprete del PATH que lo tenga (medido: `python` sí, `python3` no) y
-# se puede forzar con $ICONS_PY / $SPARK_PY.
+# El comparador de iconos y los medidores de la gráfica y de las paredes
+# necesitan Pillow (el primero rasteriza el `.ttf`; los otros leen los PNG de la
+# captura): se usa el primer intérprete del PATH que lo tenga (medido: `python`
+# sí, `python3` no) y se puede forzar con $ICONS_PY / $SPARK_PY / $WALL_PY.
 #
 # Salida: 0 ok · 1 invariante roto · 2 uso · 3 no se puede conducir el editor (no
 # hay ninguno abierto, no está el CLI, o NO RESPONDE: un diálogo modal o el hilo
@@ -268,6 +269,18 @@ SPARK_PY=""
 SPARK_SCRIPT="$ROOT/scripts/playpass-sparkline.py"
 SPARK_DIR="$ROOT/artifacts/playpass-sparkline-pixels"
 
+# Y lo mismo para las PAREDES del terreno (F6): la sonda deja en `Temp/` el frame
+# vivo y la hoja con las cajas esperadas (magenta) y los controles (cian), y el
+# medidor vuelve a los píxeles para comprobar que el mapa del laberinto está en
+# pantalla — color, sitio y escala. `LastWallDraws` se publicó durante una fase
+# entera sin que nadie lo leyera: este paso es quien lo lee.
+WALL_DUMP=""
+WALL_ANALYZE=0
+WALL_CROPS=""
+WALL_PY=""
+WALL_SCRIPT="$ROOT/scripts/playpass-walls.py"
+WALL_DIR="$ROOT/artifacts/playpass-wall-pixels"
+
 # Dónde vive la evidencia en PÍXELES del rumbo (`ProbeAntHeadingPixels` la escribe en
 # `<proyecto>/Temp/`, que Unity borra al cerrar el editor): el PNG con una hormiga por
 # rumbo y el rumbo esperado pintado encima es lo que se mira para creerse la medida.
@@ -290,7 +303,8 @@ FP_LIVE=(artifacts/playpass-samples.txt artifacts/playpass-visual.txt \
          artifacts/playpass-visual-edit.txt artifacts/playpass-block4.txt \
          artifacts/playpass-scene.txt artifacts/playpass-hud-icons.txt \
          artifacts/playpass-hud-icons/ artifacts/playpass-sparkline-pixels.txt \
-         artifacts/playpass-sparkline-pixels/)
+         artifacts/playpass-sparkline-pixels/ artifacts/playpass-wall-pixels.txt \
+         artifacts/playpass-wall-pixels/)
 # (`playpass-scene.txt` entra en la lista por su línea `presenter.live tick=… ants=…`,
 # que es una lectura del mundo EN MARCHA; lo que describe —materiales, rects— son
 # ASSETS, y ésos sí se comparan, como ficheros del alcance.)
@@ -653,6 +667,9 @@ while [[ $# -gt 0 ]]; do
     --analyze-sparkline) SPARK_ANALYZE=1; shift ;;
     --spark-dump)     SPARK_DUMP="$2"; shift 2 ;;
     --spark-crops)    SPARK_CROPS="$2"; shift 2 ;;
+    --analyze-walls)  WALL_ANALYZE=1; shift ;;
+    --wall-dump)      WALL_DUMP="$2"; shift 2 ;;
+    --wall-crops)     WALL_CROPS="$2"; shift 2 ;;
     --no-canonicalize) CANONICALIZE=0; shift ;;
     --recanonicalize)  RECANONICALIZE=1; shift ;;
     --no-discard-churn) DISCARD_CHURN=0; shift ;;
@@ -1185,6 +1202,72 @@ analyze_sparkline() {
   return 1
 }
 
+# ── Paredes del LABERINTO (F6) ──────────────────────────────────────────────
+# El tramo que ningún check de estado puede ver: la escena puede tener el
+# `WallMesh` y el `WallMaterial` cableados, el mapa diciendo dónde están las
+# paredes y la partida corriendo un laberinto invisible (mal alto, escala cero,
+# capa que la cámara no ve). `ProbeWallPixels` renderiza la cámara del juego con
+# la partida viva y compara el frame con el mapa CELDA A CELDA; el medidor
+# (`scripts/playpass-walls.py`, con Pillow) vuelve a los píxeles, exige color,
+# sitio y escala de las muestras, y aquí se aplica la política: un fallo del
+# medidor, o no poder medir, deja el pass en ≠ 0.
+preserve_walls() {
+  local from="$1" to="$2" n=0 f
+  mkdir -p "$to" || return 1
+  for f in "$from"/antsim-wall-*.png; do
+    [[ -f "$f" ]] || continue
+    cp -f "$f" "$to/" || return 1
+    n=$((n+1))
+  done
+  if [[ $n -eq 0 ]]; then
+    echo "✗ FALLO (paredes): la sonda no dejó ningún PNG en $from — sin el frame no hay píxeles que medir" >&2
+    return 1
+  fi
+  log "  ✓ evidencia de las paredes conservada en $to ($n PNG: frame vivo + hoja con las cajas y los controles)"
+  return 0
+}
+
+# analyze_walls <volcado> <dir de la evidencia> → 0 solo si el medidor da verde.
+# El informe se publica entero: sin los números por muestra, «falló» no dice qué
+# mirar (una celda sin pintar, una caja vacía, un control con muro…).
+analyze_walls() {
+  local dump="$1" crops="$2" py="${WALL_PY:-}" rc=0 out line
+
+  if [[ -z "$py" ]]; then py="$(python_with_pillow || true)"; fi
+  if [[ ! -f "$WALL_SCRIPT" ]]; then
+    echo "  ✗ FALLO (paredes): falta el medidor $WALL_SCRIPT" >&2
+    return 1
+  fi
+  if [[ -z "$py" ]]; then
+    echo "  ✗ FALLO (paredes): ningún python del PATH tiene Pillow — sin él no se leen los PNG del frame" >&2
+    echo "    (comprobación: python -c 'import PIL'; o fija el intérprete con \$WALL_PY)" >&2
+    return 1
+  fi
+  if [[ ! -f "$dump" ]]; then
+    echo "  ✗ FALLO (paredes): no hay volcado de la sonda ($dump)" >&2
+    echo "    (sin el volcado no se sabe qué celdas deberían tener muro: ¿corrió ProbeWallPixels con Play vivo?)" >&2
+    return 1
+  fi
+
+  out="$("$py" "$WALL_SCRIPT" "$dump" "$crops" 2>&1)" || rc=$?
+  while IFS= read -r line; do log "  ${line%$'\r'}"; done <<<"$out"
+
+  if [[ $rc -eq 0 ]]; then
+    log "  ✓ el mapa del laberinto está en pantalla: color, sitio y escala (medidor en verde)"
+    return 0
+  fi
+  if [[ $rc -eq 2 ]]; then
+    echo "  ✗ FALLO (paredes): el medidor NO pudo medir (rc=2: falta Pillow o uso incorrecto) — el pass no puede dar esto por verde" >&2
+    return 1
+  fi
+  local detalle
+  detalle="$(printf '%s' "$out" | tr -d '\r' | grep -E '✗|fallo' | tail -6 || true)"
+  echo "  ✗ FALLO (paredes): el terreno que colisiona no se mide como está en pantalla" >&2
+  echo "    (acuerdo celda a celda, color del material, caja llena, escala o controles; medidor rc=$rc)" >&2
+  if [[ -n "$detalle" ]]; then printf '%s\n' "$detalle" | sed 's/^/    /' >&2; fi
+  return 1
+}
+
 # ── 8bis. La HUELLA del árbol: el pase no acumula estado ─────────────────────
 # POR QUÉ. Todo lo que este pase afirma —«los assets quedaron canónicos», «el árbol
 # no se queda sucio»— descansa en un supuesto que hasta ahora nadie comprobaba: que
@@ -1503,6 +1586,51 @@ if [[ $SELFTEST -eq 1 ]]; then
     echo "✓ selftest de la gráfica ok (verde pasa · barras rotas fallan · sin volcado falla · PNG conservados)"
   fi
 
+  # — Paredes del terreno: el CABLEADO, no la métrica —
+  # La métrica trae su propio `--selftest` en scripts/playpass-walls.py (con frames
+  # sintéticos: sin paredes, a media escala, de otro color, un polígono gigante,
+  # `draws` corto y guías encima). Aquí se prueba la POLÍTICA de este script: un
+  # veredicto ≠ 0 rompe el paso, un 0 no, no poder medir no es verde, y la
+  # evidencia del frame se conserva (o el paso falla). Dobles, como en la gráfica.
+  f9=0
+  wall_dump="$tmp/wall-dump.txt"
+  printf 'WALL|stage=measure|frame=1280x960|row0=top|cells=1|agree=1\n' > "$wall_dump"
+  wall_ok="$tmp/wall-ok"; wall_fail="$tmp/wall-fail"
+  printf '#!/usr/bin/env bash\necho "  ✓ el mapa está en pantalla: 8836/8836 celdas de acuerdo (100.0 %%)"\nexit 0\n' > "$wall_ok"
+  printf '#!/usr/bin/env bash\necho "  ✗ el mapa NO está en pantalla: 431/484 celdas de acuerdo (89.0 %%)"\nexit 1\n' > "$wall_fail"
+
+  WALL_PY=bash
+  WALL_SCRIPT="$wall_ok"
+  r=0; QUIET=1 analyze_walls "$wall_dump" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 ]]; then echo "✗ selftest(paredes): el medidor en verde rompió el paso" >&2; f9=1; fi
+  WALL_SCRIPT="$wall_fail"
+  r=0; QUIET=1 analyze_walls "$wall_dump" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(paredes): un laberinto que no está en pantalla pasó en verde" >&2; f9=1; fi
+  WALL_SCRIPT="$wall_ok"
+  r=0; QUIET=1 analyze_walls "$tmp/no-existe-wall.txt" "$tmp" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(paredes): la falta de volcado pasó en verde" >&2; f9=1; fi
+
+  # La evidencia del frame: sale de `Temp/` y queda en el destino; sin PNGs el paso
+  # falla (no puede decir «medido» sin nada que mirar).
+  wall_sonda="$tmp/wall-sonda"; mkdir -p "$wall_sonda"
+  printf x > "$wall_sonda/antsim-wall-frame.png"
+  printf x > "$wall_sonda/antsim-wall-marked.png"
+  printf x > "$wall_sonda/otro.png"
+  r=0; QUIET=1 preserve_walls "$wall_sonda" "$tmp/wall-evidencia" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 || ! -f "$tmp/wall-evidencia/antsim-wall-frame.png" || ! -f "$tmp/wall-evidencia/antsim-wall-marked.png" ]]; then
+    echo "✗ selftest(paredes): no se conservó el frame de la medida" >&2; f9=1
+  fi
+  if [[ -f "$tmp/wall-evidencia/otro.png" ]]; then
+    echo "✗ selftest(paredes): se copió un PNG que no es de las paredes" >&2; f9=1
+  fi
+  r=0; QUIET=1 preserve_walls "$tmp/wall-sin-pngs" "$tmp/wall-evidencia2" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then
+    echo "✗ selftest(paredes): sin PNGs la conservación pasó en verde" >&2; f9=1
+  fi
+  if [[ $f9 -eq 0 ]]; then
+    echo "✓ selftest de las paredes ok (verde pasa · laberinto invisible falla · sin volcado falla · frame conservado)"
+  fi
+
   # — Huella del árbol: el invariante «dos pasadas dejan el mismo diff» —
   # Las funciones son `git status` + `git hash-object` sobre el alcance, así que se
   # prueban con GIT de verdad, en un repositorio de mentira: el caso «cambió un asset»
@@ -1587,7 +1715,7 @@ if [[ $SELFTEST -eq 1 ]]; then
   fi
 
   rm -rf "$tmp"
-  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 && $f8 -eq 0 ]] || exit 1
+  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 && $f8 -eq 0 && $f9 -eq 0 ]] || exit 1
   exit 0
 fi
 
@@ -1624,6 +1752,18 @@ if [[ $SPARK_ANALYZE -eq 1 ]]; then
   SPARK_CROPS="${SPARK_CROPS:-$SPARK_DIR}"
   log "▶ Midiendo las barras de la gráfica: $SPARK_DUMP · captura en $SPARK_CROPS"
   if analyze_sparkline "$SPARK_DUMP" "$SPARK_CROPS"; then exit 0; fi
+  exit 1
+fi
+
+# ── Modo solo-análisis (paredes del terreno) ────────────────────────────────
+# La MISMA medida que decide el paso de la ruta viva, sobre el frame ya en disco:
+# así un laberinto que no se ve se reproduce sin abrir Unity, y el paso se puede
+# verificar en los dos sentidos (verde y roto).
+if [[ $WALL_ANALYZE -eq 1 ]]; then
+  WALL_DUMP="${WALL_DUMP:-$ROOT/artifacts/playpass-wall-pixels.txt}"
+  WALL_CROPS="${WALL_CROPS:-$WALL_DIR}"
+  log "▶ Midiendo las paredes del laberinto: $WALL_DUMP · frame en $WALL_CROPS"
+  if analyze_walls "$WALL_DUMP" "$WALL_CROPS"; then exit 0; fi
   exit 1
 fi
 
@@ -1959,7 +2099,10 @@ UCMD clear_console >/dev/null 2>&1 || true
 # ── 2. Config del presenter ──────────────────────────────────────────────────
 CONFIG="$PROJECT/Temp/antsim-playpass.json"
 mkdir -p "$PROJECT/Temp"
-printf '{"seed":%s,"grid":%s,"colonies":%s,"ticks":%s,"speed":%s,"seedPool":"%s","replay":""}\n' \
+# `maze:true`: la partida canónica es la que el jugador recibe por defecto
+# (`LaunchSettings.Maze`), y sin terreno el paso de las paredes no tendría nada
+# que medir — además de que «terreno con obstáculos» es lo que el juego promete.
+printf '{"seed":%s,"grid":%s,"colonies":%s,"ticks":%s,"speed":%s,"seedPool":"%s","replay":"","maze":true}\n' \
   "$SEED" "$GRID" "$COLONIES" "$TICKS" "$SPEED" "${SEED_POOL:--}" > "$CONFIG"
 
 # La sonda del presenter, con la respuesta CLASIFICADA (`set_probe` deja la clave
@@ -2040,7 +2183,7 @@ trap cleanup_play EXIT
 # primera vez DURANTE la partida recarga el dominio y congela el mundo: pasó de
 # verdad (73 muestras clavadas en el tick 105, sin un solo error en la consola).
 log "▶ Compilando las sondas (antes de Play, para no recargar el dominio en partida)…"
-for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeSparklinePixels ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
+for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeSparklinePixels ProbeWallPixels ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
   UCMD run_script --file "$(winpath "$PROBE_DIR/$_probe.cs")" >/dev/null 2>&1 || true
 done
 wait_for_compiled || true
@@ -2188,6 +2331,22 @@ UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeSparklinePixels.cs")" >/dev/n
 SPARK_CROPS="${SPARK_CROPS:-$SPARK_DIR}"
 preserve_sparkline "$PROJECT/Temp" "$SPARK_CROPS" || true
 
+# Las PAREDES del terreno (F6), en píxeles del MISMO frame. Una sola llamada (la
+# sonda renderiza la cámara a su propia RenderTexture y la lee en el acto, sin
+# esperar a que el motor dibuje el frame siguiente) y antes del bloque 4, que
+# reconstruye la escena y vuelve a entrar en Play: esta captura es la de ESTA
+# partida. La evidencia sale de `Temp/` con Play vivo, por el mismo motivo que las
+# otras: Unity barre `Temp/` al cerrar.
+WALL_DUMP="${WALL_DUMP:-$ROOT/artifacts/playpass-wall-pixels.txt}"
+mkdir -p "$(dirname "$WALL_DUMP")"
+UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeWallPixels.cs")" 2>/dev/null \
+  | cmd_result 2>/dev/null > "$WALL_DUMP" || true
+# `cmd_result` no cierra la línea (va por sustitución de comandos): sin esto el
+# volcado se queda sin salto y el medidor no encuentra la línea `WALL|`.
+printf '\n' >> "$WALL_DUMP"
+WALL_CROPS="${WALL_CROPS:-$WALL_DIR}"
+preserve_walls "$PROJECT/Temp" "$WALL_CROPS" || true
+
 UCMD editor_stop >/dev/null 2>&1 || true
 PLAY_STARTED=0
 log "▶ Play detenido tras ${samples} muestras ($(( $(date +%s) - start )) s)$([[ $finished -eq 1 ]] && echo ' — reproducción completa' || echo ' — TOPE de tiempo, sin llegar al final')."
@@ -2272,6 +2431,20 @@ if analyze_sparkline "$SPARK_DUMP" "${SPARK_CROPS:-$SPARK_DIR}"; then
   log "✓ la serie de descargas se ve en la tarjeta (medidor scripts/playpass-sparkline.py en verde)"
 else
   RCSPARK=1
+fi
+
+# ── 6quinquies. Paredes del terreno, en píxeles (F6) ────────────────────────
+# Antes del bloque 4 por el mismo motivo que la gráfica: esa fase reconstruye la
+# escena y vuelve a entrar en Play, así que el frame de ESTA partida ya no estaría.
+# Veredicto propio: un fallo aquí es el TERRENO (celdas sin pintar, color, escala o
+# controles), no un glifo ni un texto que no cabe.
+RCWALL=0
+log ""
+log "▶ Terreno: las paredes del laberinto, medidas en los píxeles del frame (F6)"
+if analyze_walls "$WALL_DUMP" "${WALL_CROPS:-$WALL_DIR}"; then
+  log "✓ el terreno que colisiona está en pantalla (medidor scripts/playpass-walls.py en verde)"
+else
+  RCWALL=1
 fi
 
 # ── 7. Bloque 4: interacción (entradas sin dispositivo) ─────────────────────
@@ -2494,9 +2667,9 @@ fi
 
 # ── 9. Resumen ───────────────────────────────────────────────────────────────
 log ""
-if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCSPARK -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
-  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto, iconos y gráfica (F5.1) verificados en vivo" \
-                      || log "✓ bloques 3 y 5 + aspecto, iconos y gráfica (F5.1) verificados en vivo"
+if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCSPARK -eq 0 && $RCWALL -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
+  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto, iconos, gráfica y terreno (F5.1/F6) verificados en vivo" \
+                      || log "✓ bloques 3 y 5 + aspecto, iconos, gráfica y terreno (F5.1/F6) verificados en vivo"
   [[ $FP_COMPARED -eq 1 ]] && log "  ✓ y el árbol quedó con la MISMA huella que la pasada anterior ($FP_FILE): el pase no acumula estado"
   exit 0
 fi
@@ -2507,6 +2680,7 @@ fi
 [[ $RCF5 -ne 0 ]] && echo "✗ el aspecto falló (ver arriba)" >&2 || true
 [[ $RCICON -ne 0 ]] && echo "✗ los iconos del HUD fallaron (ver arriba)" >&2 || true
 [[ $RCSPARK -ne 0 ]] && echo "✗ las barras de descargas de la gráfica fallaron (ver arriba)" >&2 || true
+[[ $RCWALL -ne 0 ]] && echo "✗ las paredes del terreno no se miden como están en pantalla (ver arriba)" >&2 || true
 [[ $RC4 -ne 0 ]] && echo "✗ el bloque 4 falló (ver arriba)" >&2 || true
 [[ $RCDISCARD -ne 0 ]] && echo "✗ el descarte del churn no dejó el árbol limpio (ver arriba)" >&2 || true
 [[ $RCFP -ne 0 ]] && echo "✗ la huella del árbol cambió entre dos pasadas del mismo montaje (ver arriba)" >&2 || true
