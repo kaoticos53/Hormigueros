@@ -33,6 +33,25 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Inyecta un TickView observado (p. ej. desde el bombeo del presenter).</summary>
         public void Observe(Streaming.GameStreamParser.TickView view) => _model.Observe(view);
 
+        private bool _brainSizesResolved;
+
+        /// <summary>
+        /// F7 — adopta la topología del pool sembrado para decodificar el canal F.
+        /// Se resuelve una vez, al arrancar: el pool de una partida no cambia en
+        /// marcha (importar recarga la escena y esto vuelve a correr).
+        /// </summary>
+        public void ResolveBrainSizes()
+        {
+            if (_brainSizesResolved) return;
+            var presenter = Presenter != null ? Presenter : FindAnyObjectByType<SimPresenterBehaviour>();
+            if (presenter == null) return;
+            int[]? sizes = presenter.SeedPoolBrainSizes();
+            if (sizes != null) _model.BrainSizes = sizes;
+            _brainSizesResolved = true;
+        }
+
+        private void Start() => ResolveBrainSizes();
+
         /// <summary>Botón "seguir cerebro" de la tarjeta (contrato HUD §5): sigue la
         /// huella del genoma de la hormiga rastreada a través de sus cuerpos.</summary>
         public bool FollowTrackedBrain() => _model.FollowBrainOfTracked();

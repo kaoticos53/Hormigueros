@@ -43,7 +43,11 @@ public sealed class WorldSim
     private uint _nextItemId = 1;
     private readonly int _gridCells;
 
-    private static readonly int[] BrainSizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
+    /// <summary>Topología por defecto del cerebro (contrato v1: 19·8·6). Es la
+    /// que usan los pines de hash y todos los pools históricos.</summary>
+    public static readonly int[] DefaultBrainSizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
+
+    private readonly int[] _brainSizes;
 
     // — Fitness (Fase 2): recompensas de por vida. Configurables para que la
     // arena de pre-entrenamiento (Fase 3) pueda re-equilibrar la señal sin
@@ -151,11 +155,21 @@ public sealed class WorldSim
         float leafFraction = 0f,
         int lodBlockSize = PheromoneLayer.DefaultLodBlockSize,
         bool maze = false,
-        MazeLayout? mazeLayout = null)
+        MazeLayout? mazeLayout = null,
+        int[]? brainSizes = null)
     {
         if (gridCells < 16) throw new ArgumentOutOfRangeException(nameof(gridCells));
         if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
         if (lodBlockSize < 1) throw new ArgumentOutOfRangeException(nameof(lodBlockSize));
+        // F7: el cerebro puede ser más ancho que el contrato clásico cuando la
+        // partida se siembra con un pool entrenado (19→16→6, 19→24→6). La
+        // entrada (19 sensores) y la salida (6 decisiones) son fijas.
+        _brainSizes = brainSizes is null ? (int[])DefaultBrainSizes.Clone() : (int[])brainSizes.Clone();
+        if (_brainSizes.Length < 2 || _brainSizes[0] != AntSensorChannelInfo.Count
+            || _brainSizes[^1] != AntDecision.DecisionCount)
+            throw new ArgumentException(
+                $"Topología de cerebro inválida: {string.Join("→", _brainSizes)} (se exige {AntSensorChannelInfo.Count} entradas y {AntDecision.DecisionCount} salidas).",
+                nameof(brainSizes));
 
         _seed = seed;
         _gridCells = gridCells;
@@ -191,6 +205,9 @@ public sealed class WorldSim
     /// <summary>Laberinto activo del mundo (null = terreno clásico sin obstáculos).</summary>
     public MazeLayout? Maze => _maze;
 
+    /// <summary>Topología del cerebro de esta partida (copia defensiva).</summary>
+    public int[] BrainSizes => (int[])_brainSizes.Clone();
+
     private Colony CreateColony(int id, SpeciesDescriptor sp, int colonyCount, bool cloneFromElite = false)
     {
         var colony = new Colony
@@ -212,7 +229,7 @@ public sealed class WorldSim
             FungusMax = sp.FungusMax,
             QueenEnergy = 1f,
             Rng = _worldRng.Fork(0x9E3779B97F4A7C15UL + (ulong)id * 0xBF58476D1CE4E5B9UL),
-            Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), BrainSizes,
+            Pool = new GenomePool(_worldRng.Fork(0xA5C3E7B9UL + (ulong)id * 0x9E3779B9UL), _brainSizes,
                 cloneFromElite: cloneFromElite),
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
             HomeLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
@@ -1065,8 +1082,29 @@ public sealed class WorldSim
     public void ImportGenomes(int colonyId, IReadOnlyList<MlpGenome> genomes)
     {
         var colony = _colonies[colonyId];
-        foreach (var g in genomes)
-            colony.Pool.QueueImmigrant(g, Tick);
+        for (int i = 0; i < genomes.Count; i++)
+        {
+            RequireCompatibleSizes(genomes[i].Sizes);
+            colony.Pool.QueueImmigrant(genomes[i], Tick);
+        }
+    }
+
+    /// <summary>
+    /// F7: un genoma de otro ancho no puede cruzarse con la élite de este mundo
+    /// (el cruce uniforme exige vectores del mismo tamaño). Falla con un mensaje
+    /// que dice QUÉ hacer en vez de romper más tarde dentro del pool.
+    /// </summary>
+    private void RequireCompatibleSizes(int[] sizes)
+    {
+        if (sizes.Length == _brainSizes.Length)
+        {
+            bool same = true;
+            for (int i = 0; i < sizes.Length; i++) if (sizes[i] != _brainSizes[i]) { same = false; break; }
+            if (same) return;
+        }
+        throw new ArgumentException(
+            $"El genoma es {string.Join("→", sizes)} y este mundo corre {string.Join("→", _brainSizes)}: " +
+            "siembra la partida con --seed-pool (el mundo adopta el ancho del pool) en vez de importarlo en caliente.");
     }
 
     /// <summary>Vacía la lista de ítems (uso de la arena de pre-entrenamiento).</summary>
@@ -1102,6 +1140,7 @@ public sealed class WorldSim
     public void SeedPoolFromGenomes(int colonyId, IReadOnlyList<MlpGenome> genomes)
     {
         var colony = _colonies[colonyId];
+        for (int i = 0; i < genomes.Count; i++) RequireCompatibleSizes(genomes[i].Sizes);
         colony.Pool.ReplaceElite(genomes);
         for (int i = 0; i < colony.Adults.Count; i++)
         {
@@ -1130,7 +1169,7 @@ public sealed class WorldSim
         // SÍ necesitan un pool: densos en frío 19-8-6 (el régimen de un mundo
         // recién fundado; Birth() sobre élite vacía lanzaría). Los descendientes
         // nacen salvajes; solo las FUNDADORAS portan el cerebro NEAT.
-        int[] coldSizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
+        int[] coldSizes = _brainSizes;
         var cold = new List<MlpGenome>(4);
         for (int i = 0; i < 4; i++)
         {
@@ -1219,7 +1258,7 @@ public sealed class WorldSim
             StockMax = stockMax,
             FungusMax = sp.FungusMax, // F5.2a.2: capacidad siempre de la especie
             Rng = rng,
-            Pool = new GenomePool(rng.Fork(0xA5C3E7B9UL), BrainSizes, seedCount: 0),
+            Pool = new GenomePool(rng.Fork(0xA5C3E7B9UL), _brainSizes, seedCount: 0),
             FoodLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
             HomeLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),
             AlarmLayer = new PheromoneLayer(_gridCells, _gridCells, lodBlockSize: LodBlockSize),

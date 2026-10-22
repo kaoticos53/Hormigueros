@@ -30,7 +30,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT/src/App/AntSim.Unity"
 
-POOL="pretrain-warm-v2"
+# F7: pool entrenado con obstáculos (se resuelve a artifacts/pretrain-maze.antgenome).
+# `--pool pretrain-warm-v2` sigue disponible para comparar con la referencia.
+POOL="pretrain-maze"
 GRID=96
 COLONIES=2
 TICKS=216000

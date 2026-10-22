@@ -116,10 +116,18 @@ public static class GameScenario
             }
         }
 
+        // F7: el mundo adopta el ANCHO del pool sembrado (19→16→6, 19→24→6). Sin
+        // pool (o con un v2/NEAT) es el contrato clásico 19→8→6 — los pines de
+        // hash siguen intactos porque sin pool no cambia ni un byte.
+        int[]? brainSizes = null;
+        if (seedPoolPath != null)
+            brainSizes = AntGenomeFile.PeekFirstSizes(File.ReadAllBytes(seedPoolPath));
+
         var sim = new WorldSim(seed, grid, colonies, species: species,
             cloneFromElite: cloneFromElite,
             leafFraction: leafFraction, // F5.2a.1: 0 = mundo clásico sin hojas
-            maze: maze);                // F6: obstáculos generados de la semilla
+            maze: maze,                 // F6: obstáculos generados de la semilla
+            brainSizes: brainSizes);    // F7: ancho del cerebro del pool
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();

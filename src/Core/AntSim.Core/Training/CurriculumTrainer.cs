@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using AntSim.Core.Brain;
 using AntSim.Core.Contracts;
 using AntSim.Core.Evolution;
@@ -16,14 +17,31 @@ public readonly struct GenerationStats
     public readonly double BestFitness;
     public readonly double MeanFitness;
     public readonly int CompetentCount;
-
-    public GenerationStats(int stage, int generation, double best, double mean, int competent)
+    /// <summary>Descargas de la mejor evaluación de la generación (F7: es lo que
+    /// mira el currículo de obstáculos — el fitness puede subir paseando).</summary>
+    public readonly int BestUnloads;
+    /// <summary>Pickups de la mejor evaluación de la generación.</summary>
+    public readonly int BestPickups;
+    /// <summary>Dificultad del terreno USADA en esta generación (0 = abierto).</summary>
+    public readonly float Difficulty;
+    /// <summary>Ancho oculto del cerebro; 0 = no cambió, &gt;0 = creció a ese ancho.</summary>
+    public readonly int GrownHidden;
+    /// <summary>Generación de mantenimiento en campo abierto (sin terreno).</summary>
+    public readonly bool ClassicGen;
+    public GenerationStats(int stage, int generation, double best, double mean, int competent,
+        int bestUnloads = 0, int bestPickups = 0, float difficulty = 0f, int grownHidden = 0,
+        bool classicGen = false)
     {
         Stage = stage;
         Generation = generation;
         BestFitness = best;
         MeanFitness = mean;
         CompetentCount = competent;
+        BestUnloads = bestUnloads;
+        BestPickups = bestPickups;
+        Difficulty = difficulty;
+        GrownHidden = grownHidden;
+        ClassicGen = classicGen;
     }
 }
 
@@ -78,7 +96,8 @@ public sealed class CurriculumTrainer
     // (determinista: el RNG de pruebas avanza en orden fijo).
     public const int TrialsPerGenome = 3;
 
-    private static readonly int[] Sizes = { AntSensorChannelInfo.Count, 8, AntDecision.DecisionCount };
+    private int[] _sizes;
+    private readonly CapacityLadder _ladder;
 
     private readonly ulong _seed;
     // No readonly: DeterministicRandom es un struct y mutar una copia defensiva
@@ -90,6 +109,19 @@ public sealed class CurriculumTrainer
     private readonly List<MlpGenome>? _seedGenomes;
     private readonly List<MlpGenome> _population = new();
     private readonly List<GenerationStats> _report = new();
+    private readonly ObstacleCurriculum? _obstacles;
+    private readonly bool _parallel;
+    private readonly ulong _mazeSeed;
+    private readonly int _classicEvery;
+
+    /// <summary>Topología vigente del cerebro (crece con la escalera).</summary>
+    public int[] BrainSizes => (int[])_sizes.Clone();
+
+    /// <summary>Ancho oculto actual (F7).</summary>
+    public int Hidden => _sizes[1];
+
+    /// <summary>Currículo de obstáculos activo (null = arena clásica).</summary>
+    public ObstacleCurriculum? Obstacles => _obstacles;
 
     /// <summary>Secuencia completa de estadísticas por generación (determinista).</summary>
     public IReadOnlyList<GenerationStats> Report => _report;
@@ -106,7 +138,11 @@ public sealed class CurriculumTrainer
     /// </summary>
     public CurriculumTrainer(ulong seed, int populationSize,
         IReadOnlyList<CurriculumStage>? stages = null, Action<GenerationStats>? onGeneration = null,
-        IReadOnlyList<MlpGenome>? seedGenomes = null)
+        IReadOnlyList<MlpGenome>? seedGenomes = null,
+        ObstacleCurriculum? obstacleCurriculum = null,
+        IReadOnlyList<int>? hiddenLadder = null,
+        bool parallel = false,
+        int classicEvery = 0)
     {
         if (populationSize < 2) throw new ArgumentOutOfRangeException(nameof(populationSize), "Mínimo 2 genomas.");
         _seed = seed;
@@ -114,24 +150,40 @@ public sealed class CurriculumTrainer
         _populationSize = populationSize;
         _stages = stages ?? DefaultStages();
         _onGeneration = onGeneration;
+        _obstacles = obstacleCurriculum;
+        _parallel = parallel;
+        if (classicEvery < 0) throw new ArgumentOutOfRangeException(nameof(classicEvery));
+        _classicEvery = classicEvery;
+        // La semilla del terreno es FIJA para la tirada: los niveles de dificultad
+        // son anidados sobre el mismo mapa, así que subir dificultad añade paredes
+        // sobre el mapa que la política ya conoce (no cambia de mundo).
+        _mazeSeed = unchecked(seed ^ 0x4D415A4546373031UL); // "MAZEF701"
+
+        _ladder = new CapacityLadder(hiddenLadder is { Count: > 0 }
+            ? hiddenLadder
+            : new[] { 8 });
+        _sizes = new[] { AntSensorChannelInfo.Count, _ladder.Hidden, AntDecision.DecisionCount };
+
         if (seedGenomes is { Count: > 0 })
         {
+            var prepared = new List<MlpGenome>(seedGenomes.Count);
             foreach (var g in seedGenomes)
             {
                 if (g is null) throw new ArgumentNullException(nameof(seedGenomes), "Genoma semilla nulo.");
-                if (g.Sizes.Length != Sizes.Length) throw new ArgumentException(
-                    $"Topología de la semilla incompatible: {string.Join("→", g.Sizes)} ≠ {string.Join("→", Sizes)}.",
-                    nameof(seedGenomes));
-                for (int i = 0; i < Sizes.Length; i++)
-                {
-                    if (g.Sizes[i] != Sizes[i]) throw new ArgumentException(
-                        $"Topología de la semilla incompatible: {string.Join("→", g.Sizes)} ≠ {string.Join("→", Sizes)}.",
+                int[] gs = g.Sizes;
+                if (gs[0] != _sizes[0] || gs[^1] != _sizes[^1] || gs.Length != _sizes.Length)
+                    throw new ArgumentException(
+                        $"Topología de la semilla incompatible: {string.Join("→", gs)} ≠ {string.Join("→", _sizes)}.",
                         nameof(seedGenomes));
-                }
+                // Semilla más estrecha que el ancho pedido: se EXPANDE (F7) en vez
+                // de rechazarse — los pools pre-entrenados de 8 ocultas siguen
+                // sirviendo para entrenar una red de 16 o 24.
+                prepared.Add(gs[1] == _sizes[1] ? g.Clone() : g.Expand(_sizes));
             }
-            _seedGenomes = new List<MlpGenome>(seedGenomes);
+            _seedGenomes = prepared;
         }
     }
+
 
     /// <summary>
     /// Currículo por defecto de la arena realista (Fase 3bis), CALIBRADO
@@ -250,7 +302,8 @@ public sealed class CurriculumTrainer
             while (gen < stage.MaxGenerations)
             {
                 gen++;
-                Evaluate(stage, s + 1, gen, out double best, out double mean, out int competent);
+                Evaluate(stage, s + 1, gen, out double best, out double mean, out int competent,
+                    out _, out _);
 
                 // La etapa se supera cuando el mejor fitness de colonia alcanza el
                 // umbral (tras MinGenerations); con umbral 0 se agota el tope de
@@ -300,11 +353,12 @@ public sealed class CurriculumTrainer
             return;
         }
         for (int i = 0; i < _populationSize; i++)
-            _population.Add(MlpGenome.Random(ref _rng, Sizes));
+            _population.Add(MlpGenome.Random(ref _rng, _sizes));
     }
 
     private void Evaluate(CurriculumStage stage, int stageIndex, int generation,
-        out double best, out double mean, out int competent)
+        out double best, out double mean, out int competent,
+        out int bestUnloads, out int bestPickups)
     {
         // Semilla determinista de la arena por (semilla del trainer, etapa, generación).
         // Mezcla con multiplicadores de menor magnitud (evita desbordamiento de
@@ -323,25 +377,118 @@ public sealed class CurriculumTrainer
             // par: banda ancha completa (min/max de la etapa)
         }
 
-        var arena = new ArenaEvaluator(arenaSeed, min, max, stage.TickBudget, TrialsPerGenome,
-            stage.ArenaCells);
+        // — F7: terreno de la etapa. La dificultad viene del controlador; el
+        //   horizonte se acorta cuando el mapa es fácil (ver ObstacleCurriculum)
+        //   y el mapa es SIEMPRE el mismo con paredes retiradas (anidamiento).
+        //   Cada `classicEvery` generaciones se evalúa SIN terreno (mantenimiento):
+        //   entrenar solo en el laberinto olvida el forrajeo de campo abierto
+        //   (medido: 242 → 40 descargas en la partida clásica). Esas generaciones
+        //   NO alimentan al controlador de dificultad.
+        float difficulty = _obstacles?.Difficulty ?? 0f;
+        int cells = stage.ArenaCells ?? ArenaEvaluator.GridCells;
+        int budget = _obstacles != null
+            ? Math.Min(stage.TickBudget, _obstacles.TickBudget)
+            : stage.TickBudget;
+        // F7: cada `classicEvery` generaciones la evaluación es CLÁSICA (sin
+        // terreno, banda de la etapa) — mantenimiento del forrajeo de campo
+        // abierto. Medido: sin esta pata el pool del laberinto caía de 242 a 40
+        // descargas en la partida clásica; con una de cada cinco subió a 172 sin
+        // perder el laberinto (57 vs 37 del pool de referencia). Mezclar AMBOS
+        // terrenos en el mismo fitness (peso 0,5) fue peor en los dos.
+        bool classicGen = _obstacles != null && _classicEvery > 0 && generation % _classicEvery == 0;
+        MazeLayout? layout = _obstacles != null && !classicGen
+            ? MazeLayout.Pruned(_mazeSeed, cells, 1, difficulty)
+            : null;
+
+        int count = _population.Count;
+        var fitness = new double[count];
+        var unloads = new int[count];
+        var pickups = new int[count];
+
+        if (_parallel)
+        {
+            // Una semilla PROPIA por genoma: el resultado de cada evaluación no
+            // depende de cuántos hilos la ejecuten ni del orden — el entrenamiento
+            // paralelo es determinista byte a byte.
+            Parallel.For(0, count, i =>
+            {
+                var arena = new ArenaEvaluator(GenomeSeed(stageIndex, generation, i), min, max, budget,
+                    TrialsPerGenome, stage.ArenaCells, layout);
+                var result = arena.Evaluate(_population[i]);
+                fitness[i] = result.Fitness;
+                unloads[i] = result.Unloads;
+                pickups[i] = result.Pickups;
+            });
+        }
+        else
+        {
+            var arena = new ArenaEvaluator(arenaSeed, min, max, budget, TrialsPerGenome,
+                stage.ArenaCells, layout);
+            for (int i = 0; i < count; i++)
+            {
+                var result = arena.Evaluate(_population[i]);
+                fitness[i] = result.Fitness;
+                unloads[i] = result.Unloads;
+                pickups[i] = result.Pickups;
+            }
+        }
 
         double sum = 0.0;
         best = double.MinValue;
         competent = 0;
-        for (int i = 0; i < _population.Count; i++)
+        bestUnloads = 0;
+        bestPickups = 0;
+        for (int i = 0; i < count; i++)
         {
-            var result = arena.Evaluate(_population[i]);
-            _population[i].Fitness = result.Fitness;
-            sum += result.Fitness;
-            if (result.Fitness > best) best = result.Fitness;
-            if (result.Competent) competent++;
+            _population[i].Fitness = fitness[i];
+            sum += fitness[i];
+            if (fitness[i] > best)
+            {
+                best = fitness[i];
+                bestUnloads = unloads[i];
+                bestPickups = pickups[i];
+            }
+            if (unloads[i] >= 1) competent++;
         }
-        mean = sum / _population.Count;
+        mean = sum / count;
 
-        var stats = new GenerationStats(stageIndex, generation, best, mean, competent);
+        // El currículo observa el comportamiento (descargas), no el fitness, y
+        // puede mover la dificultad para la generación SIGUIENTE. Las de
+        // mantenimiento clásico no cuentan: otro terreno, otra vara de medir.
+        // Las generaciones clásicas no cuentan para el currículo ni para la
+        // escalera: otra vara de medir, otro terreno.
+        if (!classicGen) _obstacles?.Observe(bestUnloads);
+        int grown = classicGen ? 0 : TrackAndGrow(best);
+
+        var stats = new GenerationStats(stageIndex, generation, best, mean, competent,
+            bestUnloads, bestPickups, difficulty, grown, classicGen);
         _report.Add(stats);
         _onGeneration?.Invoke(stats);
+    }
+
+    /// <summary>Semilla de evaluación de un genoma, independiente del orden y de los hilos.</summary>
+    private ulong GenomeSeed(int stageIndex, int generation, int index) => unchecked(_seed
+        ^ 0x9E3779B97F4A7C15UL * (ulong)(stageIndex + 1)
+        ^ 0xBF58476D1CE4E5B9UL * (ulong)(generation + 1)
+        ^ 0xD6E8FEB86659FD93UL * (ulong)(index + 1));
+
+    /// <summary>
+    /// Escalera de capacidad (F7): con el terreno en su dificultad MÁXIMA, si el
+    /// mejor fitness lleva una racha plana, la capa oculta se ensancha un peldaño
+    /// y la población se EXPANDE (misma función, más capacidad). Devuelve el
+    /// ancho nuevo (0 = no creció).
+    /// </summary>
+    private int TrackAndGrow(double best)
+    {
+        int hidden = _ladder.Observe(best,
+            _obstacles != null && _obstacles.Tenths >= ObstacleCurriculum.MaxTenths);
+        if (hidden == 0) return 0;
+
+        var target = new[] { _sizes[0], hidden, _sizes[^1] };
+        for (int i = 0; i < _population.Count; i++)
+            _population[i] = _population[i].Expand(target);
+        _sizes = target;
+        return hidden;
     }
 
     private void Evolve()

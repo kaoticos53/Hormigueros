@@ -14,13 +14,15 @@ public sealed class GenomeImportInfo
     public GenomeImportInfo(bool ok, string? error, string fileName, string sha256,
         long bytes, string poolName, string speciesHint, ulong originSeed,
         int generation, double bestFitness, int genomeCount, string card,
-        string quarantineNote, int formatVersion = -1, int nodeCount = -1, int connCount = -1)
+        string quarantineNote, int formatVersion = -1, int nodeCount = -1, int connCount = -1,
+        int[]? sizes = null)
     {
         Ok = ok; Error = error; FileName = fileName; Sha256 = sha256; Bytes = bytes;
         PoolName = poolName; SpeciesHint = speciesHint; OriginSeed = originSeed;
         Generation = generation; BestFitness = bestFitness; GenomeCount = genomeCount;
         Card = card; QuarantineNote = quarantineNote;
         FormatVersion = formatVersion; NodeCount = nodeCount; ConnCount = connCount;
+        Sizes = sizes;
     }
 
     public bool Ok { get; }
@@ -41,6 +43,11 @@ public sealed class GenomeImportInfo
     public int FormatVersion { get; }
     public int NodeCount { get; }
     public int ConnCount { get; }
+
+    /// <summary>F7: topología MLP del primer genoma (19→16→6). null en v2/NEAT o
+    /// cuando el archivo no se pudo leer. La vista la usa para decodificar las
+    /// activaciones del inspector sin asumir el ancho clásico.</summary>
+    public int[]? Sizes { get; }
 
     /// <summary>Regla de cuarentena canónica (el oráculo la declara; la UI la pinta).</summary>
     public const string QuarantineRules =
@@ -82,6 +89,7 @@ public sealed class GenomeImportInfo
         AntGenomeMetadata meta;
         int fmt = AntGenomeFile.PeekFormatVersion(data);
         int nodeCount = -1, connCount = -1;
+        int[]? sizes = fmt == AntGenomeFile.FormatVersion ? AntGenomeFile.PeekFirstSizes(data) : null;
         try
         {
             // v2: parseo NEAT completo (trae metadatos Y forma del primer
@@ -126,7 +134,7 @@ public sealed class GenomeImportInfo
             poolName: meta.Name, speciesHint: meta.SpeciesHint, originSeed: meta.OriginSeed,
             generation: meta.Generation, bestFitness: meta.BestFitnessAtExport,
             genomeCount: meta.GenomeCount, card: card, quarantineNote: QuarantineRules,
-            formatVersion: fmt, nodeCount: nodeCount, connCount: connCount);
+            formatVersion: fmt, nodeCount: nodeCount, connCount: connCount, sizes: sizes);
     }
 
     private static GenomeImportInfo Fail(string error, string fileName) =>
@@ -167,6 +175,18 @@ public sealed class GenomeImportInfo
         sb.Append(",\"formatVersion\":").Append(FormatVersion);
         sb.Append(",\"nodeCount\":").Append(NodeCount);
         sb.Append(",\"connCount\":").Append(ConnCount);
+        sb.Append(",\"sizes\":");
+        if (Sizes == null) sb.Append("null");
+        else
+        {
+            sb.Append('[');
+            for (int i = 0; i < Sizes.Length; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(Sizes[i]);
+            }
+            sb.Append(']');
+        }
         sb.Append('}');
         return sb.ToString();
     }
