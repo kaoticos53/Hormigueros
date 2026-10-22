@@ -5,8 +5,9 @@ monta. El mundo ya era el del juego; la política, no: el pool de referencia
 (`pretrain-warm-v2`) se entrenó en campo abierto y gasta la partida aprendiendo a
 rodear paredes. F7 entrena en headless con el terreno del juego, sube la
 dificultad SOLO cuando la colonia demuestra que sabe volver al nido, ensancha el
-cerebro cuando se estanca en el laberinto completo y deja el pool nuevo como
-default del juego.
+cerebro cuando se estanca en el laberinto completo y deja un pool que forrajea en
+LAS DOS superficies: **58 descargas con `--maze` y 421 sin laberinto** en la
+partida canónica (el de referencia hace 37 y 242).
 
 Sin `--obstacles` (y sin `--maze` en la partida) nada de esto se ejecuta: los 6
 pines de CI y el camino clásico siguen byte a byte.
@@ -66,31 +67,58 @@ mejora < 2 %), la capa oculta se ensancha un peldaño: 8 → 16 → 24. `MlpGeno
 Expand` copia los pesos existentes y deja las neuronas nuevas a cero, así que la
 red expandida reproduce la salida anterior (la escalera no tira lo aprendido).
 Fuera del terreno máximo la ventana no corre: crecer en campo abierto no es la
-señal que se busca.
+señal que se busca. Un warm-start más ancho que la escalera manda (continuar un
+pool de 24 ocultas no puede empezar en 8: la escalera no tiene bajada).
 
-## 5. Mantener el forrajeo clásico
+## 5. Las dos competencias: dos regímenes clásicos, medidos
 
 Entrenar solo en el laberinto OLVIDA el campo abierto (medido en la partida
-canónica sin `--maze`: 242 → 40 descargas). `--classic-every N` (default 5 con
-`--obstacles`) evalúa 1 de cada N generaciones sin terreno y esas generaciones no
-alimentan ni el currículo ni la escalera. Se probaron dos alternativas y perdieron:
-sin la pata clásica (40 descargas) y con el fitness mezclado al 50 % en cada
-genoma (10 descargas y peor laberinto — cada generación seleccionaba con una vara
-distinta).
+canónica sin `--maze`: 242 → 40 descargas). La pregunta era qué evaluación
+clásica hay que meter en el bucle, y la respuesta medida es que hay dos papeles
+distintos:
+
+- **Mantenimiento** (1 de cada N generaciones, banda y horizonte del currículo
+  clásico: 200–260 u, 3 600 ticks). No deja que la política se vaya del régimen
+  de forrajeo clásico mientras manda el laberinto. Es el que conserva el ciclo
+  completo: sin él, 40 descargas; con él, 172.
+- **Cola** (60 generaciones al final, en el régimen de la PARTIDA sin laberinto:
+  comida uniforme en todo el mapa a ≥ 200 u del nido y horizonte de 9 000 ticks,
+  tres generaciones de hormigas dentro de una evaluación). Es el que recupera la
+  métrica del juego: 172 → 421.
+
+Lo que se descartó, con su medida:
+
+- **Banda estrecha y horizonte corto como objetivo de recuperación**: afinarla
+  SUBÍA el fitness de la arena (1,9 → 3,5 descargas) mientras la partida caía de
+  172 a 46. A 9 000 ticks el orden de la arena coincide con el de la partida.
+- **Fitness mezclado (maze + clásico al 50 %)**: 47 y 10 descargas — peor en las
+  dos superficies; cada generación seleccionaba con una vara distinta.
+- **Mezclar pools** (16 especialistas de cada terreno en un archivo): 41 y 119;
+  la colonia diluye a los dos.
+- **Solo cola, sin cuenca**: si la política ya salió del régimen clásico, la cola
+  no vuelve (150–171 descargas). La cola AMPLIFICA una competencia que existe; no
+  la crea.
+- **Generaciones clásicas con el horizonte del currículo de obstáculos**: a
+  dificultad baja el presupuesto caía a 1 800 ticks —menos que un viaje de ida y
+  vuelta a 200 u (~4 400)— y 600 generaciones seguidas vieron `unloads=0`: eran
+  selección de ruido. Por eso el mantenimiento corre con el horizonte de su
+  etapa y la cola con el suyo.
 
 ## 6. La receta (`scripts/pretrain-maze.sh`)
 
-Semilla 7, pop 32, 600 generaciones, banda 200–260, warm-start
-`pretrain-warm-v2`, `--obstacles --hidden 8 --grow --classic-every 5`, export a
-`artifacts/pretrain-maze.antgenome`.
+Dos fases encadenadas, cada una un CLI determinista:
 
-- **254–319 s** de reloj en esta máquina (600 generaciones, log por generación en
-  `artifacts/pretrain-maze.log`).
-- Dificultad final **1,0** (10 escalones, 0 descensos); cerebro **19→24→6** con
-  dos crecimientos (16 y 24).
-- **Reproducible**: dos tiradas independientes con la misma semilla y receta
-  dieron el mismo SHA-256, `3d9380f1e28d6e738b13013c02a9d10d687c1bd3a951a8cee893eeb1452f9e5c`
-  (81 321 bytes).
+1. **Cuenca** — seed 7, pop 32, 600 generaciones, `--obstacles --hidden 8 --grow
+   --classic-every 5 --classic-tail 0`, warm-start `pretrain-warm-v2`.
+   Sale el pool base (57 descargas en el laberinto, 172 sin él).
+2. **Laberinto + cola** — 600 generaciones con `--classic-every 0` y
+   `--classic-tail 60`, warm-start el pool de la fase 1. El pool final es la
+   última evaluación (clásica).
+
+Total **1 260 generaciones en 679–698 s** de reloj en esta máquina, con log por
+generación en `artifacts/pretrain-maze.log` (las clásicas llevan `classic=1`) y
+dificultad final 1,0 (10 escalones, 0 descensos). Cerebro **19→24→6** con dos
+crecimientos. Reproducible: la misma semilla y receta dan el mismo SHA-256.
 
 ## 7. Medido (no prometido)
 
@@ -102,17 +130,14 @@ descargas al nido agregadas). Evidencia regenerable:
 | pool | con laberinto (`--maze`) | sin laberinto |
 |---|---|---|
 | frío (sin pool) | 4 | 0 |
-| `pretrain-warm-v2` | 37 | **242** |
-| **`pretrain-maze`** | **57** | 172 |
+| `pretrain-warm-v2` | 37 | 242 |
+| **`pretrain-maze`** | **58** (+57 %) | **421** (+74 %) |
 
-- **Laberinto: +54 %** sobre el pool de referencia (57 vs 37) y 4/4 semillas con
-  descargas; primera descarga en el tick ~1 228 de media (vs 1 176 del de
-  referencia: no compra descargas a costa de arrancar antes).
-- **Campo abierto: 172 vs 242** (−29 %) — el precio de especializar la política.
-  Se conserva el ciclo completo en 4/4 semillas y se barre al pool frío (0), pero
-  NO es paridad: el juego monta laberinto por defecto, y ese es el terreno que la
-  partida usa. Con `CLASSIC=3` el laberinto subía a 60 y el campo abierto caía a
-  73; con `CLASSIC=0`, a 40 — la alternancia 1/5 es el mejor equilibrio medido.
+- 4/4 semillas con descargas en las dos superficies; en el laberinto, primera
+  descarga en el tick ~1 100 de media.
+- Sin laberinto las semillas dan 143/99/74/105 (media 105) frente a 64/66/49/63
+  (media 60) del pool de referencia: la mejora no depende de una semilla suerte.
+- La fase 1 sola da 57/172: es la cuenca, no el producto.
 
 ## 8. El juego arranca entrenado
 
@@ -126,8 +151,8 @@ descargas al nido agregadas). Evidencia regenerable:
 
 ## 9. Verificación
 
-- `dotnet test`: **711/711** (24 de `ObstacleTrainingTests` + los de vista F7;
-  contratos de escena y de lanzador actualizados al pool nuevo).
+- `dotnet test`: suite completa en verde (28 de `ObstacleTrainingTests`, incluidas
+  la cola clásica y el warm-start más ancho que la escalera).
 - Los 6 pines de CI no cambian ni un byte (stream canónico, replay 3000/6000,
   Atta, invasión, NEAT y la constante del fixture en la suite).
-- `scripts/check-doc-figures.sh`: 6 pines · 711 tests.
+- `scripts/check-doc-figures.sh`: 6 pines y el número de tests de la suite.
