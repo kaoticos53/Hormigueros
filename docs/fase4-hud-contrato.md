@@ -102,6 +102,7 @@ ventana de métricas (1 s). Datos y componentes, en orden de tarjeta:
 | Adultas | `colonies[c].adults` | "12 / 40" (tope duro del diseño) |
 | Cría | `eggs / larvae / pupae` | tres chips "🥚 4 · 🐛 2 · 🛑 1" |
 | Reserva | `stock` vs `stockMax` | barra horizontal; <20% = rojo (dispara alerta de puesta parada) |
+| **Gráfica de la tarjeta** (F5.1) | `colonies[c].stock/stockMax` del canal A (una muestra por segundo, ventana de 90 s) + eventos `Unload` (kind 5) del canal B, contados en esa misma ventana | área de la reserva, teñida por su estado (rojo < 20%, el mismo umbral de la barra) y, encima, barras ámbar de las DESCARGAS por ventana. **La UI no deriva la serie**: el modelo puro guarda ambas y produce las dos máscaras con el MISMO mapeo de columnas; la altura de una barra es relativa a la mayor cuenta de la ventana dibujada, y una sola descarga se ve con al menos un píxel de base. Se alimenta con CADA tick drenado (a velocidad alta un frame presenta varios y leer solo el último perdería descargas), y la misma muestra no se apunta dos veces |
 | Flujo 1 s | `metrics.pickups/unloads/births/deaths/eggs/eclosed` | mini-barras de la ventana; las muertes coloreadas por causa dominante si se registra (`AntDied.cause`) |
 | Cerebros | contadores de `GenomeEnteredElite`/`GenomeDiscarded` acumulados por la UI desde el arranque del stream | *"7 élite · 3 descartados"* — línea permanente, no toast |
 | Comandos | `metrics.commands` acumulado | *"3 comandos"* — enlaza al panel de historial (§4) |

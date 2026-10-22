@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-10-07 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 658/658 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+*Actualizado: 2026-10-22 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
+suite: 667/667 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -36,7 +36,7 @@ vs scripted vs evolucionada en la misma arena).
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **658/658 tests** en Windows y verdes en Linux en CI en cada push,
+NEAT canónica. **667/667 tests** en Windows y verdes en Linux en CI en cada push,
 igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
@@ -104,6 +104,21 @@ recompilación (y la función que configura el presenter) terminaban en una prue
 `[[ … ]] && …` que da FALSO justo en el camino bueno. Un pase real siempre había
 pasado por ahí «con suerte»; el CLI falso lo destapó como un `rc 1` sin una línea
 de salida.
+
+**La gráfica de la tarjeta enseña también las DESCARGAS** (2026-10-21) — la
+reserva dice CUÁNDO se cayó; las barras dicen POR QUÉ se estaba llenando. La
+serie sale de los eventos `Unload` del canal B —uno por descarga, con su
+colonia— contados en la misma ventana de 1 s que la muestra del área, y no de
+`colmetrics`, que es la ventana ABIERTA que el Core publica cada 120 ticks y no
+sirve para una serie a 1 Hz. Va en su propia máscara y con su color (ámbar) para
+no confundirse con el estado de la reserva, que es el que cambia a rojo, y la
+altura es relativa a la mayor cuenta de la ventana que se ve: la misma ventana
+dibujada da la misma imagen. El HUD la alimenta con **cada tick drenado**: leer
+`CurrentTick` en el `Update` bastaba para la reserva (muestrea a 1 Hz y repetir
+un tick no cambia nada) pero a velocidad alta un frame presenta varios ticks y
+las descargas de los del medio se perdían; y el mismo tick visto dos veces ya no
+cuenta doble. Nueve tests headless nuevos, uno contra el stream real: la suma de las
+barras es EXACTAMENTE el número de `Unload` que emitió el Core en la ventana.
 
 **Las hormigas andaban DE LADO** (2026-10-10) — la caja del actor tiene el largo
 en Y (`GameSpriteModel`: «Y = el largo, que es el eje de avance», y en la hormiga
@@ -357,6 +372,44 @@ repite sin editor con `scripts/playpass-live.sh --analyze-icons` (y
 trae su propio `--selftest`— se verifica en `--selftest`: comparador en verde
 pasa, glifo que no se clasifica falla, sin volcado no pasa y los PNG del HUD se
 conservan (sin ninguno que copiar, la conservación falla).
+
+**Y las descargas de la gráfica se MIDEN en los píxeles de la tarjeta** (2026-10-22).
+La serie de descargas por ventana quedó dibujada y verificada headless (modelo
+puro, textura, tests), pero eso deja fuera el tramo que va de la textura al
+ojo: el `RawImage`, su rect en pantalla, el tinte de la vista y el framebuffer.
+`scripts/unity/ProbeSparklinePixels.cs` inyecta una serie CONOCIDA en el modelo
+real de cada tarjeta —cuatro ventanas con 1, 3, 5 y 7 descargas, separadas por
+ceros—, congela la alimentación del HUD para que los ticks de la partida no
+metan muestras entre los dos pasos, deja dibujar un frame y recorta del frame
+REAL la banda de la gráfica; después restaura la serie de la partida. La medida
+es un paso del Play pass (`scripts/playpass-sparkline.py`, con su `--selftest`
+sobre imágenes sintéticas): exige una barra por ventana con descargas y en las
+columnas de SU muestra (el mismo mapeo que el área), altura creciente con la
+cuenta, todo naciendo en la base —la orientación se comprueba, no se supone— y
+ni un píxel ámbar fuera de la banda, con la banda dentro de la tarjeta y el
+recorte comprobado como trozo literal del frame. Falla cerrado: sin captura o sin
+PNG conservados no es verde. La evidencia queda en
+`artifacts/playpass-sparkline-pixels/` y se repite sin editor con
+`--analyze-sparkline`.
+
+**Medido en vivo el 2026-10-22** (primera pasada completa, editor 6000.6.0f1):
+las dos tarjetas dieron **4 barras cada una** en las columnas de su muestra, con
+alturas **5 / 11 / 18 / 24 px** para 1 / 3 / 5 / 7 descargas en una banda de 24
+px, el borde del área siguiendo la reserva inyectada (±3 px), **0 px ámbar fuera
+de la banda** y el recorte idéntico al frame (`29,837,377x30` y
+`29,582,377x30`). La primera pasada de verdad destapó dos defectos que el
+`--selftest` no podía ver, y los dos eran del tramo sonda–medidor, no de la
+gráfica: (1) **los `static` no sobreviven** entre dos `run_script` —cada llamada
+compila una asamblea nueva, medido con un contador que vuelve a 1—, así que
+`measure` no veía la serie inyectada y se plantaba sin capturar; ahora el estado
+(si el HUD se congeló y la serie real de cada tarjeta) vive en
+`Temp/antsim-spark-state.txt`, y `measure` **comprueba tarjeta por tarjeta** que
+el patrón sigue en el modelo antes de capturar. (2) **El PNG va del derecho**:
+`GetPixels32` indexa desde abajo, pero `EncodeToPNG` guarda fila 0 = arriba, así
+que contar la fila 0 como base medía la gráfica al revés — todas las barras al
+alto de la banda y el área al 100 %. El volcado declara `row0=top` y el medidor
+convierte el `inner` con `alto - iy - ih`; la comprobación de procedencia prueba
+las dos colocaciones y exige igualdad byte a byte.
 
 **Tres textos desbordaban su panel — y el ajuste ahora es un TEST** (2026-10-07).
 El Play pass medía tres textos fuera de su caja: la barra de PISTAS
@@ -618,9 +671,13 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    cuatro materiales quedan con su referencia (7 líneas) y **2 tests headless** (`PheromoneMaterialGuardTests`, en rojo
    sobre los materiales de HEAD antes del arreglo) impiden que vuelva en silencio: referencia presente, guía existente y
    textura 1×1 RGBA32 `ffffff00` (invisible).
-2. **Deuda menor de F5.1** (no bloquea): la serie de DESCARGAS en la gráfica
-   de reserva (hoy la sparkline guarda `Stock`; la serie de drops aún no se
-   grafica).
+2. **Deuda menor de F5.1** (no bloquea): **audio y accesibilidad** (sonidos de
+   evento —descarga, eclosión, alerta— y escala de UI; es lo único sin contrato
+   previo), el **chip de la capa de feromona activa** en el HUD (el render la
+   pinta y la nombra, el HUD no la rotula) y la **capa de territorio**, que el
+   `PheromoneKind` reserva y el escenario ya lee pero que nadie deposita todavía.
+   La serie de DESCARGAS en la gráfica quedó HECHA el 2026-10-21 (ver §Lo que ya
+   funciona): la sparkline guarda reserva y descargas por ventana.
    Ya HECHO, para no contarlo más como deuda: la **fuente y los sprites
    propios** (el `AntSim.ttf` que escribe el bootstrapper y las mallas de
    hormiga/carga/hoja de `ActorMeshModel`), el **chip de estado por runway**

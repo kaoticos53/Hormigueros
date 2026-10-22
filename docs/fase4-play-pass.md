@@ -340,13 +340,52 @@ ningún texto del HUD fuera de su panel. Es lo único que podía fallar por el
 defecto 6 — y por eso ahora falla. Sale ≠ 0 si cualquiera se rompe:
 
 ```bash
-bash scripts/playpass-live.sh                 # bloques 3, 4, 5 y aspecto
-bash scripts/playpass-live.sh --no-block4     # solo 3, 5 y aspecto (más rápido)
+bash scripts/playpass-live.sh                 # bloques 3, 4, 5 + aspecto, iconos y gráfica
+bash scripts/playpass-live.sh --no-block4     # solo 3, 5 y los píxeles (más rápido)
 bash scripts/playpass-live.sh --samples artifacts/playpass-samples.txt
 bash scripts/playpass-live.sh --analyze-block4 artifacts/playpass-block4.txt
 bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
-bash scripts/playpass-live.sh --selftest      # los tres analizadores, sin editor
+bash scripts/playpass-live.sh --analyze-icons    # solo los iconos (sobre la captura)
+bash scripts/playpass-live.sh --analyze-sparkline # solo las barras de la gráfica
+bash scripts/playpass-live.sh --selftest      # todos los analizadores, sin editor
 ```
+
+El paso de las **descargas de la gráfica** cierra el último tramo que el modelo
+puro no ve. `ColonySparklineModel` está verificado headless (la textura sale
+bien), pero entre la textura y el jugador quedan el `RawImage`, su rect en
+pantalla, el tinte de la vista y el framebuffer. `scripts/unity/ProbeSparklinePixels.cs`
+inyecta una serie CONOCIDA en el modelo real de cada tarjeta —cuatro ventanas con
+1, 3, 5 y 7 descargas, separadas por ceros—, congela la alimentación del HUD,
+deja dibujar un frame (son dos invocaciones: lo escrito en una textura no está en
+el framebuffer hasta el frame siguiente) y recorta del frame REAL la banda de la
+gráfica; después RESTAURA la serie de la partida. `scripts/playpass-sparkline.py`
+mide los píxeles ámbar y exige cuatro cosas: una barra por ventana con descargas y
+en las columnas de SU muestra (el mismo mapeo que el área), altura creciente con
+la cuenta (la mayor al alto de la banda), todo naciendo en la base —la
+orientación se comprueba, no se supone— y ni un píxel ámbar fuera de la banda,
+con la banda dentro de la tarjeta. El recorte tiene que ser un trozo literal del
+frame (se compara byte a byte). El volcado va a
+`artifacts/playpass-sparkline-pixels.txt` y los PNG (frame, banda por tarjeta y
+hoja de medida con las columnas esperadas) se **conservan** en
+`artifacts/playpass-sparkline-pixels/`, porque `Temp/` lo barre Unity al cerrar;
+con eso `--analyze-sparkline` repite la medida sin editor. Falla cerrado: sin
+captura o sin PNG, el paso no es verde.
+
+**Medido en vivo el 2026-10-22** (primera pasada completa, editor 6000.6.0f1): 2
+tarjetas × 4 barras, en las columnas de su muestra, con alturas **5 / 11 / 18 /
+24 px** para 1 / 3 / 5 / 7 descargas (banda de 24 px), el área siguiendo la
+reserva inyectada (±3 px), 0 px ámbar fuera de la banda y el recorte idéntico al
+frame. La primera pasada real destapó dos defectos que los `--selftest` no podían
+ver, los dos en el tramo sonda–medidor: (1) **los `static` no sobreviven** entre
+dos `run_script` —cada invocación compila una asamblea nueva—, así que `measure`
+veía `_injected=0` y se plantaba sin capturar; el estado (HUD congelado y serie
+real por tarjeta) se guarda ahora en `Temp/antsim-spark-state.txt` y `measure`
+comprueba tarjeta por tarjeta que el patrón sigue en el modelo antes de capturar.
+(2) **El PNG va del derecho** (fila 0 = arriba) aunque `GetPixels32` empiece por
+abajo: contar la fila 0 como base medía la gráfica del revés —todas las barras al
+alto de la banda y el área al 100 %—. El volcado declara `row0=top`, el medidor
+convierte el `inner` con `alto - iy - ih` y la procedencia prueba las dos
+colocaciones del recorte en el frame, exigiendo igualdad byte a byte.
 
 Aparte de los bloques, hay un **medidor de rendimiento de la escena** (F5.3
 rodaja 3) que no comprueba aspecto sino coste: monta la escena del multi-visor con
@@ -458,7 +497,8 @@ guion) es lo que destapó ese rc 1 mudo: ningún pase real lo había tocado nunc
 
 - El texto uGUI legacy puede recortar líneas largas (Overflow activado en
   `NewText` lo mitiga). El uGUI **por elemento** de F5.1 ya está hecho (toasts con
-  hit-test exacto, barras de stock, gráfica de reserva, curva de aprendizaje,
+  hit-test exacto, barras de stock, gráfica de reserva **con la serie de
+  descargas por ventana y su paso de píxeles**, curva de aprendizaje,
   botones nativos — ver el bloque 2): el **chip de estado por runway** y el
   drag&drop del `.antgenome` también están hechos (canal A + `RunwayVerdict`
   pintado por la tarjeta; `DragAndDrop` bajo `#if UNITY_EDITOR`), así que lo que

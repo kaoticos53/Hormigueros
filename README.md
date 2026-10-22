@@ -444,14 +444,14 @@ bash scripts/commit-layers.sh --selftest       # el reparto entero, en un repo d
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (658/658), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
+| `dotnet test` | la suite headless (667/667), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
-| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 658 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 667 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
 | `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance. `--discard` da el paso siguiente y ACTÚA, por los dos caminos que hacen falta para que el diff contra HEAD sea lo que cambió: restaura las rutas que certifica idénticas (el churn puro) y a las que **cambian de verdad** les quita la forma —anclas de sesión, orden, blancos— reescribiéndolas en canónico **sin tocar el contenido**, que es exactamente lo que hace el generador al cerrar una escritura; funciona porque el ancla canónica es el hash del contenido, así que un documento intacto vuelve a ser el mismo byte que en HEAD (medido en `Game.unity`, 425 documentos: una pasada que re-ancla todo y cambia UNA línea escalar pasa de 10 669 líneas de diff a 2). No toca las que canonicalizan —son las que quitan la trampa— y sólo escribe si la forma canónica pasa el `compare` (si no significa lo mismo, se planta y lo dice); después vuelve a clasificar y a mirar el índice para confirmarlo. `--dry-run` mide lo mismo sin tocar nada. El MISMO chequeo es la **puerta 1** de `.githooks/pre-push`, con el rango sacado de las refs que el push manda |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
 | `scripts/check-unity-references.sh` | **un commit no deja un asset sin su dato**: un editor puede destruir una referencia sin cambiar nada más y sin dejar error —medido dos veces: los materiales de feromonas que quedaron con `_BaseMap`/`_MainTex` en `fileID: 0` (commiteados en `d4aebc3`, el material de reposo pintado BLANCO OPACO sobre el tablero) y `PheromoneMat.mat` al cerrarse el editor el 2026-10-08—. El YAML sigue siendo válido, así que nada lo veía hasta que una prueba se topaba con la pérdida. `--range A..B` compara cada commit con SU PADRE —lo que empuja un push son los commits, no el árbol— y nombra el slot y la guía perdidos; sin argumentos comprueba el árbol contra HEAD, `--watch` espera al cierre del editor y `--selftest` verifica los dos detectores y el modo del push sin repo. Es la **puerta 2** de `.githooks/pre-push` |
@@ -585,6 +585,17 @@ se clasifica como el suyo —o si no se pudo medir, porque la sonda no guardó e
 recorte o falta Pillow— el pass sale ≠ 0 con el glifo y sus números. Antes el
 comparador se ejecutaba a mano y un icono roto pasaba en verde.
 
+La **serie de descargas de la gráfica** también se mide ahí, y por el mismo
+motivo: el modelo puro puede producir una textura perfecta que la tarjeta no
+pinte. La sonda inyecta una serie conocida (ventanas de 1, 3, 5 y 7 descargas),
+deja dibujar un frame y recorta la banda de la gráfica del frame real; el
+analizador exige una barra por ventana en las columnas de SU muestra, la altura
+creciente con la cuenta, todo nacido en la base (un PNG del revés no pasa) y
+ningún píxel ámbar fuera de la banda. La serie de la partida se restaura en la
+misma sonda, y la evidencia —el frame, la banda de cada tarjeta y una hoja de
+medida— queda en `artifacts/playpass-sparkline-pixels/` para repetirla sin
+editor con `--analyze-sparkline`.
+
 El pass también cuida el ÁRBOL que deja. El generador cierra su escritura
 (canonicaliza y recarga la escena), y el pase cierra la suya —el bloque 4 guarda
 la escena con la configuración que se commitea— **desde dentro del editor**
@@ -627,6 +638,7 @@ bash scripts/playpass-live.sh --no-discard-churn  # deja el árbol como quedó (
 bash scripts/playpass-live.sh --recanonicalize # reescribe lo que derive y sigue (árbol que no viene del generador)
 bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
 bash scripts/playpass-live.sh --analyze-icons   # solo los iconos (sobre la captura)
+bash scripts/playpass-live.sh --analyze-sparkline # solo las barras de la gráfica
 bash scripts/playpass-live.sh --selftest # los analizadores, sin editor
 ```
 

@@ -304,7 +304,7 @@ las unidades justo en los iconos y hacía parecer que la fuente mentía).
 
 Para mirar el `.ttf` sin abrir Unity, `python scripts/unity/validate-font.py
 <ruta>/AntSim.ttf` valida tablas, nombres, avances y `cmap` con fontTools y
-rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 658 tests de la
+rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 667 tests de la
 suite incluyen `GameFontTests` —que cubre también el alfabeto contra los
 literales que el HUD usa de verdad, y **los avances LEÍDOS de la tabla `hmtx`**
 frente a los del modelo, glifo a glifo por la `cmap`— y
@@ -487,7 +487,7 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
 | Nidos | Montículo + disco del color de la colonia | El mismo acento que usa la tarjeta. |
 | Feromonas | Quad transparente a y=0,3, por debajo de los actores | El canal E solo le cambia la RenderTexture. |
 | HUD | Paneles con acento, barra de estado, tarjetas 440×204, modal centrado | Todo el texto vive sobre panel (antes el mundo se comía el texto) y ningún `Text` desborda su caja. La tarjeta creció 28 px para la gráfica de reserva. |
-| Gráfica de reserva (F5.1) | `RawImage` con textura generada por `ColonySparklineModel` (puro) | Serie de 1 muestra/s (30 ticks, el ritmo del canal C) con ventana de 90 s: una gráfica de 10 minutos en 400 px no dice nada. Se dibuja con **área** (relleno + borde) y se tiñe en rojo por debajo del 20%, el mismo umbral que la barra. |
+| Gráfica de reserva y descargas (F5.1) | `RawImage` con textura generada por `ColonySparklineModel` (puro) | Serie de 1 muestra/s (30 ticks, el ritmo del canal C) con ventana de 90 s: una gráfica de 10 minutos en 400 px no dice nada. Se dibuja con **área** (relleno + borde), teñida en rojo por debajo del 20% (el mismo umbral que la barra), y las **descargas por ventana** como barras ámbar encima, contadas del canal B (`Unload`) y apuntadas en la misma ventana que la muestra; la altura es relativa a la mayor cuenta de la ventana vista. Que la tarjeta las PINTE se mide en píxeles en el Play pass (`ProbeSparklinePixels` + `scripts/playpass-sparkline.py`). |
 
 **Trampas ya encontradas** (no repetirlas):
 
