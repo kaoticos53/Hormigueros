@@ -156,19 +156,30 @@ namespace AntSim.Unity.Scripts.Streaming
         /// Devuelve null si no hay paquete (hormiga sin datos).
         /// </summary>
         public static string? Render(string? base64Payload, string? title = null)
+            => Render(base64Payload, DefaultSizes, title);
+
+        /// <summary>
+        /// F7 — render con la topología REAL de la partida. Un pool entrenado con
+        /// obstáculos puede traer 19→16→6 o 19→24→6; el paquete del canal F
+        /// declara su total, así que con los tamaños del pool se decodifica igual
+        /// (antes se asumía 19·8·6 y el inspector se quedaba en blanco).
+        /// </summary>
+        public static string? Render(string? base64Payload, int[] sizes, string? title = null)
         {
-            if (!TryDecode(base64Payload, DefaultSizes, out float[] acts)) return null;
+            if (sizes == null || sizes.Length < 2) sizes = DefaultSizes;
+            if (!TryDecode(base64Payload, sizes, out float[] acts)) return null;
 
             var sb = new StringBuilder();
-            sb.Append("MLP 19·8·6 (33 nodos)");
+            sb.Append("MLP ").Append(string.Join("·", sizes))
+              .Append(" (").Append(acts.Length).Append(" nodos)");
             if (title != null) sb.Append(" — ").Append(title);
             sb.AppendLine();
 
             int off = 0;
-            for (int l = 0; l < DefaultSizes.Length; l++)
+            for (int l = 0; l < sizes.Length; l++)
             {
-                int n = DefaultSizes[l];
-                string tag = l == 0 ? "in" : (l == 1 ? "hid" : "out");
+                int n = sizes[l];
+                string tag = l == 0 ? "in" : (l == sizes.Length - 1 ? "out" : "hid");
                 sb.Append("== capa ").Append(l).Append(" ==").AppendLine();
                 for (int i = 0; i < n; i++)
                 {

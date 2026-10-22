@@ -40,6 +40,8 @@ namespace AntSim.Unity.Scripts.Streaming
             public int GenomeCount;
             public string CardText = "";
             public string QuarantineNote = "";
+            /// <summary>F7: topología MLP del pool (19→16→6). null en v2/NEAT.</summary>
+            public int[]? Sizes;
         }
 
         public Phase CurrentPhase { get; private set; } = Phase.Closed;
@@ -161,9 +163,45 @@ namespace AntSim.Unity.Scripts.Streaming
                 GenomeCount = (int)(TryGetLong(json, "genomeCount", out var v9) ? v9 : 0),
                 CardText = TryGetString(json, "card", out var v10) ? Unescape(v10) : "",
                 QuarantineNote = TryGetString(json, "quarantine", out var v11) ? Unescape(v11) : "",
+                Sizes = TryParseSizes(json, out var sizes) ? sizes : null,
             };
             parsed.Import = import;
             return parsed;
+        }
+
+        /// <summary>
+        /// F7 — topología MLP del JSON del oráculo (`"sizes":[19,16,6]`). Público y
+        /// puro: lo usan el diálogo de importación y el inspector del cerebro, para
+        /// que un pool ancho se decodifique en capas sin asumir 19·8·6.
+        /// </summary>
+        public static bool TryParseSizes(string json, out int[] sizes)
+        {
+            sizes = Array.Empty<int>();
+            if (json == null) return false;
+            // El array lleva COMAS dentro, así que no vale el lector de escalares
+            // (se cortaría en «[19»): se localiza el corchete y se cierra en el
+            // primero que aparezca (la topología nunca anida arrays).
+            const string needle = "\"sizes\":";
+            int at = json.IndexOf(needle, StringComparison.Ordinal);
+            if (at < 0) return false;
+            int pos = at + needle.Length;
+            while (pos < json.Length && json[pos] == ' ') pos++;
+            if (pos >= json.Length || json[pos] != '[') return false;
+            int close = json.IndexOf(']', pos);
+            if (close < 0) return false;
+            string raw = json.Substring(pos, close - pos + 1);
+            if (raw.Length < 3) return false;
+            var parts = raw.Substring(1, raw.Length - 2).Split(',');
+            var parsed = new int[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (!int.TryParse(parts[i].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
+                        out parsed[i]) || parsed[i] < 1)
+                    return false;
+            }
+            if (parsed.Length < 2) return false;
+            sizes = parsed;
+            return true;
         }
 
         private static bool TryGetValue(string json, string key, out string value)

@@ -107,16 +107,32 @@ public sealed class ArenaEvaluator
     private readonly float _maxDistance;
     private readonly int _tickBudget;
     private readonly int _trials;
+    // Terreno de la etapa (F7): null = arena clásica abierta. Con laberinto el
+    // spawn de comida sigue las reglas del mundo REAL (mínimo 80 u, densidad
+    // ×4,5, nada dentro de muro) y el tope del densado de exploración pasa a ser
+    // el radio útil del mapa: la banda de distancia de la etapa no aplica porque
+    // el propio terreno impone el rodeo.
+    private readonly MazeLayout? _maze;
+    private readonly float _exploreCap;
     // No readonly: DeterministicRandom es un struct y mutar una copia defensiva
     // descartaría el avance del flujo (bug corregido en Fase 3).
     private DeterministicRandom _trialRng;
 
     public ArenaEvaluator(ulong seed, float minDistance, float maxDistance, int tickBudget, int trials = 1,
-        int? customGridCells = null)
+        int? customGridCells = null, MazeLayout? maze = null)
     {
-        if (minDistance < WorldSim.NestMinSpawnDistance)
+        if (maze != null)
+        {
+            if (maze.Width != (customGridCells ?? GridCells) || maze.Height != maze.Width)
+                throw new ArgumentException(
+                    $"El laberinto mide {maze.Width}×{maze.Height} celdas y la arena {(customGridCells ?? GridCells)}²; deben coincidir.",
+                    nameof(maze));
+        }
+        else if (minDistance < WorldSim.NestMinSpawnDistance)
+        {
             throw new ArgumentOutOfRangeException(nameof(minDistance),
                 $"La distancia mínima debe ser ≥ NestMinSpawnDistance ({WorldSim.NestMinSpawnDistance} u).");
+        }
         if (maxDistance < minDistance)
             throw new ArgumentOutOfRangeException(nameof(maxDistance), "La banda de distancia está vacía.");
         if (customGridCells is int g && g < 16)
@@ -133,6 +149,10 @@ public sealed class ArenaEvaluator
         _tickBudget = tickBudget;
         _trials = Math.Max(1, trials);
         CustomGridCells = customGridCells;
+        _maze = maze;
+        _exploreCap = maze != null
+            ? maze.WorldWidth * 0.5f
+            : maxDistance;
         _trialRng = new DeterministicRandom(_seed);
     }
 
@@ -201,7 +221,10 @@ public sealed class ArenaEvaluator
 
     private ArenaResult EvaluateTrial(MlpGenome? mlp, NeatGenome? neat, IBrain? forced = null)
     {
-        var sim = new WorldSim(_seed, EffectiveGridCells, 1);
+        // F7: la arena corre el ancho del cerebro que evalúa (19→16→6 tras la
+        // escalera de capacidad); sin genoma (NEAT/política forzada) el clásico.
+        var sim = new WorldSim(_seed, EffectiveGridCells, 1, mazeLayout: _maze,
+            brainSizes: mlp?.Sizes);
         var colony = sim.Colonies[0];
 
         // — Re-equilibrio de la señal de fitness (Fase 3) —
@@ -260,10 +283,16 @@ public sealed class ArenaEvaluator
         // casa (distancia mínima con carga: 251 u — ni un paso de regreso).
         int founderCount = colony.Adults.Count;
 
-        // — Comida: spawn con el mecanismo del mundo (uniforme, ≥ 200 u del nido),
-        //   dentro de la banda de distancia de la etapa. Sin rastro plantado. —
+        // — Comida: spawn con el mecanismo del mundo. Sin terreno, uniforme y en
+        //   la banda de distancia de la etapa (≥ 200 u). CON laberinto, las reglas
+        //   de la partida real: nada dentro de un muro, mínimo
+        //   `MazeLayout.ItemSpawnMinDistance` (80 u) y densidad ×4,5 — el rodeo ya
+        //   lo impone el terreno. Sin rastro plantado. —
         sim.ClearItems();
-        for (int k = 0; k < TestItemCount; k++)
+        int itemCount = _maze != null
+            ? Math.Max(1, (int)MathF.Round(TestItemCount * MazeLayout.ItemDensityFactor))
+            : TestItemCount;
+        for (int k = 0; k < itemCount; k++)
         {
             (float x, float y) = DrawFoodPosition(colony);
             sim.AddItem(new FoodItem { X = x, Y = y, Amount = FoodAmount });
@@ -362,7 +391,7 @@ public sealed class ArenaEvaluator
                     {
                         exploreRecord[ant.Id] = d; // referencia inicial (posición de nacimiento)
                     }
-                    else if (d <= _maxDistance && d > rec)
+                    else if (d <= _exploreCap && d > rec)
                     {
                         exploreShaping += (d - rec) * ExplorePerUnit;
                         exploreRecord[ant.Id] = d;
@@ -392,6 +421,9 @@ public sealed class ArenaEvaluator
     private (float X, float Y) DrawFoodPosition(Colony colony)
     {
         float worldSize = EffectiveGridCells * SimConstants.CellSizeUnits;
+        if (_maze != null)
+            return DrawMazeFoodPosition(colony, worldSize);
+
         float min2 = _minDistance * _minDistance;
         float max2 = _maxDistance * _maxDistance;
         for (int attempt = 0; attempt < MaxSpawnAttempts; attempt++)
@@ -406,5 +438,29 @@ public sealed class ArenaEvaluator
         }
         float d = (_minDistance + _maxDistance) * 0.5f;
         return (Math.Clamp(colony.NestX + d, 0f, worldSize), colony.NestY);
+    }
+
+    /// <summary>
+    /// Posición de comida en un mundo con laberinto: uniforme, fuera de muro
+    /// (`ItemFits`) y a ≥ <see cref="MazeLayout.ItemSpawnMinDistance"/> del nido.
+    /// Reserva determinista: el punto abierto más cercano al este del nido.
+    /// </summary>
+    private (float X, float Y) DrawMazeFoodPosition(Colony colony, float worldSize)
+    {
+        float min = MazeLayout.ItemSpawnMinDistance;
+        float min2 = min * min;
+        for (int attempt = 0; attempt < MaxSpawnAttempts * 2; attempt++)
+        {
+            float x = (float)(_trialRng.NextDouble01() * worldSize);
+            float y = (float)(_trialRng.NextDouble01() * worldSize);
+            float dx = x - colony.NestX;
+            float dy = y - colony.NestY;
+            if (dx * dx + dy * dy < min2) continue;
+            if (!_maze!.ItemFits(x, y)) continue;
+            return (x, y);
+        }
+        var fallback = _maze!.NearestOpen(
+            Math.Clamp(colony.NestX + min, 0f, worldSize), colony.NestY);
+        return fallback;
     }
 }

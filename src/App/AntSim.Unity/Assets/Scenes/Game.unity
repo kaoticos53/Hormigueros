@@ -6869,7 +6869,7 @@ MonoBehaviour:
   Colonies: 2
   FrameEvery: 1
   Species: lasius
-  SeedPoolPath: artifacts/pretrain-warm-v2.antgenome
+  SeedPoolPath: artifacts/pretrain-maze.antgenome
   Maze: 1
   ExportElite: 1
   PheroEvery: 30
@@ -7954,7 +7954,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: artifacts/pretrain-warm-v2.antgenome
+  m_Text: artifacts/pretrain-maze.antgenome
 --- !u!114 &1943160416
 MonoBehaviour:
   m_ObjectHideFlags: 0

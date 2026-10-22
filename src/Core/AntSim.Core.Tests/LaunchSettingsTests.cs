@@ -133,8 +133,9 @@ namespace AntSim.Core.Tests
             sinPool.Pool = "";
             Assert.Contains("(sin sembrar)", sinPool.Describe());
 
-            // El default del proyecto siembra warm-v2 (mismo camino que el menú).
-            Assert.Equal("pretrain-warm-v2", LaunchSettings.Defaults().Pool);
+            // El default del proyecto siembra el pool con obstáculos (F7): es el
+            // que forrajea en el laberinto que la escena monta.
+            Assert.Equal("pretrain-maze", LaunchSettings.Defaults().Pool);
         }
     }
 }
