@@ -95,6 +95,7 @@ internal static class Program
         int hidden = WorldSim.DefaultBrainSizes[1]; // F7: ancho oculto inicial del pretrain
         bool grow = false;      // F7: escalera de capacidad 8→16→24
         int classicEvery = -1;  // F7: 1 de cada N generaciones en campo abierto (-1 = 5 con --obstacles)
+        int classicTail = -1;   // F7: generaciones clásicas de cola al final (-1 = 60 con --obstacles)
         string? savePath = null;      // Fase 4: checkpoint .antsave
         int saveTick = 0;             // 0 = guardar al final de la ejecución
         string? antlogPath = null;    // Fase 4: registro de eventos .antlog
@@ -198,6 +199,11 @@ internal static class Program
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out classicEvery)
                         || classicEvery < 0)
                         return Fail("--classic-every requiere un entero ≥ 0 (1 de cada N generaciones en campo abierto; 0 = ninguna).");
+                    break;
+                case "--classic-tail":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out classicTail)
+                        || classicTail < 0)
+                        return Fail("--classic-tail requiere un entero ≥ 0 (generaciones clásicas de cola; 0 = ninguna).");
                     break;
                 case "--seed-pool":
                     seedPoolPath = Next(args, ref i);
@@ -426,7 +432,8 @@ internal static class Program
                     : GenomeImportInfo.Inspect(importPath,
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat, obstacles, hidden, grow,
-                    classicEvery: classicEvery < 0 ? (obstacles ? 5 : 0) : classicEvery),
+                    classicEvery: classicEvery < 0 ? (obstacles ? 5 : 0) : classicEvery,
+                    classicTail: classicTail < 0 ? (obstacles ? CurriculumTrainer.DefaultClassicTail : 0) : classicTail),
                 "bench" => PolicyBenchmarkScenario.Run(benchSeeds, bandMin, bandMax, ticks, trials, seedPoolPath, arenaCells),
                 "scale" => ScaleScenario.Run(grid, ticks, scaleColonyCounts, seed, seedPoolPath)
                     + (lodBlockSizes == null ? "" : "\n" + ScaleScenario.RunLodSweep(grid, ticks,
@@ -524,7 +531,7 @@ internal static class Program
     private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath,
         string? warmStartPath, float bandMin, float bandMax, bool hybrid = false, bool fullWorld = false,
         bool neat = false, bool obstacles = false, int hidden = 8, bool grow = false,
-        int classicEvery = 0)
+        int classicEvery = 0, int classicTail = 0)
     {
         if (obstacles && neat)
             throw new ArgumentException("--obstacles entrena el currículo MLP; --neat tiene su propio trainer (no se combinan).");
@@ -607,6 +614,7 @@ internal static class Program
           .Append(" hidden ").Append(hidden)
           .Append(grow ? " grow" : "")
           .Append(classicEvery > 0 ? $" classic-every {classicEvery}" : "")
+          .Append(classicTail > 0 ? $" classic-tail {classicTail}" : "")
           .AppendLine();
 
         System.Collections.Generic.List<MlpGenome>? seeded = null;
@@ -637,12 +645,16 @@ internal static class Program
                 sb.Append(" obstacle=").Append(stats.Difficulty.ToString("0.0", CultureInfo.InvariantCulture));
                 sb.Append(" unloads=").Append(stats.BestUnloads)
                   .Append(" pickups=").Append(stats.BestPickups);
+                // Generación de MANTENIMIENTO clásico: otro terreno y otro horizonte
+                // (el de la partida sin laberinto), no la dificultad de arriba.
+                if (stats.ClassicGen) sb.Append(" classic=1");
             }
             sb.AppendLine();
             if (stats.GrownHidden > 0)
                 sb.Append("grow hidden=").Append(stats.GrownHidden).AppendLine();
         }, seedGenomes: seeded, obstacleCurriculum: curriculum,
-            hiddenLadder: ladder, parallel: obstacles, classicEvery: classicEvery);
+            hiddenLadder: ladder, parallel: obstacles, classicEvery: classicEvery,
+            classicTail: classicTail);
 
         var trained = trainer.Run();
         sb.Append("trained ").Append(trained.Count).Append(" genomes, stages ").Append(trainer.Report[trainer.Report.Count - 1].Stage).AppendLine();
@@ -889,6 +901,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N]");
     }
 }

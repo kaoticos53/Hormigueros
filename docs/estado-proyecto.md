@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-22 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 711/711 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 713/713 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -47,12 +47,14 @@ laberinto del juego con dificultad graduable (`MazeLayout.Pruned`: `d=1` es el
 mapa del juego byte a byte, `d=0` campo abierto) y la sube por **competencia
 medida** —descargas reales de la mejor colonia, con histéresis—; cuando el
 terreno llega al máximo y el fitness se estanca, la capa oculta crece 8→16→24
-reproduciendo la salida anterior. Una de cada cinco generaciones se evalúa sin
-terreno para no olvidar el campo abierto. 600 generaciones en **254–319 s** con
-semilla reproducible (mismo SHA). En la partida canónica con `--maze` el pool
-nuevo hace **57 descargas contra 37** del de referencia en 4 semillas (+54 %, y
-4 frente al frío); sin laberinto forraja en 4/4 semillas (172 vs 242: el precio
-de especializar). El juego arranca con él por defecto (lanzador, escena y
+reproduciendo la salida anterior. La receta tiene DOS fases medidas: una cuenca
+con mantenimiento clásico (1 de cada 5 generaciones, banda y horizonte del
+currículo) y un refinado de laberinto que cierra con 60 generaciones en el
+régimen de la partida sin laberinto (comida en todo el mapa, horizonte largo).
+**1 260 generaciones en 679 s** con semilla reproducible (mismo SHA). El pool
+resultante forrajea en LAS DOS superficies: **58 descargas con `--maze` contra 37**
+del de referencia (+57 %) y **421 sin laberinto contra 242** (+74 %), 4/4
+semillas en ambas. El juego arranca con él por defecto (lanzador, escena y
 catálogo). Detalle y medidas en [`fase7-obstaculos.md`](fase7-obstaculos.md).
 
 ## Lo que ya funciona (verificado, no prometido)
@@ -61,7 +63,7 @@ catálogo). Detalle y medidas en [`fase7-obstaculos.md`](fase7-obstaculos.md).
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **711/711 tests** en Windows y verdes en Linux en CI en cada push,
+NEAT canónica. **713/713 tests** en Windows y verdes en Linux en CI en cada push,
 igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
