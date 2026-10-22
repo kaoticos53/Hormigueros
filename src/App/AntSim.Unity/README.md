@@ -304,7 +304,7 @@ las unidades justo en los iconos y hacía parecer que la fuente mentía).
 
 Para mirar el `.ttf` sin abrir Unity, `python scripts/unity/validate-font.py
 <ruta>/AntSim.ttf` valida tablas, nombres, avances y `cmap` con fontTools y
-rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 681 tests de la
+rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 711 tests de la
 suite incluyen `GameFontTests` —que cubre también el alfabeto contra los
 literales que el HUD usa de verdad, y **los avances LEÍDOS de la tabla `hmtx`**
 frente a los del modelo, glifo a glifo por la `cmap`— y

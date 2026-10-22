@@ -105,4 +105,49 @@ public sealed class MlpGenome : IGenome
 
     /// <summary>Copia de los pesos (para serialización y huellas).</summary>
     public float[] CopyWeights() => (float[])_weights.Clone();
+
+    /// <summary>
+    /// Expande el genoma a una topología MÁS ANCHA (F7: el cerebro crece cuando
+    /// el currículo de obstáculos se estanca). Exige la misma entrada y salida y
+    /// capas ocultas que no encogen.
+    ///
+    /// Las unidades viejas se copian a las primeras posiciones de cada capa y
+    /// las nuevas nacen a cero TANTO en su fila como en su columna, de modo que
+    /// la red expandida reproduce EXACTAMENTE la función anterior (las nuevas
+    /// ocultas reciben 0, emiten tanh(0)=0 y su peso saliente 0 no altera la
+    /// salida). Así el warm-start no tira lo aprendido: la mutación puebla las
+    /// unidades nuevas generación a generación.
+    /// </summary>
+    public MlpGenome Expand(int[] targetSizes)
+    {
+        if (targetSizes is null) throw new ArgumentNullException(nameof(targetSizes));
+        if (targetSizes.Length != _sizes.Length)
+            throw new ArgumentException("La expansión exige el mismo número de capas.", nameof(targetSizes));
+        if (targetSizes[0] != _sizes[0] || targetSizes[^1] != _sizes[^1])
+            throw new ArgumentException("La expansión no puede cambiar la entrada ni la salida.", nameof(targetSizes));
+        for (int l = 1; l < _sizes.Length - 1; l++)
+            if (targetSizes[l] < _sizes[l])
+                throw new ArgumentException($"La capa oculta {l} encogería ({_sizes[l]} → {targetSizes[l]}).", nameof(targetSizes));
+
+        var expanded = new float[MlpBrain.ExpectedWeightCount(targetSizes)];
+        int oldOffset = 0, newOffset = 0;
+        for (int l = 1; l < _sizes.Length; l++)
+        {
+            int oldDst = _sizes[l], oldSrc = _sizes[l - 1];
+            int newDst = targetSizes[l], newSrc = targetSizes[l - 1];
+            int copyDst = Math.Min(oldDst, newDst);
+            int copySrc = Math.Min(oldSrc, newSrc);
+            for (int d = 0; d < copyDst; d++)
+            {
+                int oldRow = oldOffset + d * (oldSrc + 1);
+                int newRow = newOffset + d * (newSrc + 1);
+                for (int s = 0; s < copySrc; s++)
+                    expanded[newRow + s] = _weights[oldRow + s];
+                expanded[newRow + newSrc] = _weights[oldRow + oldSrc]; // bias
+            }
+            oldOffset += oldDst * (oldSrc + 1);
+            newOffset += newDst * (newSrc + 1);
+        }
+        return new MlpGenome(targetSizes, expanded, Fitness);
+    }
 }

@@ -19,7 +19,12 @@ namespace AntSim.Unity.Scripts.Streaming
     /// </summary>
     public sealed class LaunchSettings
     {
-        public string Pool = "pretrain-warm-v2"; // nombre del pool (se resuelve a artifacts/) o ruta
+        // F7: el juego arranca con el pool entrenado CON OBSTÁCULOS. Es el que
+        // forrajea en el laberinto que el juego monta por defecto (medido: 54
+        // descargas frente a 37 del de referencia en la partida canónica con
+        // `--maze`, 4 semillas). Los pools anteriores siguen eligiéndose con
+        // `--pool` o importándose.
+        public string Pool = "pretrain-maze"; // nombre del pool (se resuelve a artifacts/) o ruta
         public string PoolPath = "";             // ruta RESUELTA por el lanzador (tiene prioridad)
         public int Grid = 96;          // celdas; el mundo mide Grid × 8 u
         public int Colonies = 2;

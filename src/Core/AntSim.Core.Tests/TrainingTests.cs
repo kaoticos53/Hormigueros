@@ -207,11 +207,29 @@ public class TrainingTests
     public void Trainer_WarmStart_RejectsIncompatibleTopology()
     {
         var seeds = new List<MlpGenome> { DrawGenome(5, 0) };
-        // Semilla con topología inválida (capas 19→2→6 en lugar de 19→8→6).
-        var bad = new MlpGenome(new[] { 19, 2, 6 }, new float[MlpBrain.ExpectedWeightCount(new[] { 19, 2, 6 })]);
+        // Topología INCOMPATIBLE: la entrada ya no son los 19 sensores.
+        var bad = new MlpGenome(new[] { 8, 8, 6 }, new float[MlpBrain.ExpectedWeightCount(new[] { 8, 8, 6 })]);
         seeds.Add(bad);
 
         Assert.Throws<ArgumentException>(() => new CurriculumTrainer(7UL, 8, seedGenomes: seeds));
+    }
+
+    [Fact]
+    public void Trainer_WarmStart_ExpandsANarrowerBrain()
+    {
+        // F7: una semilla de 19→2→6 no se rechaza, se EXPANDE al ancho pedido
+        // (19→8→6 por defecto). Así los pools pre-entrenados siguen sirviendo
+        // cuando la escalera de capacidad ensancha la red.
+        var narrow = new MlpGenome(new[] { 19, 2, 6 },
+            new float[MlpBrain.ExpectedWeightCount(new[] { 19, 2, 6 })], fitness: 5.0);
+        var trainer = new CurriculumTrainer(7UL, 4,
+            new List<CurriculumStage>
+            {
+                new() { Name = "x", MinDistance = 200f, MaxDistance = 260f, TickBudget = 60, MinGenerations = 1, MaxGenerations = 1 }
+            },
+            seedGenomes: new List<MlpGenome> { narrow });
+        var trained = trainer.Run();
+        Assert.All(trained, g => Assert.Equal(new[] { 19, 8, 6 }, g.Sizes));
     }
 
     [Fact]

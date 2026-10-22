@@ -23,6 +23,12 @@ namespace AntSim.Unity.Scripts.Streaming
         private string? _lastActiv;
         private GameStreamParser.GraphView? _lastGraph;
 
+        /// <summary>F7 — topología MLP del pool de la partida (19→16→6 tras entrenar
+        /// con obstáculos). La fija el presenter desde el pool; sin pool, la clásica.
+        /// El canal F solo trae el TOTAL de nodos, así que sin esto un cerebro ancho
+        /// no se puede repartir en capas.</summary>
+        public int[] BrainSizes { get; set; } = ActivationViewModel.DefaultSizes;
+
         /// <summary>Último grafo renderizado del canal F (null si no hay o si el
         /// inspector no está siguiendo a nadie).</summary>
         public string? BrainGraph { get; private set; }
@@ -206,7 +212,7 @@ namespace AntSim.Unity.Scripts.Streaming
                 _lastGraph = view.Graph;
                 BrainGraph = view.Graph != null
                     ? ActivationViewModel.RenderNeat(view.Activ, view.Graph, title: null)
-                    : ActivationViewModel.Render(view.Activ, title: null);
+                    : ActivationViewModel.Render(view.Activ, BrainSizes, title: null);
             }
         }
 
