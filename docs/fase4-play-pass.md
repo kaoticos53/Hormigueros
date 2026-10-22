@@ -347,6 +347,7 @@ bash scripts/playpass-live.sh --analyze-block4 artifacts/playpass-block4.txt
 bash scripts/playpass-live.sh --analyze-visual   # solo el aspecto
 bash scripts/playpass-live.sh --analyze-icons    # solo los iconos (sobre la captura)
 bash scripts/playpass-live.sh --analyze-sparkline # solo las barras de la gráfica
+bash scripts/playpass-live.sh --analyze-walls  # solo las paredes del terreno
 bash scripts/playpass-live.sh --selftest      # todos los analizadores, sin editor
 ```
 
@@ -386,6 +387,40 @@ abajo: contar la fila 0 como base medía la gráfica del revés —todas las bar
 alto de la banda y el área al 100 %—. El volcado declara `row0=top`, el medidor
 convierte el `inner` con `alto - iy - ih` y la procedencia prueba las dos
 colocaciones del recorte en el frame, exigiendo igualdad byte a byte.
+
+El paso de las **paredes del terreno** (F6) cierra el tramo que ningún check de
+estado podía ver: `LastWallDraws` se publicaba y nadie lo leía, así que la escena
+podía tener `WallMesh`/`WallMat` cableados, el contrato en verde y la partida
+corriendo un laberinto invisible (mal alto, escala cero, capa que la cámara no
+ve). `scripts/unity/ProbeWallPixels.cs` renderiza la cámara del juego con la
+partida VIVA y compara el frame con el MAPA de la cabecera CELDA A CELDA —cada
+celda interior proyectada con la cámara real y su píxel clasificado contra el
+color del material—, y publica además una muestra `R|` por pared (celda, caja en
+píxeles, color medido) y un control `C|` por zona abierta con dos celdas de
+holgura. `scripts/playpass-walls.py` vuelve al PNG y exige: `draws == rects`,
+acuerdo celda a celda ≥ 97 % (≤ 2 % de celdas-muro sin pintar, ≤ 1 % de abiertas
+pintadas), color del material en el centro de cada pared y en ningún control,
+caja LLENA (≥ 85 % de su interior), tamaño de caja coherente con las celdas del
+rectángulo (px/celda ajustado entre todas las muestras) y muestras repartidas por
+el tablero. El volcado va a `artifacts/playpass-wall-pixels.txt` y los PNG (frame
+vivo + hoja con las cajas en magenta y los controles en cian) se conservan en
+`artifacts/playpass-wall-pixels/`; con eso `--analyze-walls` repite la medida sin
+editor. Falla cerrado: sin frame o sin volcado, el paso no es verde.
+
+**Medido en vivo el 2026-10-22** (editor 6000.6.0f1, seed 42, grid 96): 313
+rectángulos y **313 dibujados** (`LastWallDraws`), **8 836/8 836 celdas de
+acuerdo** con el mapa (1 202 celdas de muro, 0 sin pintar, 0 abiertas pintadas de
+más), 32 paredes muestreadas del color exacto del material (`82,74,66`) con cajas
+**94–100 % llenas**, escala **9,61 px/celda** en las 32 muestras y 32 controles
+con **0 px** de muro. El primer intento destapó dos cosas del tramo sonda–medidor:
+(1) **`build/antsim` no se había republicado** desde F6, así que el CLI moría en
+`Argumento desconocido: --maze` y la sonda solo podía decir «sin cabecera» —el
+pase ahora falla con ese nombre en vez de medir un frame vacío—; y (2) la sonda
+proyectaba con el ASPECTO de la Game view y no con el de la RenderTexture (medido:
+las cajas salían ~4 % grandes y las paredes del borde una celda hacia dentro),
+así que la cámara se fija al aspecto de la RT durante la medida. La comprobación
+DIENTE está en el `--selftest` del medidor: sin paredes, a media escala, de otro
+color, con un polígono gigante, con `draws` corto o con las guías encima, falla.
 
 Aparte de los bloques, hay un **medidor de rendimiento de la escena** (F5.3
 rodaja 3) que no comprueba aspecto sino coste: monta la escena del multi-visor con
