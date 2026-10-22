@@ -187,6 +187,10 @@ if [[ "${1:-}" == "--selftest" ]]; then
   #    rango del push llegue a las DOS puertas que escanean commits.
   SELF="$0"
   [[ "$SELF" != /* ]] && SELF="$PWD/$SELF"
+  # Se invoca con `bash`: el bit de ejecución NO viaja por git en Windows
+  # (el fichero está versionado 100644), así que un checkout de CI en Linux lo
+  # deja sin permiso y ejecutarlo directo da 126 — el selftest se caía a sí mismo
+  # en el runner aunque aquí, en Git Bash, el bit de disco lo tapaba.
   doble="$(mktemp)"
   cat > "$doble" <<'EOF'
 #!/usr/bin/env bash
@@ -204,7 +208,7 @@ EOF
   probe() { # FAKE_RC, ANT_GATE_CMD, refs, [FAKE_REF_RC]
     PROBE_OUT="$(PUSH_REFS="$3" FAKE_RC="$1" FAKE_REF_RC="${4:-0}" \
                  ANT_ASSET_CMD="bash $doble" ANT_REF_CMD="bash $doble_ref" \
-                 ANT_GATE_CMD="$2" "$SELF" </dev/null 2>&1)"
+                 ANT_GATE_CMD="$2" bash "$SELF" </dev/null 2>&1)"
     PROBE_RC=$?
   }
 
