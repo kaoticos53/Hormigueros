@@ -215,6 +215,118 @@ public sealed class MazeLayout
         return new MazeLayout(walls, cells, cells);
     }
 
+    /// <summary>
+    /// Laberinto GRADUABLE para el currículo de entrenamiento: el mapa de
+    /// <see cref="Braided"/> con una fracción de sus líneas de pared interiores
+    /// RETIRADAS. `difficulty` 0 = campo abierto (solo queda el anillo exterior),
+    /// 1 = el laberinto del juego byte a byte.
+    ///
+    /// <para><b>Por qué retirar líneas enteras y no celdas sueltas.</b> Una pared
+    /// a la que le falta un píxel deja de ser un obstáculo legible y se convierte
+    /// en una trampa geométrica; quitar el tramo entre dos cruces produce
+    /// barreras aisladas —los «obstáculos simples» del principio— y el mapa final
+    /// sigue siendo familia del real, no otro mundo.</para>
+    ///
+    /// <para><b>Anidamiento.</b> Cada tramo decide con UNA tirada del RNG
+    /// (semilla + rejilla) y se conserva si `u &lt; difficulty`: así
+    /// `paredes(d1) ⊆ paredes(d2)` para `d1 &lt; d2` — subir la dificultad solo
+    /// AÑADE obstáculos, nunca cambia los que la política ya conocía. Los cruces
+    /// se conservan solo si sobrevive algún tramo contiguo, de modo que a
+    /// dificultad 0 no queda un enrejado de postes sueltos.</para>
+    ///
+    /// <para>Conectividad: el mapa completo es conexo y aquí solo se RETIRAN
+    /// paredes, así que cualquier dificultad lo sigue siendo por construcción.
+    /// El anillo exterior y las plazas de los nidos no se tocan.</para>
+    /// </summary>
+    public static MazeLayout Pruned(ulong seed, int cells, int colonyCount, float difficulty)
+    {
+        if (cells < 16) throw new ArgumentOutOfRangeException(nameof(cells));
+        if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
+        if (float.IsNaN(difficulty) || difficulty < 0f || difficulty > 1f)
+            throw new ArgumentOutOfRangeException(nameof(difficulty), "La dificultad debe estar en [0,1].");
+
+        var full = Braided(seed, cells, colonyCount);
+        if (difficulty >= 1f) return full; // el mapa del juego, intacto
+
+        bool[] walls = full.CopyCells();
+
+        // Las paredes interiores viven SOLO en las líneas de bloque
+        // (x = i·8 o y = j·8); el interior de sala está abierto por CarveRoom.
+        int rooms = (cells + BlockCells - 1) / BlockCells;
+        // Un tramo vertical V[i,j] cubre x = i·8, y ∈ [j·8+1, j·8+7]; los cruces
+        // (i·8, j·8) quedan aparte. Una tirada por tramo en orden fijo ⇒
+        // anidamiento y determinismo.
+        var pruneRng = new DeterministicRandom(seed ^ 0x5052554E45443132UL ^ (ulong)cells); // "PRUNED12"
+        int vCount = Math.Max(0, rooms - 1) * rooms;
+        int hCount = rooms * Math.Max(0, rooms - 1);
+        var vKeep = new bool[vCount];
+        var hKeep = new bool[hCount];
+
+        for (int i = 1; i < rooms; i++)
+        {
+            for (int j = 0; j < rooms; j++)
+            {
+                double u = pruneRng.NextDouble01();
+                vKeep[(i - 1) * rooms + j] = u < difficulty;
+            }
+        }
+        for (int j = 1; j < rooms; j++)
+        {
+            for (int i = 0; i < rooms; i++)
+            {
+                double u = pruneRng.NextDouble01();
+                hKeep[(j - 1) * rooms + i] = u < difficulty;
+            }
+        }
+
+        // Retira los tramos que no sobreviven (las celdas ya abiertas por una
+        // puerta no cambian nada: quitar es idempotente).
+        for (int i = 1; i < rooms; i++)
+        {
+            int x = i * BlockCells;
+            if (x >= cells - 1) continue; // el anillo exterior no se toca
+            for (int j = 0; j < rooms; j++)
+            {
+                if (vKeep[(i - 1) * rooms + j]) continue;
+                int y0 = j * BlockCells + 1;
+                int y1 = Math.Min(j * BlockCells + RoomCells, cells - 2);
+                for (int y = y0; y <= y1; y++) walls[y * cells + x] = false;
+            }
+        }
+        for (int j = 1; j < rooms; j++)
+        {
+            int y = j * BlockCells;
+            if (y >= cells - 1) continue;
+            for (int i = 0; i < rooms; i++)
+            {
+                if (hKeep[(j - 1) * rooms + i]) continue;
+                int x0 = i * BlockCells + 1;
+                int x1 = Math.Min(i * BlockCells + RoomCells, cells - 2);
+                for (int x = x0; x <= x1; x++) walls[y * cells + x] = false;
+            }
+        }
+
+        // Cruces: sobreviven solo si les queda algún tramo contiguo. A dificultad
+        // 0 desaparecen todos y el tablero queda realmente abierto.
+        for (int i = 1; i < rooms; i++)
+        {
+            int px = i * BlockCells;
+            if (px >= cells - 1) continue;
+            for (int j = 1; j < rooms; j++)
+            {
+                int py = j * BlockCells;
+                if (py >= cells - 1) continue;
+                bool vBelow = vKeep[(i - 1) * rooms + (j - 1)];
+                bool vAbove = vKeep[(i - 1) * rooms + j];
+                bool hLeft = i - 1 >= 0 && hKeep[(j - 1) * rooms + (i - 1)];
+                bool hRight = hKeep[(j - 1) * rooms + i];
+                if (!(vBelow || vAbove || hLeft || hRight)) walls[py * cells + px] = false;
+            }
+        }
+
+        return new MazeLayout(walls, cells, cells);
+    }
+
     private static bool IsTreeEdge(List<(int I, int J, int Side)> edges, int i, int j, int side)
     {
         for (int k = 0; k < edges.Count; k++)

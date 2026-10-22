@@ -1,0 +1,11 @@
+# Transferencia del pool con obstáculos — partida canónica sin laberinto (grid 96, 216000 ticks, semillas 42,7,99,1234)
+
+| pool | descargas (media ± σ) | descargas (total) | semillas con descargas | col0 (media) | primera descarga (media) |
+|---|---|---|---|---|---|
+| frío | 0.0 ± 0.0 | 0 | 0/4 | 0.0 | — |
+| warm-v2 | 60.5 ± 6.7 | 242 | 4/4 | 60.5 | 3970 |
+| maze | 43.0 ± 4.3 | 172 | 4/4 | 43.0 | 4056 |
+
+- **frío**: seed 42=0, seed 7=0, seed 99=0, seed 1234=0
+- **warm-v2**: seed 42=64, seed 7=66, seed 99=49, seed 1234=63
+- **maze**: seed 42=48, seed 7=46, seed 99=37, seed 1234=41

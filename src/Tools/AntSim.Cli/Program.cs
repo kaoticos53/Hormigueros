@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using AntSim.Core.Evolution;
 using AntSim.Core.Pheromone;
 using AntSim.Core.Serialization;
@@ -90,6 +91,10 @@ internal static class Program
         string? exportPath = null;
         bool neat = false; // F5.2c rodaja 7: pre-entrenar pool NEAT y exportar v2
         bool maze = false; // F6: laberinto con obstáculos en el mundo del juego
+        bool obstacles = false; // F7: currículo de obstáculos en el pre-entrenamiento
+        int hidden = WorldSim.DefaultBrainSizes[1]; // F7: ancho oculto inicial del pretrain
+        bool grow = false;      // F7: escalera de capacidad 8→16→24
+        int classicEvery = -1;  // F7: 1 de cada N generaciones en campo abierto (-1 = 5 con --obstacles)
         string? savePath = null;      // Fase 4: checkpoint .antsave
         int saveTick = 0;             // 0 = guardar al final de la ejecución
         string? antlogPath = null;    // Fase 4: registro de eventos .antlog
@@ -177,6 +182,22 @@ internal static class Program
                     break;
                 case "--import":
                     importPath = Next(args, ref i);
+                    break;
+                case "--obstacles":
+                    obstacles = true;
+                    break;
+                case "--hidden":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out hidden)
+                        || hidden < 1 || hidden > 256)
+                        return Fail("--hidden requiere un entero entre 1 y 256 (ancho de la capa oculta).");
+                    break;
+                case "--grow":
+                    grow = true;
+                    break;
+                case "--classic-every":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out classicEvery)
+                        || classicEvery < 0)
+                        return Fail("--classic-every requiere un entero ≥ 0 (1 de cada N generaciones en campo abierto; 0 = ninguna).");
                     break;
                 case "--seed-pool":
                     seedPoolPath = Next(args, ref i);
@@ -404,7 +425,8 @@ internal static class Program
                     ? throw new ArgumentException("--mode genome-info requiere --import archivo.antgenome")
                     : GenomeImportInfo.Inspect(importPath,
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
-                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat),
+                "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat, obstacles, hidden, grow,
+                    classicEvery: classicEvery < 0 ? (obstacles ? 5 : 0) : classicEvery),
                 "bench" => PolicyBenchmarkScenario.Run(benchSeeds, bandMin, bandMax, ticks, trials, seedPoolPath, arenaCells),
                 "scale" => ScaleScenario.Run(grid, ticks, scaleColonyCounts, seed, seedPoolPath)
                     + (lodBlockSizes == null ? "" : "\n" + ScaleScenario.RunLodSweep(grid, ticks,
@@ -425,7 +447,11 @@ internal static class Program
     private static string RunEvolve(ulong seed, int ticks, int colonies, int grid,
         string? importPath, string? seedPoolPath, string? exportPath)
     {
-        var sim = new WorldSim(seed, grid, colonies);
+        // F7: el mundo adopta el ancho del pool sembrado (19→16→6, 19→24→6).
+        int[]? evolveSizes = seedPoolPath != null
+            ? AntGenomeFile.PeekFirstSizes(File.ReadAllBytes(seedPoolPath))
+            : null;
+        var sim = new WorldSim(seed, grid, colonies, brainSizes: evolveSizes);
 
         var sb = new System.Text.StringBuilder();
         sb.Append("seed ").Append(seed).Append(" ticks ").Append(ticks)
@@ -497,8 +523,11 @@ internal static class Program
 
     private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath,
         string? warmStartPath, float bandMin, float bandMax, bool hybrid = false, bool fullWorld = false,
-        bool neat = false)
+        bool neat = false, bool obstacles = false, int hidden = 8, bool grow = false,
+        int classicEvery = 0)
     {
+        if (obstacles && neat)
+            throw new ArgumentException("--obstacles entrena el currículo MLP; --neat tiene su propio trainer (no se combinan).");
         // Currículo calibrado (Fase 3bis, arena realista); --generations limita el
         // máximo por etapa y --band-min/--band-max re-bandan TODAS las etapas
         // (warm-start de refinado: extender el anillo de forrajeo sobre un pool ya
@@ -547,12 +576,37 @@ internal static class Program
             }
         }
 
+        // — F7: currículo de OBSTÁCULOS. Una sola etapa que dura toda la tirada;
+        //   la dificultad del terreno la mueve ObstacleCurriculum según las
+        //   descargas observadas, y el horizonte lo fija el propio controlador
+        //   (1 800 → 2 700 → 3 600 ticks). La banda clásica no aplica: con
+        //   laberinto la comida nace con las reglas del mundo (≥ 80 u, fuera de
+        //   muro, densidad ×4,5).
+        if (obstacles)
+        {
+            stages.Clear();
+            stages.Add(new CurriculumStage
+            {
+                Name = "obstaculos",
+                MinDistance = bandMin,
+                MaxDistance = bandMax,
+                TickBudget = ObstacleCurriculum.HardTickBudget,
+                CompetenceFitness = 0.0,
+                MinGenerations = 1,
+                MaxGenerations = generations > 0 ? generations : 600
+            });
+        }
+
         var sb = new System.Text.StringBuilder();
         sb.Append("seed ").Append(seed).Append(" pop ").Append(pop)
           .Append(" band ").Append(bandMin.ToString("0", CultureInfo.InvariantCulture))
           .Append("-").Append(bandMax.ToString("0", CultureInfo.InvariantCulture))
           .Append(hybrid ? " hybrid" : "")
           .Append(fullWorld ? " full-world" : "")
+          .Append(obstacles ? " obstacles" : "")
+          .Append(" hidden ").Append(hidden)
+          .Append(grow ? " grow" : "")
+          .Append(classicEvery > 0 ? $" classic-every {classicEvery}" : "")
           .AppendLine();
 
         System.Collections.Generic.List<MlpGenome>? seeded = null;
@@ -563,18 +617,41 @@ internal static class Program
             sb.Append("warm-started ").Append(seeded.Count).Append(" genomes from ").Append(warmStartPath).AppendLine();
         }
 
+        ObstacleCurriculum? curriculum = obstacles ? new ObstacleCurriculum() : null;
+        var ladder = new System.Collections.Generic.List<int> { hidden };
+        if (grow)
+        {
+            if (hidden < 16) ladder.Add(16);
+            if (hidden < 24) ladder.Add(24);
+        }
+
         var trainer = new CurriculumTrainer(seed, pop, stages, stats =>
         {
             sb.Append("gen stage=").Append(stats.Stage)
               .Append(" gen=").Append(stats.Generation)
               .Append(" best=").Append(stats.BestFitness.ToString("0.000", CultureInfo.InvariantCulture))
               .Append(" mean=").Append(stats.MeanFitness.ToString("0.000", CultureInfo.InvariantCulture))
-              .Append(" competent=").Append(stats.CompetentCount)
-              .AppendLine();
-        }, seedGenomes: seeded);
+              .Append(" competent=").Append(stats.CompetentCount);
+            if (obstacles)
+            {
+                sb.Append(" obstacle=").Append(stats.Difficulty.ToString("0.0", CultureInfo.InvariantCulture));
+                sb.Append(" unloads=").Append(stats.BestUnloads)
+                  .Append(" pickups=").Append(stats.BestPickups);
+            }
+            sb.AppendLine();
+            if (stats.GrownHidden > 0)
+                sb.Append("grow hidden=").Append(stats.GrownHidden).AppendLine();
+        }, seedGenomes: seeded, obstacleCurriculum: curriculum,
+            hiddenLadder: ladder, parallel: obstacles, classicEvery: classicEvery);
 
         var trained = trainer.Run();
         sb.Append("trained ").Append(trained.Count).Append(" genomes, stages ").Append(trainer.Report[trainer.Report.Count - 1].Stage).AppendLine();
+        sb.Append("brain ").Append(string.Join("→", trainer.BrainSizes)).AppendLine();
+        if (curriculum != null)
+            sb.Append("obstacle final=").Append(curriculum.Difficulty.ToString("0.0", CultureInfo.InvariantCulture))
+              .Append(" escalations=").Append(curriculum.Escalations)
+              .Append(" descalations=").Append(curriculum.Descalations)
+              .AppendLine();
 
         if (exportPath != null)
         {
@@ -612,7 +689,7 @@ internal static class Program
             }
             else
             {
-                AntGenomeFile.WriteFile(exportPath, "pretrain", SpeciesDescriptor.LasiusNiger.Name,
+                AntGenomeFile.WriteFile(exportPath, obstacles ? "pretrain-maze" : "pretrain", SpeciesDescriptor.LasiusNiger.Name,
                     seed, 0, trained, AntSim.Core.Brain.BrainContract.CurrentVersion);
                 sb.Append("exported ").Append(trained.Count).Append(" genomes to ").Append(exportPath).AppendLine();
             }
@@ -812,6 +889,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N]");
     }
 }

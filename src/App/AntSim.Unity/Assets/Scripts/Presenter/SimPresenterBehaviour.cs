@@ -281,6 +281,32 @@ namespace AntSim.Unity.Scripts.Presenter
             }
         }
 
+        /// <summary>
+        /// F7 — topología del pool sembrado, leída del propio CLI
+        /// (`--mode genome-info --json`). Devuelve null sin pool o si el oráculo no
+        /// contesta: el inspector cae entonces al contrato clásico 19→8→6.
+        /// </summary>
+        public int[]? SeedPoolBrainSizes()
+        {
+            if (string.IsNullOrEmpty(SeedPoolPath)) return null;
+            try
+            {
+                string? repoRoot = Streaming.RepoPathResolver.RepoRootFromDataPath(Application.dataPath);
+                string pool = repoRoot != null
+                    ? Streaming.RepoPathResolver.Resolve(SeedPoolPath!, baseDir: null, repoRoot)
+                    : SeedPoolPath!;
+                if (!System.IO.File.Exists(pool)) return null;
+                var source = new Streaming.StreamSource(CliPath, repoRoot);
+                string json = source.FetchGenomeInfoJson(pool);
+                return Streaming.ImportDialogModel.TryParseSizes(json, out int[] sizes) ? sizes : null;
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogWarning($"[SimPresenter] no pude leer la topología del pool: {ex.Message}");
+                return null;
+            }
+        }
+
         private void Start()
         {
             // Play-pass: sin esto el bucle del jugador se CONGELA al perder el foco

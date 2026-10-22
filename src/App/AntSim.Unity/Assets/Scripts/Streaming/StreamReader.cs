@@ -151,6 +151,30 @@ namespace AntSim.Unity.Scripts.Streaming
             catch (Exception) { return fallback; }
         }
 
+        /// <summary>
+        /// F7 — JSON canónico de `--mode genome-info` para un pool: trae la
+        /// topología (`sizes`) y la tarjeta de cuarentena. Lo usa el inspector para
+        /// decodificar el canal F de un cerebro más ancho que el clásico.
+        /// </summary>
+        public string FetchGenomeInfoJson(string genomePath)
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = _cliPath,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("--mode"); psi.ArgumentList.Add("genome-info");
+            psi.ArgumentList.Add("--import"); psi.ArgumentList.Add(genomePath);
+            psi.ArgumentList.Add("--json");
+            using var proc = Process.Start(psi)!;
+            string json = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit();
+            return json;
+        }
+
         /// <summary>Descarga las tarjetas del picker (JSON canónico del CLI).</summary>
         public string FetchPresetsJson()
         {

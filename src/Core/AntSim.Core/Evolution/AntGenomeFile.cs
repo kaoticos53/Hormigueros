@@ -273,6 +273,43 @@ public static class AntGenomeFile
     public static (AntGenomeMetadata Metadata, IReadOnlyList<NeatGenome> Genomes) ReadNeatFile(string path, int expectedContractVersion)
         => DeserializeNeat(File.ReadAllBytes(path), expectedContractVersion);
 
+    /// <summary>
+    /// Topología del PRIMER genoma de un .antgenome v1 SIN cargar los pesos (F7):
+    /// el mundo adopta el ancho del pool antes de construirse, así el juego
+    /// arranca con 19→16→6 sin ninguna clave extra. v2/NEAT devuelve null (el
+    /// pool frío de la colonia sigue siendo 19→8→6).
+    /// </summary>
+    public static int[]? PeekFirstSizes(byte[] data)
+    {
+        if (data is null || PeekFormatVersion(data) != FormatVersion) return null;
+        try
+        {
+            byte[] body = VerifyAndGetBody(data);
+            using var ms = new MemoryStream(body);
+            var magic = new byte[Magic.Length];
+            ReadExactly(ms, magic);
+            ReadU32(ms); // formatVersion
+            ReadU32(ms); // contractVersion
+            ReadU32(ms); // count
+            ReadString(ms); // nombre
+            ReadString(ms); // especie
+            ReadU64(ms); // originSeed
+            ReadU32(ms); // generation
+            ReadF64(ms); // bestFitness
+            int nLayers = (int)ReadU32(ms);
+            if (nLayers < 2 || nLayers > 32) return null;
+            var sizes = new int[nLayers];
+            for (int l = 0; l < nLayers; l++) sizes[l] = ReadU16(ms);
+            return sizes;
+        }
+        catch (Exception)
+        {
+            // Un archivo roto no debe decidir la topología: el lector real falla
+            // con su mensaje cuando la partida intente sembrarse con él.
+            return null;
+        }
+    }
+
     /// <summary>formatVersion del archivo SIN parsear (byte 8..12); -1 si es demasiado corto.</summary>
     public static int PeekFormatVersion(byte[] data)
     {

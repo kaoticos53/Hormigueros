@@ -152,7 +152,9 @@ namespace AntSim.Unity.Scripts.Streaming
             {
                 // La escena simple va en la capa Default (0), no en una Sim<n>: solo
                 // hay un mundo, así que no hay mundos que separar.
-                new ViewSpec(0, 0, 42, "artifacts/pretrain-warm-v2.antgenome"),
+                // F7: el juego arranca con el pool entrenado con obstáculos (el
+                // mundo adopta su ancho de cerebro desde el archivo).
+                new ViewSpec(0, 0, 42, "artifacts/pretrain-maze.antgenome"),
             },
         };
 
