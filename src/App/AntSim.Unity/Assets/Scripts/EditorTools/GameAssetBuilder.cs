@@ -105,6 +105,45 @@ namespace AntSim.Unity.Scripts.EditorTools
             return mesh;
         }
 
+        /// <summary>
+        /// F6 — quad unitario en el plano XZ (1×1, normal +Y) para las paredes
+        /// del laberinto. El presenter lo escala a cada rectángulo de la
+        /// cabecera; no lleva altura porque la cámara es cenital y un muro se
+        /// lee por su PLANTA (una caja solo añadiría caras invisibles).
+        /// </summary>
+        public static Mesh EnsureWallMesh(string name)
+        {
+            string path = $"{MaterialsFolder}/{name}.asset";
+            var verts = new[]
+            {
+                new Vector3(-0.5f, 0f, -0.5f),
+                new Vector3(0.5f, 0f, -0.5f),
+                new Vector3(0.5f, 0f, 0.5f),
+                new Vector3(-0.5f, 0f, 0.5f),
+            };
+            var tris = new[] { 0, 2, 1, 0, 3, 2 };
+            var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+            if (existing != null && SameGeometry(existing, verts, tris)) return existing;
+
+            var mesh = new Mesh { name = name };
+            mesh.vertices = verts;
+            mesh.triangles = tris;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            EnsureMaterialsFolder();
+            if (existing != null)
+            {
+                EditorUtility.CopySerialized(mesh, existing);
+                UnityEngine.Object.DestroyImmediate(mesh);
+                EditorUtility.SetDirty(existing);
+                AssetDatabase.SaveAssetIfDirty(existing);
+                return existing;
+            }
+            AssetDatabase.CreateAsset(mesh, path);
+            return mesh;
+        }
+
         // ── font importer ──────────────────────────────────────────────────
         private static void ConfigureFontImporter()
         {
@@ -157,6 +196,18 @@ namespace AntSim.Unity.Scripts.EditorTools
         {
             if (a.Length != b.Length) return false;
             for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        private static bool SameGeometry(Mesh mesh, Vector3[] verts, int[] tris)
+        {
+            var mv = mesh.vertices;
+            if (mv.Length != verts.Length) return false;
+            for (int i = 0; i < mv.Length; i++)
+                if ((mv[i] - verts[i]).sqrMagnitude > 1e-8f) return false;
+            var mt = mesh.triangles;
+            if (mt.Length != tris.Length) return false;
+            for (int i = 0; i < mt.Length; i++) if (mt[i] != tris[i]) return false;
             return true;
         }
 

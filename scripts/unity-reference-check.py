@@ -305,6 +305,52 @@ def es_dato(meta_rel):
     return not meta_rel.endswith('.cs.meta')
 
 
+# ── Pérdidas ACEPTADAS (borrados deliberados) ───────────────────────────────
+#
+# El detector cuenta referencias POR GUÍA dentro de cada asset: cuando un objeto
+# se BORRA a propósito, la guía que sólo él usaba baja su cuenta y parece una
+# pérdida. Así se perdió una referencia a la fuente del juego al eliminar el
+# botón «↻ Sig. Gen» (F6): el objeto ya no existe, no es un editor que dejó un
+# slot vacío. La lista de abajo es la única forma de decir «este borrado es
+# intencionado» sin apagar el chequeo: cada línea lleva su MOTIVO y el alcance es
+# exacto (ruta + guía), así que una pérdida distinta en el mismo fichero sigue
+# fallando.
+ACEPTADAS = os.path.join('scripts', 'unity-reference-allowlist.txt')
+
+
+def cargar_aceptadas(root):
+    """{(ruta, guía): motivo} de la lista versionada. Sin fichero, vacío."""
+    ruta = os.path.join(root, ACEPTADAS)
+    aceptadas = {}
+    if not os.path.isfile(ruta):
+        return aceptadas
+    with open(ruta, encoding='utf-8') as f:
+        for linea in f:
+            linea = linea.strip()
+            if not linea or linea.startswith('#'):
+                continue
+            partes = [p.strip() for p in linea.split('|')]
+            if len(partes) < 3:
+                continue
+            aceptadas[(partes[0], partes[1])] = partes[2]
+    return aceptadas
+
+
+def aplicar_aceptadas(perdidas, aceptadas, quiet=False):
+    """Quita las pérdidas que la lista declara intencionadas, diciéndolo."""
+    if not aceptadas or not perdidas:
+        return perdidas
+    restantes = []
+    for clase, rel, campo, guia, detalle in perdidas:
+        motivo = aceptadas.get((rel, guia)) or aceptadas.get((os.path.basename(rel), guia))
+        if motivo is None:
+            restantes.append((clase, rel, campo, guia, detalle))
+        elif not quiet:
+            slot = f' [{campo}]' if campo else ''
+            print(f'  · pérdida ACEPTADA: {rel}{slot} — {motivo}')
+    return restantes
+
+
 # ── La comprobación ─────────────────────────────────────────────────────────
 
 def comprobar(root, project, antes, ahora=None):
@@ -409,6 +455,7 @@ def comprobar(root, project, antes, ahora=None):
                     detalle += f' · ahora: «{hoy}»'
                 perdidas.append(('referencia perdida', rel, slot, guia, detalle))
 
+    perdidas = aplicar_aceptadas(perdidas, cargar_aceptadas(root))
     return perdidas, desconocidas, (len(metas_ahora), len(metas_antes), len(cambiados))
 
 
@@ -779,6 +826,8 @@ def listar():
     print('    churn del editor mueve cientos de líneas `guid:` sin perder ninguna.')
     print('  · Sólo cuentan las guías de assets de DATOS: perder la guía de un `.cs` es')
     print('    quitar un componente, y un asset regenerado lo hace a propósito.')
+    print(f'  · Un BORRADO deliberado se declara con su motivo en {ACEPTADAS}')
+    print('    (ruta | guía | motivo): todo lo demás sigue fallando.')
     print('Modos:')
     print('  · el ÁRBOL (por omisión): el árbol de trabajo contra una revisión (HEAD).')
     print('  · `--range A..B`: cada commit del rango contra SU PADRE, sin mirar el disco')

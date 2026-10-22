@@ -35,6 +35,10 @@
 #   bash scripts/check-unity-references.sh --selftest
 #   bash scripts/check-unity-references.sh --list
 #
+# UN BORRADO A PROPÓSITO se declara, con motivo, en
+# `scripts/unity-reference-allowlist.txt` (ruta | guía | motivo): el alcance es
+# exacto, así que cualquier otra pérdida del mismo fichero sigue fallando.
+#
 # Salida: 0 referencias intactas · 1 se perdió alguna · 2 uso · 3 no medible (sin
 # git o Python, o el editor no cerró antes del --timeout).
 # ─────────────────────────────────────────────────────────────────────────────

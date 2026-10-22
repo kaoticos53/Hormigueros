@@ -124,6 +124,16 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// 256² el canal cada tick multiplicaría por 5 la memoria del búfer.</summary>
         public const int PerfFrameEvery = 5;
 
+        /// <summary>
+        /// Velocidad de reproducción del medidor (F6). Antes salía del DEFAULT del
+        /// presenter (10×); con la partida ya a 120× hay que ponerla EXPLÍCITA,
+        /// porque el medidor mide el coste del sistema con 4 streams y a 120× cada
+        /// vista consumiría 12 veces más ticks por segundo — otra carga, otro
+        /// número. La escena versionada ya declara 10×: este campo es lo que hace
+        /// que regenerarla no cambie la medida.
+        /// </summary>
+        public const float PerfSpeed = 10f;
+
         public static void CreateMultiSimPerfScene(int gridCells)
             => CreateMultiSimPerfScene(gridCells, PerfTicks);
 
@@ -349,6 +359,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // Las N partidas comparten horizonte (7200 ticks); velocidad por
             // vista con +/= (SpeedBoost) o el Speed del inspector.
             presenter.Ticks = ticks;
+            presenter.Speed = PerfSpeed;         // el medidor no hereda la base de 120×
             presenter.FrameEvery = frameEvery;   // 15 Hz de canal A por vista: N streams van finos
             presenter.Seed = seed;
             presenter.SeedPoolPath = pool;

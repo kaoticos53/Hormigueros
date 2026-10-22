@@ -299,6 +299,13 @@ namespace AntSim.Unity.Scripts.Streaming
             public GraphView? Graph;                              // canal F (F5.2c)
         }
 
+        /// <summary>Un rectángulo de pared del terreno, en CELDAS (F6).</summary>
+        public readonly struct MazeRect
+        {
+            public readonly int X, Y, W, H;
+            public MazeRect(int x, int y, int w, int h) { X = x; Y = y; W = w; H = h; }
+        }
+
         /// <summary>Cabecera del stream (parámetros de la partida).</summary>
         public sealed class HeaderView
         {
@@ -308,6 +315,9 @@ namespace AntSim.Unity.Scripts.Streaming
             public bool PheroSetMode; // canal E múltiple (F5.1): los ticks traen pheroSet
             public int ActivEvery;   // canal F (F5.0); 0 = desactivado
             public ulong InspectId;  // hormiga del canal F; 0 = sin inspección
+            /// <summary>F6: rectángulos de pared del laberinto. Vacío = terreno clásico.</summary>
+            public System.Collections.Generic.List<MazeRect> Maze = new();
+            public bool HasMaze => Maze.Count > 0;
         }
 
         public HeaderView? Header { get; private set; }
@@ -338,6 +348,7 @@ namespace AntSim.Unity.Scripts.Streaming
                     ActivEvery = raw.Contains("\"activEvery\"") ? (int)p.Num("activEvery") : 0,
                     InspectId = raw.Contains("\"inspectId\"") ? (ulong)p.Num("inspectId") : 0ul,
                 };
+                ParseMaze(raw, Header.Maze);
                 return null;
             }
 
@@ -721,6 +732,60 @@ namespace AntSim.Unity.Scripts.Streaming
                     result.Add(v);
             }
             return result.ToArray();
+        }
+
+        /// <summary>
+        /// F6 — rectángulos del terreno de la cabecera: <c>"maze":[[x,y,w,h],…]</c>
+        /// en celdas. Ausente ⇒ lista vacía (mundo clásico). No es un JSON
+        /// completo: recorre números y corchetes hasta cerrar el array.
+        /// </summary>
+        private static void ParseMaze(string raw, List<MazeRect> into)
+        {
+            int i = raw.IndexOf("\"maze\":[", StringComparison.Ordinal);
+            if (i < 0) return;
+            i += "\"maze\":".Length;
+            int depth = 0;
+            var rect = new int[4];
+            int n = 0;
+            long cur = 0;
+            bool neg = false, has = false;
+
+            void Flush()
+            {
+                if (!has) return;
+                if (n < 4) rect[n++] = (int)(neg ? -cur : cur);
+                cur = 0; neg = false; has = false;
+            }
+
+            for (; i < raw.Length; i++)
+            {
+                char ch = raw[i];
+                if (ch == '[') { Flush(); depth++; n = 0; continue; }
+                if (ch == ']')
+                {
+                    Flush();
+                    if (depth == 2)
+                    {
+                        if (n == 4) into.Add(new MazeRect(rect[0], rect[1], rect[2], rect[3]));
+                        n = 0;
+                    }
+                    depth--;
+                    if (depth <= 0) return;
+                    continue;
+                }
+                if (ch == ',') { Flush(); continue; }
+                if (ch == '-') { neg = true; has = true; continue; }
+                if (ch >= '0' && ch <= '9')
+                {
+                    cur = cur * 10 + (ch - '0');
+                    has = true;
+                }
+                else
+                {
+                    Flush();
+                    if (depth > 2 || (depth == 2 && n > 0)) return; // malformado: se corta
+                }
+            }
         }
 
         /// <summary>Lector de claves sobre un objeto JSON plano (números y strings cortos).</summary>

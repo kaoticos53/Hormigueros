@@ -33,6 +33,12 @@ namespace AntSim.Unity.Scripts.Presenter
         public string Species = "lasius";
         public string? SeedPoolPath;     // p. ej. artifacts/pretrain-warm-v2.antgenome (relativa al repo root)
 
+        [Header("Terreno (F6)")]
+        [Tooltip("Laberinto con obstáculos: la CLI lo genera desde la semilla y la cabecera del stream trae los rectángulos que se pintan aquí. Sin él, el tablero es el plano clásico.")]
+        public bool Maze = false;
+        [Tooltip("Al terminar el horizonte, guarda la élite evolucionada en artifacts/evolved-<semilla>.antgenome (la evolución es por nacimientos; no hay botón de generación).")]
+        public bool ExportElite = false;
+
         [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
         [Tooltip("Canal E (F4.5): feromonas de la colonia 0 cada N ticks. 0 = desactivado.")]
         public int PheroEvery = 0;
@@ -87,6 +93,18 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Malla de la HOJA (F5.2a): silueta propia generada por el bootstrapper. Si falta, la hoja se dibuja con ItemMesh — el aspecto de antes, sin fallo.")]
         public Mesh? LeafMesh;
         public Material ItemMaterial = null!;
+
+        [Header("Terreno (F6)")]
+        [Tooltip("Quad unitario en XZ para las paredes del laberinto (assets generados por el bootstrapper).")]
+        public Mesh? WallMesh;
+        [Tooltip("Material de las paredes (unlit, piedra oscura).")]
+        public Material? WallMaterial;
+
+        private readonly System.Collections.Generic.List<Matrix4x4> _wallMatrices = new();
+        private bool _wallsBuilt;
+
+        /// <summary>Paredes pintadas en la última presentación (0 = sin laberinto).</summary>
+        public int LastWallDraws { get; private set; }
 
         [Header("F5.2a: hojas con mordiscos (CutsLeft/CutsInitial del canal A)")]
         [Tooltip("Material de la hoja (verde oscuro, distinto del ítem simple).")]
@@ -154,8 +172,8 @@ namespace AntSim.Unity.Scripts.Presenter
         public float ActorLift = 0.6f;
 
         [Header("Tiempo")]
-        [Tooltip("Velocidad de simulación/reproducción en rango 1.0× (10% base) a 100.0× (1000% base). 10.0× = base normal. 0 = pausa.")]
-        [Range(1f, 100f)] public float Speed = 10f;
+        [Tooltip("Velocidad de simulación/reproducción en rango 10× a 160×. 120× = base normal (40 × los 3× del lanzador). 0 = pausa.")]
+        [Range(10f, 160f)] public float Speed = 120f;
         [Tooltip("Multiplicador adicional (1 por defecto).")]
         public float SpeedBoost = 1f;
         [Tooltip("Tecla para aumentar la velocidad (+ / = / Keypad +).")]
@@ -167,7 +185,7 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Tecla para pausar / reanudar la simulación.")]
         public KeyCode PauseKey = KeyCode.Space;
 
-        private float _pausedSpeed = 10f;
+        private float _pausedSpeed = 120f;
 
         private readonly Streaming.GameStreamPresenter _presenter = new();
         private Streaming.StreamSource? _source;
@@ -249,35 +267,6 @@ namespace AntSim.Unity.Scripts.Presenter
             SetSpeed(Streaming.SpeedControlModel.StepDown(Speed));
         }
 
-        /// <summary>Generación evolutiva actual acumulada en la sesión.</summary>
-        public static int GenerationCount = 1;
-
-        /// <summary>Récord histórico de supervivencia en segundos.</summary>
-        public static float AllTimeBestSurvivalSeconds = 0f;
-
-        /// <summary>Generación actual del presentador.</summary>
-        public int Generation => GenerationCount;
-
-        /// <summary>Tiempo de supervivencia transcurrido en la generación actual (s).</summary>
-        public float CurrentSurvivalSeconds => _simTime;
-
-        /// <summary>Mejor tiempo histórico de supervivencia (s).</summary>
-        public float BestSurvivalSeconds => AllTimeBestSurvivalSeconds;
-
-        /// <summary>
-        /// Avanza inmediatamente a la siguiente generación evolutiva: registra el récord
-        /// de supervivencia, incrementa la generación y relanza el escenario sembrado con la élite acumulada.
-        /// </summary>
-        public void TriggerNextGeneration()
-        {
-            if (_simTime > AllTimeBestSurvivalSeconds)
-                AllTimeBestSurvivalSeconds = _simTime;
-
-            GenerationCount++;
-            UnityEngine.SceneManagement.SceneManager.LoadScene(
-                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
-        }
-
         /// <summary>Alterna entre pausa y la velocidad previa.</summary>
         public void TogglePause()
         {
@@ -332,9 +321,26 @@ namespace AntSim.Unity.Scripts.Presenter
                 ? Streaming.RepoPathResolver.Resolve(SeedPoolPath, baseDir: null, repoRoot)
                 : SeedPoolPath ?? "";
             _source = new Streaming.StreamSource(CliPath, repoRoot);
+            // Contrapresión (F6): el stream de 2 h se presenta a 120×, y el CLI
+            // produce más rápido de lo que se consume. Sin tope, la cola acumula
+            // ticks durante una hora. 600 ticks = 20 s de simulación de colchón.
+            _presenter.MaxPending = 600;
             _streaming = true;
-            // El stream se bombea en un hilo: el juego no se congela mientras el CLI corre.
-            System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+
+            // La élite se guarda al terminar el horizonte (evolución por
+            // nacimientos: no hay reinicio de generación que la conserve).
+            string? exportPath = null;
+            if (ExportElite && string.IsNullOrEmpty(ReplayFile))
+            {
+                exportPath = repoRoot != null
+                    ? System.IO.Path.Combine(repoRoot, "artifacts", $"evolved-{Seed}.antgenome")
+                    : null;
+            }
+
+            // Hilo DEDICADO (no del pool): una partida de 2 h bloquea este hilo
+            // esperando la contrapresión; ocupar un hilo del pool una hora no es
+            // aceptable.
+            var pump = new System.Threading.Thread(() =>
             {
                 try
                 {
@@ -349,7 +355,8 @@ namespace AntSim.Unity.Scripts.Presenter
                         _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery,
                             seedPool.Length > 0 ? seedPool : null,
                             line => _presenter.Feed(line), PendingDropArgs,
-                            PheroEvery, ActivEvery, InspectId, Species);
+                            PheroEvery, ActivEvery, InspectId, Species,
+                            maze: Maze, exportPath: exportPath);
                 }
                 catch (Exception ex)
                 {
@@ -361,7 +368,28 @@ namespace AntSim.Unity.Scripts.Presenter
                 {
                     _streaming = false;
                 }
-            });
+            })
+            { IsBackground = true, Name = "AntSimStream" };
+            pump.Start();
+        }
+
+        /// <summary>
+        /// F6 — Parar Play cierra el CLI y despierta al hilo atascado en la
+        /// contrapresión. Sin esto el hijo queda huérfano bloqueado en la tubería
+        /// (el caso no existía con un horizonte de 7.200 ticks: el CLI terminaba
+        /// solo en un segundo).
+        /// </summary>
+        private void OnDestroy()
+        {
+            _source?.Stop();
+            _presenter.Close();
+            _streaming = false;
+        }
+
+        private void OnApplicationQuit()
+        {
+            _source?.Stop();
+            _presenter.Close();
         }
 
         private void Update()
@@ -392,6 +420,31 @@ namespace AntSim.Unity.Scripts.Presenter
             var state = _presenter.Sample(Frac());
             _lastState = state;
             Draw(state);
+        }
+
+        /// <summary>
+        /// Construye las matrices de las paredes una sola vez, cuando llega la
+        /// cabecera. Las celdas vienen en coordenadas de rejilla (celda = 8 u) y
+        /// el quad unitario se escala al rectángulo; Y del mundo va a Z de Unity
+        /// (el tablero se ve en cenital), como el resto de la vista.
+        /// </summary>
+        private void BuildWallsIfNeeded()
+        {
+            if (_wallsBuilt) return;
+            var header = Presenter.Header;
+            if (header == null) return; // aún no llegó la cabecera
+            _wallsBuilt = true;
+            _wallMatrices.Clear();
+            float cell = Streaming.WorldUnits.PerCell;
+            const float wallLift = 0.35f; // sobre el quad de feromonas (0,25), bajo los actores
+            for (int i = 0; i < header.Maze.Count; i++)
+            {
+                var r = header.Maze[i];
+                float w = r.W * cell;
+                float h = r.H * cell;
+                var pos = new Vector3((r.X * cell) + w * 0.5f, wallLift, (r.Y * cell) + h * 0.5f);
+                _wallMatrices.Add(Matrix4x4.TRS(pos, Quaternion.identity, new Vector3(w, 1f, h)));
+            }
         }
 
         private float Frac()
@@ -537,6 +590,24 @@ namespace AntSim.Unity.Scripts.Presenter
             LastDrawCalls = 0;
             LastInstancedCalls = 0;
             LastFallbackCalls = 0;
+            LastWallDraws = 0;
+
+            // — Terreno (F6): ANTES de actores e ítems, para que éstos se pinten
+            //   encima. Una sola pasada instanciada con los rectángulos de la
+            //   cabecera: las paredes son las mismas celdas que colisionan. —
+            if (WallMesh != null && WallMaterial != null)
+            {
+                BuildWallsIfNeeded();
+                if (_wallMatrices.Count > 0)
+                {
+                    int wallLayer = RenderLayer > 0 ? RenderLayer : 0;
+                    _drawer.Clear();
+                    for (int i = 0; i < _wallMatrices.Count; i++)
+                        _drawer.Add(WallMaterial, _wallMatrices[i]);
+                    LastDrawCalls += _drawer.Draw(WallMesh, wallLayer, instancing);
+                    LastWallDraws = _wallMatrices.Count;
+                }
+            }
 
             if (AntMesh != null && AntMaterial != null)
             {

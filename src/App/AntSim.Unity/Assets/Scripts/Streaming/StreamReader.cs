@@ -22,6 +22,24 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>CPU del hijo al cerrar: el proceso ya no está, pero su coste
         /// total sí (dejarlo a 0 diría que la simulación fue gratis).</summary>
         private double _cliCpuMsClosed;
+        private volatile bool _stopRequested;
+
+        /// <summary>
+        /// Detiene el CLI en curso (F6). Sin esto, parar Play con una partida de
+        /// 2 h deja un proceso huérfano bloqueado escribiendo en una tubería que
+        /// ya nadie lee.
+        /// </summary>
+        public void Stop()
+        {
+            _stopRequested = true;
+            var proc = _live;
+            if (proc == null) return;
+            // `Kill()` sin árbol: la sobrecarga con `entireProcessTree` NO existe
+            // en el perfil de .NET de Unity 6000 (error CS1739 al importar el
+            // script). El CLI no lanza hijos, así que el árbol no hace falta.
+            try { if (!proc.HasExited) proc.Kill(); }
+            catch (Exception) { /* ya terminó o el handle se fue con él */ }
+        }
 
         /// <param name="cliPath">Ruta del CLI: absoluta, relativa al cwd o
         /// relativa al repo root (p. ej. "build/antsim").</param>
@@ -38,7 +56,8 @@ namespace AntSim.Unity.Scripts.Streaming
         /// (canal F) — telemetría pura, el hash del mundo no cambia.</summary>
         public void StreamGame(ulong seed, int ticks, int grid, int colonies, int frameEvery,
             string? seedPoolPath, Action<string> onLine, IReadOnlyList<string>? extraArgs = null,
-            int pheroEvery = 0, int activEvery = 0, uint inspectId = 0, string? species = null)
+            int pheroEvery = 0, int activEvery = 0, uint inspectId = 0, string? species = null,
+            bool maze = false, string? exportPath = null)
         {
             var psi = new ProcessStartInfo
             {
@@ -57,6 +76,10 @@ namespace AntSim.Unity.Scripts.Streaming
             { psi.ArgumentList.Add("--seed-pool"); psi.ArgumentList.Add(seedPoolPath); }
             if (!string.IsNullOrWhiteSpace(species))
             { psi.ArgumentList.Add("--species"); psi.ArgumentList.Add(species); }
+            if (maze)
+                psi.ArgumentList.Add("--maze");
+            if (!string.IsNullOrWhiteSpace(exportPath))
+            { psi.ArgumentList.Add("--export"); psi.ArgumentList.Add(exportPath); }
             if (pheroEvery > 0)
             { psi.ArgumentList.Add("--phero-every"); psi.ArgumentList.Add(pheroEvery.ToString()); }
             if (activEvery > 0)
@@ -76,7 +99,7 @@ namespace AntSim.Unity.Scripts.Streaming
             try
             {
                 string? line;
-                while ((line = proc.StandardOutput.ReadLine()) != null)
+                while (!_stopRequested && (line = proc.StandardOutput.ReadLine()) != null)
                     onLine(line);
             }
             finally

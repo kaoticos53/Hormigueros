@@ -10,10 +10,12 @@ public sealed class PlaypassConfig
     public int seed = 42;
     public int grid = 96;
     public int colonies = 2;
-    public int ticks = 7200;
-    public float speed = 3f;
+    public int ticks = 216000;
+    public float speed = 120f;
     public string seedPool = "";
     public string replay = "";
+    public bool maze = true;
+    public bool export = false;
 }
 
 /// <summary>
@@ -44,12 +46,16 @@ public static class ProbeToastsSet
         behaviour.Speed = cfg.speed;
         behaviour.SeedPoolPath = string.IsNullOrEmpty(cfg.seedPool) ? null : cfg.seedPool;
         behaviour.ReplayFile = string.IsNullOrEmpty(cfg.replay) ? null : cfg.replay;
+        behaviour.Maze = cfg.maze;
+        behaviour.ExportElite = cfg.export;
 
         return "ok|seed=" + cfg.seed
              + "|grid=" + cfg.grid
              + "|ticks=" + cfg.ticks
              + "|speed=" + cfg.speed.ToString(CultureInfo.InvariantCulture)
              + "|seedPool=" + (behaviour.SeedPoolPath ?? "-")
-             + "|replay=" + (behaviour.ReplayFile ?? "-");
+             + "|replay=" + (behaviour.ReplayFile ?? "-")
+             + "|maze=" + (behaviour.Maze ? "1" : "0")
+             + "|export=" + (behaviour.ExportElite ? "1" : "0");
     }
 }
