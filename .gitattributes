@@ -1,0 +1,104 @@
+# ── Finales de línea: que el checkout no dependa de la máquina ──────────────
+# POR QUÉ. El repo se desarrolla en Windows —Git for Windows instala con
+# `core.autocrlf=true`— y sus scripts se ejecutan en Linux: la CI y, aquí mismo,
+# WSL. Sin reglas, lo que cae en el disco lo decide el `autocrlf` de cada
+# máquina, no el repo: medido el 2026-09-20 con `git ls-files --eol`, 442
+# ficheros estaban en LF y 176 en CRLF, con los MISMOS blobs.
+#
+# Y donde de verdad muerde no es cosmético. Medido en un shell POSIX (Linux) con
+# un fichero CRLF: el shebang no arranca («cannot execute: required file not
+# found»), una asignación se queda con el `\r` dentro (`v=[hola\r]`, o sea que
+# toda ruta o argumento construido desde una variable lo arrastra) y un `case`
+# revienta con «Syntax error: word unexpected (expecting "in")». Eso es
+# exactamente `.githooks/pre-push` —que git ejecuta por su shebang— y los
+# `scripts/*.sh`, incluidos el verificador de assets y los pines de hash.
+#
+# EL EDITOR NO ESCRIBE CRLF. Medido antes de tocar los assets, porque era la
+# duda que decidía la regla: `MultiSim.unity` y el `UniversalRenderPipelineAsset`
+# salieron del bootstrapper de Unity (el editor serializando) y su hash SIN
+# filtros es idéntico al del blob —LF de verdad—; su mtime es el de esa corrida,
+# no el de un checkout. En cambio `Game.unity` y los 76 `.mat`, que nadie tocó
+# desde entonces, están en CRLF: eso lo escribió el CHECKOUT con `autocrlf=true`
+# (su hash sin filtros NO es el del blob). O sea: el CRLF del árbol no es del
+# editor, es de git; fijar LF en los assets va a favor de lo que Unity hace.
+#
+# EL DIFF ESPURIO ESTÁ MEDIDO. Con el árbol limpio, `git status` sale vacío con
+# `autocrlf=true`; pero el mismo `AntMat.mat` leído sin normalizar es un fichero
+# entero cambiado: `git -c core.autocrlf=false status` lo marca ` M` y su diff
+# son 71 inserciones / 71 borrados (cada línea, por el `\r`). Así que cualquier
+# herramienta que lea el árbol de otra forma —un diff a ojo, un consumidor en
+# Linux, `git config core.autocrlf false`— ve ruido que el repo puede evitar.
+#
+# CÓMO. Se fija el eol por TIPO de fichero, que es lo que todas las plataformas
+# pueden respetar: LF para TODO texto —código, documentos, assets de Unity en
+# modo Force Text— y CRLF sólo para lo que interpreta Windows (cmd.exe y
+# PowerShell). No hay `* text=auto` ni `* text` a propósito: la decisión es
+# explícita por extensión y no la adivina la heurística de contenido. Con `eol=`
+# fijo, git no cambia lo que GUARDA (los blobs siguen en LF); cambia lo que
+# ESCRIBE al hacer checkout, así que un clone fresco da los mismos bytes en
+# Windows, Linux y macOS sin depender del `autocrlf` local.
+
+# Lo que ejecuta un shell POSIX o Python: el shebang, los heredocs y los
+# patrones exigen LF. El hook no lleva extensión, de ahí su línea propia.
+*.sh            text eol=lf
+*.py            text eol=lf
+.githooks/*     text eol=lf
+
+# Documentos: los escribe un humano o un agente, sin editor que medie, y se
+# leen por diffs. Incluye los `artifacts/*.txt` con finales mezclados, que
+# quedan normalizados la próxima vez que se escriban.
+*.md            text eol=lf
+*.txt           text eol=lf
+*.html          text eol=lf
+
+# Configuración y datos de texto: nadie espera CRLF dentro de un JSON, y los
+# `*.jsonl` del stream y los `*.expected` de los pines de hash se comparan byte
+# a byte entre plataformas.
+*.json          text eol=lf
+*.jsonl         text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.rsp           text eol=lf
+*.expected      text eol=lf
+*.err           text eol=lf
+*.slnx          text eol=lf
+*.csproj        text eol=lf
+*.gitignore     text eol=lf
+
+# Código C#: 178 `*.cs` y los `.asmdef` que los agrupan.
+*.cs            text eol=lf
+*.asmdef        text eol=lf
+
+# Assets de Unity en modo Force Text (los YAML con `m_...`). Mandan LF porque es
+# lo que escribe el editor (medido arriba); el verificador de equivalencia ya
+# ignora finales de línea, así que un asset que Unity reescriba sigue contando
+# como idéntico.
+*.mat           text eol=lf
+*.unity         text eol=lf
+*.asset         text eol=lf
+*.meta          text eol=lf
+*.prefab        text eol=lf
+*.controller    text eol=lf
+*.anim          text eol=lf
+
+# Binarios: que git no los trate como texto ni intente convertir nada. Los
+# `.antgenome`/`.antsave` son formatos propios con payload binario.
+#
+# `.ttf` entra aquí por lo mismo, y además porque es GENERADO: la fuente del
+# HUD la escribe el bootstrapper (GameAssetBuilder.EnsureFont a través de
+# TtfWriter) y su md5 tiene que ser el mismo en Windows y en Linux para que la
+# segunda pasada no reescriba el asset ni ensucie el árbol. Un filtro de texto
+# —`text eol=lf`, o el `autocrlf` de turno— le cambiaría bytes al payload y
+# rompería justo eso: el checksum `0xB1B0AFBA` del sfnt deja de cuadrar.
+*.png           -text
+*.ttf           -text
+*.antgenome     -text
+*.antsave       -text
+
+# Lo que interpreta Windows: cmd.exe y PowerShell esperan CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Este fichero también: con CRLF, cada patrón de aquí llevaría un `\r` pegado.
+.gitattributes  text eol=lf

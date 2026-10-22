@@ -69,6 +69,13 @@ public sealed class AlertDeriverTests
         Assert.Contains("Primera descarga", green[0].Text);
         Assert.Contains("la colonia completa ciclos", green[0].Text);
 
+        // El hito va ANCLADO a la posición de ESA descarga (100,100 en el evento
+        // de arriba): es lo que el salto de cámara —y el paso C del bloque 4 del
+        // Play pass— necesitan. Antes salía en (-1,-1) y la alerta no tenía
+        // ningún punto del mundo al que saltar.
+        Assert.Equal(100f, green[0].X);
+        Assert.Equal(100f, green[0].Y);
+
         // Segunda descarga: no repite el hito.
         output.Clear();
         relay.Observe(evs, sim);

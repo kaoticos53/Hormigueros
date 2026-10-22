@@ -107,6 +107,15 @@ public sealed class RelayTracker
     public ulong FirstUnloadTick { get; private set; }
     public ulong LastUnloadTick { get; private set; }
 
+    /// <summary>Posición del PRIMER unload de la partida (x/y del evento, en
+    /// unidades del mundo) y la colonia que lo cerró. Es el ancla del hito verde
+    /// `first-unload`: sin ella la alerta no se puede saltar con la cámara y el
+    /// paso C del bloque 4 del Play pass se quedaba sin nada que verificar. -1 =
+    /// todavía sin descarga.</summary>
+    public float FirstUnloadX { get; private set; } = -1f;
+    public float FirstUnloadY { get; private set; } = -1f;
+    public int FirstUnloadColony { get; private set; } = -1;
+
     public long DropDistanceSum { get; private set; }
     public int DropCount { get; private set; }
 
@@ -157,7 +166,12 @@ public sealed class RelayTracker
             else if (ev.Kind == SimEventKind.Unload)
             {
                 if (FirstUnloadTick == 0)
+                {
                     FirstUnloadTick = ev.Tick;
+                    FirstUnloadX = ev.X;
+                    FirstUnloadY = ev.Y;
+                    FirstUnloadColony = ev.ColonyId;
+                }
                 LastUnloadTick = ev.Tick;
 
                 var colony = sim.Colonies[ev.ColonyId];

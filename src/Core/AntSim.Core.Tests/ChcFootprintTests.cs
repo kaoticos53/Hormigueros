@@ -187,7 +187,7 @@ public class ChcFootprintTests
     // ————— 4. checkpoint: la huella viaja —————
 
     [Fact]
-    public void Checkpoint_V5_ConservaLaHuella_YEsDeterminista()
+    public void Checkpoint_V6_ConservaLaHuella_YEsDeterminista()
     {
         var original = NewWorld(seed: 11UL, colonies: 2);
         for (int i = 0; i < 300; i++) original.Step();
@@ -197,8 +197,8 @@ public class ChcFootprintTests
         byte[] bytes = WorldSimSave.Serialize(original);
         // La versión va en los 4 bytes siguientes a la magia de 8: que suba es
         // una decisión consciente de formato, no un efecto colateral.
-        Assert.Equal(5, BitConverter.ToInt32(bytes, 8));
-        Assert.Equal(5, WorldSimSave.FormatVersion);
+        Assert.Equal(6, BitConverter.ToInt32(bytes, 8));
+        Assert.Equal(6, WorldSimSave.FormatVersion);
 
         var cargado = WorldSimSave.Deserialize(bytes);
 

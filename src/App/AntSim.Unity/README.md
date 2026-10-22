@@ -110,7 +110,8 @@ aquí.
 
 Al activar los avisos salieron **5 CS8618** en `SimPresenterBehaviour` — los
 campos de render (`AntMesh`, `AntMaterial`, `CarrierMaterial`, `ItemMesh`,
-`ItemMaterial`) que asigna la escena/bootstrapper, de modo que el compilador no ve
+`ItemMaterial` — y desde F5.1 §2 el `LeafMesh`) que asigna la
+escena/bootstrapper, de modo que el compilador no ve
 su inicialización. Se resolvieron con `null!`: neutro en comportamiento (el
 inicializador solo corre en la construcción, los valores serializados lo
 sobrescriben y `Draw` ya los guarda con `!= null`); marcarlos `?` habría propagado
@@ -155,10 +156,164 @@ idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
    ```
    El `.unity` resultante se puede inspeccionar como texto (objetos, `ColonyId`,
    `m_SizeDelta`), así que una regresión de layout también se detecta sin ojos.
+   Desde aquí mismo, el montador CIERRA lo que escribe: canonicaliza los assets
+   generados y recarga la escena (ver «El byte lo estabiliza el GENERADOR» más
+   abajo), así que en batch sale el mismo byte canónico que con el editor abierto
+   — y `ANTSIM_CANONICALIZE=0` apaga ese cierre para medir el antes/después.
 4. **Play**: el mundo llega por el stream del CLI; HUD en vivo.
 
 Para inspeccionar sin CLI: `ReplayFile` en `SimPresenterBehaviour` apunta a un
 stream volcado (`artifacts/stream-fixture-256.jsonl`) y lo reproduce como fue.
+
+### Qué entrada y qué config produjo cada escena (registro)
+
+Las dos escenas que el repo versiona **no** salen de los valores por defecto de su
+montador, y eso lo sabía sólo quien las ejecutó: el `.unity` guarda los campos, no
+su procedencia, y el montador dice otra cosa. El registro vive en
+`GeneratedSceneCatalog` (modelo puro, compilado también en la suite headless) y lo
+comprueba `GeneratedSceneContractTests` campo a campo contra el YAML serializado,
+así que un pase que deje otra configuración falla nombrando el campo, la escena y
+los dos valores:
+
+| Escena | Entrada que la escribió | grid | colonias | ticks | frameEvery | velocidad | semilla(s) | pool(s) |
+|---|---|---|---|---|---|---|---|---|
+| `Assets/Scenes/Game.unity` | **`SceneBootstrapper.CreateGameScene`** con `LaunchSettings.Defaults()` (F6). El Play pass la reescribe en su bloque 4 con `TICKS`/`B4_SPEED`, que siguen a esos defaults | 96 | 2 | 216000 | 1 | 120 | 42 | `pretrain-warm-v2` |
+| `Assets/Scenes/MultiSim.unity` | **Medidor de rendimiento**: `-executeMethod …MultiSimBootstrapper.CreateMultiSimPerfScene` | 256 | 2 por vista | 12000 | 5 | 10 | 42–45 (una por vista) | warm-v2 · warm-4 · warm3 · warm2 (autodetectados de `artifacts/`) |
+
+Lo que **no** hay que confundir, porque es justo lo que se perdía:
+
+- El menú **«Crear escena de juego»** (`SceneBootstrapper.CreateGameScene`) monta
+  con `LaunchSettings.Defaults()` —F6: ticks **216000**, velocidad **120×** y
+  laberinto desde la semilla—, y ésa es EXACTAMENTE la configuración del
+  `Game.unity` del repo. El Play pass la reproduce en su bloque 4: sus `TICKS`,
+  `B4_SPEED`, `GRID`, `COLONIES`, `SEED` y `SEED_POOL` tienen que coincidir con el
+  catálogo, o el pase guardaría otra partida. `frameEvery` y la especie no los
+  toca el pase: la escena conserva los del montador, y el registro los ancla a
+  `LaunchSettings` en vez de a la memoria.
+- El menú **«Crear escena multi-visor»** (`CreateMultiSimScene`) monta grid 96 /
+  36000 ticks / frameEvery 2 —la escena de F5.1bis—, y las variantes
+  `CreateMultiSimSmokeScene*`, `PerfSceneProbe.RunPerf` y
+  `PlayerBuild.BuildMultiViewPlayer` escriben **la misma ruta**
+  `Assets/Scenes/MultiSim.unity`. Regenerar «el multi-visor» con cualquiera de
+  ellas pisa la escena del medidor, y el contrato lo dice en la siguiente corrida.
+- **El byte lo estabiliza el GENERADOR al escribir, no un pase posterior**: Unity
+  renumera las anclas `&N` y los `fileID` al recrear los assets
+  (`CreateOrReplaceAsset` borra y vuelve a crear) y URP añade a cada `.mat` un
+  bloque `AssetVersion` con un id de 64 bits que cambia de sitio, así que la
+  escena salía con bytes distintos aunque fuese la misma. Lo cierra el propio
+  montador: al terminar de escribir, `GeneratedAssets` corre
+  `scripts/unity-canonicalize-assets.py` —anclas derivadas del **contenido**, sin
+  tocar el objeto principal (`clase × 100000`, que la escena cita entre
+  ficheros) ni `SceneRoots`— y **recarga la escena** desde el  fichero canónico, de forma que un guardado posterior escriba esas anclas y no
+  las de sesión. El Play pass ya no repara lo del generador: lo comprueba
+  (`--check`) justo después de generar y se planta si algún asset derivaría. Lo
+  que sí cierra es **su propia** escritura —el bloque 4 guarda la escena con la
+  configuración que se commitea, y un `save_scene` deja anclas de sesión aunque
+  el contenido no cambie: medido el 2026-10-10, 425 documentos de sólo forma— y
+  la cierra **desde dentro del editor** (`scripts/unity/ProbeCanonicalizeAssets.cs`:
+  canonicaliza y recarga la escena), porque escribir por detrás de una escena
+  abierta le levanta a Unity el modal «The open scene(s) have been modified
+  externally» y el editor deja de responder a todos los comandos. Con
+  eso, **dos pasadas seguidas dan el mismo `git diff`**. Lo que este registro fija
+  es, además, la equivalencia estructural —de eso decide
+  `scripts/check-unity-assets.sh`— y los valores de juego.
+
+### La fuente y los sprites son del juego (no del motor)
+
+El HUD no pide ninguna fuente prestada al motor. El bootstrapper **escribe** el
+`.ttf` del juego y lo importa (`GameAssetBuilder.EnsureFont` →
+`Assets/Fonts/AntSim.ttf`), y las siluetas de los actores son mallas propias
+(`GameAssetBuilder.EnsureActorMesh` → `AntMesh`/`ItemMesh`/`LeafMesh` en
+`Assets/Materials/`, una por vista en el multi-visor).
+
+- **La tipografía** sale de `GameFontModel`: 1000 upem, avance de 0,5 em (el
+  ancho de las tarjetas no cambia) y una tabla de ~142 glifos escrita en una DSL
+  corta y total —`p:` polilínea a trazo, `e:` anillo, `d:` disco, `o:` elipse,
+  `b:` caja, `t:` triángulo, `h:` medio disco, con `-`/`+` para adelgazar y
+  engrosar— y el castellano completo por acentos **compuestos** (una base más un
+  acento de la misma DSL, en vez de un dibujo por letra acentuada). Además de los
+  36 signos que el HUD usa de verdad, trae tres **iconos de uso privado**
+  (U+E000 hormiga, U+E001 carga, U+E002 huevo) con los que las tarjetas
+  sustituyen texto. Las tarjetas los pintan al **doble del cuerpo**
+  (`GameFontModel.CardIconSize` = 2 × `CardBodySize`): van en un run de rich text
+  `<size=28>` dentro del cuerpo de 14 px, así que el glifo crece sin mover el
+  avance del texto del que sale el ancho de la tarjeta. A 14 px medían 5–14 px y
+  se leían como manchas; al doble, la comparación contra la referencia del `.ttf`
+  —cada icono del recorte vivo frente a su glifo rasterizado a 28 px— los
+  clasifica a los tres como su propio glifo: silueta IoU 0,79–0,87 y 0,42–0,69 de
+  correlación, con los otros dos glifos ≤0,19 en el mismo sitio.
+
+### El avance del icono: 720 declarado, 643 es la tinta
+
+Si al medir aparece un «643» donde la fuente declara 720, hay dos cosas que
+decir, las dos medidas:
+
+- **643 es la caja de TINTA del icono**, no un avance: 0,643 em, o sea 9 px a
+  14 px y 18 px a 28 px. El avance declarado es 720 unidades (0,72 em) y la
+  tinta cabe dentro.
+- **El avance RESERVADO no es el declarado porque Unity carga el glifo con el
+  hinting de FreeType**, que ajusta el avance al píxel entero. Cargando la
+  fuente por el motor: sin hinting el icono da 719,76–719,87 unidades a 14, 15,
+  28, 29 y 31 px y una letra 500,00 clavadas; con hinting —lo que pinta uGUI—
+  reserva 10, 11, 20, 21 y 22 px (714, 733, 714, 724 y 710 unidades) y una letra
+  pasa a 8 px a 15 (500 → 533). En el HUD en vivo (canvas al 98,3 %, cara de
+  27,5 px) el generador reserva 19 px: el 95,9 % del avance declarado.
+
+### Lo generado tiene contrato con sus modelos
+
+Los modelos son la fuente de verdad, pero lo que el juego dibuja son los
+ARTEFACTOS: el `.ttf` y las mallas `.asset` que el bootstrapper deja en
+`Assets/`. Editarlos por separado no lo notaba nadie —la suite miraba los
+modelos y el Play pass miraba lo pintado, cada uno con su lado de la pareja—, así
+que `GeneratedAssetContractTests` (headless, sin editor) compara los dos: la
+fuente BYTE A BYTE contra `TtfWriter.BuildFromModel` (el escritor sella la fecha,
+por eso es determinista) y cada malla VÉRTICE A VÉRTICE contra
+`ActorMeshModel.Build(GameSpriteModel.Build(…))`, leyendo las posiciones del blob
+`_typelessdata` de la malla en YAML. El mensaje nombra el fichero y el vértice, y
+la reparación es siempre la misma: abrir el proyecto y dejar que el bootstrapper
+regenere.
+
+El ajuste `shouldRoundAdvanceValue` del importador no cambia nada de eso
+(probado en sus dos estados, avances idénticos), así que la cuenta del ancho
+vive en el modelo que sí decide: `HudLayoutTests.HintedAdvance` reserva como
+reserva uGUI —avance al tamaño del run redondeado al píxel— y un test ancla los
+nueve valores medidos. La sonda publica `units`, `decl` y `ofDecl` por icono,
+normalizando por el tamaño del RUN (hacerlo por el cuerpo del `Text` duplicaba
+las unidades justo en los iconos y hacía parecer que la fuente mentía).
+  `HudLayoutTests` fija las dos mitades: que los tres iconos viajan en su run
+  grande (y que ningún glifo crudo se cuela) y que las cinco líneas siguen
+  cabiendo en la caja útil de 406×135 px, contadas con los avances reales de la
+  fuente.
+- **El escritor** es `TtfWriter`: sfnt puro —10 tablas, `cmap` format 4, `glyf`
+  con puntos on-curve y sin instrucciones—, sin dependencias, con fecha FIJA en
+  `head` y el `checksumAdjustment` del sfnt. Es determinista: la misma entrada da
+  los mismos bytes, así que el `.ttf` se commitea y no se reescribe en cada
+  pasada. `.gitattributes` lo marca binario (`*.ttf -text`) justo por eso: un
+  filtro de texto le cambiaría bytes al payload y el checksum dejaría de cuadrar.
+- **Los sprites** salen de `GameSpriteModel` —contornos CONVEXOS, todos en el
+  mismo sentido, porque el relleno es NON-ZERO y los solapes suman— y
+  `ActorMeshModel` los extruye a una malla. Hormiga, carga y hoja se construyen
+  en la **misma caja** que la cápsula y la esfera que sustituyen (2 u × 1 u), así
+  que la Caja del contrato no cambia (la escala del presenter sí tuvo que decir
+  qué eje es el largo: ver «de canto» abajo), y la hoja estrena pasada propia
+  (los mordiscos ya no comparten malla con la carga).
+- **Regenerar** es volver a correr el bootstrapper: `EnsureFont` sólo reescribe
+  el `.ttf` si los bytes difieren, y `EnsureActorMesh` usa
+  `EditorUtility.CopySerialized` para no cambiar el GUID del asset — cambiarlo
+  rompería las referencias de las escenas ya guardadas.
+
+Para mirar el `.ttf` sin abrir Unity, `python scripts/unity/validate-font.py
+<ruta>/AntSim.ttf` valida tablas, nombres, avances y `cmap` con fontTools y
+rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 681 tests de la
+suite incluyen `GameFontTests` —que cubre también el alfabeto contra los
+literales que el HUD usa de verdad, y **los avances LEÍDOS de la tabla `hmtx`**
+frente a los del modelo, glifo a glifo por la `cmap`— y
+`GeneratedMaterialContractTests`, que comprueba contra `GameMaterialModel` los
+**76 `.mat` y las 10 texturas** que el bootstrapper deja en `Assets/Materials`
+(color, tipo, textura a la que apunta y píxeles de esa textura),
+`ActorMeshTests`, que triangula y mide la malla, y `GeneratedSceneContractTests`,
+que contrasta cada escena versionada con `GeneratedSceneCatalog` —la entrada y la
+configuración que la produjeron— y con las constantes de sus productores.
 
 ### Multi-visor: varias simulaciones a la vez (F5.1bis)
 
@@ -236,6 +391,86 @@ El binario lo resuelve el mismo código que los pases (`scripts/lib/unity-cli.sh
 `$UNITY_CLI` → `unity` en el PATH → instalaciones del Hub), de modo que no hay dos
 ideas de dónde está el editor.
 
+## Unity ensució los assets: ¿churn o cambio de verdad?
+
+Abrir el proyecto, construir un player o simplemente guardar una escena
+**reescribe** la escena, los materiales y los ajustes de URP sin cambiar lo que
+significan: reordena los documentos del YAML, renumera las anclas `&N` y mueve el
+bloque `AssetVersion` de sitio. El diff resultante son miles de líneas que
+esconden, si acaso, un cambio pequeño — y commitearlas contamina la historia del
+repo para siempre. Medido (2026-09-20) en una pasada del generador del
+multi-visor: de 64 assets reescritos, 60 no cambiaban nada.
+
+Lo que **no** ensucia es abrir y cerrar sin tocar nada. Medido (2026-10-09, Unity
+6000.6.0f1, árbol canónico y `Library/` caliente): dos ciclos de abrir el
+proyecto —cargando `Game.unity`, que el log confirma— y cerrarlo con el mismo
+camino que la X de la ventana **no dejaron ni un byte**: `Assets/Scenes` y
+`Assets/Materials` salen idénticos a HEAD, `Packages/manifest.json` intacto, el
+verificador no tiene nada que descartar (`✓ no hay churn que descartar`) y los
+assets siguen en forma canónica. El ruido lo mete GENERAR —y el guardado que eso
+conlleva—, no el simple abrir y cerrar.
+
+A ojo eso no se decide. El verificador lo hace por **equivalencia estructural**
+(documentos por clase, cada referencia local `{fileID: N}` sin `guid` resuelta a
+la huella de su destino e iterada hasta el punto fijo, así que el mismo cableado
+da la misma huella aunque las anclas se renumeren):
+
+```bash
+bash scripts/check-unity-assets.sh            # los assets que el árbol tiene tocados
+bash scripts/check-unity-assets.sh --list     # qué comprueba y qué no
+bash scripts/check-unity-assets.sh --churn    # ¿el último commit metió ruido?
+```
+
+Si ese ruido ya está en el árbol —una pasada que no vas a commitear—,
+`--discard` lo quita él mismo, y por los dos caminos: devuelve a HEAD las rutas
+cuyo único cambio es de forma (anclas y orden) y a las que **cambian de verdad**
+les quita la forma **sin tocar el contenido** —las reescribe en canónico, que es
+lo que el generador hace al cerrar cada escritura—, así que el diff se queda en
+el cambio. Y funciona por lo mismo que todo lo demás: el ancla canónica es el
+hash del contenido, así que un documento que no cambió vuelve a ser el mismo
+byte que en HEAD aunque la pasada le hubiera puesto otra. Medido (2026-10-09,
+`Game.unity`, 425 documentos): una pasada que re-ancla todo y cambia UNA línea
+escalar pasa de **10 669 líneas de diff a 2**. Sólo escribe si la forma canónica
+pasa el `compare` —si no significa lo mismo, se planta y lo dice—, y con
+`--dry-run` mide igual sin tocar nada:
+
+```bash
+bash scripts/check-unity-assets.sh --discard --dry-run   # sólo avisa (y mide)
+bash scripts/check-unity-assets.sh --discard             # quita la forma
+```
+
+El verificador dice si dos versiones **significan** lo mismo; quien hace que no
+haya dos versiones distintas sin motivo es `scripts/unity-canonicalize-assets.py`,
+que el GENERADOR corre al cerrar cada escritura
+(`Assets/Scripts/EditorTools/GeneratedAssets.cs`: el bootstrapper lo invoca tras
+`SaveScene` y recarga la escena desde el fichero canónico). El Play pass no lo
+reejecuta para arreglar al generador: le toma el veredicto con `--check` justo
+después de generar y se planta si algún asset derivaría — eso es un fallo suyo.
+Lo que sí cierra es la escritura que hace el propio pase (el `save_scene` del
+bloque 4), desde dentro del editor y con el mismo canonicalizador
+(`scripts/unity/ProbeCanonicalizeAssets.cs`); y al terminar descarta el churn que
+haya quedado, si esos assets no se van a commitear. La herramienta se puede usar
+sola:
+
+```bash
+python scripts/unity-canonicalize-assets.py --check    # ¿algún asset derivaría del canónico?
+python scripts/unity-canonicalize-assets.py            # reescribirlos en sitio
+python scripts/unity-canonicalize-assets.py --selftest # invariantes, sin repo
+python scripts/unity-canonicalize-assets.py --list     # qué toca y qué no
+```
+
+El paso del generador tiene dos perillas: `ANTSIM_CANONICALIZE=0` lo apaga (medir
+el antes/después, o trabajar a mano) y `ANTSIM_PYTHON` apunta al intérprete cuando
+el PATH del editor no lo tiene. Si no encuentra ninguno **avisa** y sigue —«no
+medido» no es «roto»—, pero entonces la garantía no se cumplió y la comprobación
+del Play pass lo dirá.
+
+La respuesta termina con la orden exacta para descartar el ruido sin perder nada
+(`git checkout -- …`) y sale con código 1 si alguno **sí** cambia de verdad. En CI
+el paso `Assets de Unity (el churn de re-serialización no entra)` recorre los
+commits del push y falla si alguno metió un asset que no cambia nada; su selftest
+es también un paso del job `test`, junto a los de las otras herramientas.
+
 ## Aspecto del mundo y del HUD (F5.1)
 
 Lo que se ve y por qué, en una tabla — el resto de decisiones están comentadas en
@@ -247,14 +482,64 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
 | Suelo | Tierra clara + rejilla cada world/24 | Referencia de escala: un mundo de 768 u no da ninguna pista de tamaño. |
 | Mesa | Plano oscuro 2,6× el mundo | La vista es ancha y el tablero cuadrado: sin ella el 38% de la pantalla era vacío negro. |
 | Cámara | Ortográfica, `orthoSize = world·0.52` | Encuadra la altura con 4% de margen y deja la mesa llenar los lados. |
-| Hormigas | Cápsula tumbada (Rx 90°), largo = 0,018 × mundo, ancho 0,33 × largo | De pie y a escala 0,6 eran postes sub-píxel: «no se ven hormigas». Las portadoras van un 25% mayores (el relevo se lee sin HUD). |
+| Hormigas | Silueta propia (`AntMesh`, de `GameSpriteModel`) tumbada con `Rx 90°` y **girada al rumbo del stream** (`90° − rumbo`), largo = 0,018 × mundo (= 18,69 px en un viewport de 1080), ancho 0,33 × largo | De pie y a escala 0,6 eran postes sub-píxel: «no se ven hormigas». La caja del actor tiene el largo en Y y la hormiga mira hacia +Y, así que el giro del presenter lleva ese eje al rumbo. Las portadoras van un 25% mayores (el relevo se lee sin HUD). |
 | Ítems | Esfera natural × 0,010 × mundo | El diámetro dice la cantidad restante. |
 | Nidos | Montículo + disco del color de la colonia | El mismo acento que usa la tarjeta. |
 | Feromonas | Quad transparente a y=0,3, por debajo de los actores | El canal E solo le cambia la RenderTexture. |
 | HUD | Paneles con acento, barra de estado, tarjetas 440×204, modal centrado | Todo el texto vive sobre panel (antes el mundo se comía el texto) y ningún `Text` desborda su caja. La tarjeta creció 28 px para la gráfica de reserva. |
-| Gráfica de reserva (F5.1) | `RawImage` con textura generada por `ColonySparklineModel` (puro) | Serie de 1 muestra/s (30 ticks, el ritmo del canal C) con ventana de 90 s: una gráfica de 10 minutos en 400 px no dice nada. Se dibuja con **área** (relleno + borde) y se tiñe en rojo por debajo del 20%, el mismo umbral que la barra. |
+| Gráfica de reserva y descargas (F5.1) | `RawImage` con textura generada por `ColonySparklineModel` (puro) | Serie de 1 muestra/s (30 ticks, el ritmo del canal C) con ventana de 90 s: una gráfica de 10 minutos en 400 px no dice nada. Se dibuja con **área** (relleno + borde), teñida en rojo por debajo del 20% (el mismo umbral que la barra), y las **descargas por ventana** como barras ámbar encima, contadas del canal B (`Unload`) y apuntadas en la misma ventana que la muestra; la altura es relativa a la mayor cuenta de la ventana vista. Que la tarjeta las PINTE se mide en píxeles en el Play pass (`ProbeSparklinePixels` + `scripts/playpass-sparkline.py`). |
 
 **Trampas ya encontradas** (no repetirlas):
+
+- **La hormiga andaba de lado**: la caja del actor tiene el largo en Y y la
+  hormiga mira hacia +Y, pero el giro del presenter era `−rumbo` en vez de
+  `90° − rumbo`, así que el morro caía 90° a la izquierda del avance —patas y
+  antenas perpendiculares al rumbo—. Se veía a simple vista y **no lo veía ningún
+  check**: los tres lóbulos estaban, el mundo aparecía, el conteo de hormigas no
+  cambiaba y los píxeles de «se ven hormigas» seguían en verde. Lo mide
+  `scripts/unity/ProbeActorOrientation.cs` (dentro del editor, con la matemática
+  de Unity y la rotación del propio presenter: reimplementar la convención de
+  `Euler` es justo cómo se cuela este giro) y es un PASO del Play pass: mide el
+  morro contra el rumbo en ocho rumbos y se planta si el desvío pasa de 2° (el
+  mismo paso mide el acostado de ítems y hojas, ver «de canto» abajo).
+  Medido el 2026-10-10 antes del arreglo: **90° justos** en los ocho. Y desde el
+  mismo día la misma pregunta se mide **en PÍXELES**, porque la matriz no prueba el
+  render: `scripts/unity/ProbeAntHeadingPixels.cs` dibuja la malla y el material
+  reales con un rumbo fijo (cámara de usar y tirar que copia la del juego y sólo ve
+  la capa de la hormiga, silueta = diferencia entre el frame con y sin ella) y mide
+  su eje a la escala de la partida (18,69 px) y a 6×, más su morro a zoom —a 19 px el
+  reparto de área de los dos extremos deja 1 px de margen en los diagonales y no
+  decide—. Medido: 0° de desvío en los ocho rumbos, y 90° con el giro viejo `−rumbo`.
+  La evidencia que se mira queda en `artifacts/playpass-heading-pixels/`.
+
+- **Los ítems y las hojas salían DE CANTO**: el arte es un sólido PLANO (se
+  extruye en Z) y la cámara mira de arriba, así que una pieza dibujada con
+  `Quaternion.identity` enseña su canto: desde arriba se veía un rectángulo y
+  nada del dibujo. La hoja salía de 0,66 s × 1,10 s con su largo (1,24 u) en el
+  eje VERTICAL —y el `1,1` de la escala, que iba al grosor, estirado en el
+  plano—, así que no se veían ni la punta ni el nervio; la carga, igual, y los
+  mordiscos con ella. Ahora las tres usan el MISMO ayudante que la hormiga
+  (`SimPresenterBehaviour.FlatRotation` = `ActorRotation` con el rumbo que apunta
+  al norte, y `FlatScale` = 1:1 en el plano y el grosor a la mitad, con lo que
+  `x` es ancho, `y` largo y `z` grosor, como en la hormiga): medido en el editor
+  por `ProbeActorOrientation`, la hoja acuesta su eje (0° del plano, 0° al norte)
+  y ocupa 0,60 × 1,24 u de planta con 0,50 u de alto, contra 0,66 × 1,10 u de
+  canto y 0,62 u de alto antes. No hay rumbo que seguir —el `FoodItem` del Core
+  no guarda ángulo y el stream no lo lleva—, así que el eje se acuesta y se queda
+  al norte en vez de inventarle un giro por pieza; el probe además exige que la
+  configuración vieja FALLE, para que la comprobación no sea decorativa.
+
+- **Las muescas de la hoja flotaban fuera del limbo**: el borde de la hoja es una
+  ELIPSE —semiejes 0,30 s de ancho × 0,62 s de largo, los extremos del polígono de
+  `GameSpriteModel.Leaf()`—, pero `AddBites` repartía los cortes consumidos con un
+  radio ÚNICO de 0,55 s. Un radio no cae en un borde elíptico en ningún sitio: por
+  los costados queda FUERA del limbo (0,55 &gt; 0,30) y por las puntas DENTRO
+  (0,55 &lt; 0,62), así que las muescas se veían flotando en el vacío junto a la
+  hoja en vez de comer de ella. Ahora `SimPresenterBehaviour.BiteOffset` las reparte
+  sobre la elipse (los semiejes salen de `LeafHalfWidth`/`LeafHalfLength`, una sola
+  definición) y el MISMO paso del Play pass que mide el acostado comprueba cada
+  muesca contra el borde (r = 1, tolerancia 0,02) —y exige que el círculo viejo de
+  0,55 s falle, o la comprobación sería decorativa.
 
 - Un `Text` de uGUI con la fuente por defecto **no tiene emoji**: los glifos 🥚
   🐛 🛑 🟢 salían como cajas. Los niveles son ahora glifos de forma (○ ◐ ● ■ ·).
@@ -293,7 +578,13 @@ Lo que se ve y por qué, en una tabla — el resto de decisiones están comentad
   comando). Esa comprobación está enganchada a `.githooks/pre-push`
   (`scripts/install-hooks.sh`) porque el job de CI que la hace está dormido y, con
   licencia Personal, no puede activarse en un runner alojado: la puerta local es
-  la que cubre este riesgo hoy.
+  la que cubre este riesgo hoy. El hook corre además, **antes** de esa puerta y
+  sin necesidad del editor, dos chequeos sobre los commits que el push manda: el
+  churn de assets (`scripts/check-unity-assets.sh`) y las referencias perdidas
+  (`scripts/check-unity-references.sh --range`, cada commit contra su padre). Así
+  ni el ruido de re-serialización que este proyecto genera al abrir la escena ni
+  un asset que se quedó sin su dato —el `_BaseMap` en `fileID: 0`, que dibuja el
+  objeto con el valor por defecto— llegan siquiera a la rama.
 - **Medir el COSTE por frame del build necesita `enableFrameTimingStats`.** Con el
   vsync entregando al refresco, el coste del frame queda tapado (60 fps es el techo
   del monitor): `bash scripts/player-perf.sh --cpu` construye con ese ajuste

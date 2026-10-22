@@ -124,11 +124,18 @@ public class LearningPanelTests
             : panel.Coverage < LearningPanelModel.GoodCoverage ? (byte)1 : (byte)2,
             panel.CoverageLevel);
 
+        // Las dos líneas nombran lo que el jugador lee: la cohorte y su fitness en
+        // una, la élite del pool y el mundo conocido en la otra. Los nacimientos
+        // NO están aquí a propósito: viven en la ventana de 1 s de la tarjeta y
+        // esta banda solo tiene 57 caracteres por línea (ver FitnessLine).
         string fitness = panel.FitnessLine();
         Assert.Contains("gen 0", fitness);
-        Assert.Contains("nac.", fitness);
         Assert.Contains("cohorte", fitness);
+        Assert.Contains("bajas", fitness);
+        Assert.Contains("fit", fitness);
+        Assert.Contains("máx", fitness);
         string world = panel.WorldLine();
+        Assert.Contains("élite", world);
         Assert.Contains("cobertura", world);
         Assert.Contains("celdas", world);
     }

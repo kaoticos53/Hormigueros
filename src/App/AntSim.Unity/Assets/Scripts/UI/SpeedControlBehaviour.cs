@@ -27,7 +27,7 @@ namespace AntSim.Unity.Scripts.UI
         public Button? Preset25;
         public Button? Preset50;
         public Button? Preset100;
-        public Button? NextGenButton;
+
         // Compatibilidad con prefijos anteriores
         public Button? Preset30;
         public Button? Preset300;
@@ -130,11 +130,6 @@ namespace AntSim.Unity.Scripts.UI
                 var t = transform.Find("Preset_100") ?? transform.Find("Preset_100X");
                 if (t != null) Preset100 = t.GetComponent<Button>();
             }
-            if (NextGenButton == null)
-            {
-                var t = transform.Find("NextGenBtn");
-                if (t != null) NextGenButton = t.GetComponent<Button>();
-            }
         }
 
         /// <summary>
@@ -178,15 +173,6 @@ namespace AntSim.Unity.Scripts.UI
                 });
             }
 
-            if (NextGenButton != null)
-            {
-                NextGenButton.onClick.RemoveAllListeners();
-                NextGenButton.onClick.AddListener(() =>
-                {
-                    if (Presenter != null) Presenter.TriggerNextGeneration();
-                });
-            }
-
             if (MinusButton != null)
             {
                 MinusButton.onClick.RemoveAllListeners();
@@ -215,15 +201,19 @@ namespace AntSim.Unity.Scripts.UI
                 });
             }
 
-            WirePreset(Preset1, 1.00f);
-            WirePreset(Preset5, 5.00f);
-            WirePreset(Preset10, 10.00f);
-            WirePreset(Preset25, 25.00f);
-            WirePreset(Preset50, 50.00f);
-            WirePreset(Preset100, 100.00f);
-            WirePreset(Preset30, 1.00f);
-            WirePreset(Preset300, 25.00f);
-            WirePreset(Preset1000, 100.00f);
+            // F6: base 120× — los presets del HUD son los del modelo (10…160).
+            WirePreset(Preset1, 10.00f);
+            WirePreset(Preset5, 30.00f);
+            WirePreset(Preset10, 60.00f);
+            WirePreset(Preset25, 90.00f);
+            WirePreset(Preset50, 120.00f);
+            WirePreset(Preset100, 160.00f);
+            // Prefijos de escenas anteriores (F5.3): se conservan para que una escena
+            // vieja siga cableada, pero en la escala NUEVA — con 1× o 100× quedarían
+            // fuera del rango 10–160 y el primer click los recortaría en silencio.
+            WirePreset(Preset30, 10.00f);
+            WirePreset(Preset300, 90.00f);
+            WirePreset(Preset1000, 160.00f);
         }
 
         /// <summary>

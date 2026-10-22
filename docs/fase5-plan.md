@@ -12,7 +12,7 @@ un bucle de jugador completo demostrado end-to-end.
 
 <!-- /cifras-historicas -->
 
-**Estado ACTUAL** (HEAD `v0.8.0`, suite **536/536**, **6 pines** de hash): las
+**Estado ACTUAL** (HEAD `v0.8.0`, suite **681/681**, **6 pines** de hash): las
 seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
 F5.2c y F5.3. Lo que sigue abierto es deuda menor de presentación (F5.1, §2) y el
 camino `unity: full` de CI. El registro cronológico con las cifras vive en
@@ -76,8 +76,25 @@ acabado):
    `HudLayoutBehaviour` instancia un elemento POR toast (pool por key, sin
    parpadeos), pinta `fillAmount` por colonia y `BindNativeButtons` conecta
    los tres botones a las acciones ya verificadas. El bootstrapper crea
-   contenedor/plantilla/barras/botones con referencias asignadas. Pendiente:
-   chip de estado por runway.
+   contenedor/plantilla/barras/botones con referencias asignadas. El **chip de
+   estado por runway** también está HECHO: el tramo viaja calculado en el canal A
+   (`RunwayVerdict`, umbrales de la especie) y la tarjeta lo pinta en la línea del
+   título — en forma corta en la tarjeta compacta del multi-visor.
+   No es decoración, y está medido en seed 42 · grid 96 · 2 colonias · 12000
+   ticks: los tramos se recorren enteros —561 muestras de desahogo, 26 de
+   reserva, 27 de oofagia, 17 de caníbal y 169 de crítico— con el primer
+   no-desahogo en el tick 8280, el primer crítico (runway 7,62 s) en el 9330 y
+   la despensa a 0 s en el 9540. El radio de la escalera son los umbrales de la
+   ESPECIE (Lasius 40/25/15/8 · Atta 50/30/18/10 · Eciton 30/20/12/6), así que
+   la misma autonomía significa cosas distintas en un mundo multi-especie.
+   Y está medido **en píxeles** con la sonda del player (`player-perf.sh
+   --ticks`, build de 4 vistas × 2 colonias sobre grid 256): las cinco entradas
+   de la paleta aparecen en pantalla con el color de su tramo —DESAHOGO
+   `#4CAF50` a t3000/t6000, RESERVA `#7ED07E` a t8000, OOFAGIA `#D8B02A` y
+   CRÍTICO `#E03A3A` a t9500, CRÍTICO/CANÍBAL `#E07A2A` a t12000— a 0,67–0,91
+   de cobertura, con la línea del título entre 139 y 200 px de los 601
+   reservados y **ni un píxel de tinta** dentro de la barra de reserva.
+   Evidencia cruda: `artifacts/hud-chip-ladder.txt`.
 2. **Drag & drop de `.antgenome`** — ✅ HECHO (editor): el diálogo acepta la
    ruta por texto Y los archivos soltados sobre la ventana (`DragAndDrop`,
    bajo `#if UNITY_EDITOR` — esa API es del editor y la guarda es justo lo que
@@ -92,13 +109,39 @@ acabado):
    (rojo < 20%, el mismo de la barra). La tarjeta creció a 204 px para que la
    banda no le robe sitio al texto. 11 tests headless (anillo, muestreo 1 Hz,
    reparto de columnas, umbral y una integración contra el stream real).
-   Queda: la serie de DESCARGAS por ventana (hoy se grafica la reserva, que es
-   la que explica la decisión) si el jugador la pide.
+   ✅ HECHO (descargas, 2026-10-21): la misma gráfica lleva las DESCARGAS por
+   ventana como barras ámbar encima del área de reserva. Salen de los eventos
+   `Unload` del canal B contados por la propia serie (una ventana de 1 s por
+   muestra) y no de `colmetrics`, que es la ventana abierta publicada cada 120
+   ticks. La altura es relativa a la mayor cuenta de la ventana dibujada y las
+   barras usan el MISMO mapeo de columnas que el área; cada serie va en su
+   máscara, así que el modelo no sabe de colores (la vista tiñe la reserva por
+   estado y las barras con el suyo). El HUD pasa CADA tick drenado —a velocidad
+   alta se perdían las descargas de los ticks intermedios— y el mismo tick visto
+   dos veces no cuenta doble. 20 tests headless en total, uno contra el stream
+   real: la suma de las barras es exactamente lo que emitió el canal B.
 4. **Iconos, rich text y tipografía** — ✅ PARCIAL: el render v1 era texto
    plano con glifos emoji que la fuente por defecto de uGUI **no tiene** y
    pintaba como cajas (🥚 🐛 🛑 🟢 🔘 · 🐝); ahora los niveles son glifos de
    forma (○ ◐ ● ■ ·) y el título de la tarjeta va en negrita por rich text.
-   Queda: fuente propia y sprites para hormiga/carga/huevo.
+   HECHO (2026-10-06) — **fuente y sprites propios**. El bootstrapper ya no
+   pide `LegacyRuntime.ttf`/`Arial.ttf` al motor: **escribe** su tipografía
+   (`Assets/Fonts/AntSim.ttf`, 142 glifos, 72 504 B) con `TtfWriter` —escritor
+   sfnt puro, fecha fija en `head` y checksum `0xB1B0AFBA`, así que es
+   determinista y byte a byte reproducible— a partir de la tabla de glifos de
+   `GameFontModel`, y la importa y asigna en las dos escenas (32 textos en
+   `Game.unity`, 8 en `MultiSim.unity`, cero referencias a la fuente del
+   motor). La tabla cubre el alfabeto castellano con acentos compuestos, los
+   **36 signos** que el HUD usa de verdad y tres iconos de uso privado
+   (U+E000–U+E002: hormiga, carga, huevo) que sustituyen el texto de las
+   líneas de cría y de flujo. Los actores dejan de ser primitivas: cápsula y
+   esfera son mallas propias (`AntMesh`/`ItemMesh`/`LeafMesh`, desde
+   `ActorMeshModel`) en la MISMA caja de 2 u × 1 u, y la hoja estrena pasada
+   propia (los mordiscos ya no comparten malla con la carga). 18 tests
+   headless nuevos (16 de `GameFontTests`/`ActorMeshTests` y 2 de la medición de
+   los iconos); 625/625 en total hoy. Los tres iconos van en un run `<size=28>`
+   —el doble del cuerpo— y la comparación contra la referencia del `.ttf` sobre
+   los píxeles del Play pass los clasifica a los tres como su propio glifo.
 5. **Aspecto del mundo y entrada del HUD** — ✅ HECHO (pasada de pulido,
    2026-09-12):
    - **El tablero se lee como tierra**: el quad de feromonas llevaba el
@@ -128,9 +171,15 @@ acabado):
    - **Puertas de aspecto en el Play pass**: `ProbeVisualSample` mide píxeles
      (tablero terroso, hormigas visibles) y `ProbeSceneInspect` cuenta los
      textos que no caben en su panel; `playpass-live.sh` falla si el tablero
-     no es terroso, si no se ve ninguna hormiga o si el HUD desborda. Todas
-     las muestras de ESTADO estaban en verde mientras el mundo se veía blanco:
-     el pass no podía fallar por algo que no medía.
+     no es terroso, si no se ve ninguna hormiga, si el HUD desborda o si algún
+     icono de la tarjeta recortada no se clasifica como SU glifo contra la
+     referencia del `.ttf` (`scripts/playpass-icons.py`). Todas las muestras de
+     ESTADO estaban en verde mientras el mundo se veía blanco: el pass no podía
+     fallar por algo que no medía — y con los iconos pasaba lo mismo, con el
+     comparador escrito y ejecutado a mano. El ajuste de los textos FIJOS (pistas
+     y las dos líneas del panel de aprendizaje) es además un test headless
+     (`TextosFijosDelHud_CabenEnLaCajaQueLaEscenaLesDa`, peor caso incluido),
+     porque el desborde de esos tres lo había medido solo la captura.
 6. **Feromonas por colonia** — ✅ HECHO (2026-09-12): el canal E clásico emitía
    home de la colonia 0, así que con dos colonias compitiendo se veía media
    partida. Ahora `--phero-every N --phero-layers 0:home,1:home,1:alarm` emite
@@ -456,7 +505,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 
 | Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 536/536 en Windows y Linux |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 681/681 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |

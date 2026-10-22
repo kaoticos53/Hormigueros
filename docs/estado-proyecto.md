@@ -1,14 +1,15 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-09-20 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 536/536 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+*Actualizado: 2026-10-22 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
+suite: 681/681 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
 estamos. Los detalles de cada fase viven en sus documentos; este es el
 índice con veredicto. Enlaces: [`arquitectura.md`](arquitectura.md) (plan
 global por fases), [`especificaciones.md`](especificaciones.md) (contratos),
-[`fase5-plan.md`](fase5-plan.md) (plan vigente de Fase 5),
+[`fase5-plan.md`](fase5-plan.md) (plan de Fase 5),
+[`fase6-terreno.md`](fase6-terreno.md) (F6: laberinto, ritmo 120× y evolución por nacimientos),
 [`ideas-externas.md`](ideas-externas.md) (revisión de cuatro simuladores
 afines con propuestas priorizadas por valor/coste) y
 [`politicas-benchmark.md`](politicas-benchmark.md) (la vara externa: aleatoria
@@ -28,7 +29,17 @@ vs scripted vs evolucionada en la misma arena).
 | **5.2c** | **NEAT / `.antgenome` v2 (topologías que evolucionan)** | ✅ **CERRADO** `v0.7.0` | `fase5-2c-neat.md` |
 | — | **Cross-platform: CanonMath + cabecera del stream** | ✅ `v0.6.1` | `arquitectura.md` §CI |
 | **5.3** | **Escala: SoA, compactación, CHC, benchmark, aprendizaje, LOD + instancing** | ✅ **CERRADO** `v0.8.0` (exit medido en un build de jugador) | `fase5-3-escala.md` |
-| 6 | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
+| **6** | **Terreno con laberinto, ritmo 120× (216 000 ticks) y evolución por nacimientos** | ✅ **CERRADO** | `fase6-terreno.md` |
+| 6bis | Migración 2D → 3D | 🔲 fuera de alcance de Fase 5 | — |
+
+**F6 (cerrada, sin tag todavía)**: el tablero es un laberinto con bucles generado
+de la semilla (paredes visibles, colisión con deslizamiento, antenas que ven el
+muro de su lado), la partida arranca a **120×** y dura **216 000 ticks = 2 h de
+simulación**, y la evolución va por nacimientos —sin botón de «siguiente
+generación»— guardando la élite en `artifacts/evolved-<semilla>.antgenome` al
+terminar. Sin `--maze` el mundo y el stream son byte a byte los de antes: los 6
+pines de CI no se mueven. Detalle y medidas en
+[`fase6-terreno.md`](fase6-terreno.md).
 
 ## Lo que ya funciona (verificado, no prometido)
 
@@ -36,11 +47,180 @@ vs scripted vs evolucionada en la misma arena).
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **536/536 tests** en Windows y verdes en Linux en CI en cada push,
-igual que los 6 scripts de pin. El job `test` incluye además **cuatro pasos que
+NEAT canónica. **681/681 tests** en Windows y verdes en Linux en CI en cada push,
+igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
-guardas del Unity CLI y —desde el 2026-09-19— el **selftest del barrido de
-costes**, que es el que prueba el ajuste fijo/marginal de §4.10.
+guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
+de costes** (el que prueba el ajuste fijo/marginal de §4.10), el guardarraíl de
+cifras documentales y —desde el 2026-09-20— el **verificador de equivalencia de
+assets de Unity**.
+
+**El churn de assets de Unity no entra al repo** (2026-09-20) — abrir el
+proyecto, construir un player o dejar que el editor guarde reescribe la escena,
+los materiales y los ajustes de URP SIN cambiar lo que significan. Medido ese
+día, en una pasada del generador del multi-visor: **de 64 assets, 60 eran
+idénticos** (sólo se movía el bloque `AssetVersion` y cambiaban de ancla) y 4
+cambiaban de verdad. `scripts/check-unity-assets.sh` decide eso por equivalencia
+estructural —documentos por clase, referencias locales resueltas a la huella de
+su destino e iteradas a punto fijo— así que el reordenamiento y la renumeración
+de anclas de Unity no cuentan, y los finales de línea tampoco —desde el
+2026-09-20 los assets están fijados a LF por `.gitattributes`, así que el
+`autocrlf` de la máquina ya no los reescribe—. En CI recorre los commits del
+push y falla si alguno metió un asset que no cambia nada, con la lista de
+ficheros a descartar. Desde el 2026-10-09 su `--discard` quita la forma de los
+dos casos: restaura el churn puro y, a los que cambian de verdad, les reescribe
+la forma canónica **sin tocar el contenido**, así que el diff queda reducido al
+cambio —medido en `Game.unity` (425 documentos), una pasada que re-ancla todo y
+cambia una línea escalar pasa de 10 669 líneas de diff a 2—. Sólo escribe si la
+forma canónica pasa su propio `compare`, y después vuelve a clasificar y a mirar
+el índice para confirmarlo.
+
+**El pase también ESCRIBE, y por eso cierra su escritura y descarta lo que deja**
+(2026-10-10, medido con el editor abierto, `Game.unity`, 425 documentos) — dos
+defectos que sólo aparecieron al correr el Play pass de verdad:
+
+  · la comprobación canónica del bloque 4 culpaba al **generador** de lo que había
+escrito el **pase**: un `save_scene` sobre una escena ya canónica la deja
+`DERIVARÍA` sin cambiarle el contenido (sólo anclas y orden), así que el bloque 4
+se plantaba sin sondear nada. Ahora el veredicto del generador se toma justo tras
+generar y ANTES de que el pase escriba, y cada `save_scene` del pase se cierra con
+el mismo canonicalizador —no arregla lo del generador, arregla lo suyo—;
+  · y ese cierre (y el descarte del churn al terminar) se hacen **desde dentro del
+editor** (sonda `scripts/unity/ProbeCanonicalizeAssets.cs`: canonicaliza y recarga
+la escena). Escribir la escena por detrás, con el editor teniéndola abierta, le
+hace notar el cambio al vigilante y levanta «The open scene(s) have been modified
+externally»: el editor deja de contestar a TODOS los comandos (`Main thread
+operation timed out after 30000ms`) hasta que alguien pulsa el diálogo, y la
+siguiente pasada muere en la primera sonda.
+
+**«El editor no responde» NO es «la escena no tiene HUD»** (2026-10-10) — cuando
+el hilo principal está parado en un diálogo, el CLI contesta con la salida
+**vacía** (y `unity status` sigue diciendo `ready`, porque eso lo sirve su
+registro, no el editor). El pass leía ese vacío como una respuesta y culpaba a la
+escena: «la escena no tiene HUD presentable ()» —con el motivo en blanco— y moría
+en «no se pudo configurar el presenter: » con rc 3, sin causa ni remedio. Costó ir
+a buscar la causa a mano (enumerando las ventanas del proceso). Ahora el pass
+CLASIFICA cada respuesta del CLI en cuatro cosas que no se pueden mezclar —`ok`,
+`error` (el editor habló y la escena tiene la culpa), `mudo` (ni JSON) y
+`bloqueado` (caducó)— y, si no responde, sale con rc 3 diciendo qué pasó, que NO
+es la escena y el remedio (cerrar el diálogo —Reload o Ignore— y repetir; o mirar
+`Logs/Editor.log` si la marca «Main thread operation timed out» está en su COLA,
+no en cualquier parte del fichero).
+
+Y al probarlo **sin editor** —un CLI de mentira que contesta por guion
+(`bloqueado`, `mudo`, mudo a partir de la recompilación, y una escena sin
+presenter)— salió un defecto que ningún pase real había tocado: `set -e` se
+llevaba el pase por delante **en silencio, con rc 1**, porque el bucle de la
+recompilación (y la función que configura el presenter) terminaban en una prueba
+`[[ … ]] && …` que da FALSO justo en el camino bueno. Un pase real siempre había
+pasado por ahí «con suerte»; el CLI falso lo destapó como un `rc 1` sin una línea
+de salida.
+
+**La gráfica de la tarjeta enseña también las DESCARGAS** (2026-10-21) — la
+reserva dice CUÁNDO se cayó; las barras dicen POR QUÉ se estaba llenando. La
+serie sale de los eventos `Unload` del canal B —uno por descarga, con su
+colonia— contados en la misma ventana de 1 s que la muestra del área, y no de
+`colmetrics`, que es la ventana ABIERTA que el Core publica cada 120 ticks y no
+sirve para una serie a 1 Hz. Va en su propia máscara y con su color (ámbar) para
+no confundirse con el estado de la reserva, que es el que cambia a rojo, y la
+altura es relativa a la mayor cuenta de la ventana que se ve: la misma ventana
+dibujada da la misma imagen. El HUD la alimenta con **cada tick drenado**: leer
+`CurrentTick` en el `Update` bastaba para la reserva (muestrea a 1 Hz y repetir
+un tick no cambia nada) pero a velocidad alta un frame presenta varios ticks y
+las descargas de los del medio se perdían; y el mismo tick visto dos veces ya no
+cuenta doble. Nueve tests headless nuevos, uno contra el stream real: la suma de las
+barras es EXACTAMENTE el número de `Unload` que emitió el Core en la ventana.
+
+**Las hormigas andaban DE LADO** (2026-10-10) — la caja del actor tiene el largo
+en Y (`GameSpriteModel`: «Y = el largo, que es el eje de avance», y en la hormiga
+la cabeza va hacia +Y) y el giro del presenter era `−rumbo` en vez de
+`90° − rumbo`, así que el morro caía 90° a la izquierda del avance. Medido con la
+matemática de Unity y la rotación del propio presenter, dentro del editor
+(`scripts/unity/ProbeActorOrientation.cs`): **90° justos en los ocho rumbos de
+prueba** antes del arreglo, 0° después. Lo que lo hacía peligroso es que no lo
+veía nadie — los tres lóbulos estaban, el mundo aparecía, el conteo de hormigas
+no cambiaba y las puertas de píxeles («se ven hormigas», «el tablero se lee como
+tierra») seguían en verde; lo vio el jugador. Ahora es un PASO del Play pass: se
+planta si el morro se desvía más de 2° del rumbo.
+
+**Y los ítems y las hojas salían DE CANTO** (2026-10-10) — el arte de una pieza
+es un sólido PLANO (se extruye en Z) y la cámara mira de arriba: dibujada con
+`Quaternion.identity`, desde arriba se ve su canto, o sea un rectángulo, y del
+dibujo no se lee nada. La hoja salía de 0,66 s × 1,10 s con su largo (1,24 u) en
+el eje vertical y el `1,1` de la escala —que iba, y va, al grosor— estirado en el
+plano: ni punta ni nervio, y el limbo apuntando al cielo. La carga, igual, y los
+mordiscos con ella. El arreglo es el MISMO ayudante de la hormiga:
+`FlatRotation` (que es `ActorRotation` con el rumbo que apunta al norte: no hay
+rumbo que seguir, porque el `FoodItem` del Core no guarda ángulo y el stream no
+lo lleva, así que inventarle un giro por pieza sería una decisión que el dato no
+tiene) y `FlatScale` (1:1 en el plano del tablero y el grosor a la mitad), usadas
+por ítem, hoja y mordisco a través de una sola `FlatTRS`. Medido en el editor por
+`ProbeActorOrientation`: la hoja acuesta su eje (0° del plano, 0° al norte) y
+deja **0,60 × 1,24 u** de planta con 0,50 u de alto, contra **0,66 × 1,10 u** de
+canto y 0,62 u de alto antes; la carga pasa de 0,71 × 1,00 u con 0,78 u de alto a
+0,71 × 0,78 u con 0,50 u. Y la sonda exige que la configuración VIEJA falle: si
+pasa, el bloque sería decorativo (el probe lo dice y se planta).
+
+**Y las muescas de la hoja comen del BORDE del limbo** (2026-10-10) — el borde de
+la hoja es una ELIPSE (semiejes 0,30 s de ancho × 0,62 s de largo, los extremos del
+polígono de `GameSpriteModel.Leaf()`), pero los cortes consumidos se repartían con
+un radio ÚNICO de 0,55 s. Un radio no cae en un borde elíptico en ningún sitio:
+por los costados queda FUERA del limbo (0,55 > 0,30) y por las puntas DENTRO
+(0,55 < 0,62), así que las muescas se veían flotando en el vacío junto a la hoja.
+Ahora `SimPresenterBehaviour.BiteOffset` las reparte sobre la elipse —los semiejes
+salen de `GameSpriteModel.LeafHalfWidth`/`LeafHalfLength`, una sola definición— y
+el PASO del Play pass que ya medía el acostado comprueba cada muesca contra el
+borde (r = 1, tolerancia 0,02), exigiendo que el círculo viejo falle.
+
+**Y el rumbo se mide también EN LOS PÍXELES** (2026-10-10) — la matriz correcta no
+prueba el render: entre la matriz del presenter y lo que ve el jugador quedan el
+encuadre de la cámara (¿mira al nadir? ¿su arriba es el norte de pantalla?), la
+proyección, el rasterizado y el aliasing, que es exactamente donde se coló el giro
+de 90° de la hormiga. `scripts/unity/ProbeAntHeadingPixels.cs` renderiza la malla y
+el material REALES de la escena con un rumbo fijo en una cámara de usar y tirar que
+copia la del juego (mismo `orthographicSize`, misma rotación) y que sólo ve la capa
+de la hormiga, así que el fondo es plano y la silueta es la DIFERENCIA entre el
+frame con ella y el mismo frame sin ella. Sobre esos píxeles mide el eje (segundo
+momento) a la escala de la partida —18,69 px de hormiga, la escala real de un
+viewport de 1080— y 6× más cerca, y el MORRO (el extremo LIGERO: el gáster pesa más
+que la cabeza) **sólo a zoom**: a 19 px el reparto de área de los dos extremos deja
+1 px de margen en los rumbos diagonales (medido: 16 px contra 15 px), y un dato así
+no decide nada, así que ahí se publica sin usarse. Medido: el eje desvía **0°** en
+los ocho rumbos a las dos escalas y el morro 0° a zoom; y el mismo render con el
+giro viejo (`−rumbo`) desvía **90°**, que es lo que hace que la comprobación tenga
+dientes en vez de ser decorativa. La
+evidencia se mira: `artifacts/playpass-heading-pixels/antsim-heading-pixels.png`
+(una hormiga por rumbo, el rumbo esperado pintado en magenta y el morro medido en
+cian). Es un paso del Play pass y falla cerrado: sin la imagen, «medido en píxeles»
+no se puede mirar.
+
+**Finales de línea fijados por el repo, no por la máquina** (2026-09-20) —
+`.gitattributes` fija el `eol` por tipo: **LF para todo el texto** —código,
+documentos y los assets YAML de Unity en modo Force Text— y **CRLF sólo para lo
+que interpreta Windows** (`.bat`, `.cmd`, `.ps1`); los binarios (`.png`,
+`.antgenome`, `.antsave`) quedan `-text`. Antes lo decidía el `autocrlf` de cada
+máquina: medido con `git ls-files --eol`, 442 ficheros en LF y 176 en CRLF **con
+los MISMOS blobs**, y una lectura sin normalizar veía un fichero entero cambiado
+(`AntMat.mat`: 71 inserciones / 71 borrados, sólo por el `\r`). El supuesto de
+que el editor escribe CRLF resultó **falso al medirlo**: `MultiSim.unity` y el
+asset de URP salidos del bootstrapper tienen hash sin filtros idéntico al del
+blob —LF de verdad— y el CRLF del árbol era del checkout. La medición destapó
+además un defecto del volcado de la sonda: `cmd_result` escribía por
+`sys.stdout`, que en Windows es un `TextIOWrapper` que traduce `\n` a
+`os.linesep`, así que `artifacts/playpass-scene.txt` quedó commiteado con CR
+doble (sus 65 líneas eran `\r\r\n`); ahora escribe bytes en UTF-8 y el volcado
+es LF en toda plataforma.
+
+**Cada escena generada declara su entrada y su configuración** (2026-10-07) — las
+dos escenas versionadas no salen de los defaults de su montador: `Game.unity` pide
+la configuración del Play pass (ticks 7200, velocidad 2) y `MultiSim.unity` la del
+medidor (grid 256, 12000 ticks, frameEvery 5), y ni el fichero ni el montador lo
+decían. `GeneratedSceneCatalog` (puro) lo registra —entrada que la escribió,
+configuración por vista, comando de regeneración y qué OTRAS entradas pisan esa
+ruta— y `GeneratedSceneContractTests` lo contrasta campo a campo contra el YAML de
+cada escena y contra las constantes de sus productores (`playpass-live.sh` y
+`MultiSimBootstrapper`): regenerar deja de depender de recordar. Un pase que deje
+otra configuración falla nombrando el campo, la escena y los dos valores.
 
 **Guardarraíl de cifras documentales** (2026-09-20) — los documentos afirman el
 número de pines y el de tests, y esas cifras se quedaron atrás más de una vez
@@ -87,7 +267,10 @@ asiento de pago, o (c) la **puerta local**, que es la cobertura real de hoy:
 `scripts/check-unity-compile.sh` —el MISMO script del job, **8 s** con la
 Library caliente— corre en `.githooks/pre-push` (`scripts/install-hooks.sh`) y
 bloquea **solo** con errores CS (exit 1); «no pude comprobar» avisa y deja
-pasar. En Windows el mismo comando es `scripts/check-unity.bat`.
+pasar. En Windows el mismo comando es `scripts/check-unity.bat`. El hook tiene
+dos puertas y la primera es el **churn de assets** (`check-unity-assets.sh
+--churn` sobre los commits que el push manda), que no necesita el editor: el
+ruido de re-serialización se corta antes de salir de la máquina, no en CI.
 
 **NEAT de extremo a extremo** — genomas estructurales (nodos/conexiones por
 innovation), paridad bit a bit con MLP (`FromMlp`), operadores
@@ -109,6 +292,256 @@ colonia/capa (selector F/G), tarjetas con gráfica de reserva, modal de
 importación, vida útil real de fundadoras (240 s), velocidad de replay
 +/= (1→2→4×) y la banda de aprendizaje por tarjeta (curva + cobertura). La
 escena se regeneró con ella el 2026-09-17 (`53eda0b`).
+
+**Fuente y sprites propios** (2026-10-06) — el HUD ya no pide prestada ninguna
+fuente al motor. El bootstrapper **escribe** su tipografía (`TtfWriter`, un
+escritor sfnt puro y determinista: fecha fija en `head` y checksum
+`0xB1B0AFBA`) a partir de la tabla de glifos de `GameFontModel`, la importa y
+la asigna a los 32 textos de la escena de juego y a los 8 del multi-visor
+(`Assets/Fonts/AntSim.ttf`, 142 glifos, 72 504 B). Cubre el castellano
+completo con acentos compuestos y los **36 signos que el HUD usa de verdad**
+—«·», «─», «○ ◐ ●», «→», «↻», «≈», «⏸», «−», «■ ▶»…—, más tres iconos de uso
+privado (U+E000–U+E002: hormiga, carga, huevo) que sustituyen el texto de las
+líneas de cría y de flujo de las tarjetas. Desde F5.1ter los tres van en un run
+`<size=28>` —el DOBLE del cuerpo, que es de 14 px— porque a 14 px medían 5-14 px
+y se leían como manchas: el run escala el glifo sin mover el avance del texto,
+que es de donde sale el ancho de la tarjeta (subir el cuerpo ENTERO habría
+pedido 880×536 y la segunda tarjeta se salía de un canvas de 1080 de alto). La
+misma medida destapó un defecto de layout PREVIO: `Panel()` elegía la esquina
+por el signo del ancla y luego aplicaba `Mathf.Abs` a la posición, así que las
+tarjetas quedaban ancladas 71 unidades POR ENCIMA del borde superior —medido con
+la sonda, `screen=[16,1111..448,1374]` con pantalla de 1303: la tarjeta 0 medio
+fuera y la 1 entera—. Corregido: las dos quedan enteras en pantalla. Y los actores dejan de ser
+primitivas del motor: cápsula y esfera son ahora mallas propias
+(`AntMesh`/`ItemMesh`/`LeafMesh` desde `ActorMeshModel`), construidas en la
+MISMA caja de 2 u × 1 u para no tocar la escala ni la orientación del
+presenter. Las hojas dejan de compartir malla con la carga, así que la
+mordida se dibuja aparte. Regenerar dos veces deja el `.ttf` y las mallas con
+idéntico md5; la escena sí cambia de bytes (renumeración de anclas `&N`) y por
+eso va por el verificador de equivalencia de assets.
+
+**Y los iconos se COMPARAN, no se suponen** (2026-10-07) — la legibilidad de los
+tres iconos se venía comprobando sobre una muestra del `.ttf` renderizada
+aparte, y eso prueba que el GLIFO es legible, no que la tarjeta lo pinte así.
+Ahora el círculo se cierra con píxeles del Play pass: `ProbeHudIconShot` recorta
+la tarjeta del frame en vivo y `scripts/playpass-icons.py` busca la FORMA de
+cada glifo dentro del recorte (correlación cruzada normalizada sobre la tinta,
+que no depende del brillo del panel). MEDIDO: el icono mide **2,00×** el cuerpo
+(run 28 sobre cuerpo 14, leído del propio generador) y cada uno se clasifica
+como SU glifo —correlación **0,51 · 0,57 · 0,81** y silueta IoU **0,79 · 0,85 ·
+0,90** (hormiga, carga, huevo) frente a la referencia rasterizada al tamaño
+EFECTIVO del icono— mientras que en ese mismo sitio los otros dos glifos puntúan
+**≤0,22**. La correlación más baja es la de la hormiga (0,51) y tiene explicación
+medida: sus patas de ~1 px son lo que más cambia entre el rasterizador de Unity y
+el de FreeType, y por eso el instrumento publica además el IoU de siluetas, que
+sí sobrevive al cambio de rasterizador (0,79). El
+instrumento trae `--selftest`
+(verifica la métrica sin capturas: una forma distinta tiene que puntuar bajo y
+una ventana plana, 0,00 — antes puntuaba 0,9 y hacía pasar cualquier cosa).
+
+**Y la referencia se redondeaba a píxel entero: escala disfrazada de forma**
+(2026-10-08). El paso de iconos salió en ROJO por la hormiga (0,32 < 0,35) y no
+era la hormiga: era la referencia. Con el canvas al 91,1 % el icono vivo mide
+28 × 0,911 = **25,508 px**, pero `int(round(…))` la rasterizaba a **26 px**, un
+1,9 % más grande — y en un glifo de patas de ~1 px un 1,9 % de escala no es un
+matiz, es otra forma. MEDIDO sobre los mismos recortes, con la misma ventana:
+contra la referencia a 26 px la hormiga puntúa 0,32 y contra la de 25,508 px
+(supermuestreo 8× y reducción LANCZOS) **0,51**; el huevo sube de 0,63 a 0,81 y
+la carga de 0,37 a 0,57. No es un defecto del HUD: la caja de tinta viva de la
+hormiga medida en su ventana es 16×24 px y la referencia al tamaño corregido
+(25,508 px) da 16×25, mientras la de 26 px da 17×26 — el icono se pinta al tamaño
+fraccionario y era la REFERENCIA la que estaba crecida. Arreglado en el instrumento: la referencia se
+rasteriza al tamaño FRACCIONARIO real, no a su redondeo (el hinting de FreeType
+ajusta el AVANCE al píxel entero, pero el contorno se rasteriza al tamaño
+fraccionario con antialiased — igual que hace el motor). **El mínimo NO se tocó**:
+bajarlo a ~0,27 habría dejado solo 0,02 de margen contra un glifo EQUIVOCADO
+(medido con el banco sintético del paso: con la hormiga sustituida por un huevo
+el glifo ajeno puntúa 0,25 y el propio 0,09) — es decir, habría aflojado justo la
+puerta que existe para cazar ese caso.
+El recorte se respalda con una comprobación de PROCEDENCIA —tiene que ser un
+trozo literal del frame en vivo, con la fila del PNG contada al revés que la
+coordenada de pantalla—; la búsqueda libre por el frame pasó a ser informativa
+porque, con la métrica honesta, el glifo es una aguja en el pajar de tinta del
+terreno y dejaba falsos negativos.
+
+**Y el veredicto CUENTA: los iconos son un PASO del Play pass** (2026-10-07). El
+comparador existía y daba 0 fallos, pero se ejecutaba a mano: un icono roto en el
+HUD pasaba el pass en verde. Ahora `playpass-live.sh` corre la clasificación
+sobre los mismos recortes del frame en vivo y sale ≠ 0 con el glifo y sus números
+si alguno no se clasifica como el suyo — o si **no se pudo medir** (la sonda no
+guardó el recorte, o ningún python del PATH tiene Pillow), porque un paso que no
+corre no puede contar como verde. Es un veredicto propio, separado del de
+aspecto, así que el fallo no se confunde con un texto que no cabe; va ANTES del
+bloque 4 a propósito, que reconstruye la escena y volvería a escribir el HUD.
+La evidencia en píxeles —el frame vivo, el PNG de cada tarjeta y la hoja de
+comparación que genera el propio comparador— se **conserva en
+`artifacts/playpass-hud-icons/`**: la sonda los escribe en `Temp/`, que Unity
+barre al cerrar el editor, y un paso cuyo objeto de medida desaparece con la
+sesión deja el veredicto sin nada que mirar después. Con eso el mismo análisis se
+repite sin editor con `scripts/playpass-live.sh --analyze-icons` (y
+`--icons-crops` para apuntar a otros recortes), y el cableado —no la métrica, que
+trae su propio `--selftest`— se verifica en `--selftest`: comparador en verde
+pasa, glifo que no se clasifica falla, sin volcado no pasa y los PNG del HUD se
+conservan (sin ninguno que copiar, la conservación falla).
+
+**Y las descargas de la gráfica se MIDEN en los píxeles de la tarjeta** (2026-10-22).
+La serie de descargas por ventana quedó dibujada y verificada headless (modelo
+puro, textura, tests), pero eso deja fuera el tramo que va de la textura al
+ojo: el `RawImage`, su rect en pantalla, el tinte de la vista y el framebuffer.
+`scripts/unity/ProbeSparklinePixels.cs` inyecta una serie CONOCIDA en el modelo
+real de cada tarjeta —cuatro ventanas con 1, 3, 5 y 7 descargas, separadas por
+ceros—, congela la alimentación del HUD para que los ticks de la partida no
+metan muestras entre los dos pasos, deja dibujar un frame y recorta del frame
+REAL la banda de la gráfica; después restaura la serie de la partida. La medida
+es un paso del Play pass (`scripts/playpass-sparkline.py`, con su `--selftest`
+sobre imágenes sintéticas): exige una barra por ventana con descargas y en las
+columnas de SU muestra (el mismo mapeo que el área), altura creciente con la
+cuenta, todo naciendo en la base —la orientación se comprueba, no se supone— y
+ni un píxel ámbar fuera de la banda, con la banda dentro de la tarjeta y el
+recorte comprobado como trozo literal del frame. Falla cerrado: sin captura o sin
+PNG conservados no es verde. La evidencia queda en
+`artifacts/playpass-sparkline-pixels/` y se repite sin editor con
+`--analyze-sparkline`.
+
+**Medido en vivo el 2026-10-22** (primera pasada completa, editor 6000.6.0f1):
+las dos tarjetas dieron **4 barras cada una** en las columnas de su muestra, con
+alturas **5 / 11 / 18 / 24 px** para 1 / 3 / 5 / 7 descargas en una banda de 24
+px, el borde del área siguiendo la reserva inyectada (±3 px), **0 px ámbar fuera
+de la banda** y el recorte idéntico al frame (`29,837,377x30` y
+`29,582,377x30`). La primera pasada de verdad destapó dos defectos que el
+`--selftest` no podía ver, y los dos eran del tramo sonda–medidor, no de la
+gráfica: (1) **los `static` no sobreviven** entre dos `run_script` —cada llamada
+compila una asamblea nueva, medido con un contador que vuelve a 1—, así que
+`measure` no veía la serie inyectada y se plantaba sin capturar; ahora el estado
+(si el HUD se congeló y la serie real de cada tarjeta) vive en
+`Temp/antsim-spark-state.txt`, y `measure` **comprueba tarjeta por tarjeta** que
+el patrón sigue en el modelo antes de capturar. (2) **El PNG va del derecho**:
+`GetPixels32` indexa desde abajo, pero `EncodeToPNG` guarda fila 0 = arriba, así
+que contar la fila 0 como base medía la gráfica al revés — todas las barras al
+alto de la banda y el área al 100 %. El volcado declara `row0=top` y el medidor
+convierte el `inner` con `alto - iy - ih`; la comprobación de procedencia prueba
+las dos colocaciones y exige igualdad byte a byte.
+
+**Tres textos desbordaban su panel — y el ajuste ahora es un TEST** (2026-10-07).
+El Play pass medía tres textos fuera de su caja: la barra de PISTAS
+(`rect=1100x26 pref=1325x13`) y las DOS líneas del panel de aprendizaje de cada
+tarjeta (`rect=406x34 pref=648x13` y `pref=513x13`). La causa de las pistas es
+medible: su caja (1100) se dimensionó cuando el HUD usaba la tipografía de uGUI y
+siguió igual al pasar a la fuente propia, que a 14 px reserva **7 px por
+carácter** (500/1000 em, redondeo del hinting incluido). Arreglado así: el texto
+y su caja viven en `HudElementLayoutModel` (pistas a **1360**, 194 caracteres) y
+la banda de aprendizaje tiene caja de contrato en el mismo modelo (406×34); las
+dos líneas del panel se recortaron a lo que CABE —se cayeron los nacimientos
+(que la tarjeta ya pinta en su ventana de 1 s), el radio máximo y la media de la
+élite— porque 57 caracteres por línea son el techo duro de 406 px. Lo importante
+no es el recorte sino la PUERTA: `TextosFijosDelHud_CabenEnLaCajaQueLaEscenaLesDa`
+comprueba en headless, con la misma cuenta del `TextGenerator` y con el PEOR caso
+de números (generación de 2 dígitos, cohorte y bajas al tope, el mundo entero
+pisado), que pistas y las dos líneas caben — antes esto solo lo veía una captura y
+el literal vivía en el bootstrapper, que no se compila en la suite. MEDIDO tras el
+cambio: `hud.overflow=3` → **0** y el paso de aspecto en verde. La regeneración de
+la escena que hizo falta para las pistas restauró además la textura de reposo de
+`PheromoneMat` (su `_BaseMap` había quedado en `{fileID: 0}` tras una sesión del
+editor, con el guardarraíl `PheromoneMaterialGuardTests` en rojo: ahora verde).
+
+**El bloque 4 no podía ver su propia alerta** (2026-10-07). El paso C espera a que
+salga una alerta ANCLADA y la sonda tarda ~1 s por vuelta. MEDIDO a la velocidad
+por defecto (6): la partida entera (7200 ticks) se consumía antes de que C
+empezara a sondear — su primera muestra salía ya en `tick=7200` con `toasts=0` —,
+así que el gate era inalcanzable por cronómetro. La velocidad por defecto del
+bloque 4 pasa a **2**, donde el toast vive ~3 s de reloj y C lo cazó en dos
+muestras seguidas (tick 335 y 435). El defecto APARTE —la alerta sin ancla— está
+arreglado (2026-10-07): en la partida canónica la ÚNICA alerta emitida es
+`first-unload` y el Core la emitía con `x=-1,y=-1`, así que el salto de cámara
+(`J`, Alt+click) no tenía a qué saltar. Ahora el `RelayTracker` guarda la posición
+del primer `Unload` (`FirstUnloadX/Y`) y el `AlertDeriver` ancla el hito ahí —la
+salida que ya estaba escrita en el comentario del propio script—. Los pines de
+hash NO se mueven: el `AlertDeriver` es observador puro y el hash del stream es el
+del MUNDO (`sim.HashLine()`), así que la alerta no entra en él.
+
+**El avance del icono: 720 declarado, 643 es la TINTA** (2026-10-07) — la duda
+«uGUI reserva 643 unidades donde el `.ttf` declara 720» tiene una respuesta
+medida en dos partes. Primero, QUÉ ES 643: la caja de tinta del icono (0,643 em
+= 9 px a 14 px y 18 px a 28 px), no un avance; el avance declarado es 720
+unidades (0,72 em) y la tinta cabe dentro. Segundo, POR QUÉ EL RESERVADO NO ES
+EL DECLARADO: Unity carga el glifo con el hinting de FreeType, que ajusta el
+avance al PÍXEL ENTERO. Medido cargando la fuente por el motor, sin hinting el
+icono da 719,76-719,87 unidades a 14, 15, 28, 29 y 31 px (0,72 em, clavado) y
+una letra 500,00; con hinting —lo que pinta el HUD— reserva 10 px a 14, 11 a
+15, 20 a 28, 21 a 29 y 22 a 31 (714, 733, 714, 724 y 710 unidades), y una LETRA
+pasa a 8 px a 15 (500 → 533 unidades, un 6,7 % más). No lo arregla el ajuste
+`shouldRoundAdvanceValue` del importador: probado en sus dos estados, los
+avances son idénticos. Y en el HUD en vivo (canvas al 98,3 %, cara de 27,5 px)
+el generador reserva 19 px, el 95,9 % del avance declarado —el resto lo come el
+hinting—. Lo que sí se arregla es el MODELO: la cuenta del ancho del HUD
+(`HudLayoutTests.HintedAdvance`) reserva ahora como reserva uGUI —avance a
+tamaño del run redondeado al píxel— en vez de multiplicar la em a pelo, que a
+15 px se quedaba corta un 7 % por letra; y la sonda publica `units`/`decl`/`ofDecl`
+normalizando por el tamaño del RUN (antes lo hacía por el cuerpo del `Text` y
+publicaba el doble de unidades justo en los iconos, que es lo que hacía parecer
+que la fuente mentía). Un test nuevo ancla los nueve valores medidos.
+631/631 tests (18 casos de `GameFontTests`/`ActorMeshTests`, 2 de la medición de
+los iconos, 1 del avance reservado y 2 del contrato de los assets generados).
+
+**Los assets generados tienen CONTRATO con sus modelos** (2026-10-07) — los
+modelos son la fuente de verdad, pero el HUD y los actores se dibujan con los
+ARTEFACTOS que el repo versiona: el `.ttf` y las quince mallas `*Mesh*.asset`.
+Que los dos lados no se separen dependía de abrir el editor y regenerar, y no lo
+comprobaba nadie: la suite miraba los modelos (que están bien) y el Play pass
+miraba lo pintado (con el artefacto viejo, así que también «bien»).
+`GeneratedAssetContractTests` cierra ese hueco en headless: la fuente se compara
+BYTE A BYTE contra `TtfWriter.BuildFromModel` —legítimo porque el escritor sella
+la fecha, así que la salida es determinista— y cada malla VÉRTICE A VÉRTICE
+(posiciones decodificadas del blob `_typelessdata` de la malla en YAML, con el
+paso entre vértices deducido del propio blob) contra
+`ActorMeshModel.Build(GameSpriteModel.Build(…))`; las variantes `_V*` del
+multi-visor se DESCUBREN en disco, así que una vista más entra sola. Que el
+chequeo mira de verdad se comprobó mutando: con el exponente de un vértice de
+`AntMesh_V3` cambiado falla nombrando el vértice (`x` del vértice 0: 1,16e9
+frente a 0,27) y con un byte del `head` del `.ttf` cambiado falla nombrando el
+byte (71036).
+
+**Los avances del fichero, LEÍDOS de `hmtx`** (2026-10-07) — el contrato de assets
+compara BYTES, y eso dice «el `.ttf` versionado es el que genera el modelo», pero
+no dice QUÉ pone: un `hmtx` con el avance torcido seguiría siendo idéntico a sí
+mismo, byte a byte, mientras el escritor y el modelo se torcieran JUNTOS.
+`GameFontTests` cierra ese lado con su propio lector de sfnt: recorre
+`GameFontModel.Codepoints`, llega al glifo por la `cmap` (formato 4, el mismo
+camino que usa el juego) y exige que el avance que trae `hmtx` sea el del modelo
+—500 unidades para toda letra y 720 para los tres iconos PUA—, no el que el modelo
+diría si se le preguntara. Antes de mirar nada se comprueban las tres condiciones
+que el lector da por supuestas (una entrada de 4 B por glifo, `numberOfHMetrics ==
+numGlyphs`, sin la compresión de cola del formato) y al final que hay DOS avances
+distintos en el fichero: si todos midieran igual, la comparación pasaría por
+casualidad y no probaría nada. Y hay comprobación negativa del PROPIO lector: se
+genera un `.ttf` con la «A» a 623 unidades y se exige que el lector lo VEA,
+mientras el modelo sigue diciendo 500 — un lector que devolviera
+`GameFontModel.AdvanceOf` estaría comparando el modelo consigo mismo. Sensibilidad
+medida mutando el escritor (`hmtx` con +1 unidad): fallan los dos tests nuevos, y
+sólo ellos. Todo headless y sin editor, como el resto del contrato.
+
+**Los MATERIALES y las TEXTURAS también tienen contrato** (2026-10-07) — el contrato
+de assets cubría la fuente y las mallas; el resto de artefactos del bootstrapper
+—los 76 `.mat` y las 10 texturas que PINTAN el mundo— seguían sin modelo: su color
+vivía como literal dentro de los montadores del editor (que no compilan en la
+suite) y escrito DOS veces, una por escena. Ahora la paleta, los tres tipos de
+material (plano con instancing, suelo con rejilla, capa transparente), la rejilla
+—lado, colores y qué píxel es línea— y la textura de reposo viven en
+`GameMaterialModel` (puro), los DOS montadores los APLICAN —el multi-visor ya no
+tiene paleta propia: pide el mismo material con el sufijo de la vista— y
+`GeneratedMaterialContractTests` compara el artefacto: biyección nombre a nombre
+(ni un `.mat` de más ni uno de menos), color LEÍDO del fichero en `_BaseColor` y
+`_Color` (Unity guarda el valor autorado, sin pasarlo a lineal: medido), la receta
+entera por tipo —instancing en los planos; `_BaseMap` con las 24 repeticiones del
+modelo en el suelo; `_SURFACE_TYPE_TRANSPARENT`, `_SrcBlend`/`_DstBlend`, `_ZWrite`
+y `renderQueue` 3000 en la capa de feromonas— y los PÍXELES de las texturas
+decodificados del blob: la rejilla píxel a píxel y el reposo blanco con alpha 0
+(alpha 255 volvería a tapar el tablero, el defecto del Play pass de F5.1). Lleva
+su comprobación negativa: con el color de un `.mat` cambiado a mano y el alpha de
+la textura a 255, los lectores lo VEN —si devolvieran el modelo, el contrato
+estaría comparando el modelo consigo mismo—. De regalo, el acento de colonia sale
+del modelo, así que el disco del nido y la barra de su tarjeta son el mismo color
+por construcción y no por coincidencia. Compila en Unity (0 errores, 0 avisos).
 
 **Unity compila limpio** — 0 errores CS, 0 avisos CS en Unity 6000.6.0f1.
 Canal F NEAT en el inspector (`ActivationViewModel.RenderNeat`
@@ -249,10 +682,18 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    cuatro materiales quedan con su referencia (7 líneas) y **2 tests headless** (`PheromoneMaterialGuardTests`, en rojo
    sobre los materiales de HEAD antes del arreglo) impiden que vuelva en silencio: referencia presente, guía existente y
    textura 1×1 RGBA32 `ffffff00` (invisible).
-2. **Deuda menor de F5.1** (no bloquea): chip de estado por runway, fuente propia y
-   sprites (hormiga/carga/huevo), y la serie de DESCARGAS en la gráfica de reserva
-   (hoy la sparkline guarda `Stock`; la serie de drops aún no se grafica).
-   Ya HECHO, para no contarlo más como deuda: el drag & drop de `.antgenome`
+2. **Deuda menor de F5.1** (no bloquea): **audio y accesibilidad** (sonidos de
+   evento —descarga, eclosión, alerta— y escala de UI; es lo único sin contrato
+   previo), el **chip de la capa de feromona activa** en el HUD (el render la
+   pinta y la nombra, el HUD no la rotula) y la **capa de territorio**, que el
+   `PheromoneKind` reserva y el escenario ya lee pero que nadie deposita todavía.
+   La serie de DESCARGAS en la gráfica quedó HECHA el 2026-10-21 (ver §Lo que ya
+   funciona): la sparkline guarda reserva y descargas por ventana.
+   Ya HECHO, para no contarlo más como deuda: la **fuente y los sprites
+   propios** (el `AntSim.ttf` que escribe el bootstrapper y las mallas de
+   hormiga/carga/hoja de `ActorMeshModel`), el **chip de estado por runway**
+   (canal A + `RunwayVerdict`/`RunwayChipModel`, en la línea del título de la
+   tarjeta y en forma corta en el multi-visor), el drag & drop de `.antgenome`
    (`ImportDialogBehaviour`, `#if UNITY_EDITOR` — esa API es del editor y su guarda
    es lo que compila el player) y las hojas con mordiscos (`CutsInitial - CutsLeft`
    restado por el presenter).

@@ -85,12 +85,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             floor.transform.position = new Vector3(world * 0.5f, 0f, world * 0.5f);
             floor.transform.localScale = new Vector3(world / 10f, 1f, world / 10f); // plane = 10 u
             RemoveCollider(floor);
-            var earth = new Color(0.42f, 0.33f, 0.23f);       // tierra clara, legible
-            var gridLine = new Color(0.34f, 0.26f, 0.18f);    // surco de labor
-            // Rejilla cada N unidades: referencia de ESCALA para el jugador (sin
-            // ella un mundo de 768 u no tiene ninguna pista de tamaño).
-            var floorMat = NewUnlitTextureMat("FloorMat",
-                NewGridTexture(earth, gridLine), GridTiles);
+            // Rejilla cada GridTiles unidades: referencia de ESCALA para el jugador
+            // (sin ella un mundo de 768 u no tiene ninguna pista de tamaño). El
+            // patrón y sus colores viven en GameMaterialModel, que es lo que el
+            // contrato de assets comprueba: el suelo del juego y el de cada vista
+            // del multi-visor se construyen del MISMO dato.
+            var floorMat = NewUnlitTextureMat(UI.GameMaterialModel.ByName("FloorMat"),
+                UI.GameMaterialModel.GridTextureName(-1));
             floor.GetComponent<Renderer>().sharedMaterial = floorMat;
 
             // — Mesa: el tablero no flota en el vacío —
@@ -103,13 +104,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             table.transform.localScale = new Vector3(world * 2.6f / 10f, 1f, world * 2.6f / 10f);
             RemoveCollider(table);
             table.GetComponent<Renderer>().sharedMaterial =
-                NewMat(new Color(0.22f, 0.175f, 0.13f), "TableMat");
+                NewMat(UI.GameMaterialModel.ByName("TableMat"));
 
             // — Marco del mundo: cuatro cajas que cierran el tablero —
             // Claras a propósito: sobre tierra, un borde oscuro se lee como sombra
             // y no como límite; el canto de madera clara sí delimita el tablero.
             float rim = Mathf.Max(1.5f, world * 0.012f);
-            var rimMat = NewMat(new Color(0.56f, 0.45f, 0.31f), "RimMat");
+            var rimMat = NewMat(UI.GameMaterialModel.ByName("RimMat"));
             Frame(rimMat, "Frame_N", world * 0.5f, world - rim * 0.5f, world, rim, rim);
             Frame(rimMat, "Frame_S", world * 0.5f, rim * 0.5f, world, rim, rim);
             Frame(rimMat, "Frame_W", rim * 0.5f, world * 0.5f, rim, world, rim);
@@ -128,6 +129,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.Ticks = settings.Ticks;
             presenter.FrameEvery = settings.FrameEvery;
             presenter.Species = settings.Species;
+            presenter.Maze = settings.Maze;             // F6: terreno con obstáculos
+            presenter.ExportElite = true;              // la élite se guarda al acabar
             // PoolPath (ruta absoluta del lanzador) manda; si no, el nombre se
             // resuelve como el default histórico: artifacts/<nombre>.antgenome.
             presenter.SeedPoolPath = !string.IsNullOrEmpty(settings.PoolPath)
@@ -138,26 +141,41 @@ namespace AntSim.Unity.Scripts.EditorTools
             // el presenter escala en unidades de mundo, así que pre-escalar aquí
             // solo escondía el número real (una cápsula de 0.25 u que el presenter
             // multiplicaba por una «escala» sin relación con el tamaño en pantalla).
-            presenter.AntMesh = PrimitiveMesh(PrimitiveType.Capsule, 1f, "AntMesh");
-            presenter.ItemMesh = PrimitiveMesh(PrimitiveType.Sphere, 1f, "ItemMesh");
+            // Mallas PROPIAS (F5.1): la cápsula y la esfera eran primitivas del
+            // motor y no decían nada — ni que el bicho va hacia donde avanza, ni
+            // que el ítem es una carga. Las siluetas las genera el bootstrapper
+            // desde el modelo puro (ActorMeshModel), en la MISMA caja (2 u × 1 u)
+            // que las primitivas: la rotación y la escala de abajo no cambian.
+            presenter.AntMesh = EditorTools.GameAssetBuilder.EnsureActorMesh(
+                UI.GameSpriteModel.Sprite.Ant, "AntMesh");
+            presenter.ItemMesh = EditorTools.GameAssetBuilder.EnsureActorMesh(
+                UI.GameSpriteModel.Sprite.Load, "ItemMesh");
+            presenter.LeafMesh = EditorTools.GameAssetBuilder.EnsureActorMesh(
+                UI.GameSpriteModel.Sprite.Leaf, "LeafMesh");
             // Hormiga por defecto: marrón rojizo oscuro.
-            presenter.AntMaterial = NewMat(new Color(0.35f, 0.16f, 0.10f), "AntMat");
-            presenter.CarrierMaterial = NewMat(new Color(0.98f, 0.72f, 0.16f), "CarrierMat");
+            presenter.AntMaterial = NewMat(UI.GameMaterialModel.ByName("AntMat"));
+            presenter.CarrierMaterial = NewMat(UI.GameMaterialModel.ByName("CarrierMat"));
             // Materiales de hormigas diferenciados por colonia (armonizados con acentos de nido):
             // Colonia 0: Terracota / Ámbar cálido
-            var antMat0 = NewMat(new Color(0.85f, 0.35f, 0.20f), "AntMatColony0");
-            var carrierMat0 = NewMat(new Color(0.98f, 0.70f, 0.20f), "CarrierMatColony0");
+            var antMat0 = NewMat(UI.GameMaterialModel.ByName("AntMatColony0"));
+            var carrierMat0 = NewMat(UI.GameMaterialModel.ByName("CarrierMatColony0"));
             // Colonia 1: Azul acero / Celeste
-            var antMat1 = NewMat(new Color(0.25f, 0.55f, 0.90f), "AntMatColony1");
-            var carrierMat1 = NewMat(new Color(0.40f, 0.85f, 0.95f), "CarrierMatColony1");
+            var antMat1 = NewMat(UI.GameMaterialModel.ByName("AntMatColony1"));
+            var carrierMat1 = NewMat(UI.GameMaterialModel.ByName("CarrierMatColony1"));
             presenter.ColonyAntMaterials = new Material[] { antMat0, antMat1 };
             presenter.ColonyCarrierMaterials = new Material[] { carrierMat0, carrierMat1 };
 
-            presenter.ItemMaterial = NewMat(new Color(0.36f, 0.78f, 0.36f), "ItemMat");
+            presenter.ItemMaterial = NewMat(UI.GameMaterialModel.ByName("ItemMat"));
             // F5.2a: hojas con mordiscos — verde oscuro para la hoja, marrón
             // oscuro para las muescas de corte (CutsLeft/CutsInitial del canal A).
-            presenter.LeafMaterial = NewMat(new Color(0.15f, 0.50f, 0.12f), "LeafMat");
-            presenter.BiteMaterial = NewMat(new Color(0.30f, 0.15f, 0.05f), "BiteMat");
+            presenter.LeafMaterial = NewMat(UI.GameMaterialModel.ByName("LeafMat"));
+            presenter.BiteMaterial = NewMat(UI.GameMaterialModel.ByName("BiteMat"));
+            // F6: paredes del laberinto — quad unitario en XZ + material de piedra.
+            // La geometría de cada pared llega en la cabecera del stream (los
+            // MISMOS rectángulos que colisionan en el Core): la escena no guarda
+            // un laberinto que pueda quedar desincronizado del mundo.
+            presenter.WallMesh = EditorTools.GameAssetBuilder.EnsureWallMesh("WallMesh");
+            presenter.WallMaterial = NewMat(UI.GameMaterialModel.ByName("WallMat"));
             // Canal E activo por defecto en la escena: el quad de feromonas ya
             // existe — sin este campo el canal quedaría apagado y el quad vacío.
             presenter.PheroEvery = 30;
@@ -175,7 +193,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             // El marcador va en DOS piezas para leerse: montículo oscuro + disco
             // del color de la colonia (el mismo acento que usa la tarjeta del HUD).
             float nestR = world * 0.022f; // marcador proporcional al mundo
-            var moundMat = NewMat(new Color(0.30f, 0.25f, 0.20f), "NestMoundMat");
+            var moundMat = NewMat(UI.GameMaterialModel.ByName("NestMoundMat"));
             int nestCount = Mathf.Max(1, settings.Colonies);
             for (int c = 0; c < nestCount; c++)
             {
@@ -192,7 +210,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 nest.transform.position = new Vector3(nx, 0.45f, world * 0.5f);
                 nest.transform.localScale = new Vector3(nestR, 0.3f, nestR);
                 RemoveCollider(nest);
-                nest.GetComponent<Renderer>().sharedMaterial = NewMat(AccentForColony(c), $"NestMat{c}");
+                nest.GetComponent<Renderer>().sharedMaterial = NewMat(UI.GameMaterialModel.Nest(c));
             }
 
             // — Feromonas (F4.5): capa TRANSPARENTE sobre el suelo —
@@ -206,9 +224,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             pheroQuad.transform.position = new Vector3(world * 0.5f, PheroHeight, world * 0.5f);
             pheroQuad.transform.localScale = new Vector3(world / 10f, 1f, world / 10f); // plane = 10 u
             RemoveCollider(pheroQuad);
-            var pheroMat = NewTransparentMat("PheromoneMat");
-            EnsureMaterialFolder();
-            CreateOrReplaceAsset(pheroMat, "Assets/Materials/PheromoneMat.mat");
+            var pheroMat = NewTransparentMat(UI.GameMaterialModel.ByName("PheromoneMat"),
+                UI.GameMaterialModel.ReposeTextureName(-1));
             pheroQuad.GetComponent<Renderer>().sharedMaterial = pheroMat;
             var phero = pheroQuad.AddComponent<Presenter.PheromoneTileBehaviour>();
             phero.Presenter = presenter;
@@ -263,7 +280,11 @@ namespace AntSim.Unity.Scripts.EditorTools
                 var panel = Panel(canvasGo.transform, $"ColonyCard_{c}",
                     new Vector2(16, -72 - c * 280), new Vector2(440, 268), accent);
                 cardPanels[c] = panel;
-                cardTexts[c] = PanelText(panel, "Body", 14, Ink);
+                // El tamaño del cuerpo sale de la FUENTE (`GameFontModel`), no de un
+                // literal: los iconos de la tarjeta van a `CardIconSize` (el doble) y
+                // esa relación se comprueba en la suite. Cambiarlo aquí sin tocar la
+                // fuente dejaría los iconos sin el doble que pide el diseño.
+                cardTexts[c] = PanelText(panel, "Body", UI.GameFontModel.CardBodySize, Ink);
                 var cardBodyRt = cardTexts[c].rectTransform;
                 // 126 px de inset inferior: barra de reserva (14–26), gráfica de
                 // reserva (32–58), curva de aprendizaje (62–88) y sus dos líneas
@@ -311,18 +332,24 @@ namespace AntSim.Unity.Scripts.EditorTools
             inspector.CardText = inspect;
 
             // — Pistas de teclado (abajo al centro): el juego no se explica solo —
+            // Texto y CAJA vienen del modelo (`HudElementLayoutModel`): el ancho
+            // sale de la fuente (194 caracteres a 7 px), no de un literal a ojo.
+            // La caja anterior (1100) se quedó corta cuando la tipografía propia
+            // sustituyó a la de uGUI, y el Play pass lo midió desbordando 1325.
             var hints = NewText(canvasGo.transform, "Hints",
-                new Vector2(0, 18), new Vector2(1100, 26),
+                new Vector2(0, 18),
+                new Vector2(Streaming.HudElementLayoutModel.HintsWidth,
+                            Streaming.HudElementLayoutModel.HintsHeight),
                 TextAnchor.LowerCenter, 14);
             hints.color = InkDim;
             hints.rectTransform.anchorMin = new Vector2(0.5f, 0f);
             hints.rectTransform.anchorMax = new Vector2(0.5f, 0f);
             hints.rectTransform.pivot = new Vector2(0.5f, 0f);
             hints.rectTransform.anchoredPosition = new Vector2(0f, 18f);
-            // Sin emoji (la fuente LegacyRuntime de uGUI no los tiene: salían
-            // cajas vacías, uno de los motivos del aspecto pobre del HUD).
-            hints.text = "click: inspeccionar   ·   + / -: velocidad (1×–100×)   ·   Espacio: pausa   ·   " +
-                         "D: drops (Z deshace)   ·   F: feromonas   ·   G: colonia   ·   I: importar pool   ·   \u2b07: soltar .antgenome";
+            // Sin emoji salvo los que la fuente PROPIA dibuja (U+2B07 sí está en
+            // `GameFontModel`: los que no están salían como cajas vacías, uno de
+            // los motivos del aspecto pobre del HUD).
+            hints.text = Streaming.HudElementLayoutModel.HintsText;
 
             // — HUD layout: reparte el stream a todo —
             var hudGo = new GameObject("HudLayout");
@@ -443,14 +470,17 @@ namespace AntSim.Unity.Scripts.EditorTools
             dragText.fontSize = 24;
             dragText.alignment = TextAnchor.MiddleCenter;
             dragText.color = Color.white;
-            dragText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            dragText.font = DefaultFont();
             hud.DragOverlayText = dragText;
             dragOverlayGo.SetActive(false);
 
             // — F5.1: per-elemento — contenedor de toasts clicables + barras + botones —
             RectTransform toastContainer = CreateToastContainer(canvasGo.transform, hud);
             var stockImages = CreateStockBars(cardPanels, hud, cardTexts.Length);
-            CreateSparklines(cardPanels, presenter, cardTexts.Length);
+            // Las gráficas se cuelgan del HUD: es quien drena TODOS los ticks
+            // presentados y quien tiene que pasarles cada uno (las descargas se
+            // cuentan por tick, no por frame — ver ColonySparklineBehaviour).
+            hud.Sparklines = CreateSparklines(cardPanels, cardTexts.Length);
             CreateLearningPanels(cardPanels, presenter, cardTexts.Length);
             var buttons = CreateNativeButtons(modalRt, dropPanel, hud);
             hud.BindNativeButtons(buttons[0], buttons[1], buttons[2], buttons[3]);
@@ -473,6 +503,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
             RegisterInBuildSettings(ScenePath);
+            // CIERRE CANÓNICO: la escena, los materiales y las texturas salen con
+            // anclas derivadas del CONTENIDO y no con las de sesión de Unity, que
+            // son la base aleatoria del contador de instancias (medido: el mismo
+            // montaje con dos bases distintas ⇒ 17 assets con bytes distintos).
+            // Antes lo hacía el Play pass DESPUÉS de generar; ahora lo cierra el
+            // generador (ver GeneratedAssets).
+            GeneratedAssets.CloseWithCanonicalForm(ScenePath);
             Debug.Log($"[SceneBootstrapper] Escena creada y guardada en {ScenePath}, registrada en " +
                       "build settings. Pulsa Play. Publica antes el CLI: " +
                       "dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim");
@@ -597,7 +634,12 @@ namespace AntSim.Unity.Scripts.EditorTools
         }
 
         /// <summary>Acento de HUD/nido por colonia (cicla los dos del contrato).</summary>
-        private static Color AccentForColony(int colony) => colony % 2 == 0 ? AccentColony0 : AccentColony1;
+        private static Color AccentForColony(int colony) => ToColor(UI.GameMaterialModel.Accent(colony));
+
+        /// <summary>El color del MODELO, en el tipo del motor. La conversión vive
+        /// aquí (y no en el modelo) porque el modelo es puro y no puede hablar en
+        /// `Color`.</summary>
+        private static Color ToColor(UI.GameMaterialModel.Rgba c) => new Color(c.R, c.G, c.B, c.A);
 
         // ── Asistente de primera ejecución (Windows-friendly) ──────────────
         // Menú AntSim → Asistente: guía al usuario paso a paso para elegir
@@ -851,9 +893,10 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// memoria. El componente se refresca solo desde el presenter, así que el
         /// HUD no tiene que conocer la gráfica.
         /// </summary>
-        private static void CreateSparklines(RectTransform[] cardPanels,
-            Presenter.SimPresenterBehaviour presenter, int colonies)
+        private static Presenter.ColonySparklineBehaviour[] CreateSparklines(
+            RectTransform[] cardPanels, int colonies)
         {
+            var sparklines = new Presenter.ColonySparklineBehaviour[colonies];
             for (int i = 0; i < colonies; i++)
             {
                 var go = new GameObject($"Sparkline_{i}", typeof(RectTransform));
@@ -870,14 +913,15 @@ namespace AntSim.Unity.Scripts.EditorTools
                 img.color = Color.white;
 
                 var spark = go.AddComponent<Presenter.ColonySparklineBehaviour>();
-                spark.Presenter = presenter;
                 spark.ColonyId = i;
                 spark.Target = img;
                 // 1 px por unidad de UI (406 de ancho en la tarjeta) y 90 muestras
                 // ⇒ el modelo reparte la ventana por todo el ancho.
                 spark.Width = 406;
                 spark.Height = 26;
+                sparklines[i] = spark;
             }
+            return sparklines;
         }
 
         /// <summary>
@@ -906,11 +950,16 @@ namespace AntSim.Unity.Scripts.EditorTools
                 var textGo = new GameObject($"LearningInfo_{i}", typeof(RectTransform));
                 textGo.transform.SetParent(cardPanels[i], false);
                 var trt = (RectTransform)textGo.transform;
+                // La CAJA sale del modelo (`HudElementLayoutModel`), no de un
+                // cálculo local: es el ancho contra el que el modelo (y su test)
+                // ajustan las dos líneas. Estirada a la tarjeta medía lo mismo
+                // (440−20−14 = 406), pero el contrato vivía en dos sitios.
                 trt.anchorMin = new Vector2(0f, 0f);
-                trt.anchorMax = new Vector2(1f, 0f);
+                trt.anchorMax = new Vector2(0f, 0f);
                 trt.pivot = new Vector2(0f, 0f);
-                trt.offsetMin = new Vector2(20f, 90f);
-                trt.offsetMax = new Vector2(-14f, 124f);
+                trt.anchoredPosition = new Vector2(20f, 90f);
+                trt.sizeDelta = new Vector2(Streaming.HudElementLayoutModel.LearningInfoWidth,
+                                            Streaming.HudElementLayoutModel.LearningInfoHeight);
                 var info = textGo.AddComponent<Text>();
                 info.font = DefaultFont();
                 info.fontSize = 14;
@@ -1001,8 +1050,7 @@ namespace AntSim.Unity.Scripts.EditorTools
                 text.text = label;
                 text.alignment = TextAnchor.MiddleCenter;
                 text.fontSize = 14;
-                text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                if (text.font == null) text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                text.font = DefaultFont();
                 return btn;
             }
 
@@ -1119,16 +1167,15 @@ namespace AntSim.Unity.Scripts.EditorTools
             speedLabel.text = Streaming.SpeedControlModel.FormatSpeed(startSpeed);
             speedLabel.raycastTarget = false;
 
-            // 6. Botones de preset rápido (1×, 5×, 10× Base, 25×, 50×, 100×)
-            var p1 = MakeBtn(panelRt, "Preset_1", "1×", new Vector2(426f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p5 = MakeBtn(panelRt, "Preset_5", "5×", new Vector2(464f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p10 = MakeBtn(panelRt, "Preset_10", "10× Base", new Vector2(502f, 0f), new Vector2(66f, 26f), new Color(0.18f, 0.42f, 0.28f, 0.95f), 11);
-            var p25 = MakeBtn(panelRt, "Preset_25", "25×", new Vector2(572f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p50 = MakeBtn(panelRt, "Preset_50", "50×", new Vector2(614f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
-            var p100 = MakeBtn(panelRt, "Preset_100", "100×", new Vector2(656f, 0f), new Vector2(46f, 26f), new Color(0.38f, 0.20f, 0.14f, 0.95f), 11);
-
-            // 7. Botón de Siguiente Generación (bucle evolutivo continuo)
-            var nextGenBtn = MakeBtn(panelRt, "NextGenBtn", "\u21bb Sig. Gen", new Vector2(708f, 0f), new Vector2(76f, 26f), new Color(0.20f, 0.38f, 0.52f, 0.95f), 11);
+            // 6. Botones de preset rápido (10×, 30×, 60×, 90×, 120× Base, 160×)
+            //    F6: la base es 120× (40 × los 3× de antes). No hay botón de
+            //    «siguiente generación»: la evolución va por nacimientos.
+            var p1 = MakeBtn(panelRt, "Preset_1", "10×", new Vector2(426f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p5 = MakeBtn(panelRt, "Preset_5", "30×", new Vector2(464f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p10 = MakeBtn(panelRt, "Preset_10", "60×", new Vector2(502f, 0f), new Vector2(34f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p25 = MakeBtn(panelRt, "Preset_25", "90×", new Vector2(540f, 0f), new Vector2(38f, 26f), new Color(0.14f, 0.28f, 0.25f, 0.95f), 11);
+            var p50 = MakeBtn(panelRt, "Preset_50", "120× Base", new Vector2(582f, 0f), new Vector2(66f, 26f), new Color(0.18f, 0.42f, 0.28f, 0.95f), 11);
+            var p100 = MakeBtn(panelRt, "Preset_100", "160×", new Vector2(652f, 0f), new Vector2(46f, 26f), new Color(0.38f, 0.20f, 0.14f, 0.95f), 11);
 
             // Añadir controlador interactivo en tiempo de ejecución (asegura listeners en Play mode)
             var speedCtrl = panelGo.AddComponent<UI.SpeedControlBehaviour>();
@@ -1145,7 +1192,6 @@ namespace AntSim.Unity.Scripts.EditorTools
             speedCtrl.Preset25 = p25;
             speedCtrl.Preset50 = p50;
             speedCtrl.Preset100 = p100;
-            speedCtrl.NextGenButton = nextGenBtn;
 
             hud.SpeedSlider = slider;
             hud.SpeedText = speedLabel;
@@ -1291,14 +1337,16 @@ namespace AntSim.Unity.Scripts.EditorTools
             public const float ToastHeight = Streaming.HudElementLayoutModel.ToastHeight;
         }
 
-        // ── F5.1: paleta y medidas (una sola fuente de verdad) ───────────────
-        private const int GridTiles = 24;        // rejilla del suelo cada world/24 u
+        // ── F5.1: paleta y medidas de la UI (una sola fuente de verdad) ──────
+        // Los acentos de colonia NO están aquí: son color de MATERIAL (el disco
+        // del nido) y viven en GameMaterialModel, que es lo que el contrato de
+        // assets comprueba; la barra de la tarjeta del HUD los lee de ahí, así
+        // que el nido y su tarjeta ya no pueden separarse. La rejilla del suelo
+        // —tamaño, patrón y colores— vive en el mismo modelo.
         private const float PheroHeight = 0.25f; // altura de la capa de feromonas
         private static readonly Color PanelFill = new Color(0.07f, 0.075f, 0.09f, 0.82f);
         private static readonly Color Ink = new Color(0.93f, 0.91f, 0.86f);
         private static readonly Color InkDim = new Color(0.72f, 0.71f, 0.66f);
-        private static readonly Color AccentColony0 = new Color(0.93f, 0.45f, 0.35f);
-        private static readonly Color AccentColony1 = new Color(0.42f, 0.63f, 0.95f);
         private static readonly Color AccentNeutral = new Color(0.52f, 0.84f, 0.78f);
 
         /// <summary>Texto uGUI con las convenciones v1 (sin fuente custom).</summary>
@@ -1325,14 +1373,14 @@ namespace AntSim.Unity.Scripts.EditorTools
             return t;
         }
 
-        /// <summary>Fuente por defecto del HUD. LegacyRuntime es la de Unity 6;
-        /// Arial queda como respaldo para proyectos antiguos.</summary>
-        private static Font DefaultFont()
-        {
-            var f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (f == null) f = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            return f;
-        }
+        /// <summary>
+        /// Fuente del HUD: la del JUEGO. Genera (o reutiliza) el .ttf propio y lo
+        /// importa; ya no se pide ninguna fuente de relleno al motor. Antes esto
+        /// era <c>Resources.GetBuiltinResource&lt;Font&gt;("LegacyRuntime.ttf")</c>:
+        /// el HUD se dibujaba con la tipografía de cualquier proyecto nuevo y los
+        /// signos del juego («·», «─», «○ ◐ ●», «→», «≈», «⏸») no existían en ella.
+        /// </summary>
+        private static Font DefaultFont() => EditorTools.GameAssetBuilder.EnsureFont();
 
         /// <summary>
         /// Panel del HUD (F5.1): fondo translúcido + barra de acento a la
@@ -1349,7 +1397,19 @@ namespace AntSim.Unity.Scripts.EditorTools
             var rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(anchor.x < 0 ? 1f : 0f, anchor.y < 0 ? 1f : 0f);
             rt.pivot = rt.anchorMin;
-            rt.anchoredPosition = new Vector2(Mathf.Abs(anchor.x), Mathf.Abs(anchor.y));
+            // El SIGNO de `anchor` es el margen HACIA DENTRO y no puede perderse: el
+            // pivote es la esquina, así que un desplazamiento positivo la mueve hacia
+            // FUERA de la pantalla. Con `Mathf.Abs` aquí (el defecto que destapó la
+            // medida de los iconos) las tarjetas de colonia se anclaban 72 unidades
+            // POR ENCIMA del borde superior —medido: screen=[16,1111..448,1374] con
+            // pantalla de 1303, o sea la tarjeta 0 medio fuera y la 1 entera fuera— y
+            // los iconos del censo y de la línea de 1 s no llegaban a pintarse en
+            // pantalla. La barra de estado se salvaba porque le sobreescribe los
+            // offsets; los paneles de abajo, porque allí el signo ya era el bueno.
+            // El contrato que cada llamada escribe —(16, −72) = 16 a la derecha y 72
+            // por debajo del borde superior; (−16, 16) = 16 por encima del inferior y
+            // 16 a la izquierda— se respeta tal cual.
+            rt.anchoredPosition = anchor;
             rt.sizeDelta = size;
             var bg = go.AddComponent<UnityEngine.UI.Image>();
             bg.color = PanelFill;
@@ -1415,21 +1475,29 @@ namespace AntSim.Unity.Scripts.EditorTools
         }
 
         /// <summary>Textura de rejilla (fondo + línea) GUARDADA como asset: sirve de
-        /// referencia de escala sobre el suelo y sobrevive a recargar la escena.</summary>
-        private static Texture2D NewGridTexture(Color fill, Color line)
+        /// referencia de escala sobre el suelo y sobrevive a recargar la escena.
+        /// El patrón —lado, colores y qué píxel es línea— lo decide
+        /// <see cref="UI.GameMaterialModel"/>: la escena simple y cada vista del
+        /// multi-visor dibujan la misma rejilla, y el contrato de assets la
+        /// comprueba píxel a píxel sin abrir el editor.</summary>
+        private static Texture2D NewGridTexture(string name)
         {
-            const int N = 64;
-            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { name = "GridTex" };
+            const int N = UI.GameMaterialModel.GridSize;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { name = name };
+            var linea = UI.GameMaterialModel.GridLine;
+            var relleno = UI.GameMaterialModel.GridFill;
             var px = new Color32[N * N];
             for (int y = 0; y < N; y++)
                 for (int x = 0; x < N; x++)
-                    px[y * N + x] = (x == 0 || y == 0) ? (Color32)line : (Color32)fill;
+                    px[y * N + x] = UI.GameMaterialModel.IsGridLine(x, y)
+                        ? new Color32(linea.R, linea.G, linea.B, linea.A)
+                        : new Color32(relleno.R, relleno.G, relleno.B, relleno.A);
             tex.SetPixels32(px);
             tex.wrapMode = TextureWrapMode.Repeat;
             tex.filterMode = FilterMode.Bilinear;
             tex.Apply();
             EnsureMaterialFolder();
-            CreateOrReplaceAsset(tex, "Assets/Materials/GridTex.asset");
+            CreateOrReplaceAsset(tex, $"Assets/Materials/{name}.asset");
             return tex;
         }
 
@@ -1438,7 +1506,7 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// Material TRANSPARENTE para capas superpuestas (feromonas). Busca primero
         /// el shader de Universal Render Pipeline (URP) y como fallback los legacy/built-in.
         /// </summary>
-        private static Material NewTransparentMat(string name)
+        private static Material NewTransparentMat(UI.GameMaterialModel.Spec spec, string textureName)
         {
             Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (sh == null) sh = Shader.Find("Unlit/Transparent");
@@ -1447,7 +1515,7 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
 
-            var m = new Material(sh!) { name = name };
+            var m = new Material(sh!) { name = spec.Name };
             if (sh != null && sh.name.StartsWith("Universal Render Pipeline"))
             {
                 m.SetFloat("_Surface", 1f); // 1 = Transparent
@@ -1470,11 +1538,14 @@ namespace AntSim.Unity.Scripts.EditorTools
                 m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                 m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             }
-            // Arranca SIN pintar (textura transparente) y con el tinte en blanco: el
-            // canal E solo cambia la textura, así que el quad nace invisible.
-            m.mainTexture = NewEmptyTexture();
+            // Arranca SIN pintar (textura transparente) y con el tinte en blanco (el
+            // que dice el modelo): el canal E solo cambia la textura, así que el quad
+            // nace invisible.
+            m.mainTexture = NewEmptyTexture(textureName);
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", m.mainTexture);
-            if (m.HasProperty("_Color")) m.color = Color.white;
+            if (m.HasProperty("_Color")) m.color = ToColor(spec.Color);
+            EnsureMaterialFolder();
+            CreateOrReplaceAsset(m, $"Assets/Materials/{spec.Name}.mat");
             return m;
         }
 
@@ -1511,7 +1582,7 @@ namespace AntSim.Unity.Scripts.EditorTools
         ///     no es el del material y el invariante «hay hormigas visibles» no se
         ///     puede comprobar con tolerancias razonables.
         /// </summary>
-        private static Material NewMat(Color c, string name)
+        private static Material NewMat(UI.GameMaterialModel.Spec spec)
         {
             Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (sh == null) sh = Shader.Find("Unlit/Color");
@@ -1519,13 +1590,16 @@ namespace AntSim.Unity.Scripts.EditorTools
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
 
-            var m = new Material(sh!) { name = name };
+            var c = ToColor(spec.Color);
+            var m = new Material(sh!) { name = spec.Name };
             // Instancing por construcción (F5.3 rodaja 3): el presenter dibuja
             // hormigas e ítems con Graphics.DrawMeshInstanced, que LANZA si el
             // material no lo tiene activado — y esa excepción aborta el dibujo (la
             // escena se quedaba sin hormigas). El presenter además lo activa
             // defensivamente, pero los materiales de la escena lo traen de fábrica.
-            m.enableInstancing = true;
+            // El flag sale del modelo (Flat ⇒ instancing), y el contrato comprueba
+            // que el `.mat` de disco lo lleva.
+            m.enableInstancing = spec.Instancing;
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             m.color = c;
@@ -1537,28 +1611,30 @@ namespace AntSim.Unity.Scripts.EditorTools
                 m.SetColor("_EmissionColor", c);
             }
             EnsureMaterialFolder();
-            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{spec.Name}.mat");
             return m;
         }
 
         /// <summary>Material unlit TEXTURIZADO (el suelo con su rejilla). La textura
         /// es un asset guardado: una textura creada en runtime no sobrevive a
         /// guardar/recargar la escena y el suelo se quedaría liso (o blanco).</summary>
-        private static Material NewUnlitTextureMat(string name, Texture2D tex, int tiles)
+        private static Material NewUnlitTextureMat(UI.GameMaterialModel.Spec spec, string textureName)
         {
             Shader? sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (sh == null) sh = Shader.Find("Unlit/Texture");
             if (sh == null) sh = Shader.Find("Universal Render Pipeline/Lit");
             if (sh == null) sh = Shader.Find("Standard");
 
-            var m = new Material(sh!) { name = name, mainTexture = tex };
+            var tex = NewGridTexture(textureName);
+            float tiles = UI.GameMaterialModel.GridTiles;
+            var m = new Material(sh!) { name = spec.Name, mainTexture = tex };
             m.mainTextureScale = new Vector2(tiles, tiles);
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);
             if (m.HasProperty("_BaseMap_ST")) m.SetVector("_BaseMap_ST", new Vector4(tiles, tiles, 0, 0));
-            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
-            if (m.HasProperty("_Color")) m.color = Color.white;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", ToColor(spec.Color));
+            if (m.HasProperty("_Color")) m.color = ToColor(spec.Color);
             EnsureMaterialFolder();
-            CreateOrReplaceAsset(m, $"Assets/Materials/{name}.mat");
+            CreateOrReplaceAsset(m, $"Assets/Materials/{spec.Name}.mat");
             return m;
         }
 
@@ -1585,37 +1661,24 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// El resultado: una pasada del generador ya no cambia los materiales que no
         /// debía tocar, y el asset se crea como mucho UNA vez por proyecto.
         /// </summary>
-        private static Texture2D NewEmptyTexture()
+        private static Texture2D NewEmptyTexture(string name)
         {
-            const string path = "Assets/Materials/PheromoneEmpty.asset";
+            string path = $"Assets/Materials/{name}.asset";
             var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (existing != null) return existing;
 
-            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = "PheromoneEmpty" };
-            tex.SetPixels32(new[] { new Color32(255, 255, 255, 0) });
+            // El píxel (blanco, alpha 0) sale del modelo: es lo que el contrato
+            // comprueba píxel a píxel — alpha 255 convertiría el reposo en un
+            // quad blanco opaco, el MISMO defecto por otra puerta.
+            var px = UI.GameMaterialModel.ReposePixel;
+            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = name };
+            tex.SetPixels32(new[] { new Color32(px.R, px.G, px.B, px.A) });
             tex.Apply();
             EnsureMaterialFolder();
             AssetDatabase.CreateAsset(tex, path);
             return tex;
         }
 
-        private static Mesh PrimitiveMesh(PrimitiveType type, float scale, string name)
-        {
-            var go = GameObject.CreatePrimitive(type);
-            var mesh = Object.Instantiate(go.GetComponent<MeshFilter>().sharedMesh);
-            mesh.name = name;
-            // Los meshes de primitivas vienen a escala 1: el presenter ya escala.
-            if (scale != 1f)
-            {
-                var verts = mesh.vertices;
-                for (int i = 0; i < verts.Length; i++) verts[i] *= scale;
-                mesh.vertices = verts;
-                mesh.RecalculateNormals();
-            }
-            Object.DestroyImmediate(go);
-            CreateOrReplaceAsset(mesh, $"Assets/Materials/{name}.asset");
-            return mesh;
-        }
     }
 }
 #endif

@@ -63,6 +63,22 @@
 #   scripts/player-perf.sh --skip-build        # reusa el player ya construido
 #   scripts/player-perf.sh --log FICHERO       # solo analiza el log de una corrida
 #   scripts/player-perf.sh --selftest          # verifica el analizador (sin Unity)
+#   scripts/player-perf.sh --dump              # vuelca la CAPTURA CRUDA a
+#                                              # artifacts/perf-player-capture.rgb
+#                                              # (cabecera «ANTSIMRGB w h» + RGB);
+#                                              # es la prueba de lo que hay en
+#                                              # pantalla cuando el chip suspende.
+#
+# EL CHIP DE RUNWAY TAMBIÉN SE MIDE, y también suspende. La puerta de píxeles
+# miraba el mundo; desde F5.1 la sonda mide además el HUD del frame presentado: el
+# color del tramo del chip, el ancho real de la línea que lo lleva y que el texto no
+# invada la barra de reserva (el modelo puro de la medida es HudInkModel, probado en
+# la suite headless). Lo que se publica del chip es su COBERTURA sobre el fondo
+# medido de la tarjeta (0,70–0,96 según cómo rasterice el atlas de la fuente), no
+# una igualdad de color que el rasterizador no garantiza; con --dump se vuelca
+# además la captura cruda, que es la prueba de los píxeles. Una corrida sin captura de pantalla no se da por buena: medir
+# nada no es medir bien. OJO: el CLI que lanza el player tiene que ser el de HOY — con
+# el binario viejo el stream no trae el campo de runway y no habría chip que medir.
 #
 # Salida: 0 medido y puerta verde · 1 medido con la puerta en rojo · 2 uso ·
 # 3 sin editor/CLI · 4 el player no arrancó · 5 sin veredicto (no midió) ·
@@ -104,6 +120,10 @@ LOG=""
 ANALYZE_ONLY=0
 QUIET=0
 SELFTEST=0
+# Volcado de la captura cruda: apagado por defecto (son ~2,7 MB por corrida) y
+# encendido con --dump cuando una medida suspende y hay que ver los píxeles.
+DUMP_REQ=0
+DUMP_REL="artifacts/perf-player-capture.rgb"
 UNITY=""
 
 # shellcheck source=lib/unity-project.sh
@@ -127,6 +147,7 @@ while [[ $# -gt 0 ]]; do
     --system)      CPU_MODE=1; SYSTEM_MODE=1; REPORT="$REPORT_SYSTEM"; shift ;;
     --ticks)       TICKS="$2"; shift 2 ;;
     --skip-build)  SKIP_BUILD=1; shift ;;
+    --dump)        DUMP_REQ=1; shift ;;
     --log)         LOG="$2"; ANALYZE_ONLY=1; shift 2 ;;
     --quiet)       QUIET=1; shift ;;
     --selftest)    SELFTEST=1; shift ;;
@@ -209,11 +230,19 @@ if [[ $SELFTEST -eq 1 ]]; then
   if ! ran_player "$tmp/ok.log"; then echo "✗ selftest: un log con sonda se reportó como no arrancado" >&2; fails=1; fi
   # El extractor de claves del JSON: es lo que publica la tabla, y un cambio de
   # formato del informe no debe romperlo en silencio.
-  printf '{\n  "fpsMedian": 59.9,\n  "gateOk": true,\n  "vSyncCount": 1,\n  "series": [\n    {"s": 1}\n  ]\n}\n' > "$tmp/perf.json"
+  printf '{\n  "fpsMedian": 59.9,\n  "gateOk": true,\n  "vSyncCount": 1,\n  "hudOk": true,\n  "hudChips": 8,\n  "hudTitlePx": 236,\n  "hudChipMinCover": 0.74,\n  "hudChipMaxCover": 0.96,\n  "series": [\n    {"s": 1}\n  ]\n}\n' > "$tmp/perf.json"
   got="$(jget "$tmp/perf.json" fpsMedian)"
   if [[ "$got" != "59.9" ]]; then echo "✗ selftest: jget fpsMedian dio «$got» (esperado 59.9)" >&2; fails=1; fi
   got="$(jget "$tmp/perf.json" gateOk)"
   if [[ "$got" != "true" ]]; then echo "✗ selftest: jget gateOk dio «$got» (esperado true)" >&2; fails=1; fi
+  # Las claves del chip EN PANTALLA: son las que publica la medición del HUD, y un
+  # cambio de formato del informe no debe romper la tabla en silencio.
+  printf '{\n  "hudOk": false,\n  "hudChips": 8,\n  "hudTitleHeadroom": 350,\n  "hudStagingInkPx": 0,\n  "hudBarInkPx": 0\n}\n' > "$tmp/hud.json"
+  for kv in "hudOk=false" "hudChips=8" "hudTitleHeadroom=350" "hudBarInkPx=0"; do
+    k="${kv%%=*}"; want="${kv#*=}"
+    got="$(jget "$tmp/hud.json" "$k")"
+    if [[ "$got" != "$want" ]]; then echo "✗ selftest: jget $k dio «$got» (esperado $want)" >&2; fails=1; fi
+  done
   # Las claves del modo coste: son las que publica la 5ª pieza del criterio.
   printf '{\n  "mode": "player-cpu",\n  "vSyncCount": 0,\n  "projectVSyncCount": 1,\n  "cpuMsMedian": 4.1,\n  "costMeasured": true,\n  "costFits": true,\n  "costVerdict": "cabe: la CPU deja margen al objetivo",\n  "bottleneck": "equilibrado"\n}\n' > "$tmp/cpu.json"
   for kv in "cpuMsMedian=4.1" "costMeasured=true" "projectVSyncCount=1"; do
@@ -329,7 +358,8 @@ set +e
     -antsimPerfSystem "$SYSTEM_MODE" \
     -antsimPerfSeconds "$SECONDS_WINDOW" \
     -antsimPerfWarmup "$WARMUP" \
-    -antsimPerfBoost "$BOOST" >/dev/null 2>&1)
+    -antsimPerfBoost "$BOOST" \
+    -antsimPerfDump $([[ $DUMP_REQ -eq 1 ]] && echo "$DUMP_REL" || echo "") >/dev/null 2>&1)
 player_rc=$?
 set -e
 
@@ -351,6 +381,10 @@ if [[ -f "$REPORT_ABS" ]]; then
   log "   vsync: $(jget "$REPORT_ABS" vSyncCount) (proyecto $(jget "$REPORT_ABS" projectVSyncCount)) · draw calls $(jget "$REPORT_ABS" drawCalls) (instanciadas $(jget "$REPORT_ABS" instancedCalls), respaldo $(jget "$REPORT_ABS" fallbackCalls))"
   log "   carga final: $(jget "$REPORT_ABS" ants) hormigas · $(jget "$REPORT_ABS" items) ítems · tick $(jget "$REPORT_ABS" finalTick)"
   log "   puerta de píxeles: $(jget "$REPORT_ABS" gateOk)"
+  # El chip de runway medido EN PANTALLA (F5.1): su color, el ancho real de la línea
+  # que lo lleva y que el texto no invada la barra de reserva.
+  log "   chip en pantalla: $(jget "$REPORT_ABS" hudOk) · $(jget "$REPORT_ABS" hudChips) chips en $(jget "$REPORT_ABS" hudCards) tarjetas · cobertura $(jget "$REPORT_ABS" hudChipMinCover)-$(jget "$REPORT_ABS" hudChipMaxCover) · captura $(jget "$REPORT_ABS" hudCapture)"
+  log "   línea del título: $(jget "$REPORT_ABS" hudTitlePx)/$(jget "$REPORT_ABS" hudTitleAvail) px (aire $(jget "$REPORT_ABS" hudTitleHeadroom)) · tinta en la franja $(jget "$REPORT_ABS" hudStagingInkPx) px · dentro de la barra $(jget "$REPORT_ABS" hudBarInkPx) px"
 
   if [[ $CPU_MODE -eq 1 ]]; then
     # ── Modo coste: el número que se publica es el de la CPU del frame ────────

@@ -49,6 +49,11 @@ public static class GameScenario
         }
     }
 
+    /// <summary>
+    /// Stream completo como string (tests, fixtures y consumidores cortos). Para
+    /// un horizonte largo usa <see cref="RunTo"/>: construir 216.000 ticks en
+    /// memoria son gigabytes.
+    /// </summary>
     public static string Run(ulong seed, int ticks, int colonies = 2, int grid = 256,
         int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
         IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
@@ -56,8 +61,33 @@ public static class GameScenario
         uint inspectId = 0, int activEvery = 0,
         IReadOnlyList<PheroRequest>? pheroLayers = null,
         float leafFraction = 0f,
-        IReadOnlyList<SpeciesDescriptor>? species = null)
+        IReadOnlyList<SpeciesDescriptor>? species = null,
+        bool maze = false, string? exportPath = null)
     {
+        var sw = new StringWriter(CultureInfo.InvariantCulture);
+        RunTo(sw, seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
+            cloneFromElite, pheroEvery, inspectId, activEvery, pheroLayers,
+            leafFraction, species, maze, exportPath);
+        return sw.ToString();
+    }
+
+    /// <summary>
+    /// Igual que <see cref="Run"/> pero ESCRIBE tick a tick en
+    /// <paramref name="output"/> (F6: la partida de 2 h no cabe en memoria). Con
+    /// `exportPath` escribe la élite de la colonia 0 al terminar el horizonte y
+    /// lo declara en la línea `end`.
+    /// </summary>
+    public static void RunTo(TextWriter output, ulong seed, int ticks, int colonies = 2, int grid = 256,
+        int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
+        IReadOnlyList<(int Tick, float X, float Y)>? drops = null,
+        bool cloneFromElite = false, int pheroEvery = 0,
+        uint inspectId = 0, int activEvery = 0,
+        IReadOnlyList<PheroRequest>? pheroLayers = null,
+        float leafFraction = 0f,
+        IReadOnlyList<SpeciesDescriptor>? species = null,
+        bool maze = false, string? exportPath = null)
+    {
+        if (output is null) throw new ArgumentNullException(nameof(output));
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
         if (frameEvery < 1) throw new ArgumentOutOfRangeException(nameof(frameEvery));
         if (pheroEvery < 0) throw new ArgumentOutOfRangeException(nameof(pheroEvery));
@@ -88,7 +118,8 @@ public static class GameScenario
 
         var sim = new WorldSim(seed, grid, colonies, species: species,
             cloneFromElite: cloneFromElite,
-            leafFraction: leafFraction); // F5.2a.1: 0 = mundo clásico sin hojas
+            leafFraction: leafFraction, // F5.2a.1: 0 = mundo clásico sin hojas
+            maze: maze);                // F6: obstáculos generados de la semilla
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();
@@ -96,7 +127,7 @@ public static class GameScenario
         var alerts = new AlertDeriver();
         var alertsOut = new List<AlertDeriver.Alert>();
 
-        AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite);
+        AppendHeader(sb, seed, ticks, colonies, grid, frameEvery, seedPoolPath, cloneFromElite, sim.Maze);
         if (pheroEvery > 0 || activEvery > 0)
         {
             // Retrocede el cierre para continuar con los canales opt-in.
@@ -166,6 +197,12 @@ public static class GameScenario
             }
         }
 
+        // La cabecera ya está completa (con o sin canales opt-in): se entrega y
+        // se vacía el buffer. A partir de aquí se escribe TICK A TICK — es lo
+        // que permite un horizonte de 2 h sin reservar todo el stream.
+        output.Write(sb);
+        sb.Clear();
+
         int nextDrop = 0;
         for (int i = 0; i < ticks; i++)
         {
@@ -203,11 +240,28 @@ public static class GameScenario
             if (activEvery > 0 && sim.Tick % (ulong)activEvery == 0)
                 AppendActivations(sb, sim, inspectId);
             sb.Append('}').AppendLine(); // cierra el objeto del tick
+
+            output.Write(sb);
+            sb.Clear();
+            // Vaciar cada 30 ticks (≈1 s de simulación): el consumidor recibe el
+            // stream con latencia de un segundo y el pipe no acumula megabytes.
+            if ((i & 31) == 31) output.Flush();
+        }
+
+        // — F6: la élite evolucionada se guarda al terminar el horizonte —
+        bool exported = false;
+        if (exportPath != null)
+        {
+            sim.ExportEliteToFile(0, exportPath, "evolved", sim.Colonies[0].Species.Name);
+            exported = true;
         }
 
         sb.Append("{\"end\":true,\"tick\":").Append(sim.Tick)
-          .Append(",\"hash\":\"").Append(sim.HashLine()).Append("\"}").AppendLine();
-        return sb.ToString();
+          .Append(",\"hash\":\"").Append(sim.HashLine()).Append('"');
+        if (exported) sb.Append(",\"exported\":true");
+        sb.Append('}').AppendLine();
+        output.Write(sb);
+        output.Flush();
     }
 
     /// <summary>
@@ -322,7 +376,8 @@ public static class GameScenario
         sb.Append(",\"activ\":\"");
         if (target is { Alive: true } ant && ant.Brain is MlpBrain mlp)
         {
-            var sensors = AntSenses.Build(sim.Colonies[ant.ColonyId], ant, sim.Items, sim.WorldWidth, sim.WorldHeight);
+            var sensors = AntSenses.Build(sim.Colonies[ant.ColonyId], ant, sim.Items,
+                sim.WorldWidth, sim.WorldHeight, rivals: null, maze: sim.Maze);
             var decision = AntDecision.Neutral();
             mlp.Evaluate(in sensors, ref decision);
 
@@ -343,7 +398,8 @@ public static class GameScenario
         {
             // F5.2c — el mismo canal F para el grafo: total = nodos, orden de
             // evaluación (ids fijos 0..24, luego ocultos por id).
-            var sensors = AntSenses.Build(sim.Colonies[ant2.ColonyId], ant2, sim.Items, sim.WorldWidth, sim.WorldHeight);
+            var sensors = AntSenses.Build(sim.Colonies[ant2.ColonyId], ant2, sim.Items,
+                sim.WorldWidth, sim.WorldHeight, rivals: null, maze: sim.Maze);
             var decision = AntDecision.Neutral();
             neat.Evaluate(in sensors, ref decision);
 
@@ -378,7 +434,8 @@ public static class GameScenario
     }
 
     private static void AppendHeader(StringBuilder sb, ulong seed, int ticks, int colonies,
-        int grid, int frameEvery, string? seedPoolPath, bool cloneFromElite)
+        int grid, int frameEvery, string? seedPoolPath, bool cloneFromElite,
+        MazeLayout? maze = null)
     {
         sb.Append("{\"header\":{")
           .Append("\"mode\":\"game\",\"seed\":").Append(seed)
@@ -390,6 +447,21 @@ public static class GameScenario
             sb.Append(",\"seedPool\":\"").Append(Escape(seedPoolPath)).Append('"');
         if (cloneFromElite)
             sb.Append(",\"cloneFromElite\":true");
+        // F6: el terreno viaja en la cabecera como rectángulos de CELDA para que
+        // la vista pinte exactamente lo que el mundo colisiona. Solo si existe:
+        // los streams sin laberinto son byte a byte los de antes.
+        if (maze != null)
+        {
+            sb.Append(",\"maze\":[");
+            var rects = maze.Rects;
+            for (int i = 0; i < rects.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append('[').Append(rects[i].X).Append(',').Append(rects[i].Y)
+                  .Append(',').Append(rects[i].W).Append(',').Append(rects[i].H).Append(']');
+            }
+            sb.Append(']');
+        }
         sb.Append("}}").AppendLine();
     }
 
@@ -460,6 +532,12 @@ public static class GameScenario
                   .Append(",\"elite\":").Append(c.EliteCount)
                   .Append(",\"fungus\":").Append(F(c.Fungus))
                   .Append(",\"fungusMax\":").Append(F(c.FungusMax))
+                  // F5.1: autonomía (segundos) y su tramo en la escalera de
+                  // escasez de la especie, decidido por el Core (RunwayVerdict).
+                  // −1/0 = sin medida (EMA de consumo degenerada): el chip no se
+                  // pinta, que es más honesto que un chip que miente.
+                  .Append(",\"runway\":").Append(F(c.Runway))
+                  .Append(",\"runwayLevel\":").Append(c.RunwayLevel)
                   .Append('}');
             }
             sb.Append(']');

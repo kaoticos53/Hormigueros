@@ -16,7 +16,7 @@ public static class AntSenses
     /// Los cuatro pines de hash de CI se fijan con ESTA vía.</summary>
     public static AntSensors Build(Colony c, Ant a, IReadOnlyList<FoodItem> items,
         float worldWidth, float worldHeight)
-        => Build(c, a, items, worldWidth, worldHeight, rivals: null);
+        => Build(c, a, items, worldWidth, worldHeight, rivals: null, maze: null);
 
     /// <summary>
     /// F5.2b.2: con `rivals` no nulo (especie beligerante en mundo multi-colonia),
@@ -27,7 +27,8 @@ public static class AntSenses
     /// idénticos al build anterior (pines de CI intactos).
     /// </summary>
     public static AntSensors Build(Colony c, Ant a, IReadOnlyList<FoodItem> items,
-        float worldWidth, float worldHeight, IReadOnlyList<Colony>? rivals)
+        float worldWidth, float worldHeight, IReadOnlyList<Colony>? rivals,
+        MazeLayout? maze = null)
     {
         SpeciesDescriptor sp = c.Species;
         float reach = sp.SensorReach * a.SensorScale;
@@ -110,7 +111,7 @@ public static class AntSenses
             s.HomeDy = Math.Clamp(left, -1f, 1f);
         }
 
-        // — Obstáculos (en Fase 1: solo los bordes del mundo) —
+        // — Obstáculos: los bordes del mundo y, desde F6, el laberinto —
         float dWall = MathF.Min(MathF.Min(a.X, worldWidth - a.X),
                                 MathF.Min(a.Y, worldHeight - a.Y));
         float prox = Math.Clamp(1f - dWall / reach, 0f, 1f);
@@ -118,6 +119,15 @@ public static class AntSenses
         // F5.2b.2: con rivales, el frontal mide la presa, no la pared.
         s.ProxFront = prox;
         s.ProxRight = prox;
+        if (maze != null)
+        {
+            // Cada antena mide EN SU PUNTO (no en el centro): así las tres
+            // proximidades distinguen de qué lado está el obstáculo y la
+            // hormiga puede seguir una pared en vez de solo saber que hay una.
+            s.ProxFront = MathF.Max(prox, maze.ProximityAt(cx, cy, reach));
+            s.ProxLeft = MathF.Max(prox, maze.ProximityAt(lx, ly, reach));
+            s.ProxRight = MathF.Max(prox, maze.ProximityAt(rx, ry, reach));
+        }
         if (rivals != null)
         {
             float visionRival = sp.VisionRadius * a.SensorScale;
