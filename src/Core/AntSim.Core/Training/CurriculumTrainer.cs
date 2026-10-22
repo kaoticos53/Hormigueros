@@ -96,6 +96,20 @@ public sealed class CurriculumTrainer
     // (determinista: el RNG de pruebas avanza en orden fijo).
     public const int TrialsPerGenome = 3;
 
+    /// <summary>Horizonte de las generaciones de mantenimiento clásico (F7). Es el
+    /// de la etapa «mundo» del currículo clásico: dentro de una evaluación caben
+    /// 2–3 generaciones de hormigas y con ellas el relevo y la cría. A 3 600 ticks
+    /// la arena premia al especialista del anillo y la partida clásica empeora.</summary>
+    public const int ClassicTickBudget = 9000;
+
+    /// <summary>Número de generaciones clásicas de COLA al terminar el currículo de
+    /// obstáculos (F7). El mantenimiento intercalado no basta: el gradiente del
+    /// laberinto y el del campo abierto se oponen, y la competencia clásica se
+    /// recupera al final, cuando ya no queda ninguna generación de terreno que
+    /// deshaga lo aprendido. La cola corre en el régimen de la partida (banda
+    /// ancha, horizonte largo) y NO mueve currículo ni escalera.</summary>
+    public const int DefaultClassicTail = 60;
+
     private int[] _sizes;
     private readonly CapacityLadder _ladder;
 
@@ -113,6 +127,7 @@ public sealed class CurriculumTrainer
     private readonly bool _parallel;
     private readonly ulong _mazeSeed;
     private readonly int _classicEvery;
+    private readonly int _classicTail;
 
     /// <summary>Topología vigente del cerebro (crece con la escalera).</summary>
     public int[] BrainSizes => (int[])_sizes.Clone();
@@ -142,7 +157,8 @@ public sealed class CurriculumTrainer
         ObstacleCurriculum? obstacleCurriculum = null,
         IReadOnlyList<int>? hiddenLadder = null,
         bool parallel = false,
-        int classicEvery = 0)
+        int classicEvery = 0,
+        int classicTail = 0)
     {
         if (populationSize < 2) throw new ArgumentOutOfRangeException(nameof(populationSize), "Mínimo 2 genomas.");
         _seed = seed;
@@ -153,7 +169,9 @@ public sealed class CurriculumTrainer
         _obstacles = obstacleCurriculum;
         _parallel = parallel;
         if (classicEvery < 0) throw new ArgumentOutOfRangeException(nameof(classicEvery));
+        if (classicTail < 0) throw new ArgumentOutOfRangeException(nameof(classicTail));
         _classicEvery = classicEvery;
+        _classicTail = classicTail;
         // La semilla del terreno es FIJA para la tirada: los niveles de dificultad
         // son anidados sobre el mismo mapa, así que subir dificultad añade paredes
         // sobre el mapa que la política ya conoce (no cambia de mundo).
@@ -162,7 +180,20 @@ public sealed class CurriculumTrainer
         _ladder = new CapacityLadder(hiddenLadder is { Count: > 0 }
             ? hiddenLadder
             : new[] { 8 });
-        _sizes = new[] { AntSensorChannelInfo.Count, _ladder.Hidden, AntDecision.DecisionCount };
+        // Una semilla MÁS ANCHA que el ancho pedido manda: continuar entrenando un
+        // pool de 24 no puede empezar en 8 (la red encogería y la escalera no tiene
+        // peldaño de bajada). La escalera se queda donde está hasta que un peldaño
+        // real supere el ancho actual.
+        int seedHidden = 0;
+        if (seedGenomes is { Count: > 0 })
+            foreach (var g in seedGenomes)
+                if (g is not null) seedHidden = Math.Max(seedHidden, g.Sizes[1]);
+        _sizes = new[]
+        {
+            AntSensorChannelInfo.Count,
+            Math.Max(_ladder.Hidden, seedHidden),
+            AntDecision.DecisionCount
+        };
 
         if (seedGenomes is { Count: > 0 })
         {
@@ -324,6 +355,22 @@ public sealed class CurriculumTrainer
             }
         }
 
+        // — F7: COLA clásica. Solo con currículo de obstáculos: el terreno ya está
+        //   aprendido y esta cola devuelve al pool la competencia de campo abierto
+        //   (medido: 60 generaciones llevan la partida clásica de 148 a 366
+        //   descargas costando ~2 del laberinto). No alimenta el currículo ni la
+        //   escalera, y el pool exportado es esta última evaluación.
+        if (_classicTail > 0 && _obstacles != null)
+        {
+            var stage = _stages[_stages.Count - 1];
+            for (int t = 1; t <= _classicTail; t++)
+            {
+                Evaluate(stage, _stages.Count + 1, t,
+                    out _, out _, out _, out _, out _, forceClassic: true);
+                if (t < _classicTail) Evolve();
+            }
+        }
+
         SortByFitness();
         return _population;
     }
@@ -358,7 +405,7 @@ public sealed class CurriculumTrainer
 
     private void Evaluate(CurriculumStage stage, int stageIndex, int generation,
         out double best, out double mean, out int competent,
-        out int bestUnloads, out int bestPickups)
+        out int bestUnloads, out int bestPickups, bool forceClassic = false)
     {
         // Semilla determinista de la arena por (semilla del trainer, etapa, generación).
         // Mezcla con multiplicadores de menor magnitud (evita desbordamiento de
@@ -386,16 +433,36 @@ public sealed class CurriculumTrainer
         //   NO alimentan al controlador de dificultad.
         float difficulty = _obstacles?.Difficulty ?? 0f;
         int cells = stage.ArenaCells ?? ArenaEvaluator.GridCells;
-        int budget = _obstacles != null
-            ? Math.Min(stage.TickBudget, _obstacles.TickBudget)
-            : stage.TickBudget;
-        // F7: cada `classicEvery` generaciones la evaluación es CLÁSICA (sin
-        // terreno, banda de la etapa) — mantenimiento del forrajeo de campo
-        // abierto. Medido: sin esta pata el pool del laberinto caía de 242 a 40
-        // descargas en la partida clásica; con una de cada cinco subió a 172 sin
-        // perder el laberinto (57 vs 37 del pool de referencia). Mezclar AMBOS
-        // terrenos en el mismo fitness (peso 0,5) fue peor en los dos.
-        bool classicGen = _obstacles != null && _classicEvery > 0 && generation % _classicEvery == 0;
+
+        // — F7: dos regímenes clásicos, con papeles distintos —
+        // · MANTENIMIENTO (intercalado, 1 de cada N): la banda y el horizonte del
+        //   currículo clásico. Su papel es no dejar que la población se vaya del
+        //   régimen de forrajeo clásico mientras el laberinto manda; medido, es el
+        //   que conserva el ciclo completo (242 → 40 sin mantenimiento).
+        // · COLA (forceClassic, al final): el régimen de la PARTIDA sin laberinto
+        //   —comida uniforme en todo el mapa (≥ 200 u del nido, hasta la media
+        //   diagonal) y horizonte de 2–3 generaciones de hormigas—. Es la fase que
+        //   recupera la métrica del juego (medido: 60 generaciones de banda estrecha
+        //   y 3 600 ticks afinaban la arena y hundían la partida, 172 → 46).
+        bool classicGen = forceClassic || (_obstacles != null && _classicEvery > 0
+            && generation % _classicEvery == 0);
+        if (forceClassic)
+        {
+            min = WorldSim.NestMinSpawnDistance;
+            max = 0.5f * MathF.Sqrt(2f) * (cells * SimConstants.CellSizeUnits);
+        }
+
+        // El horizonte clásico NO depende del terreno: atarlo al presupuesto del
+        // currículo de obstáculos dejaba las generaciones de mantenimiento a
+        // 1 800 ticks con dificultad baja — menos de lo que dura un viaje de ida y
+        // vuelta a 200 u (~4 400) — y esas generaciones no veían NINGUNA descarga
+        // (medido: 600 generaciones seguidas con `unloads=0`), así que seleccionaban
+        // ruido. El mantenimiento corre con el horizonte de la etapa "mundo" clásica.
+        int budget = forceClassic
+            ? ClassicTickBudget
+            : _obstacles != null
+                ? Math.Min(stage.TickBudget, _obstacles.TickBudget)
+                : stage.TickBudget;
         MazeLayout? layout = _obstacles != null && !classicGen
             ? MazeLayout.Pruned(_mazeSeed, cells, 1, difficulty)
             : null;
@@ -482,7 +549,9 @@ public sealed class CurriculumTrainer
     {
         int hidden = _ladder.Observe(best,
             _obstacles != null && _obstacles.Tenths >= ObstacleCurriculum.MaxTenths);
-        if (hidden == 0) return 0;
+        // Un peldaño que no SUPERA el ancho actual no es crecimiento (semilla ya más
+        // ancha que la escalera): expandir a lo mismo no cambia nada.
+        if (hidden == 0 || hidden <= _sizes[1]) return 0;
 
         var target = new[] { _sizes[0], hidden, _sizes[^1] };
         for (int i = 0; i < _population.Count; i++)
