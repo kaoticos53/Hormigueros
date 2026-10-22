@@ -12,7 +12,7 @@ un bucle de jugador completo demostrado end-to-end.
 
 <!-- /cifras-historicas -->
 
-**Estado ACTUAL** (HEAD `v0.8.0`, suite **658/658**, **6 pines** de hash): las
+**Estado ACTUAL** (HEAD `v0.8.0`, suite **667/667**, **6 pines** de hash): las
 seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
 F5.2c y F5.3. Lo que sigue abierto es deuda menor de presentación (F5.1, §2) y el
 camino `unity: full` de CI. El registro cronológico con las cifras vive en
@@ -109,8 +109,17 @@ acabado):
    (rojo < 20%, el mismo de la barra). La tarjeta creció a 204 px para que la
    banda no le robe sitio al texto. 11 tests headless (anillo, muestreo 1 Hz,
    reparto de columnas, umbral y una integración contra el stream real).
-   Queda: la serie de DESCARGAS por ventana (hoy se grafica la reserva, que es
-   la que explica la decisión) si el jugador la pide.
+   ✅ HECHO (descargas, 2026-10-21): la misma gráfica lleva las DESCARGAS por
+   ventana como barras ámbar encima del área de reserva. Salen de los eventos
+   `Unload` del canal B contados por la propia serie (una ventana de 1 s por
+   muestra) y no de `colmetrics`, que es la ventana abierta publicada cada 120
+   ticks. La altura es relativa a la mayor cuenta de la ventana dibujada y las
+   barras usan el MISMO mapeo de columnas que el área; cada serie va en su
+   máscara, así que el modelo no sabe de colores (la vista tiñe la reserva por
+   estado y las barras con el suyo). El HUD pasa CADA tick drenado —a velocidad
+   alta se perdían las descargas de los ticks intermedios— y el mismo tick visto
+   dos veces no cuenta doble. 20 tests headless en total, uno contra el stream
+   real: la suma de las barras es exactamente lo que emitió el canal B.
 4. **Iconos, rich text y tipografía** — ✅ PARCIAL: el render v1 era texto
    plano con glifos emoji que la fuente por defecto de uGUI **no tiene** y
    pintaba como cajas (🥚 🐛 🛑 🟢 🔘 · 🐝); ahora los niveles son glifos de
@@ -496,7 +505,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 
 | Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 658/658 en Windows y Linux |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 667/667 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
