@@ -26,6 +26,10 @@ namespace AntSim.Unity.Scripts.Presenter
         public float ToastLifetime = Streaming.HudToastsModel.DefaultLifetime;
         public int ToastMaxStack = Streaming.HudToastsModel.DefaultMaxStack;
 
+        [Header("F5.1: gráficas por tarjeta (opcionales)")]
+        [Tooltip("Gráficas de reserva y descargas; se alimentan con CADA tick drenado — ver ColonySparklineBehaviour.")]
+        public ColonySparklineBehaviour?[]? Sparklines;
+
         [Header("F5.1 per-elemento (opcionales — v1 texto si quedan null)")]
         [Tooltip("Contenedor uGUI donde se crea un elemento clicable POR toast.")]
         public RectTransform? ToastContainer;
@@ -96,6 +100,16 @@ namespace AntSim.Unity.Scripts.Presenter
             // Asegurar EventSystem para interacción uGUI
             UI.SpeedControlBehaviour.EnsureEventSystem();
 
+            // Las gráficas de las tarjetas viven en el CANVAS, no bajo este
+            // GameObject (`HudLayout` es un objeto aparte), y la referencia
+            // serializada solo existe en una escena regenerada: en una
+            // `Game.unity` anterior al campo, `Sparklines` llega null y la gráfica
+            // se quedaría congelada (antes se sondeaba sola; ahora la alimenta
+            // este reparto por tick). Se buscan en la escena —cada una sabe su
+            // ColonyId— en vez de exigir regenerarla para ver el cambio.
+            if (Sparklines == null || Sparklines.Length == 0)
+                Sparklines = FindObjectsByType<ColonySparklineBehaviour>();
+
             // Re-vincular botones nativos en tiempo de ejecución (evita pérdida de delegates anónimos)
             if (NativeButtons != null && NativeButtons.Length >= 4)
             {
@@ -126,12 +140,19 @@ namespace AntSim.Unity.Scripts.Presenter
             // que garantiza no perder una alerta cadenciada del canal D (cada alerta
             // existe solo en su tick). Los toasts envejecen con sim, no con frame.
             var toasts = Toasts;
+            var sparklines = Sparklines;
             while (p.TryDequeuePresented(out var view) && view != null)
             {
                 _cards.Observe(view);
                 toasts.Observe(view);
                 _history.Observe(view);
                 if (Inspector != null) Inspector.Observe(view);
+                // Las gráficas cuentan las descargas del canal B: se les pasa CADA
+                // tick, no solo el último del frame, o a velocidad alta se
+                // perderían las barras de los ticks intermedios.
+                if (sparklines != null)
+                    for (int i = 0; i < sparklines.Length; i++)
+                        if (sparklines[i] != null) sparklines[i]!.Observe(view);
                 _lastTick = view.Tick;
             }
             toasts.Tick(Time.deltaTime * Mathf.Max(presenter.Speed, 0f));

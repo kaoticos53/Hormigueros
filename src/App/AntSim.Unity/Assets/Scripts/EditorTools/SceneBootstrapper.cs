@@ -469,7 +469,10 @@ namespace AntSim.Unity.Scripts.EditorTools
             // — F5.1: per-elemento — contenedor de toasts clicables + barras + botones —
             RectTransform toastContainer = CreateToastContainer(canvasGo.transform, hud);
             var stockImages = CreateStockBars(cardPanels, hud, cardTexts.Length);
-            CreateSparklines(cardPanels, presenter, cardTexts.Length);
+            // Las gráficas se cuelgan del HUD: es quien drena TODOS los ticks
+            // presentados y quien tiene que pasarles cada uno (las descargas se
+            // cuentan por tick, no por frame — ver ColonySparklineBehaviour).
+            hud.Sparklines = CreateSparklines(cardPanels, cardTexts.Length);
             CreateLearningPanels(cardPanels, presenter, cardTexts.Length);
             var buttons = CreateNativeButtons(modalRt, dropPanel, hud);
             hud.BindNativeButtons(buttons[0], buttons[1], buttons[2], buttons[3]);
@@ -882,9 +885,10 @@ namespace AntSim.Unity.Scripts.EditorTools
         /// memoria. El componente se refresca solo desde el presenter, así que el
         /// HUD no tiene que conocer la gráfica.
         /// </summary>
-        private static void CreateSparklines(RectTransform[] cardPanels,
-            Presenter.SimPresenterBehaviour presenter, int colonies)
+        private static Presenter.ColonySparklineBehaviour[] CreateSparklines(
+            RectTransform[] cardPanels, int colonies)
         {
+            var sparklines = new Presenter.ColonySparklineBehaviour[colonies];
             for (int i = 0; i < colonies; i++)
             {
                 var go = new GameObject($"Sparkline_{i}", typeof(RectTransform));
@@ -901,14 +905,15 @@ namespace AntSim.Unity.Scripts.EditorTools
                 img.color = Color.white;
 
                 var spark = go.AddComponent<Presenter.ColonySparklineBehaviour>();
-                spark.Presenter = presenter;
                 spark.ColonyId = i;
                 spark.Target = img;
                 // 1 px por unidad de UI (406 de ancho en la tarjeta) y 90 muestras
                 // ⇒ el modelo reparte la ventana por todo el ancho.
                 spark.Width = 406;
                 spark.Height = 26;
+                sparklines[i] = spark;
             }
+            return sparklines;
         }
 
         /// <summary>
