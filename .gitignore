@@ -43,6 +43,58 @@ Thumbs.db
 __pycache__/
 *.pyc
 
+# Capturas de pantalla y volcados de las sesiones de prueba (F7/F8). NO son
+# código ni ENTRADAS de test: los rehace un `play-game.sh` o una sonda de
+# scripts/unity/ pulsada a mano, y pesan —cada captura del tablero ~1,5 MB y
+# cada volcado de `artifacts/tmp/` entre 9 y 16 MB—. Se quedan fuera de
+# `git status` para que el árbol sucio diga solo lo que hay que leer.
+#
+# Las capturas que SÍ son evidencia versionada siguen trackeadas (gitignore no
+# toca lo que ya está en el índice): `artifacts/game-view.png`, los recortes de
+# `artifacts/playpass-*/` y el log `artifacts/pretrain-maze.log`. Las negaciones
+# de abajo existen para que se puedan volver a añadir sin `-f` si se regeneran.
+artifacts/*.png
+!artifacts/game-view.png
+artifacts/*.log
+!artifacts/pretrain-maze.log
+# Volcados de las sondas del tablero (un JSON por muestra) y del arnés de
+# partidas encadenadas; el .txt consolidado sí se conserva.
+artifacts/live-board-*
+artifacts/eco-run.jsonl
+# Proyecto de usar y tirar con el que se prueba un volcado (Program.cs +
+# csproj + streams de varios MB): no es fuente del repo.
+artifacts/tmp/
+
+# Volcados de STREAM de partidas (F4/F5): decenas o cientos de MB de jsonl que
+# se REGENERAN con el comando que ya está documentado en cada sitio, así que no
+# se versionan. Se quedan en disco: para dejar de seguirlos se usó `git rm
+# --cached` (nunca `rm`) y después se purgaron los blobs del HISTORIAL — los 278
+# commits, las 2 ramas y las 6 etiquetas se reescribieron (hashes nuevos) y se
+# publicaron con push forzado; el .git local bajó de ~21 a 3,7 MB.
+# Por eso estas reglas importan — sin ellas el fichero reaparece como
+# "untracked" en cada `git status`. Lo que NO se toca: los smoke-e2e-*.jsonl
+# (≤0,7 MB), que son el registro pequeño del e2e.
+#   stream-fixture.jsonl      el canónico: lo regenera scripts/check-stream-fixture.sh
+#                             en cada push y su hash vive en stream-fixture.expected
+#   stream-fixture-256.jsonl  el repro del mundo grande (fase4-play-pass)
+#   smoke-seeds/*.jsonl       e2e del relevo, una semilla por fichero (warm-v2)
+#   smoke-warmv2-stream.jsonl el stream de ese e2e
+#   multiview-*.jsonl         lo que reproducen las vistas del multi-visor
+#   playpass-stream.jsonl     el de la pasada del Play pass: se PISA en cada
+#                             pasada y llegó a 315 MB versionados
+artifacts/stream-fixture.jsonl
+artifacts/stream-fixture-256.jsonl
+artifacts/smoke-seeds/
+# …salvo los .err vacíos (0 B) de esa carpeta, que SÍ están versionados.
+!artifacts/smoke-seeds/*.err
+artifacts/smoke-warmv2-stream.jsonl
+artifacts/multiview-*.jsonl
+artifacts/playpass-stream.jsonl
+
+# Capturas que guarda el EDITOR (`capture_game_view`) dentro del proyecto Unity:
+# frames del Play que se rehacen en cada sesión, no assets del juego.
+src/App/AntSim.Unity/Assets/Screenshots/
+
 # Salidas EFÍMERAS de la sonda del player (scripts/player-perf.sh): el log del
 # build, el de la corrida y el volcado crudo de píxeles (~2,7 MB) se PISAN en
 # cada medición y no son evidencia por sí solos — ensucian `git status` después
