@@ -1,0 +1,12 @@
+# Reclutamiento contra el mundo clásico — partida canónica (grid 96, laberinto, 60000 ticks, semillas 42,7,99,1234,3,11,555,2024)
+# pool: artifacts/pretrain-maze-los3.antgenome
+
+| mundo | descargas (media ± σ) | total | semillas con descargas | pico adultas | eclosiones | primera descarga (media) | fin de ronda (media) |
+|---|---|---|---|---|---|---|---|
+| clásico | 25.8 ± 6.1 | 206 | 8/8 | 72.8 | 52.8 | 1138 | 34928 |
+| reclutamiento | 43.6 ± 10.0 | 349 | 8/8 | 72.6 | 53.6 | 997 | 37410 |
+
+- **clásico**: seed 42=26 (pickups 56, adultas pico 73, eclosiones 53, fin 35537), seed 7=18 (pickups 53, adultas pico 75, eclosiones 55, fin 34290), seed 99=29 (pickups 51, adultas pico 73, eclosiones 53, fin 34657), seed 1234=29 (pickups 52, adultas pico 72, eclosiones 52, fin 34888), seed 3=21 (pickups 54, adultas pico 72, eclosiones 52, fin 34517), seed 11=18 (pickups 47, adultas pico 72, eclosiones 52, fin 34880), seed 555=37 (pickups 68, adultas pico 73, eclosiones 53, fin 33692), seed 2024=28 (pickups 55, adultas pico 72, eclosiones 52, fin 36960)
+- **reclutamiento**: seed 42=32 (pickups 66, adultas pico 72, eclosiones 52, fin 35541), seed 7=41 (pickups 77, adultas pico 74, eclosiones 54, fin 32357), seed 99=35 (pickups 57, adultas pico 73, eclosiones 53, fin 33580), seed 1234=35 (pickups 79, adultas pico 72, eclosiones 52, fin 34832), seed 3=38 (pickups 79, adultas pico 71, eclosiones 51, fin 34529), seed 11=60 (pickups 94, adultas pico 72, eclosiones 60, fin 60000), seed 555=54 (pickups 97, adultas pico 74, eclosiones 54, fin 33560), seed 2024=54 (pickups 76, adultas pico 73, eclosiones 53, fin 34878)
+
+✓ el reclutamiento gana al mundo clásico en TODAS las semillas (349 vs 206 descargas; 8/8 semillas)

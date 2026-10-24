@@ -1,0 +1,12 @@
+# Reclutamiento contra el mundo clásico — partida canónica (grid 96, laberinto, 216000 ticks, semillas 42)
+# pool: artifacts/pretrain-maze-los3.antgenome
+
+| mundo | descargas (media ± σ) | total | semillas con descargas | pico adultas | eclosiones | primera descarga (media) | fin de ronda (media) |
+|---|---|---|---|---|---|---|---|
+| clásico | 26.0 ± 0.0 | 26 | 1/1 | 73.0 | 53.0 | 1141 | 35537 |
+| reclutamiento | 32.0 ± 0.0 | 32 | 1/1 | 72.0 | 52.0 | 1143 | 35541 |
+
+- **clásico**: seed 42=26 (pickups 56, adultas pico 73, eclosiones 53, fin 35537)
+- **reclutamiento**: seed 42=32 (pickups 66, adultas pico 72, eclosiones 52, fin 35541)
+
+✓ el reclutamiento gana al mundo clásico en TODAS las semillas (32 vs 26 descargas; 1/1 semillas)

@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "command": "command run_script",
+  "data": {
+    "command": "run_script",
+    "parameters": {
+      "file": "E:/Users/kaoti/Documentos/GitHub/Hormigueros/scripts/unity/ProbeRecruitmentShot.cs"
+    },
+    "result": {
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "message": "Dereference of a possibly null reference.",
+          "line": 111,
+          "column": 43,
+          "id": "CS8602",
+          "source": "for (int x = maxX + 1; x < model.Width && model!.Cell(x, maxY) >= t; x++) wx++;"
+        }
+      ],
+      "compileMs": 1485,
+      "executeMs": 53,
+      "assemblyName": "PipelineRunScript_ProbeRecruitmentShot_c7a83b5a15f44021885ffa0f046f79e3",
+      "success": true,
+      "result": "RECRUIT|enabled=1|tick=21623|items=155|knobs=montones=8 (6–10 ítems, radio 18 u) · rastro=1× / 2100 s / sigue 8|layer=feromonas · colonia 0 · todas (food+home+alarm+huella)|paintedColony=0|trailCells=388|trailMax=255|strongCells=382|hist=0/1/1/4/382|antU=13.824|band@8=3x1(24u)|band@24=3x1(24u)|band@48=3x1(24u)|band@96=3x1(24u)|groups=12|g=1:5,span=17.493,c=360.821/281.71,trail=15|g=2:3,span=9.685,c=161.681/497.499,trail=6|g=3:3,span=5.192,c=620.711/411.166,trail=4|g=4:11,span=29.848,c=428.369/271.144,trail=1|g=5:11,span=28.457,c=536.899/557.331,trail=0|g=6:9,span=14.738,c=621.317/236.103,trail=0|g=7:8,span=13.485,c=484.105/577.173,trail=0|g=8:8,span=17.718,c=675.757/368.415,trail=0|g=9:8,span=18.848,c=623.124/477.82,trail=0|g=10:6,span=13.043,c=670.755/481.281,trail=0|pile=5,c=360.821/281.71,span=17.493,r=17.493,trail=15|nestDist=146.46|lineCover=0.105|frame=1536x1121|centerPx=735.477/416.937|pxPerU=1.403|pileBox=694,376..776,458|itemPx=172|trailPxTested=386|pxDirect=0.028|pxFlipX=0.008|pxFlipY=0.01|pxFlip180=0.005|amberPx=11|amberBand=4.989x2.138u"
+    },
+    "target": {
+      "host": "127.0.0.1",
+      "port": 7800,
+      "projectPath": "E:\\Users\\kaoti\\Documentos\\GitHub\\Hormigueros\\src\\App\\AntSim.Unity"
+    },
+    "success": true
+  },
+  "errors": [],
+  "warnings": []
+}

@@ -2,12 +2,12 @@
 
 | pool | descargas (media ± σ) | descargas (total) | semillas con descargas | col0 (media) | primera descarga (media) |
 |---|---|---|---|---|---|
-| frío | 1.0 ± 1.0 | 4 | 2/4 | 0.8 | 3370 |
-| warm-v2 | 9.2 ± 2.6 | 37 | 4/4 | 8.8 | 1176 |
-| maze | 14.5 ± 4.6 | 58 | 4/4 | 13.5 | 1303 |
+| frío | 0.5 ± 0.5 | 2 | 2/4 | 0.5 | 3371 |
+| warm-v2 | 9.8 ± 2.3 | 39 | 4/4 | 9.5 | 1176 |
+| maze | 25.5 ± 4.5 | 102 | 4/4 | 24.8 | 1262 |
 
-- **frío**: seed 42=0, seed 7=2, seed 99=2, seed 1234=0
-- **warm-v2**: seed 42=8, seed 7=6, seed 99=10, seed 1234=13
-- **maze**: seed 42=12, seed 7=10, seed 99=14, seed 1234=22
+- **frío**: seed 42=0, seed 7=1, seed 99=1, seed 1234=0
+- **warm-v2**: seed 42=10, seed 7=6, seed 99=11, seed 1234=12
+- **maze**: seed 42=26, seed 7=18, seed 99=29, seed 1234=29
 
-✓ el pool con obstáculos transfiere a la partida: gana al frío (58 vs 4 descargas) y no queda por debajo del de referencia (58 vs 37).
+✓ el pool con obstáculos transfiere a la partida: gana al frío (102 vs 2 descargas) y no queda por debajo del de referencia (102 vs 39).
