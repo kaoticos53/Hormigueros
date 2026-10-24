@@ -426,6 +426,74 @@ public sealed class MazeLayout
         return Math.Clamp(1f - DistanceAt(x, y) / reach, 0f, 1f);
     }
 
+    /// <summary>
+    /// ¿La línea recta (x0,y0)→(x1,y1) está LIBRE de paredes? Recorrido DDA
+    /// (Amanatides–Woo) sobre la MISMA rejilla de celdas que la colisión, con
+    /// las celdas de los extremos incluidas. Sin muros de por medio devuelve
+    /// true; un extremo dentro de una pared cuenta como bloqueado.
+    ///
+    /// <para><b>Para qué.</b> El canal de comida visible elige el ítem más
+    /// cercano por distancia pura. En el laberinto eso entrega comida que está
+    /// al otro lado del muro: la política obedece el vector, choca con la pared
+    /// y se queda empujándola (medido: 83 % de las «comidas visibles» estaban
+    /// detrás de una pared y la colonia se extinguía con >100 ítems en el
+    /// mapa). Con el recorrido de la línea el cerebro solo ve lo alcanzable.
+    /// </para>
+    ///
+    /// <para>Determinismo: solo comparaciones y sumas en coma flotante, sin
+    /// trigonometría ni tablas dependientes de la plataforma — el mismo mundo
+    /// da el mismo canal en todos los SO.</para>
+    /// </summary>
+    public bool SegmentClear(float x0, float y0, float x1, float y1)
+    {
+        float cell = SimConstants.CellSizeUnits;
+        float fx0 = x0 / cell;
+        float fy0 = y0 / cell;
+        float fx1 = x1 / cell;
+        float fy1 = y1 / cell;
+        int cx = (int)MathF.Floor(fx0);
+        int cy = (int)MathF.Floor(fy0);
+        int ex = (int)MathF.Floor(fx1);
+        int ey = (int)MathF.Floor(fy1);
+        if (IsWall(cx, cy) || IsWall(ex, ey)) return false;
+
+        float dx = fx1 - fx0;
+        float dy = fy1 - fy0;
+        int stepX = Math.Sign(dx);
+        int stepY = Math.Sign(dy);
+        // t en [0,1] a lo largo del segmento: primero el cruce de cada eje y
+        // luego el paso entre cruces consecutivos (1/|dx| = un ancho de celda).
+        float tDeltaX = stepX != 0 ? 1f / MathF.Abs(dx) : float.PositiveInfinity;
+        float tDeltaY = stepY != 0 ? 1f / MathF.Abs(dy) : float.PositiveInfinity;
+        float tMaxX = stepX > 0 ? (cx + 1 - fx0) / dx
+                    : stepX < 0 ? (cx - fx0) / dx
+                    : float.PositiveInfinity;
+        float tMaxY = stepY > 0 ? (cy + 1 - fy0) / dy
+                    : stepY < 0 ? (cy - fy0) / dy
+                    : float.PositiveInfinity;
+
+        // Cota dura de pasos: el segmento más largo del mapa cruza a lo sumo
+        // Width + Height celdas. Una cota alcanzada solo puede venir de NaN o
+        // de coordenadas no finitas; se trata como bloqueado (conservador).
+        int guard = Width + Height;
+        while (cx != ex || cy != ey)
+        {
+            if (--guard < 0) return false;
+            if (tMaxX < tMaxY)
+            {
+                cx += stepX;
+                tMaxX += tDeltaX;
+            }
+            else
+            {
+                cy += stepY;
+                tMaxY += tDeltaY;
+            }
+            if (IsWall(cx, cy)) return false;
+        }
+        return true;
+    }
+
     /// <summary>¿El círculo (x, y, radio) toca alguna celda de pared?</summary>
     public bool Blocked(float x, float y, float radius)
     {

@@ -277,6 +277,114 @@ namespace AntSim.Core.Tests
             Assert.True(sinMaze.ProxFront < 0.5f);
         }
 
+        // ── 2bis. Línea de visión del canal de comida (F7) ───────────────────
+
+        /// <summary>
+        /// Un mapa sintético: 32×32 abierto con una pared vertical de una celda en
+        /// x = 20 y una puerta en y = 16. Permite comprobar el recorrido de la
+        /// línea sin depender de la geometría del laberinto generado.
+        /// </summary>
+        private static MazeLayout MuroConPuerta()
+        {
+            const int n = 32;
+            var cells = new bool[n * n];
+            for (int y = 0; y < n; y++)
+                if (y != 16) cells[y * n + 20] = true;
+            return MazeLayout.FromCells(cells, n, n);
+        }
+
+        [Fact]
+        public void SegmentClear_AtraviesaMurosYRespetaLaPuerta()
+        {
+            var maze = MuroConPuerta();
+            float cell = SimConstants.CellSizeUnits;
+            float y = 8.5f * cell;
+
+            // Cruzar la pared (celda 20) de lado a lado NO está libre…
+            Assert.False(maze.SegmentClear(18.5f * cell, y, 22.5f * cell, y));
+            // …pero el mismo lado sí, y por la puerta también.
+            Assert.True(maze.SegmentClear(17.5f * cell, y, 19.5f * cell, y));
+            Assert.True(maze.SegmentClear(18.5f * cell, 16.5f * cell, 22.5f * cell, 16.5f * cell));
+
+            // Un extremo dentro de la pared cuenta como bloqueado (conservador).
+            Assert.False(maze.SegmentClear(20.5f * cell, y, 22.5f * cell, y));
+
+            // Diagonal que cruza la línea de pared JUSTO por la puerta: libre.
+            Assert.True(maze.SegmentClear(19.5f * cell, 16.2f * cell, 21.5f * cell, 16.8f * cell));
+            // La misma diagonal un poco más arriba cruza la pared, no la puerta.
+            Assert.False(maze.SegmentClear(19.5f * cell, 13.5f * cell, 21.5f * cell, 14.5f * cell));
+        }
+
+        [Fact]
+        public void Sensores_ConLaberinto_NoVenLaComidaDetrasDelMuro()
+        {
+            var maze = MuroConPuerta();
+            var sim = new WorldSim(seed: 42UL, gridCells: 32, colonyCount: 1, mazeLayout: maze);
+            var colony = sim.Colonies[0];
+            float cell = SimConstants.CellSizeUnits;
+
+            // Hormiga en la celda (17, 8) mirando a +X: la pared está en x = 20
+            // (160 u, la puerta queda en otra fila) y la comida de detrás, a
+            // 28 u (dentro de la visión de 60).
+            var ant = new Ant
+            {
+                Id = 9999,
+                ColonyId = 0,
+                X = 17.5f * cell,
+                Y = 8.5f * cell,
+                Heading = 0f,
+            };
+            ant.InitFromVigor(colony.Species.EnergyCapacity, colony.Species.BaseLifespan, 1f);
+            Assert.False(maze.Blocked(ant.X, ant.Y, MazeLayout.AntRadius));
+
+            sim.ClearItems();
+            sim.AddItem(new FoodItem { Id = 1, X = 21f * cell, Y = 8.5f * cell, Amount = 1f });   // 28 u, tras el muro
+            sim.AddItem(new FoodItem { Id = 2, X = 12.5f * cell, Y = 8.5f * cell, Amount = 4f });  // 40 u, a la vista
+
+            var conMaze = AntSenses.Build(colony, ant, sim.Items, sim.WorldWidth,
+                sim.WorldHeight, rivals: null, maze: maze);
+            // El más cercano por distancia es el de detrás del muro; con línea de
+            // visión el cerebro ve el de 40 u (a su espalda, −X local).
+            Assert.Equal(4f / FoodItem.MaxValue, conMaze.FoodSize, 4);
+            Assert.True(conMaze.FoodDx < -0.9f, $"FoodDx={conMaze.FoodDx:0.000}: no apunta al ítem visible");
+
+            // Sin terreno la selección es la clásica (distancia pura): el de 28 u.
+            var sinMaze = AntSenses.Build(colony, ant, sim.Items, sim.WorldWidth,
+                sim.WorldHeight, rivals: null, maze: null);
+            Assert.Equal(1f / FoodItem.MaxValue, sinMaze.FoodSize, 4);
+            Assert.True(sinMaze.FoodDx > 0.9f, $"FoodDx={sinMaze.FoodDx:0.000}: debía apuntar al ítem cercano");
+        }
+
+        [Fact]
+        public void Sensores_ConLaberinto_PrefierenLaComidaVisibleMasCercana()
+        {
+            // Dos ítems a la vista (uno más lejos que el otro): la línea de visión
+            // filtra los muros, no cambia el «más cercano» entre visibles.
+            var maze = MuroConPuerta();
+            var sim = new WorldSim(seed: 42UL, gridCells: 32, colonyCount: 1, mazeLayout: maze);
+            var colony = sim.Colonies[0];
+            float cell = SimConstants.CellSizeUnits;
+
+            var ant = new Ant
+            {
+                Id = 9998,
+                ColonyId = 0,
+                X = 10.5f * cell,
+                Y = 16.5f * cell,
+                Heading = 0f,
+            };
+            ant.InitFromVigor(colony.Species.EnergyCapacity, colony.Species.BaseLifespan, 1f);
+
+            sim.ClearItems();
+            sim.AddItem(new FoodItem { Id = 1, X = 13.5f * cell, Y = 16.5f * cell, Amount = 3f }); // 24 u
+            sim.AddItem(new FoodItem { Id = 2, X = 16.5f * cell, Y = 16.5f * cell, Amount = 6f }); // 48 u
+
+            var s = AntSenses.Build(colony, ant, sim.Items, sim.WorldWidth,
+                sim.WorldHeight, rivals: null, maze: maze);
+            Assert.Equal(3f / FoodItem.MaxValue, s.FoodSize, 4);
+            Assert.True(s.FoodDx > 0.9f);
+        }
+
         // ── 3. Checkpoint (v6) ──────────────────────────────────────────────
 
         [Fact]

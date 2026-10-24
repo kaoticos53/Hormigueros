@@ -62,20 +62,24 @@ public static class GameScenario
         IReadOnlyList<PheroRequest>? pheroLayers = null,
         float leafFraction = 0f,
         IReadOnlyList<SpeciesDescriptor>? species = null,
-        bool maze = false, string? exportPath = null)
+        bool maze = false, string? exportPath = null, bool untilExtinct = false,
+        bool recruitment = false, RecruitmentTuning? recruitmentTuning = null)
     {
         var sw = new StringWriter(CultureInfo.InvariantCulture);
         RunTo(sw, seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
             cloneFromElite, pheroEvery, inspectId, activEvery, pheroLayers,
-            leafFraction, species, maze, exportPath);
+            leafFraction, species, maze, exportPath, untilExtinct, recruitment,
+            recruitmentTuning);
         return sw.ToString();
     }
 
     /// <summary>
     /// Igual que <see cref="Run"/> pero ESCRIBE tick a tick en
     /// <paramref name="output"/> (F6: la partida de 2 h no cabe en memoria). Con
-    /// `exportPath` escribe la élite de la colonia 0 al terminar el horizonte y
-    /// lo declara en la línea `end`.
+    /// `exportPath` escribe la élite de la colonia 0 al terminar (horizonte o
+    /// extinción) y lo declara en la línea `end`. Con `untilExtinct` la partida
+    /// se corta en el primer tick sin hormigas ni cría —el juego encadena rondas
+    /// con esa élite— y la línea `end` lo marca con `extinct:true`.
     /// </summary>
     public static void RunTo(TextWriter output, ulong seed, int ticks, int colonies = 2, int grid = 256,
         int frameEvery = DefaultFrameEvery, string? seedPoolPath = null,
@@ -85,7 +89,8 @@ public static class GameScenario
         IReadOnlyList<PheroRequest>? pheroLayers = null,
         float leafFraction = 0f,
         IReadOnlyList<SpeciesDescriptor>? species = null,
-        bool maze = false, string? exportPath = null)
+        bool maze = false, string? exportPath = null, bool untilExtinct = false,
+        bool recruitment = false, RecruitmentTuning? recruitmentTuning = null)
     {
         if (output is null) throw new ArgumentNullException(nameof(output));
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
@@ -127,7 +132,9 @@ public static class GameScenario
             cloneFromElite: cloneFromElite,
             leafFraction: leafFraction, // F5.2a.1: 0 = mundo clásico sin hojas
             maze: maze,                 // F6: obstáculos generados de la semilla
-            brainSizes: brainSizes);    // F7: ancho del cerebro del pool
+            brainSizes: brainSizes,     // F7: ancho del cerebro del pool
+            recruitment: recruitment,   // F8: cúmulos + reflejos de rastro
+            recruitmentTuning: recruitmentTuning); // F8: montones y rastro (lanzador/CLI)
         var sb = new StringBuilder();
         var metrics = new MetricRecorder();
         var relay = new RelayTracker();
@@ -212,6 +219,11 @@ public static class GameScenario
         sb.Clear();
 
         int nextDrop = 0;
+        // F8: la ronda termina ANTES del horizonte si no queda ni una hormiga ni
+        // cría (`--until-extinct`). Se escribe el tick en el que se detecta —el
+        // HUD tiene que poder pintar la colonia vacía— y se corta ahí; la élite
+        // que se exporta después es lo que siembra la ronda siguiente.
+        bool extinct = false;
         for (int i = 0; i < ticks; i++)
         {
             if (drops != null)
@@ -254,6 +266,12 @@ public static class GameScenario
             // Vaciar cada 30 ticks (≈1 s de simulación): el consumidor recibe el
             // stream con latencia de un segundo y el pipe no acumula megabytes.
             if ((i & 31) == 31) output.Flush();
+
+            if (untilExtinct && sim.AllColoniesExtinct())
+            {
+                extinct = true;
+                break;
+            }
         }
 
         // — F6: la élite evolucionada se guarda al terminar el horizonte —
@@ -267,6 +285,7 @@ public static class GameScenario
         sb.Append("{\"end\":true,\"tick\":").Append(sim.Tick)
           .Append(",\"hash\":\"").Append(sim.HashLine()).Append('"');
         if (exported) sb.Append(",\"exported\":true");
+        if (extinct) sb.Append(",\"extinct\":true");
         sb.Append('}').AppendLine();
         output.Write(sb);
         output.Flush();

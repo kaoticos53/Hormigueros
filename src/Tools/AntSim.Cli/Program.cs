@@ -17,7 +17,9 @@ namespace AntSim.Cli;
 /// Uso:
 ///   antsim [--mode micro|world|evolve|pretrain|verify] [--seed N] [--ticks N] [--grid N]
 ///          [--colonies N] [--import archivo.antgenome] [--seed-pool archivo.antgenome]
-///          [--export archivo.antgenome] [--pop N] [--generations N] [--warm-start f]
+///          [--export archivo.antgenome] [--until-extinct] [--recruitment] [--clusters N]
+///          [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F]
+///          [--trail-half-life S] [--trail-follow G] [--pop N] [--generations N] [--warm-start f]
 ///          [--save f] [--save-tick N] [--antlog f] [--load f]
 ///          [--colony-counts 1,2,4,8] [--lod-blocks 4,8,16,32,64] [--lod-colonies N]
 ///
@@ -91,6 +93,12 @@ internal static class Program
         string? exportPath = null;
         bool neat = false; // F5.2c rodaja 7: pre-entrenar pool NEAT y exportar v2
         bool maze = false; // F6: laberinto con obstáculos en el mundo del juego
+        bool untilExtinct = false; // F8: corta la ronda al extinguirse (y exporta la élite)
+        bool recruitment = false;  // F8: cúmulos de comida + reflejos innatos de rastro
+        // F8: las perillas del reclutamiento (montones y rastro). Sin banderas se
+        // queda con los defaults del mundo, así que la partida clásica no cambia.
+        var recruitmentTuning = RecruitmentTuning.Default;
+        bool recruitmentTuned = false;
         bool obstacles = false; // F7: currículo de obstáculos en el pre-entrenamiento
         int hidden = WorldSim.DefaultBrainSizes[1]; // F7: ancho oculto inicial del pretrain
         bool grow = false;      // F7: escalera de capacidad 8→16→24
@@ -304,6 +312,67 @@ internal static class Program
                     // y el stream son byte a byte los clásicos (pines intactos).
                     maze = true;
                     break;
+                case "--until-extinct":
+                    // F8: la ronda acaba cuando no queda ninguna hormiga ni cría, no
+                    // en el horizonte. La élite se exporta AHÍ: es lo que siembra la
+                    // ronda siguiente (laberinto nuevo, mismos cerebros evolucionados).
+                    untilExtinct = true;
+                    break;
+                case "--recruitment":
+                    // F8: la partida deja ver las feromonas. Siembra cúmulos de
+                    // comida (además de los ítems sueltos) y añade dos reflejos
+                    // innatos al comportamiento de cada hormiga: al cargar deja
+                    // rastro de comida, al volver al nido deja rastro de casa.
+                    // Opt-in para no tocar los hashes del mundo clásico.
+                    recruitment = true;
+                    break;
+                case "--clusters":
+                    // Nº de montones que se siembran además de la comida suelta. 0
+                    // es el control A/B: mismo mundo con reclutamiento, sin montones.
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out int clusterCount)
+                        || clusterCount < 0 || clusterCount > RecruitmentTuning.MaxClusters)
+                        return Fail($"--clusters requiere un entero en [0, {RecruitmentTuning.MaxClusters}].");
+                    recruitmentTuning.Clusters = clusterCount;
+                    recruitmentTuned = true;
+                    break;
+                case "--cluster-size":
+                {
+                    // Ítems por montón, como MIN:MAX (el tamaño se sortea en la banda).
+                    string spec = Next(args, ref i);
+                    string[] mm = spec.Split(':');
+                    if (mm.Length != 2
+                        || !int.TryParse(mm[0], NumberStyles.None, CultureInfo.InvariantCulture, out int sizeMin)
+                        || !int.TryParse(mm[1], NumberStyles.None, CultureInfo.InvariantCulture, out int sizeMax))
+                        return Fail("--cluster-size requiere MIN:MAX (p. ej. 6:10).");
+                    recruitmentTuning.ClusterMin = sizeMin;
+                    recruitmentTuning.ClusterMax = sizeMax;
+                    recruitmentTuned = true;
+                    break;
+                }
+                case "--cluster-radius":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out float clusterRadius))
+                        return Fail("--cluster-radius requiere un número (unidades de mundo).");
+                    recruitmentTuning.ClusterRadius = clusterRadius;
+                    recruitmentTuned = true;
+                    break;
+                case "--trail-deposit":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out float trailDeposit))
+                        return Fail("--trail-deposit requiere un número (fracción de QMaxFood por segundo).");
+                    recruitmentTuning.TrailDeposit = trailDeposit;
+                    recruitmentTuned = true;
+                    break;
+                case "--trail-half-life":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out float trailHalfLife))
+                        return Fail("--trail-half-life requiere un número (segundos).");
+                    recruitmentTuning.TrailHalfLife = trailHalfLife;
+                    recruitmentTuned = true;
+                    break;
+                case "--trail-follow":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out float trailFollow))
+                        return Fail("--trail-follow requiere un número (rad/s de giro a plena asimetría).");
+                    recruitmentTuning.TrailFollow = trailFollow;
+                    recruitmentTuned = true;
+                    break;
                 case "--neat": // F5.2c rodaja 7
                     neat = true;
                     break;
@@ -404,6 +473,17 @@ internal static class Program
 
             if (maze && mode != "game")
                 return Fail("--maze solo tiene sentido con --mode game (es el terreno de la partida).");
+            if (untilExtinct && mode != "game")
+                return Fail("--until-extinct solo tiene sentido con --mode game (cierra una ronda).");
+            if (recruitment && mode != "game")
+                return Fail("--recruitment solo tiene sentido con --mode game (es el mundo de la partida).");
+            // Las perillas se validan SIEMPRE que se pasen: un montón de 0 ítems o
+            // un rastro con vida media 0 no son un experimento, son un mundo roto.
+            if (!recruitmentTuning.TryValidate(out string tuningError))
+                return Fail("Reclutamiento inválido: " + tuningError);
+            if (recruitmentTuned && !recruitment)
+                return Fail("--clusters/--cluster-size/--cluster-radius/--trail-* solo tienen " +
+                            "sentido con --recruitment (si no, el mundo clásico los ignora).");
 
             // F6: el modo juego escribe TICK A TICK en stdout. Construirlo como
             // string (216.000 ticks) son gigabytes: el lanzador de la escena
@@ -418,7 +498,9 @@ internal static class Program
                     pheroEvery: pheroEvery, inspectId: inspectId, activEvery: activEvery,
                     pheroLayers: pheroLayers.Count > 0 ? pheroLayers : null,
                     leafFraction: leafFraction, species: species,
-                    maze: maze, exportPath: exportPath);
+                    maze: maze, exportPath: exportPath, untilExtinct: untilExtinct,
+                    recruitment: recruitment,
+                    recruitmentTuning: recruitment ? recruitmentTuning : null);
                 return 0;
             }
 
@@ -901,6 +983,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N] [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F] [--trail-half-life S] [--trail-follow G]");
     }
 }

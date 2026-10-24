@@ -113,6 +113,49 @@ namespace AntSim.Core.Tests
             }
         }
 
+        // — Curva de pantalla (F8, render): el dato no se toca —
+
+        [Fact]
+        public void Rasterizador_CeroEsInvisible()
+        {
+            Assert.Equal(0f, PheromoneRamp.Alpha(0, 200));
+            Assert.Equal(0, PheromoneRamp.AlphaByte(0, 200));
+        }
+
+        [Fact]
+        public void Rasterizador_CapaFuerte_CortaLaColaYDejaNucleoSolido()
+        {
+            // Con máximo 200 el suelo relativo es 36: por debajo no se pinta nada
+            // (eso era el humo), y el máximo sale casi opaco. La curva es monótona.
+            Assert.Equal(0f, PheromoneRamp.Alpha(30, 200));
+            Assert.True(PheromoneRamp.Alpha(37, 200) > 0f);
+            Assert.Equal(1f, PheromoneRamp.Alpha(200, 200), 3);
+            float prev = -1f;
+            for (int v = 0; v <= 200; v++)
+            {
+                float a = PheromoneRamp.Alpha((byte)v, 200);
+                Assert.True(a >= prev, $"la curva bajó en v={v}: {a} < {prev}");
+                prev = a;
+            }
+        }
+
+        [Fact]
+        public void Rasterizador_CapaDebil_SeVeEntera()
+        {
+            // El corte es RELATIVO a la capa: un rastro incipiente (máximo 8/255)
+            // no se apaga por ser débil; el suelo absoluto manda y el máximo se
+            // pinta entero.
+            Assert.Equal(0f, PheromoneRamp.Alpha(6, 8));
+            Assert.Equal(1f, PheromoneRamp.Alpha(8, 8), 3);
+        }
+
+        [Fact]
+        public void Rasterizador_LayerMax_EsElMayorDeLaCapa()
+        {
+            Assert.Equal((byte)0, PheromoneRamp.LayerMax(new byte[] { 0, 0, 0 }));
+            Assert.Equal((byte)42, PheromoneRamp.LayerMax(new byte[] { 3, 42, 7 }));
+        }
+
         private static string HashOf(string stream)
         {
             foreach (string line in stream.Split('\n'))

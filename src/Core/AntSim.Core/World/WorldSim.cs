@@ -38,6 +38,9 @@ public sealed class WorldSim
     private readonly List<SimEvent> _events = new();
     private readonly List<SimCommand> _pendingCommands = new(); // F4.0: cola de comandos (aplicados en el punto canónico)
     private readonly List<SaveRequest> _saveRequests = new();   // F4.0: peticiones de guardado del último Step
+    private int[][]? _nestGuide;                               // F8: campo de distancia al nido por pasillos
+    private readonly Dictionary<uint, (int dist, int ticks, int cx, int cy)> _guideStall = new(); // F8: la vuelta no avanza
+    private readonly Dictionary<uint, (int ticks, int cx, int cy)> _homingOff = new(); // F8: tregua del reflejo tras atascarse
     private bool[]? _extinctReported; // F4.2: ColonyExtinct una vez por colonia (lazy: el load reconstruye colonias)
     private uint _nextAntId = 1;
     private uint _nextItemId = 1;
@@ -121,6 +124,27 @@ public sealed class WorldSim
     public float WorldHeight { get; }
 
     public IReadOnlyList<Colony> Colonies => _colonies;
+
+    /// <summary>
+    /// F8 — ¿no queda NINGUNA hormiga ni cría en ninguna colonia? Es la
+    /// condición con la que se cierra una ronda: el CLI para antes del horizonte
+    /// (con <c>--until-extinct</c>) y exporta la élite evolucionada, y el juego
+    /// abre la siguiente. Un mundo SIN colonias no está extinto: no hay ronda
+    /// que cerrar ni élite que heredar, y devolver true ahí encadenaría rondas
+    /// vacías en bucle.
+    /// </summary>
+    public bool AllColoniesExtinct()
+    {
+        if (_colonies.Count == 0) return false;
+        for (int i = 0; i < _colonies.Count; i++)
+        {
+            var c = _colonies[i];
+            if (c.AdultCountAlive > 0 || c.Eggs.Count > 0 || c.Larvae.Count > 0 || c.Pupae.Count > 0)
+                return false;
+        }
+        return true;
+    }
+
     public IReadOnlyList<FoodItem> Items => _items;
     public IReadOnlyList<SimEvent> LastEvents => _events;
 
@@ -156,7 +180,9 @@ public sealed class WorldSim
         int lodBlockSize = PheromoneLayer.DefaultLodBlockSize,
         bool maze = false,
         MazeLayout? mazeLayout = null,
-        int[]? brainSizes = null)
+        int[]? brainSizes = null,
+        bool recruitment = false,
+        RecruitmentTuning? recruitmentTuning = null)
     {
         if (gridCells < 16) throw new ArgumentOutOfRangeException(nameof(gridCells));
         if (colonyCount < 1) throw new ArgumentOutOfRangeException(nameof(colonyCount));
@@ -173,7 +199,12 @@ public sealed class WorldSim
 
         _seed = seed;
         _gridCells = gridCells;
+        Recruitment = recruitment;
         LodBlockSize = lodBlockSize;
+        // F8: las perillas de montones/rastro (lanzador y CLI) se aplican ANTES
+        // de sembrar — el constructor crea los montones más abajo, así que
+        // asignarlas después no cambiaría nada del mundo ya nacido.
+        recruitmentTuning?.ApplyTo(this);
         WorldWidth = gridCells * SimConstants.CellSizeUnits;
         WorldHeight = gridCells * SimConstants.CellSizeUnits;
         _worldRng = new DeterministicRandom(seed);
@@ -197,13 +228,161 @@ public sealed class WorldSim
         // útil y alargan cada viaje (ver MazeLayout.ItemDensityFactor).
         if (_maze != null) TargetItems = Math.Max(1, (int)MathF.Round(DensityScaledTargetItems * MazeLayout.ItemDensityFactor));
 
+        // La siembra clásica es la MISMA con y sin reclutamiento: comerse el
+        // mundo a ítems sueltos no es lo que se pide al encender la bandera, y
+        // conservarla deja el flujo del RNG intacto (los mundos clásicos y sus
+        // pines de hash no cambian).
         int initialItems = _maze != null ? TargetItems : DensityScaledTargetItems;
         for (int i = 0; i < initialItems; i++)
             SpawnItem();
+
+        if (Recruitment)
+        {
+            // F8: ADEMÁS de lo aleatorio, el mundo siembra CÚMULOS —montones que
+            // una hormiga puede anunciar como «aquí hay comida» y que se ven en
+            // el tablero como un punto caliente del rastro de comida. El guard es
+            // por si el terreno rechazara centros: nunca un bucle sin salida.
+            int piles = 0;
+            for (int guard = 0; guard < 256 && piles < FoodClusterCount; guard++)
+                if (SpawnCluster()) piles++;
+            // Nivel al que se REPONEN los montones (ver RespawnItems): el total que
+            // dejó la siembra inicial, no solo la cuota de ítems sueltos.
+            _pileFloor = _items.Count;
+        }
     }
 
     /// <summary>Laberinto activo del mundo (null = terreno clásico sin obstáculos).</summary>
     public MazeLayout? Maze => _maze;
+
+    /// <summary>
+    /// F8 — RECLUTAMIENTO POR RASTRO. Con esto encendido el mundo cambia en dos
+    /// cosas, y solo en la partida (los mundos clásicos, los pines de hash y los
+    /// entrenamientos siguen byte a byte iguales):
+    ///
+    ///   · la comida se siembra en CÚMULOS (ver <see cref="SpawnCluster"/>) RICOS
+    ///     y AL ALCANCE — es lo que da algo que anunciar, y medido es lo que más
+    ///     mueve la aguja; un ítem suelto o un montón al otro lado del mapa no
+    ///     sostienen un rastro porque no lo visita nadie;
+    ///   · las hormigas tienen dos REFLEJOS innatos (no salidas del cerebro): la
+    ///     que vuelve cargada deposita rastro de comida (hacia el montón) y de
+    ///     casa (hacia el nido), y la que busca sin carga gira hacia el lado con
+    ///     más rastro de comida (<see cref="ApplyTrailRecruitment"/>).
+    ///
+    /// Es el mismo patrón que la tropotaxis de huella (F5.3): un reflejo
+    /// periférico que el cerebro puede reforzar o corregir, no una decisión
+    /// cableada. Con la bandera apagada no se toca ni un flotante.
+    /// </summary>
+    public bool Recruitment { get; }
+
+    /// <summary>Rastro de comida que deja una hormiga CARGADA, como fracción de
+    /// QMaxFood por segundo (F8).</summary>
+    public float RecruitmentFoodDeposit { get; set; } = 1f;
+
+    /// <summary>Rastro de casa que deja la que vuelve cargada (F8).</summary>
+    public float RecruitmentHomeDeposit { get; set; } = 0.25f;
+
+    /// <summary>Ganancia del reflejo que sigue el rastro de comida, en rad/s a
+    /// plena asimetría (F8). Del orden de la huella (8): mueve la conducta.
+    /// Calibrado contra el rastro real de la partida (12 % de las hormigas sin
+    /// carga lo tienen al alcance de las antenas, frente al 2 % con el rastro
+    /// estrecho de antes): con 0 el mundo rinde ~331 descargas en 8 semillas, con
+    /// 8 rinde ~371 — el rastro aporta, pero quien más aporta es que los montones
+    /// estén al alcance (ver <see cref="FoodClusterMinDistance"/>).</summary>
+    public float FoodTrailAttract { get; set; } = 8f;
+
+    /// <summary>Término que convierte el gradiente de comida en un RATIO (F8):
+    /// satura donde el rastro ya es denso en vez de crecer sin tope.</summary>
+    public float FoodTrailSaturation { get; set; } = 4f;
+
+    /// <summary>Energía (fracción de la capacidad) por debajo de la cual la
+    /// hormiga vuelve al nido a recargar (<see cref="ApplyReturnWhenTired"/>).
+    /// 0,40 deja ~160 s de caminata para volver desde cualquier punto que
+    /// alcance en una salida (el gasto medido es ≈0,0025 de la reserva por
+    /// segundo) — margen de sobra para cruzar el mapa, y suficiente para que
+    /// recargar sea rentable frente a morir en el campo. 0 = sin reflejo.</summary>
+    public float TiredEnergy { get; set; } = 0.40f;
+
+    /// <summary>Ticks sin bajar de celda en el campo antes de darse la vuelta
+    /// (150 = 5 s). Ver <see cref="BreakGuideStall"/>.</summary>
+    public int GuideStallTicks { get; set; } = 150;
+
+    /// <summary>Ticks de tregua del reflejo de vuelta tras un atasco (90 = 3 s).</summary>
+    public int HomingTruceTicks { get; set; } = 90;
+
+    /// <summary>Giro (rad) que da la hormiga al chocar con una pared del
+    /// laberinto (F6): la pared no se atraviesa, la hormiga se apoya y gira. Se
+    /// aplica cuando el paso real es menor que <see cref="MazeBumpMinProgress"/>
+    /// de lo que pretendía — la que empuja de frente avanza milésimas por el eje
+    /// libre y sin esto no se distingue de la que camina. 0 = sin rebote.</summary>
+    public float MazeBumpTurn { get; set; } = 0.5f;
+
+    /// <summary>Fracción del paso pretendido por debajo de la cual se considera
+    /// que la hormiga se apoyó en una pared y toca girar (ver
+    /// <see cref="MazeBumpTurn"/>). 0,25 descarta los deslizamientos reales
+    /// (a 45° se avanza ~0,7 del paso) y caza el empuje perpendicular.</summary>
+    public float MazeBumpMinProgress { get; set; } = 0.25f;
+
+    /// <summary>Ganancia del reflejo que DEVUELVE al nido a la hormiga CARGADA
+    /// (F8), en unidades de <c>Steer</c> por unidad de desvío lateral (el seno
+    /// del ángulo entre el rumbo y el nido). Se suma al giro del cerebro: si el
+    /// nido está de frente el reflejo vale 0 (el cerebro manda para esquivar
+    /// paredes) y si está de lado vale la ganancia entera.
+    ///
+    /// Sin él, la cargada se queda con el bocado lejos del nido —medido: 3 de 44
+    /// cargadas llegaban a 40 u del nido y la colonia vivía de la reserva
+    /// fundadora hasta extinguirse a los ~1180 s con 150 ítems en el tablero—.
+    /// 4 satura el giro a partir de ~15° de desvío: la vuelta es una recta.
+    /// 0 = el reflejo no existe (control A/B).</summary>
+    public float LoadHoming { get; set; } = 4f;
+
+    /// <summary>Vida media (s) del rastro de comida con reclutamiento encendido
+    /// (F8). Con la clásica (10 s) el camino se borraba antes de que llegara la
+    /// siguiente hormiga; 300 s lo mantiene mientras la colonia lo usa y 2 100 s
+    /// —siete veces más— lo deja legible durante toda la ronda: el camino que
+    /// pisa una obrera sigue ahí cuando la colonia vuelve al montón minutos
+    /// después, en vez de desvanecerse entre visita y visita.</summary>
+    public float RecruitmentFoodHalfLife { get; set; } = 2100f;
+
+    /// <summary>Factor de vida (F8) que se aplica en la ronda a las capas que
+    /// NO tienen perilla propia (casa, alarma y huella): 7× su vida media
+    /// clásica. El rastro de comida ya lleva su propia vida media
+    /// (<see cref="RecruitmentFoodHalfLife"/>, también 7× la clásica).</summary>
+    public const float RecruitmentPheromoneLifeScale = 7f;
+
+    /// <summary>Distancia al nido (u) a la que el rastro de comida alcanza su
+    /// intensidad plena (F8). Por debajo, la hormiga cargada deposita MENOS: el
+    /// rastro marca la FUENTE y no el tráfico. Es lo que hace legible la cresta:
+    /// con depósito uniforme el campo es más denso en el nido (todas las cargas
+    /// convergen allí) y el que sube el gradiente vuelve a casa, no al montón. El
+    /// suelo de 0,4 deja oler la boca del nido, que es por donde se sale.</summary>
+    public float RecruitmentTrailSourceDistance { get; set; } = 240f;
+
+    /// <summary>Montones que se siembran ADEMÁS de la comida aleatoria (F8).</summary>
+    public int FoodClusterCount { get; set; } = 8;
+
+    /// <summary>Ítems por montón (F8).</summary>
+    public int FoodClusterMin { get; set; } = 6;
+    public int FoodClusterMax { get; set; } = 10;
+
+    /// <summary>Valor (ep) de cada trozo de un montón (F8). Un parche rico da
+    /// bocados grandes: 10 ep es el tope del contrato (<see cref="FoodItem.MaxValue"/>)
+    /// y el doble de una migaja suelta (4–6). Es lo que hace que el viaje al
+    /// montón pague el coste de mantener a la obrera.</summary>
+    public float FoodClusterItemAmount { get; set; } = 10f;
+
+    /// <summary>Total de comida que dejó la siembra inicial con montones (F8):
+    /// por debajo de este nivel se repone UN montón por paso.</summary>
+    private int _pileFloor;
+
+    /// <summary>Radio del montón en unidades (F8). A 18 u el grueso de un montón
+    /// cabe en 2–3 celdas de feromona, así que el rastro nace como un punto
+    /// caliente y no como una mancha informe.</summary>
+    public float FoodClusterRadius { get; set; } = 18f;
+
+    /// <summary>Banda de distancia al nido (u) donde caen los montones (F8):
+    /// dentro del radio que la colonia patrulla de verdad.</summary>
+    public float FoodClusterMinDistance { get; set; } = 100f;
+    public float FoodClusterMaxDistance { get; set; } = 220f;
 
     /// <summary>Topología del cerebro de esta partida (copia defensiva).</summary>
     public int[] BrainSizes => (int[])_brainSizes.Clone();
@@ -214,6 +393,7 @@ public sealed class WorldSim
         {
             Id = id,
             Species = sp,
+            RecruitmentEconomy = Recruitment, // F8: contabilidad de la ronda
             NestX = WorldWidth * (id + 1) / (colonyCount + 1),
             NestY = WorldHeight * 0.5f,
             // Fundamento a pleno rendimiento: una colonia fundada debe sobrevivir
@@ -383,17 +563,40 @@ public sealed class WorldSim
             foreach (var colony in _colonies)
             {
                 float dt = SimConstants.FixedDtSeconds * PheromoneUpdateEvery;
-                colony.FoodLayer.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.FoodTrail));
-                colony.FoodLayer.Diffuse(0.10f);
-                colony.HomeLayer.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.Home));
-                colony.HomeLayer.Diffuse(0.10f);
-                colony.AlarmLayer.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.Alarm));
-                colony.AlarmLayer.Diffuse(0.10f);
-                // CHC (F5.3): difunde y evapora como las demás, pero con la vida
-                // media larga de la huella de tráfico (240 s) — el rastro de
-                // zonas ya peinadas sobrevive a la visita.
-                colony.FootprintLayer.Evaporate(dt, PheromoneDefaults.LambdaPerSecond(PheromoneKind.Footprint));
-                colony.FootprintLayer.Diffuse(0.06f);
+                // F8: con reclutamiento el rastro de comida tiene que SOBREVIVIR AL
+                // VIAJE (nido → montón → nido son ~1–2 min en 96²). Con la vida
+                // media clásica (10 s) el camino se borraba entre visita y visita:
+                // cada hormiga dejaba su tramo, pero nadie encontraba el tramo del
+                // anterior y el rastro nunca se volvía un camino. Los mundos
+                // clásicos conservan su λ exacta y su difusión (pines de hash
+                // intactos).
+                //
+                // En la RONDA el rastro es una HUELLA, no humo: se apaga la
+                // difusión (k = 0). La difusión era la que ensanchaba el depósito
+                // de una celda hasta una mancha de decenas de unidades —más ancha
+                // que la hormiga— y le daba esa cola de niebla alrededor del
+                // camino. Sin ella la celda depositada se queda en su celda (8 u,
+                // menos que el largo de una obrera) y el camino es exactamente lo
+                // que se ha pisado. La vida media, en cambio, sube 7× en todas las
+                // capas: el rastro se borra por tiempo, no por difusión.
+                float life = Recruitment ? RecruitmentPheromoneLifeScale : 1f;
+                float k = Recruitment ? 0f : 0.10f;
+                float foodLambda = Recruitment
+                    ? PheromoneDefaults.LambdaFromHalfLife(RecruitmentFoodHalfLife)
+                    : PheromoneDefaults.LambdaPerSecond(PheromoneKind.FoodTrail);
+                colony.FoodLayer.Evaporate(dt, foodLambda);
+                colony.FoodLayer.Diffuse(k);
+                colony.HomeLayer.Evaporate(dt, PheromoneDefaults.LambdaFromHalfLife(
+                    PheromoneDefaults.HalfLifeSeconds(PheromoneKind.Home) * life));
+                colony.HomeLayer.Diffuse(k);
+                colony.AlarmLayer.Evaporate(dt, PheromoneDefaults.LambdaFromHalfLife(
+                    PheromoneDefaults.HalfLifeSeconds(PheromoneKind.Alarm) * life));
+                colony.AlarmLayer.Diffuse(k);
+                // CHC (F5.3): la huella de tráfico ya es de vida larga (240 s); en
+                // la ronda va a 1 680 s y tampoco se difunde.
+                colony.FootprintLayer.Evaporate(dt, PheromoneDefaults.LambdaFromHalfLife(
+                    PheromoneDefaults.HalfLifeSeconds(PheromoneKind.Footprint) * life));
+                colony.FootprintLayer.Diffuse(Recruitment ? 0f : 0.06f);
             }
         }
 
@@ -428,6 +631,373 @@ public sealed class WorldSim
             if (!ant.Alive) continue;
             Act(colony, ant);
         }
+    }
+
+    /// <summary>
+    /// F8 — atracción por el rastro de comida (reclutamiento). La sonda es la
+    /// MISMA de las antenas que ya lee el cerebro: si el lado derecho huele más
+    /// comida, la hormiga gira a la derecha (signo negativo del contrato de
+    /// giro); el denominador satura donde el rastro es denso, como la huella.
+    /// Solo actúa la que busca (sin carga): la que vuelve ya lleva su camino.
+    ///
+    /// Es <c>public</c>, igual que la huella, para fijar su álgebra en los tests
+    /// con una capa pintada a mano (simetría, signo y saturación) sin depender
+    /// de que una partida entera produzca la geometría deseada.
+    /// </summary>
+    public void ApplyTrailRecruitment(Colony colony, Ant ant, SpeciesDescriptor sp, ref AntDecision decision)
+    {
+        if (!Recruitment || ant.HasLoad) return;
+
+        float reach = sp.SensorReach * ant.SensorScale;
+        AntSenses.SampleSides(colony.FoodLayer, ant, reach, sp.SenseAngle, out float left, out float right);
+
+        float imbalance = right - left;                                  // >0 ⇒ más rastro a la derecha
+        float denom = 1f + FoodTrailSaturation * MathF.Max(left, right);
+        decision.Steer -= FoodTrailAttract * imbalance / denom;          // negativo = gira a la derecha
+    }
+
+    /// <summary>
+    /// F8 — VUELTA DE LA CARGADA: la hormiga que lleva comida vuelve al nido con
+    /// una corrección LATERAL (el seno del ángulo al objetivo), no con un rumbo
+    /// impuesto. Apuntando al objetivo vale 0 y el cerebro queda libre para
+    /// esquivar; de lado vale <see cref="LoadHoming"/> y el giro satura hacia
+    /// casa. Con el objetivo DETRÁS el lado no está definido por el seno, así que
+    /// se gira por el lado más corto (empate a +, determinista).
+    ///
+    /// Con LABERINTO el objetivo no es el nido en línea recta (la pared está en
+    /// medio) sino la siguiente celda del CAMPO DE DISTANCIA por pasillos que se
+    /// construye en <see cref="NestGuides"/>: el reflejo sigue el descenso del
+    /// campo celda a celda, que es lo que hace que la vuelta rodee el muro en vez
+    /// de empujarlo. Sin terreno, el objetivo es el nido.
+    ///
+    /// Por qué hace falta: la política entrenada no aprendió a volver al nido a
+    /// la escala de la partida. Medido en la partida canónica con reclutamiento:
+    /// de 44 hormigas que cogieron comida solo 3 se acercaron a 40 u del nido
+    /// (distancia mediana de las cargadas: 226 u) y la colonia se apagaba a los
+    /// ~1180 s con 150 ítems sin tocar. Vive bajo la bandera F8: la partida
+    /// clásica no mueve un flotante.
+    /// </summary>
+    public void ApplyLoadHoming(Colony colony, Ant ant, ref AntDecision decision)
+    {
+        if (!Recruitment || !ant.HasLoad || LoadHoming <= 0f) return;
+        if (_homingOff.Count > 0 && _homingOff.ContainsKey(ant.Id)) return; // tregua: la vuelta no progresaba
+        SteerHome(colony, ant, LoadHoming, ref decision);
+    }
+
+    /// <summary>
+    /// F8 — VUELTA A RECARGAR: la hormiga que se queda sin reserva vuelve al
+    /// nido, como la obrera real que vacía el buche. Sin esto, la que NO
+    /// encuentra comida se queda en el campo hasta morir de hambre: medido en la
+    /// partida canónica, el gasto de caminar y depositar vacía la reserva en
+    /// ~400 s, así que la vida útil de la que no vuelve es la mitad de su
+    /// longevidad (720 s) y la colonia paga su mantenimiento para nada. Con el
+    /// reflejo vuelve, recarga en el nido (<see cref="NestFeedRate"/>) y sale otra
+    /// vez: es lo que cierra el ciclo de la energía, no solo el de la comida.
+    ///
+    /// Umbral en <see cref="TiredEnergy"/>; mismos guiado y ganancia que la
+    /// cargada. Vive bajo la bandera F8: la partida clásica no mueve un flotante.
+    /// </summary>
+    public void ApplyReturnWhenTired(Colony colony, Ant ant, ref AntDecision decision)
+    {
+        if (!Recruitment || ant.HasLoad || LoadHoming <= 0f) return;
+        if (ant.Energy >= TiredEnergy) return;
+        if (_homingOff.Count > 0 && _homingOff.ContainsKey(ant.Id)) return; // tregua: la vuelta no progresaba
+        SteerHome(colony, ant, LoadHoming, ref decision);
+    }
+
+    /// <summary>Corrección lateral hacia el nido (campo de pasillos si hay
+    /// laberinto, línea recta si no) compartida por la cargada y la cansada.</summary>
+    private void SteerHome(Colony colony, Ant ant, float gain, ref AntDecision decision)
+    {
+        float tx = colony.NestX, ty = colony.NestY;
+        GuideStep(colony, ant, ref tx, ref ty);
+
+        float dx = tx - ant.X;
+        float dy = ty - ant.Y;
+        float d2 = dx * dx + dy * dy;
+        if (d2 <= 1e-6f) return; // encima del objetivo: no hay rumbo que corregir
+
+        float inv = 1f / MathF.Sqrt(d2);
+        float cosH = CanonMath.Cos(ant.Heading);
+        float sinH = CanonMath.Sin(ant.Heading);
+        float forward = (dx * cosH + dy * sinH) * inv;  // >0 ⇒ el objetivo está delante
+        float left = (-dx * sinH + dy * cosH) * inv;    // >0 ⇒ el objetivo está a la izquierda
+
+        // RUMBO, no «de qué lado». `left` vale ±1 cuando el objetivo está a un
+        // lado, así que con gain 4 el reflejo SATURABA con solo 15° de desvío:
+        // la hormiga giraba a tope, se pasaba del rumbo y el muro la devolvía
+        // —medido: la cargada 13 recorre 13 u de pared arriba y abajo durante
+        // 1 800 ticks con el objetivo a 8 u—. El ángulo relativo (atan2) da la
+        // corrección proporcional al desvío real: se apaga al quedar encarada y
+        // satura solo cuando el objetivo está de verdad a la espalda.
+        float side = forward < 0f ? (left >= 0f ? 1f : -1f) : left;
+        decision.Steer += gain * side;
+    }
+
+    /// <summary>
+    /// F8 — EL NIDO NO SE VE A TRAVÉS DE LA PARED. Con laberinto, la brújula
+    /// innata del cerebro (canales <c>HomeDx</c>/<c>HomeDy</c>) dejaba de ser el
+    /// vector en línea recta al nido y pasa a ser la dirección del PASILLO: el
+    /// centro de la celda vecina que baja el campo de distancia del nido. Es el
+    /// mismo campo que usa la vuelta de la cargada, así que la hormiga que
+    /// vuelve —cargada o cansada— deja de empujar el muro que tiene el nido
+    /// detrás y rodea el obstáculo.
+    ///
+    /// Sin laberinto no toca nada (brújula clásica, pines de hash intactos) y una
+    /// celda no conectada deja la brújula a CERO en vez de mentir con una recta
+    /// que cruza paredes: mejor no saber dónde está la casa que creer que está
+    /// al otro lado del muro.
+    ///
+    /// Es <c>public</c>, como los demás reflejos, para poder fijar en un test que
+    /// la dirección que sale NO cruza una pared, celda por celda del laberinto.
+    /// </summary>
+    public void ApplyCorridorHomeSense(Colony colony, Ant ant, ref AntSensors sensors)
+    {
+        if (!Recruitment || _maze == null) return;
+        var guides = NestGuides();
+        if (colony.Id < 0 || colony.Id >= guides.Length) return;
+        int[] dist = guides[colony.Id];
+        if (dist.Length == 0) return;
+
+        int n = _gridCells;
+        int cx = Cell(ant.X), cy = Cell(ant.Y);
+        int here = dist[cy * n + cx];
+        if (here == int.MaxValue)
+        {
+            // Celda no conectada al nido (o dentro de una pared): no hay pasillo
+            // que enseñar. La brújula se apaga; la pared sigue siendo opaca.
+            sensors.HomeDx = 0f;
+            sensors.HomeDy = 0f;
+            return;
+        }
+
+        int best = here, bx = cx, by = cy;
+        if (cx > 0 && dist[cy * n + cx - 1] < best) { best = dist[cy * n + cx - 1]; bx = cx - 1; by = cy; }
+        if (cx + 1 < n && dist[cy * n + cx + 1] < best) { best = dist[cy * n + cx + 1]; bx = cx + 1; by = cy; }
+        if (cy > 0 && dist[(cy - 1) * n + cx] < best) { best = dist[(cy - 1) * n + cx]; bx = cx; by = cy - 1; }
+        if (cy + 1 < n && dist[(cy + 1) * n + cx] < best) { best = dist[(cy + 1) * n + cx]; bx = cx; by = cy + 1; }
+        if (best == here)
+        {
+            // Ya en la celda del nido: casa está aquí, no hay rumbo que dar.
+            sensors.HomeDx = 0f;
+            sensors.HomeDy = 0f;
+            return;
+        }
+
+        float cell = SimConstants.CellSizeUnits;
+        float dx = (bx + 0.5f) * cell - ant.X;
+        float dy = (by + 0.5f) * cell - ant.Y;
+        float d2 = dx * dx + dy * dy;
+        if (d2 <= 1e-6f) return;
+
+        // Mismo marco local que AntSenses: X = rumbo, Y = izquierda.
+        float inv = 1f / MathF.Sqrt(d2);
+        float cosH = CanonMath.Cos(ant.Heading);
+        float sinH = CanonMath.Sin(ant.Heading);
+        sensors.HomeDx = Math.Clamp((dx * cosH + dy * sinH) * inv, -1f, 1f);
+        sensors.HomeDy = Math.Clamp((-dx * sinH + dy * cosH) * inv, -1f, 1f);
+    }
+
+    /// <summary>
+    /// F8 — SI LA VUELTA NO AVANZA, LA HORMIGA SALE DEL RINCÓN POR UNA CELDA LIBRE.
+    /// El campo de pasillos baja celda a celda, pero en una esquina el objetivo cae
+    /// en el borde del hueco: la hormiga se apoya en el muro y se queda orbitando
+    /// por su cara con el nido al otro lado (medido: la cargada 13 recorre 13 u de
+    /// pared arriba y abajo durante 1 800 ticks).
+    ///
+    /// El primer intento —media vuelta a ciegas— no bastaba: el giro de 180° la
+    /// devolvía al mismo pasillo y la tregua de 3 s se agotaba ANTES de que la
+    /// hormiga cambiara de celda, así que el reflejo volvía a apuntar al mismo
+    /// rincón y el ciclo se repetía indefinidamente. Medido en la partida viva:
+    /// tres cargadas (124, 147, 167) seguían deslizándose por la cara del muro con
+    /// el nido detrás, con deriva < 1,4 u en ventanas de 500 s.
+    ///
+    /// Ahora el desatasco ESCOGE DIRECCIÓN: de las celdas vecinas libres (las
+    /// cuatro ortogonales del campo, sin diagonales que corten esquinas) toma la
+    /// que menos aleja del nido, y la tregua no se consume por tiempo sino al
+    /// CAMBIAR DE CELDA — el reflejo no puede volver a engancharla en el mismo
+    /// sitio. Determinista (recorre los vecinos en el orden fijo del BFS y no usa
+    /// el RNG) y solo existe con reclutamiento y laberinto.
+    /// </summary>
+    private void BreakGuideStall(Colony colony, Ant ant)
+    {
+        if (!Recruitment || _maze == null) return;
+
+        int cx = Cell(ant.X), cy = Cell(ant.Y);
+        if (_homingOff.TryGetValue(ant.Id, out var off))
+        {
+            // La tregua dura hasta que la hormiga CAMBIA de celda: es la prueba
+            // de que salió del rincón donde se atascó.
+            if (cx != off.cx || cy != off.cy || off.ticks <= 1)
+                _homingOff.Remove(ant.Id);
+            else
+                _homingOff[ant.Id] = (off.ticks - 1, off.cx, off.cy);
+            return;
+        }
+
+        bool homing = ant.HasLoad || ant.Energy < TiredEnergy;
+        if (!homing) { _guideStall.Remove(ant.Id); return; }
+
+        int d = NestGuideDistance(colony.Id, ant.X, ant.Y);
+        if (d <= 2) { _guideStall.Remove(ant.Id); return; }
+        if (!_guideStall.TryGetValue(ant.Id, out var s)) { _guideStall[ant.Id] = (d, 0, cx, cy); return; }
+        if (d < s.dist) { _guideStall[ant.Id] = (d, 0, cx, cy); return; }
+
+        int ticks = s.ticks + 1;
+        if (ticks < GuideStallTicks) { _guideStall[ant.Id] = (s.dist, ticks, s.cx, s.cy); return; }
+
+        float? escape = EscapeHeading(colony, ant);
+        ant.Heading = escape ?? WrapPi(ant.Heading + MathF.PI);
+        _homingOff[ant.Id] = (HomingTruceTicks, cx, cy);
+        _guideStall[ant.Id] = (d, 0, cx, cy);
+    }
+
+    /// <summary>
+    /// F8 — rumbo de salida de un rincón: de las cuatro celdas ortogonales libres
+    /// de la celda actual, la que MÁS BAJA el campo de distancia (empate: el orden
+    /// fijo −X, +X, −Y, +Y del BFS). Devuelve null si ninguna es transitable o
+    /// está conectada al nido; entonces el que llama recurre al 180°.
+    ///
+    /// Ortogonales, no diagonales, a propósito: una diagonal desde el borde de una
+    /// celda vuelve a cortar la esquina del muro, que es justo el gesto que deja a
+    /// la hormiga deslizándose por la cara.
+    /// </summary>
+    private float? EscapeHeading(Colony colony, Ant ant)
+    {
+        if (_maze == null || colony.Id < 0) return null;
+        var guides = NestGuides();
+        if (colony.Id >= guides.Length) return null;
+        int[] dist = guides[colony.Id];
+        if (dist.Length == 0) return null;
+
+        int n = _gridCells;
+        int cx = Cell(ant.X), cy = Cell(ant.Y);
+        int here = dist[cy * n + cx];
+        int best = here, bx = -1, by = -1;
+
+        void Consider(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= n || y >= n) return;
+            if (_maze!.IsWall(x, y)) return;
+            int value = dist[y * n + x];
+            if (value == int.MaxValue || value >= best) return;
+            best = value; bx = x; by = y;
+        }
+
+        Consider(cx - 1, cy);
+        Consider(cx + 1, cy);
+        Consider(cx, cy - 1);
+        Consider(cx, cy + 1);
+        if (bx < 0) return null;
+
+        const float cell = SimConstants.CellSizeUnits;
+        float dx = (bx + 0.5f) * cell - ant.X;
+        float dy = (by + 0.5f) * cell - ant.Y;
+        if (dx * dx + dy * dy <= 1e-6f) return null;
+        return WrapPi(MathF.Atan2(dy, dx));
+    }
+
+    /// <summary>
+    /// F8 — CAMPO DE DISTANCIA AL NIDO, POR PASILLOS, una vez por colonia: BFS de
+    /// 4 vecinos desde la celda del nido sobre las celdas abiertas del laberinto
+    /// (entero, sin RNG: determinista). Es el mapa que usa la cargada para
+    /// volver bordeando los muros en vez de empujarlos.
+    ///
+    /// Se construye PEREZOSAMENTE (la primera cargada lo paga: ~9 200 celdas) y se
+    /// cachea; <see cref="ClearColoniesForLoad"/> lo invalida para que un
+    /// checkpoint reconstruya el suyo. Sin laberinto no hay campo (la vuelta es la
+    /// brújula al nido).
+    /// </summary>
+    private int[][] NestGuides()
+    {
+        if (_nestGuide != null) return _nestGuide;
+        var guides = new int[_colonies.Count][];
+        _nestGuide = guides;
+        if (_maze == null) return guides;
+
+        int n = _gridCells;
+        for (int c = 0; c < _colonies.Count; c++)
+        {
+            var dist = new int[n * n];
+            for (int i = 0; i < dist.Length; i++) dist[i] = int.MaxValue;
+            guides[c] = dist;
+
+            var (ox, oy) = _maze.NearestOpen(_colonies[c].NestX, _colonies[c].NestY);
+            int sx = Cell(ox), sy = Cell(oy);
+            if (_maze.IsWall(sx, sy)) continue; // sin celda de arranque: la cargada usa la brújula
+
+            var queue = new Queue<int>();
+            dist[sy * n + sx] = 0;
+            queue.Enqueue(sy * n + sx);
+            while (queue.Count > 0)
+            {
+                int idx = queue.Dequeue();
+                int cx = idx % n, cy = idx / n;
+                int d = dist[idx] + 1;
+                // Orden fijo de vecinos (−X, +X, −Y, +Y): el campo no depende del
+                // orden de llegada porque cada celda se escribe una sola vez.
+                if (cx > 0) Push(cx - 1, cy, d);
+                if (cx + 1 < n) Push(cx + 1, cy, d);
+                if (cy > 0) Push(cx, cy - 1, d);
+                if (cy + 1 < n) Push(cx, cy + 1, d);
+
+                void Push(int x, int y, int value)
+                {
+                    int i2 = y * n + x;
+                    if (dist[i2] != int.MaxValue || _maze.IsWall(x, y)) return;
+                    dist[i2] = value;
+                    queue.Enqueue(i2);
+                }
+            }
+        }
+        return guides;
+    }
+
+    /// <summary>
+    /// F8 — distancia al nido por pasillos, en celdas, para la colonia
+    /// <paramref name="colonyId"/> en la celda que contiene (x, y). −1 = sin
+    /// campo (sin laberinto) o celda no conectada al nido. Es la lectura que
+    /// fijan los tests del campo (descenso monótono, nido en 0).
+    /// </summary>
+    public int NestGuideDistance(int colonyId, float x, float y)
+    {
+        if (_maze == null || colonyId < 0 || colonyId >= _colonies.Count) return -1;
+        int[] dist = NestGuides()[colonyId];
+        if (dist.Length == 0) return -1;
+        int value = dist[Cell(y) * _gridCells + Cell(x)];
+        return value == int.MaxValue ? -1 : value;
+    }
+
+    /// <summary>
+    /// F8 — un paso del campo: deja en (<paramref name="tx"/>, <paramref name="ty"/>) el
+    /// centro de la celda vecina que más baja la distancia al nido. Si no hay
+    /// campo, la hormiga está en una celda aislada o ya está en el mínimo, deja el
+    /// nido como objetivo (brújula).
+    /// </summary>
+    private void GuideStep(Colony colony, Ant ant, ref float tx, ref float ty)
+    {
+        if (_maze == null) return;
+        var guides = NestGuides();
+        if (colony.Id < 0 || colony.Id >= guides.Length) return;
+        int[] dist = guides[colony.Id];
+        if (dist.Length == 0) return;
+
+        int n = _gridCells;
+        int cx = Cell(ant.X), cy = Cell(ant.Y);
+        int here = dist[cy * n + cx];
+        if (here == int.MaxValue) return; // celda no conectada al nido
+
+        int best = here, bx = cx, by = cy;
+        if (cx > 0 && dist[cy * n + cx - 1] < best) { best = dist[cy * n + cx - 1]; bx = cx - 1; by = cy; }
+        if (cx + 1 < n && dist[cy * n + cx + 1] < best) { best = dist[cy * n + cx + 1]; bx = cx + 1; by = cy; }
+        if (cy > 0 && dist[(cy - 1) * n + cx] < best) { best = dist[(cy - 1) * n + cx]; bx = cx; by = cy - 1; }
+        if (cy + 1 < n && dist[(cy + 1) * n + cx] < best) { best = dist[(cy + 1) * n + cx]; bx = cx; by = cy + 1; }
+        if (bx == cx && by == cy) return; // ya en el mínimo (celda del nido)
+
+        const float cell = SimConstants.CellSizeUnits;
+        tx = (bx + 0.5f) * cell;
+        ty = (by + 0.5f) * cell;
+
     }
 
     /// <summary>
@@ -501,10 +1071,19 @@ public sealed class WorldSim
         var sensors = AntSenses.Build(colony, ant, _items, WorldWidth, WorldHeight,
             rivals: sp.ContactRadius > 0f && _colonies.Count > 1 ? _colonies : null,
             maze: _maze);
+        // F8: con laberinto el nido NO se ve a través de la pared — la brújula
+        // innata apunta por el pasillo (ver ApplyCorridorHomeSense).
+        ApplyCorridorHomeSense(colony, ant, ref sensors);
         var decision = AntDecision.Neutral();
         ant.Brain.Evaluate(in sensors, ref decision);
         // — F5.3: tropotaxis repelente por huella CHC (reflejo periférico) —
         ApplyFootprintRepulsion(colony, ant, sp, ref decision);
+        // — F8: tropotaxis ATRACTIVA por rastro de comida (reclutamiento) —
+        ApplyTrailRecruitment(colony, ant, sp, ref decision);
+        // — F8: brújula de la CARGADA — vuelve al nido con lo que lleva —
+        ApplyLoadHoming(colony, ant, ref decision);
+        // — F8: la que se queda sin reserva vuelve a recargar al nido —
+        ApplyReturnWhenTired(colony, ant, ref decision);
         DecisionValidator.SanitizeAndClamp(in decision, out decision);
 
         // Supervivencia: pequeña recompensa por estar viva cada paso.
@@ -537,6 +1116,7 @@ public sealed class WorldSim
             // cerebro tenga que calcular el ángulo exacto.
             nx = Math.Clamp(nx, 0f, WorldWidth);
             ny = Math.Clamp(ny, 0f, WorldHeight);
+            float stepX = ant.X, stepY = ant.Y; // para medir cuánto avanzó de verdad
             if (!_maze.Blocked(nx, ny, MazeLayout.AntRadius))
             {
                 ant.X = nx;
@@ -550,9 +1130,19 @@ public sealed class WorldSim
             {
                 ant.Y = ny;
             }
-            // Si los tres fallan se queda donde estaba: la pared de enfrente la
-            // ven las antenas y el cerebro decide girar (o no, y paga el coste).
+            // Si apenas avanzó, la hormiga SE APOYA en la pared y gira (ver
+            // <see cref="MazeBumpTurn"/>). El criterio es el AVANCE EFECTIVO, no
+            // «fallaron los tres intentos»: la que empuja una pared de frente
+            // con un deslizamiento de milésimas por el otro eje nunca ve fallar
+            // el paso entero, y se quedaba ahí para siempre —medido en la
+            // partida canónica: 55 hormigas inmóviles más de 3 s, con el bocado
+            // en la boca—. La colonia se apagaba por falta de descargas, no por
+            // falta de comida.
+            float moved = MathF.Abs(ant.X - stepX) + MathF.Abs(ant.Y - stepY);
+            if (MazeBumpTurn != 0f && moved < MazeBumpMinProgress * v * dt)
+                ant.Heading = WrapPi(ant.Heading + MazeBumpTurn);
         }
+        BreakGuideStall(colony, ant);
         ant.LifetimeDistanceExplored += v * dt;
         ant.Energy = Math.Max(0f, ant.Energy - (sp.CostMove * v * dt * metabolismCircadian) / ant.EnergyCapacity);
 
@@ -591,14 +1181,59 @@ public sealed class WorldSim
             deposited += amt;
             colony.AlarmLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
         }
-        ant.Energy = Math.Max(0f, ant.Energy - deposited * sp.CostDeposit / ant.EnergyCapacity);
+        // — F8: reflejo de reclutamiento — el rastro lo deja la hormiga según lo
+        //   que esté HACIENDO, sin que el cerebro tenga que decidirlo: la que
+        //   BUSCA va dejando rastro de CASA (el camino de vuelta al nido) y la
+        //   que vuelve CARGADA deja rastro de COMIDA (el camino al montón). Una
+        //   sola celda, la que pisa: el rastro es un camino, no una nube.
+        //   Sin coste de energía ni fitness: es el reflejo que hace que un
+        //   hallazgo se convierta en camino para las demás, no una inversión que
+        //   la política tenga que justificar.
+        if (Recruitment && ant.HasLoad)
+        {
+            // Rastro de comida con forma de cresta hacia la FUENTE y de UNA CELDA:
+            // es el camino que la hormiga pisa, no una nube. El kernel 3×3 de la
+            // primera versión (centro 0,4 + cuatro vecinas 0,15) dejaba una banda
+            // de tres celdas —24 u— por la que nadie había pasado, y como la
+            // difusión no puede agrandar el soporte, ese era el ancho MÍNIMO: en
+            // el tablero se veía como humo de decenas de unidades, y la cola
+            // difusa (2–10/255) ensanchaba aún más el halo con la curva de
+            // pantalla. Ahora TODO el depósito va a la celda que ocupa la hormiga
+            // (misma cantidad, no menos señal: el reparto lateral solo repartía).
+            float dxN = ant.X - colony.NestX;
+            float dyN = ant.Y - colony.NestY;
+            float away = MathF.Sqrt(dxN * dxN + dyN * dyN) / MathF.Max(RecruitmentTrailSourceDistance, 1f);
+            float amt = RecruitmentFoodDeposit * (0.4f + 0.6f * Math.Clamp(away, 0f, 1f)) * sp.QMaxFood * dt;
+            int cx = Cell(ant.X), cy = Cell(ant.Y);
+            colony.FoodLayer.Deposit(cx, cy, amt);
+        }
+        else if (Recruitment)
+        {
+            // Buscando (sin carga): rastro de CASA. Es el camino de vuelta —el
+            // que la trajo y el que la devuelve al nido— y se pinta en verde con
+            // la capa `home`. No se sigue como guía (se probó y no mejoraba el
+            // forrajeo: el cerebro ya deposita `home` por todas partes); lo que
+            // guía a la comida es el rastro de la cargada.
+            colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y),
+                RecruitmentHomeDeposit * sp.QMaxHome * dt);
+        }
+        // F8 — LA FEROMONA DE LA PARTIDA NO SE PAGA CON LA RESERVA. En el mundo
+        // de reclutamiento el rastro lo pone el REFLEJO (gratis, ver más abajo);
+        // los canales del cerebro siguen escribiendo su capa, pero cobrarlos
+        // costaba más que el mantenimiento entero de la obrera: medido, el
+        // depósito a plena tasa son ~0,03 ep/s por hormiga (frente a 0,012 de
+        // upkeep) y la colonia se quedaba sin reserva con el tablero lleno. La
+        // partida clásica sigue cobrando cada gota (pines de hash intactos).
+        if (!Recruitment)
+            ant.Energy = Math.Max(0f, ant.Energy - deposited * sp.CostDeposit / ant.EnergyCapacity);
         if (deposited > 0f && RewardDepositPerUnit > 0f)
             ant.Fitness += deposited * RewardDepositPerUnit;
 
         // — Recarga de energía / trofalaxia comunal dentro del nido —
         float dxNest = ant.X - colony.NestX;
         float dyNest = ant.Y - colony.NestY;
-        if (dxNest * dxNest + dyNest * dyNest <= NestRadius * NestRadius)
+        bool insideNest = dxNest * dxNest + dyNest * dyNest <= NestRadius * NestRadius;
+        if (insideNest)
         {
             if (ant.Energy < 0.85f && colony.Stock > 0f)
             {
@@ -617,7 +1252,12 @@ public sealed class WorldSim
         ant.InteractCooldown = Math.Max(0f, ant.InteractCooldown - dt);
         // F5.2b.1: el golpe de combate TAMBIÉN vive en el cooldown de
         // interacción (misma ventana de 0.5 s que pickup/unload).
-        if (DecisionValidator.WantsInteraction(in decision) && ant.InteractCooldown <= 0f)
+        // F8: la CARGADA que pisa el nido DESCARGA sin que el cerebro pulse
+        // interacción — el bocado ya venía para casa y llegó. Antes de esto, la
+        // hormiga podía cruzar el nido cien veces con la carga encima y la
+        // comida se quedaba en la boca del nido sin entrar a la reserva.
+        bool atNestWithLoad = Recruitment && ant.HasLoad && insideNest;
+        if ((DecisionValidator.WantsInteraction(in decision) || atNestWithLoad) && ant.InteractCooldown <= 0f)
         {
             if (!ant.HasLoad)
             {
@@ -894,25 +1534,104 @@ public sealed class WorldSim
 
     private void RespawnItems()
     {
-        int spawned = 0;
         // Objetivo escalado por área (ver DensityScaledTargetItems): el setter
         // explícito de TargetItems (la arena lo pone a 0; el CLI podría fijarlo)
         // tiene prioridad — solo cuando sigue en el default se aplica la
         // densidad constante.
         int target = TargetItems != TargetItemsDefault ? TargetItems : DensityScaledTargetItems;
+
+        int spawned = 0;
         while (_items.Count < target && spawned < RespawnBudgetPerStep)
         {
             if (SpawnItem()) spawned++;
             else break;
         }
+
+        // F8: los montones se reponen ADEMÁS, y de uno en uno: un montón son 6–10
+        // ítems y el presupuesto clásico de 2 por paso tardaría una eternidad en
+        // volver a formar uno visible en el tablero.
+        if (Recruitment && _items.Count < _pileFloor) SpawnCluster();
     }
 
     private bool SpawnItem()
     {
+        if (!TryFindSpawnPoint(out float x, out float y)) return false;
+        AddFoodItemAt(x, y);
+        return true;
+    }
+
+    /// <summary>
+    /// F8 — siembra un MONTÓN: un centro dentro del radio de forrajeo de una
+    /// colonia (ver <see cref="TryFindClusterCenter"/>) y 6–10 bocados ricos de
+    /// <see cref="FoodClusterItemAmount"/> alrededor (radio
+    /// <see cref="FoodClusterRadius"/>). El primero cae en el centro, así que el
+    /// montón tiene corazón y no un hueco; los que caen en pared se descartan (no
+    /// se reintentan: reintentar por ítem desordenaría el flujo del RNG sin ganar
+    /// nada).
+    /// </summary>
+    private bool SpawnCluster()
+    {
+        if (!TryFindClusterCenter(out float cx, out float cy)) return false;
+
+        int size = FoodClusterMin +
+            (int)(_worldRng.NextDouble01() * (FoodClusterMax - FoodClusterMin + 1));
+        AddFoodItemAt(cx, cy, FoodClusterItemAmount);
+        for (int i = 1; i < size; i++)
+        {
+            float ox = cx + ((float)_worldRng.NextDouble01() * 2f - 1f) * FoodClusterRadius;
+            float oy = cy + ((float)_worldRng.NextDouble01() * 2f - 1f) * FoodClusterRadius;
+            ox = Math.Clamp(ox, 0f, WorldWidth);
+            oy = Math.Clamp(oy, 0f, WorldHeight);
+            if (_maze != null && !_maze.ItemFits(ox, oy)) continue;
+            AddFoodItemAt(ox, oy, FoodClusterItemAmount);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// F8 — centro de un MONTÓN. No es un punto cualquiera del mapa: se elige
+    /// una colonia al azar y un rumbo, y se deja el montón a media distancia
+    /// (entre <see cref="FoodClusterMinDistance"/> y
+    /// <see cref="FoodClusterMaxDistance"/>). Una colonia recluta hacia parches
+    /// que puede alcanzar: medido, sus obreras patrullan a ~100 u del nido y solo
+    /// un 11 % pasa de 200, así que un montón al otro lado del mapa no lo visita
+    /// nadie y el rastro no tiene a quién guiar.
+    /// </summary>
+    private bool TryFindClusterCenter(out float cx, out float cy)
+    {
+        cx = cy = 0f;
         for (int attempt = 0; attempt < 8; attempt++)
         {
-            float x = (float)(_worldRng.NextDouble01() * WorldWidth);
-            float y = (float)(_worldRng.NextDouble01() * WorldHeight);
+            var colony = _colonies[(int)(_worldRng.NextDouble01() * _colonies.Count) % _colonies.Count];
+            float bearing = (float)(_worldRng.NextDouble01() * Math.PI * 2.0);
+            float dist = FoodClusterMinDistance +
+                (float)_worldRng.NextDouble01() * (FoodClusterMaxDistance - FoodClusterMinDistance);
+            float x = colony.NestX + CanonMath.Cos(bearing) * dist;
+            float y = colony.NestY + CanonMath.Sin(bearing) * dist;
+            x = Math.Clamp(x, 0f, WorldWidth);
+            y = Math.Clamp(y, 0f, WorldHeight);
+            if (_maze != null)
+            {
+                if (!_maze.ItemFits(x, y)) (x, y) = _maze.NearestOpen(x, y);
+                if (!_maze.ItemFits(x, y)) continue;
+            }
+            cx = x;
+            cy = y;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>Un punto válido para comida: fuera del radio de los nidos, fuera de
+    /// las paredes y sin pegarse a ellas. Consume el MISMO flujo del RNG que el
+    /// spawn clásico (dos dobles por intento), así que la ruta sin reclutamiento
+    /// queda byte a byte igual.</summary>
+    private bool TryFindSpawnPoint(out float x, out float y)
+    {
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            x = (float)(_worldRng.NextDouble01() * WorldWidth);
+            y = (float)(_worldRng.NextDouble01() * WorldHeight);
             bool ok = true;
             float minDist = _maze != null ? MazeLayout.ItemSpawnMinDistance : NestMinSpawnDistance;
             for (int c = 0; c < _colonies.Count; c++)
@@ -930,36 +1649,49 @@ public sealed class WorldSim
             // 12 u, pero un ítem a 3 u del muro obliga a la hormiga a meterse en
             // él). Con laberinto, un punto así se descarta y se reintenta.
             if (_maze != null && !_maze.ItemFits(x, y)) continue;
-
-            // F5.2a.1: ¿hoja o ítem simple? La tirada SOLO se consume con
-            // LeafFraction > 0 — con 0 el flujo de RNG es el de siempre.
-            bool isLeaf = LeafFraction > 0f && _worldRng.NextDouble01() < LeafFraction;
-            float amount;
-            int cuts = 0;
-            if (isLeaf)
-            {
-                cuts = 3 + (int)(_worldRng.NextDouble01() * 3f); // 3..5
-                amount = 8f + (float)_worldRng.NextDouble01() * 6f; // 8..14 ep
-            }
-            else
-            {
-                amount = 4f + (float)_worldRng.NextDouble01() * 2f;
-            }
-
-            var item = new FoodItem
-            {
-                Id = _nextItemId++,
-                X = x,
-                Y = y,
-                Amount = amount,
-                CutsLeft = cuts,
-                CutsInitial = cuts
-            };
-            _items.Add(item);
-            _events.Add(new SimEvent(SimEventKind.ItemSpawned, Tick, -1, 0, x, y));
             return true;
         }
+        x = 0f;
+        y = 0f;
         return false;
+    }
+
+    /// <summary>Crea el ítem (hoja o simple) en un punto YA validado y avisa al
+    /// canal de eventos. Las tiradas de RNG son las del spawn clásico: la regla
+    /// hoja/simple solo consume cuando <see cref="LeafFraction"/> &gt; 0.</summary>
+    private void AddFoodItemAt(float x, float y, float? amountOverride = null)
+    {
+        // F5.2a.1: ¿hoja o ítem simple? La tirada SOLO se consume con
+        // LeafFraction > 0 — con 0 el flujo de RNG es el de siempre.
+        bool isLeaf = LeafFraction > 0f && _worldRng.NextDouble01() < LeafFraction;
+        float amount;
+        int cuts = 0;
+        if (isLeaf)
+        {
+            cuts = 3 + (int)(_worldRng.NextDouble01() * 3f); // 3..5
+            amount = 8f + (float)_worldRng.NextDouble01() * 6f; // 8..14 ep
+        }
+        else
+        {
+            amount = 4f + (float)_worldRng.NextDouble01() * 2f;
+        }
+
+        // F8: un montón es un parche RICO — el trozo que se lleva la obrera es
+        // más grande que el de una migaja suelta (buche lleno). Se aplica DESPUÉS
+        // de la tirada clásica, así que el flujo del RNG no cambia.
+        if (amountOverride.HasValue) amount = amountOverride.Value;
+
+        var item = new FoodItem
+        {
+            Id = _nextItemId++,
+            X = x,
+            Y = y,
+            Amount = amount,
+            CutsLeft = cuts,
+            CutsInitial = cuts
+        };
+        _items.Add(item);
+        _events.Add(new SimEvent(SimEventKind.ItemSpawned, Tick, -1, 0, x, y));
     }
 
     private FoodItem? NearestItemWithin(float x, float y, float radius)
@@ -1233,7 +1965,11 @@ public sealed class WorldSim
     }
 
     /// <summary>Vacía las colonias provisionales antes de reconstruirlas desde el checkpoint.</summary>
-    internal void ClearColoniesForLoad() => _colonies.Clear();
+    internal void ClearColoniesForLoad()
+    {
+        _colonies.Clear();
+        _nestGuide = null; // F8: el campo de vuelta se reconstruye con los nidos cargados
+    }
 
     /// <summary>Añade un ítem SIN reasignar Id (carga de checkpoint: el Id es parte del estado).</summary>
     internal void AddItemUnchecked(FoodItem item) => _items.Add(item);
@@ -1253,6 +1989,7 @@ public sealed class WorldSim
         {
             Id = id,
             Species = sp,
+            RecruitmentEconomy = Recruitment, // F8: contabilidad de la ronda
             NestX = nestX,
             NestY = nestY,
             StockMax = stockMax,

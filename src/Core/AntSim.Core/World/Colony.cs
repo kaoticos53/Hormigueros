@@ -28,6 +28,13 @@ public sealed class Colony
     // — Reina —
     public float QueenEnergy = 1f; // [0,1]
 
+    // — F8: la contabilidad de la comida de la PARTIDA (ver ColonyController) —
+    // La ronda con reclutamiento lleva dos correcciones que el mundo clásico no
+    // puede adoptar sin mover sus pines de hash: el nido solo paga el alimento
+    // que la obrera se come de verdad, y la puesta se dimensiona con la entrada
+    // NETA (no con cualquier goteo).
+    public bool RecruitmentEconomy;
+
     // — RNG propio (Fork del flujo del mundo) —
     public DeterministicRandom Rng;
 

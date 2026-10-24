@@ -22,6 +22,7 @@
        headless — cualquier cambio del Core que rompa la UI rompe estos tests. -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/GameStreamParser.cs" Link="UnityPure/GameStreamParser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/RoundModel.cs" Link="UnityPure/RoundModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/StreamReader.cs" Link="UnityPure/StreamReader.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/RepoPathResolver.cs" Link="UnityPure/RepoPathResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/FrameGate.cs" Link="UnityPure/FrameGate.cs" />
@@ -40,10 +41,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/DropFoodPlanModel.cs" Link="UnityPure/DropFoodPlanModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ImportDialogModel.cs" Link="UnityPure/ImportDialogModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneTileModel.cs" Link="UnityPure/PheromoneTileModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneRamp.cs" Link="UnityPure/PheromoneRamp.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/ActivationViewModel.cs" Link="UnityPure/ActivationViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneSelectorModel.cs" Link="UnityPure/PheromoneSelectorModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/PheromoneCompositeModel.cs" Link="UnityPure/PheromoneCompositeModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/MultiViewportModel.cs" Link="UnityPure/MultiViewportModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/LaunchSettings.cs" Link="UnityPure/LaunchSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/RecruitmentKnobs.cs" Link="UnityPure/RecruitmentKnobs.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/RecruitmentLiveModel.cs" Link="UnityPure/RecruitmentLiveModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/Streaming/GeneratedSceneCatalog.cs" Link="UnityPure/GeneratedSceneCatalog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/ColonySparklineModel.cs" Link="UnityPure/ColonySparklineModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)../../App/AntSim.Unity/Assets/Scripts/UI/LearningPanelModel.cs" Link="UnityPure/LearningPanelModel.cs" />

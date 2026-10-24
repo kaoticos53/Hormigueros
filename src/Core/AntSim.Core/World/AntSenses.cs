@@ -25,6 +25,11 @@ public static class AntSenses
     /// siguen siendo el único obstáculo físico). El GATING es de la llamada:
     /// un mundo de una colonia o sin especie beligerante pasa null ⇒ bytes
     /// idénticos al build anterior (pines de CI intactos).
+    ///
+    /// F7 (línea de visión): con `maze` no nulo el canal de comida visible exige
+    /// que el segmento hormiga→ítem no cruce ninguna pared
+    /// (<see cref="MazeLayout.SegmentClear"/>); sin `maze` la selección es la de
+    /// siempre (distancia pura), así que ningún mundo sin terreno cambia.
     /// </summary>
     public static AntSensors Build(Colony c, Ant a, IReadOnlyList<FoodItem> items,
         float worldWidth, float worldHeight, IReadOnlyList<Colony>? rivals,
@@ -67,7 +72,14 @@ public static class AntSenses
         s.AlarmCenter = alarmC;
         s.AlarmDiff = Math.Clamp(alarmL - alarmR, -1f, 1f);
 
-        // — Comida visible: ítem más cercano dentro de rV —
+        // — Comida visible: ítem más cercano dentro de rV y A LA VISTA —
+        // Con laberinto la distancia no basta: un ítem al otro lado del muro está
+        // dentro del radio pero no es alcanzable, y la política se queda
+        // empujando la pared (medido: 83 % de las comidas «visibles» en el
+        // laberinto estaban tras una pared). Se exige línea de visión SOLO con
+        // terreno: los mundos sin laberinto (y sus pines de hash de CI) siguen
+        // byte a byte iguales.
+        bool requireLos = maze != null;
         FoodItem? nearest = null;
         float bestDist2 = float.MaxValue;
         float vision = sp.VisionRadius * a.SensorScale;
@@ -80,6 +92,10 @@ public static class AntSenses
             float d2 = dx * dx + dy * dy;
             if (d2 < vision2 && d2 < bestDist2)
             {
+                // El orden importa: el recorrido de la línea solo se hace para
+                // candidatos que MEJORAN la distancia — unas pocas veces por
+                // hormiga y tick, no para cada ítem del mundo.
+                if (requireLos && !maze!.SegmentClear(a.X, a.Y, it.X, it.Y)) continue;
                 bestDist2 = d2;
                 nearest = it;
             }
@@ -169,6 +185,17 @@ public static class AntSenses
     /// Usa CanonMath (Sin/Cos cross-platform bit-exact): alimenta el movimiento.
     /// </summary>
     public static void SampleFootprintSides(Pheromone.PheromoneLayer layer, Ant a,
+        float reach, float senseAngle, out float left, out float right)
+        => SampleSides(layer, a, reach, senseAngle, out left, out right);
+
+    /// <summary>
+    /// F8 — las DOS sondas laterales sobre CUALQUIER capa (antes solo la huella).
+    /// Es el mismo par de antenas que el cerebro lee en su canal de gradiente, y
+    /// alimenta los reflejos de <see cref="WorldSim"/>: la huella los empuja a
+    /// alejarse del tráfico y el rastro de comida a acercarse al montón. Usa
+    /// CanonMath (Sin/Cos bit-exact): estas lecturas mueven el mundo.
+    /// </summary>
+    public static void SampleSides(Pheromone.PheromoneLayer layer, Ant a,
         float reach, float senseAngle, out float left, out float right)
     {
         float angL = a.Heading + senseAngle;

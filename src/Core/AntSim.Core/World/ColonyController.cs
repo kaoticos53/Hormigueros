@@ -77,7 +77,24 @@ public static class ColonyController
         int adultCount = c.AdultCountAlive;
         if (adultCount > 0)
         {
-            float adultBudget = Math.Min(c.Stock, adultCount * sp.AdultUpkeep * dt);
+            // F8: en la RONDA el nido paga el hueco REAL de cada obrera, no la
+            // ración teórica. Antes se descontaba `adultas · b_adult · dt` aunque
+            // estuvieran llenas: ~0,3 ep/s de comida que salía del stock sin
+            // alimentar a nadie, y la colonia se apagaba con el tablero lleno.
+            // (El mundo clásico conserva la ración fija: sus pines no se mueven.)
+            float allowance = adultCount * sp.AdultUpkeep * dt;
+            float need = allowance;
+            if (c.RecruitmentEconomy)
+            {
+                need = 0f;
+                for (int i = 0; i < c.Adults.Count; i++)
+                {
+                    var a0 = c.Adults[i];
+                    if (!a0.Alive) continue;
+                    need += Math.Max(0f, 1f - a0.Energy) * a0.EnergyCapacity;
+                }
+            }
+            float adultBudget = Math.Min(c.Stock, Math.Min(allowance, need));
             c.Stock -= adultBudget;
             consumed += adultBudget;
             float perAnt = adultBudget / adultCount;
@@ -258,7 +275,16 @@ public static class ColonyController
         // los 240 s). Sin entrada solo se reponen bajas (A·λ_death); la
         // expansión espera al primer ciclo de comida — biología de fundación
         // real: primera puesta limitada, expansión ligada a la entrada.
-        float inflowGate = Math.Clamp(c.InflowEma * 10f, 0f, 1f);
+        // F8: en la ronda la puesta se mide con la entrada NETA. El gate clásico
+        // (`InflowEma · 10`, saturado a 0,1 ep/s) trataba cualquier goteo como
+        // abundancia: la reina ponía ~0,9 huevos/s con 0,35 ep/s de entrada, la
+        // cría se comía la reserva fundadora y la colonia no se reponía. Ahora
+        // solo se expande el margen que la entrada paga por encima de lo que ya
+        // cuestan las adultas.
+        float upkeepDemand = Math.Max(1e-6f, c.AdultCountAlive * sp.AdultUpkeep);
+        float inflowGate = c.RecruitmentEconomy
+            ? Math.Clamp((c.InflowEma - upkeepDemand) / upkeepDemand, 0f, 1f)
+            : Math.Clamp(c.InflowEma * 10f, 0f, 1f);
         // Feedback homeostático biológico: si el stock es abundante (>60%) acelera la puesta;
         // si el stock cae en zona crítica (<20%) frena la puesta para proteger la colonia.
         float stockRatio = sp.StockMax > 0f ? c.Stock / sp.StockMax : 0f;

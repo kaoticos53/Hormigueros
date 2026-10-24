@@ -307,6 +307,148 @@ namespace AntSim.Core.Tests
         }
 
         [Fact]
+        public void LineaDeReclutamiento_DiceLasCifrasQueSeAplican_YCabeEnSuCaja()
+        {
+            // F8: la línea del HUD existe para comparar dos lanzamientos seguidos
+            // sin abrir el log del editor, así que tiene que publicar los MISMOS
+            // números que viajan al CLI — y caber con el peor caso posible, no con
+            // el del día.
+            string linea = HudElementLayoutModel.RecruitmentLine(RecruitmentKnobs.Default);
+            Assert.Contains("montones=8", linea);
+            Assert.Contains("6–10 ítems", linea);
+            Assert.Contains("radio 18 u", linea);
+            Assert.Contains("rastro=1× / 2100 s / sigue 8 rad/s", linea);
+
+            // Los rangos MÁXIMOS que acepta la tabla: 64 montones, 40 ítems, radio
+            // 120 u, rastro 5×/3600 s/20 rad/s. Si esto cabe, cualquier otra
+            // configuración válida cabe.
+            var tope = new RecruitmentKnobs
+            {
+                Clusters = RecruitmentKnobs.MaxClusters,
+                ClusterMin = RecruitmentKnobs.MaxClusterItems,
+                ClusterMax = RecruitmentKnobs.MaxClusterItems,
+                ClusterRadius = RecruitmentKnobs.MaxClusterRadius,
+                TrailDeposit = RecruitmentKnobs.MaxTrailDeposit,
+                TrailHalfLife = RecruitmentKnobs.MaxTrailHalfLife,
+                TrailFollow = RecruitmentKnobs.MaxTrailFollow,
+            };
+            Assert.True(tope.TryValidate(out string errTope), errTope);
+
+            foreach (var (nombre, texto) in new[]
+                     {
+                         ("default", linea),
+                         ("tope de rangos", HudElementLayoutModel.RecruitmentLine(tope)),
+                         ("apagado", HudElementLayoutModel.RecruitmentLine(tope, enabled: false)),
+                     })
+            {
+                float w = RenderedWidth(texto);
+                Assert.True(w <= HudElementLayoutModel.RecruitmentWidth,
+                    $"la línea de reclutamiento ({nombre}) mide {Px(w)} y su caja reserva " +
+                    $"{Px(HudElementLayoutModel.RecruitmentWidth)} px: «{texto}»");
+                float altoLinea = LineHeight(texto);
+                Assert.True(altoLinea <= HudElementLayoutModel.RecruitmentHeight,
+                    $"la línea de reclutamiento ({nombre}) pide {Px(altoLinea)} de alto y la caja " +
+                    $"reserva {HudElementLayoutModel.RecruitmentHeight} px");
+            }
+
+            // Apagado se DICE: un hueco vacío se leería como «el HUD no pinta».
+            string apagado = HudElementLayoutModel.RecruitmentLine(tope, enabled: false);
+            Assert.Equal(HudElementLayoutModel.RecruitmentOffText, apagado);
+            Assert.Contains("apagado", apagado);
+        }
+
+        [Fact]
+        public void CifrasDelTablero_CuentanMontonesVivosYItems()
+        {
+            // F8: la línea de configuración dice lo que se PIDIÓ al mundo; esta
+            // dice lo que HAY. Dos montones de tres ítems a 8 u (radio 18) y una
+            // migaja sola a 200 u: la migaja no es un montón sembrado.
+            var view = new GameStreamParser.TickView();
+            for (int i = 0; i < 3; i++)
+                view.Items.Add(new GameStreamParser.ItemView((uint)i, 100f + i * 8f, 100f, 1f));
+            for (int i = 0; i < 3; i++)
+                view.Items.Add(new GameStreamParser.ItemView((uint)(10 + i), 300f + i * 8f, 300f, 1f));
+            view.Items.Add(new GameStreamParser.ItemView(99, 500f, 500f, 1f));
+
+            var live = new RecruitmentLiveModel();
+            Assert.False(live.HasWorld);
+            Assert.Equal("", HudElementLayoutModel.RecruitmentLiveLine(live));
+
+            live.Observe(view, 18f);
+            Assert.True(live.HasWorld);
+            Assert.Equal(7, live.Items);
+            Assert.Equal(2, live.Piles);
+
+            string line = HudElementLayoutModel.RecruitmentLiveLine(live);
+            Assert.Contains("montones 2", line);
+            Assert.Contains("ítems 7", line);
+        }
+
+        [Fact]
+        public void CifrasDelTablero_CuentanSoloElRastroQueSeVe()
+        {
+            // El rastro se cuenta con la MISMA curva del render: de las cuatro
+            // celdas con dato, la de 20/255 cae por debajo del corte (18 % de 200
+            // = 36) y NO se pinta, así que el HUD no la cuenta.
+            var cells = new byte[5 * 3];
+            cells[1 * 5 + 1] = 200; cells[1 * 5 + 2] = 200; cells[1 * 5 + 3] = 200;
+            cells[0 * 5 + 4] = 20;
+
+            var live = new RecruitmentLiveModel();
+            live.Observe(new GameStreamParser.TickView(), 18f);
+            live.ObserveTrail("food", 5, 3, cells);
+
+            Assert.Equal(3, live.TrailCells);       // no 4: la débil no se ve
+            Assert.Equal((byte)200, live.TrailMax);
+            Assert.Equal(24, live.BandWidthUnits);  // 3 celdas × 8 u
+            Assert.Equal(8, live.BandHeightUnits);  // 1 celda
+
+            string line = HudElementLayoutModel.RecruitmentLiveLine(live);
+            Assert.Contains("rastro food 3 celdas", line);
+            Assert.Contains("máx 200", line);
+            Assert.Contains("banda 24×8 u", line);
+
+            // Sin paquete no se deja la cifra anterior y no se inventa una banda.
+            live.ObserveTrail("food", 0, 0, null);
+            Assert.Equal(0, live.TrailCells);
+            string vacia = HudElementLayoutModel.RecruitmentLiveLine(live);
+            Assert.Contains("0 celdas", vacia);
+            Assert.DoesNotContain("banda", vacia, System.StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public void CifrasDelTablero_CabenEnSuCaja_ConElPeorCaso()
+        {
+            // El texto más largo que el modelo puede publicar en un mundo de 256²:
+            // el rastro entero pintado (65 536 celdas, banda 2 048 u) y 33 montones.
+            var view = new GameStreamParser.TickView();
+            for (int p = 0; p < 33; p++)
+                for (int i = 0; i < 3; i++)
+                    view.Items.Add(new GameStreamParser.ItemView(
+                        (uint)(p * 3 + i), p * 30f + i * 2f, 0f, 1f));
+
+            var live = new RecruitmentLiveModel();
+            live.Observe(view, 5f);   // 3 ítems a 2 u = montón; montones a 30 u
+            Assert.Equal(33, live.Piles);
+            Assert.Equal(99, live.Items);
+
+            const int w = 256, h = 256;
+            var cells = new byte[w * h];
+            for (int i = 0; i < cells.Length; i++) cells[i] = (byte)(255 - i % 7);
+            live.ObserveTrail("footprint", w, h, cells);   // la capa de nombre más largo
+            Assert.Equal(65_536, live.TrailCells);
+
+            string text = HudElementLayoutModel.RecruitmentLiveLine(live);
+            float ancho = RenderedWidth(text);
+            Assert.True(ancho <= HudElementLayoutModel.RecruitmentLiveWidth,
+                $"la línea del tablero mide {Px(ancho)} y su caja reserva " +
+                $"{Px(HudElementLayoutModel.RecruitmentLiveWidth)} px: «{text}»");
+            Assert.True(LineHeight(text) <= HudElementLayoutModel.RecruitmentLiveHeight,
+                $"la línea del tablero pide {Px(LineHeight(text))} de alto y la caja " +
+                $"reserva {HudElementLayoutModel.RecruitmentLiveHeight} px");
+        }
+
+        [Fact]
         public void AvanceReservado_EsElDeLaFuenteConElRedondeoDelHinting()
         {
             // ANCLA A LA MEDIDA. El modelo de ancho de estas pruebas vale lo que
