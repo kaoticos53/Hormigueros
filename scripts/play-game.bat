@@ -7,11 +7,13 @@ REM  colonias dimensionan también suelo, cámara y marcadores de nido, así que
 REM  ya no hay que tocar el inspector a mano.
 REM
 REM  USO:
-REM    play-game.bat                                    warm-v2, grid 96, 2 colonias
+REM    play-game.bat                                    pretrain-maze-los3, grid 96, 2 colonias
 REM    play-game.bat --pool pretrain-neat               otro pool
 REM    play-game.bat --grid 256 --ticks 12000           mundo grande
 REM    play-game.bat --species lasius,eciton            invasión
 REM    play-game.bat --speed 60 --frame-every 2          más rápido, menos frames
+REM    play-game.bat --clusters 2 --cluster-size 12:16   montones grandes
+REM    play-game.bat --trail-half-life 60 --trail-follow 0  rastro efímero y ciego
 REM    play-game.bat --dry-run                          muestra lo que aplicaría
 REM
 REM  Este bat NO parsea nada: pasa los argumentos CRUDOS (%*) al .ps1. Motivo:

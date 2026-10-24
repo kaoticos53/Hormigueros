@@ -35,7 +35,9 @@ CLI_PROJECT = ROOT / "src" / "Tools" / "AntSim.Cli"
 POOLS = {
     "frío": None,
     "warm-v2": "artifacts/pretrain-warm-v2.antgenome",
-    "maze": "artifacts/pretrain-maze.antgenome",
+    # El pool por defecto del juego (el que siembran play-game.sh, la escena y
+    # LaunchSettings): entrenado desde la cuenca con línea de visión.
+    "maze": "artifacts/pretrain-maze-los3.antgenome",
 }
 
 

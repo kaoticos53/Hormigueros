@@ -34,8 +34,9 @@
 #            artifacts/pretrain-maze.log             (una línea por generación +
 #                                                     dificultad, descargas y crecimiento)
 #
-# La partida normal usa el pool final por defecto (scripts/play-game.sh): el mundo
-# adopta su ancho de cerebro y la escena arranca ya entrenada.
+# La partida normal usa el pool de la TIRADA CORTA de esta misma receta
+# (GENS=300, el de por defecto): el mundo adopta su ancho de cerebro y la escena
+# arranca ya entrenada.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 

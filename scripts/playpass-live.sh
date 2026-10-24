@@ -222,8 +222,8 @@ GRID=96
 COLONIES=2
 SEED=42
 # F7: el Play pass juega con el pool por defecto del juego — el entrenado con
-# obstáculos — para que lo medido sea lo que el jugador arranca.
-SEED_POOL="artifacts/pretrain-maze.antgenome"
+# obstáculos y línea de visión — para que lo medido sea lo que el jugador arranca.
+SEED_POOL="artifacts/pretrain-maze-los3.antgenome"
 DEADLINE=240
 MAX_STACK=4
 SEEDED_COLONY=0

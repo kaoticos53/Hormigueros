@@ -7,12 +7,19 @@
 # el suelo, la camara y los marcadores de nido.
 #
 # USO:
-#   .\scripts\play-game.ps1                          warm-v2, grid 96, 2 colonias
+#   .\scripts\play-game.ps1                          pool por defecto, grid 96, 2 colonias
 #   .\scripts\play-game.ps1 --pool pretrain-neat     otro pool
 #   .\scripts\play-game.ps1 --grid 256 --ticks 12000 mundo grande
 #   .\scripts\play-game.ps1 --species lasius,eciton  invasion
 #   .\scripts\play-game.ps1 --speed 60                mas rapido
+#   .\scripts\play-game.ps1 --clusters 2 --cluster-size 12:16   montones grandes
+#   .\scripts\play-game.ps1 --trail-half-life 60 --trail-follow 0   rastro efimero y ciego
 #   .\scripts\play-game.ps1 --dry-run                solo muestra lo que aplica
+#
+# PERILLAS DEL RECLUTAMIENTO (F8): --clusters, --cluster-size MIN:MAX,
+# --cluster-radius, --trail-deposit, --trail-half-life y --trail-follow dejan
+# comparar configuraciones sin tocar codigo. Los defaults son los del mundo; un
+# valor distinto viaja al CLI y el mundo lo aplica antes de sembrar la comida.
 #
 # NOTA: este archivo es ASCII puro a proposito. PowerShell 5.1 lee los .ps1
 # como ANSI/Windows-1252 si no llevan BOM, y un guion largo o una tilde
@@ -28,13 +35,21 @@
 # ===========================================================================
 
 param(
-    [string]$Pool = "pretrain-warm-v2",
+    [string]$Pool = "pretrain-maze-los3",
     [int]$Grid = 96,
     [int]$Colonies = 2,
     [int]$Ticks = 216000,
     [string]$Species = "lasius",
     [float]$Speed = 120,
     [int]$FrameEvery = 1,
+    # F8: perillas del reclutamiento (montones de comida y rastro de feromonas).
+    [int]$Clusters = 8,
+    [string]$ClusterSize = "6:10",
+    [float]$ClusterRadius = 18,
+    [float]$TrailDeposit = 1,
+    [float]$TrailHalfLife = 2100,
+    [float]$TrailFollow = 8,
+    [switch]$NoRecruitment,
     [switch]$DryRun,
     # play-game.bat delega el texto CRUDO (%*): cmd parte los argumentos por
     # comas al expandir %1..%9, asi que un valor como "lasius,eciton" llegaba
@@ -53,7 +68,7 @@ function Set-FromFlags {
         $tok = $Flags[$i]
         if (-not $tok.StartsWith("--")) {
             Write-Host "  X argumento no reconocido: $tok" -ForegroundColor Red
-            Write-Host "    Opciones: --pool --grid --colonies --ticks --species --speed --frame-every --dry-run --help"
+            Write-Host "    Opciones: --pool --grid --colonies --ticks --species --speed --frame-every --no-recruitment --dry-run --help"
             exit 2
         }
         $body = $tok.Substring(2)
@@ -67,6 +82,7 @@ function Set-FromFlags {
         $key = $key.ToLowerInvariant()
 
         if ($key -eq 'dry-run') { $script:DryRunFlag = $true; $i++; continue }
+        if ($key -eq 'no-recruitment') { $script:RecruitmentOff = $true; $i++; continue }
         if ($key -eq 'help' -or $key -eq 'h') { $script:HelpFlag = $true; $i++; continue }
 
         if ($null -eq $val) {
@@ -88,9 +104,18 @@ function Set-FromFlags {
             'species'     { if (-not $PSBoundParameters.ContainsKey('Species'))    { $script:Species = $val } }
             'speed'       { if (-not $PSBoundParameters.ContainsKey('Speed'))      { $script:Speed = [float]$val } }
             'frame-every' { if (-not $PSBoundParameters.ContainsKey('FrameEvery')) { $script:FrameEvery = [int]$val } }
+            'clusters'       { if (-not $PSBoundParameters.ContainsKey('Clusters'))       { $script:Clusters = [int]$val } }
+            'cluster-size'   { if (-not $PSBoundParameters.ContainsKey('ClusterSize'))    { $script:ClusterSize = $val } }
+            'cluster-radius' { if (-not $PSBoundParameters.ContainsKey('ClusterRadius'))  { $script:ClusterRadius = [float]$val } }
+            'trail-deposit'  { if (-not $PSBoundParameters.ContainsKey('TrailDeposit'))   { $script:TrailDeposit = [float]$val } }
+            'trail-half-life'{ if (-not $PSBoundParameters.ContainsKey('TrailHalfLife'))  { $script:TrailHalfLife = [float]$val } }
+            'trail-follow'   { if (-not $PSBoundParameters.ContainsKey('TrailFollow'))    { $script:TrailFollow = [float]$val } }
             default {
                 Write-Host "  X opcion desconocida: --$key" -ForegroundColor Red
-                Write-Host "    Opciones: --pool --grid --colonies --ticks --species --speed --frame-every --dry-run --help"
+                Write-Host "    Opciones: --pool --grid --colonies --ticks --species --speed --frame-every"
+                Write-Host "              --clusters N --cluster-size MIN:MAX --cluster-radius U"
+                Write-Host "              --trail-deposit F --trail-half-life S --trail-follow G"
+                Write-Host "              --no-recruitment --dry-run --help"
                 exit 2
             }
         }
@@ -98,19 +123,33 @@ function Set-FromFlags {
 }
 
 $script:HelpFlag = $false
+$script:RecruitmentOff = $false
 Set-FromFlags
 if ($DryRunFlag) { $DryRun = $true }
+if ($NoRecruitment) { $script:RecruitmentOff = $true }
+$Recruitment = -not $script:RecruitmentOff
 
 if ($HelpFlag) {
     Write-Host ""
     Write-Host "  play-game.ps1 [--pool nombre] [--grid 96|256] [--colonies 1|2]"
     Write-Host "                [--ticks N] [--species lasius|atta|eciton] [--speed 10-160]"
-    Write-Host "                [--frame-every N] [--dry-run]"
+    Write-Host "                [--frame-every N] [--no-recruitment] [--dry-run]"
+    Write-Host "                [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U]"
+    Write-Host "                [--trail-deposit F] [--trail-half-life S] [--trail-follow G]"
+    Write-Host ""
+    Write-Host "  Reclutamiento (F8) - default entre parentesis:"
+    Write-Host "    --clusters N          montones de comida que siembra el mundo (8)"
+    Write-Host "    --cluster-size MIN:MAX  items por monton (6:10)"
+    Write-Host "    --cluster-radius U    radio del monton en unidades (18)"
+    Write-Host "    --trail-deposit F     rastro de comida de la cargada, x QMaxFood/s (1)"
+    Write-Host "    --trail-half-life S   vida media del rastro en segundos (2100 = 7x la clasica)"
+    Write-Host "    --trail-follow G      giro que provoca el rastro, rad/s (8; 0 = no lo sigue)"
     Write-Host ""
     Write-Host "  Ejemplos:"
     Write-Host "    .\scripts\play-game.ps1"
     Write-Host "    .\scripts\play-game.ps1 --pool pretrain-neat --grid 256 --ticks 12000"
-    Write-Host "    .\scripts\play-game.ps1 --species lasius,eciton --speed 60"
+    Write-Host "    .\scripts\play-game.ps1 --clusters 2 --cluster-size 12:16 --cluster-radius 30"
+    Write-Host "    .\scripts\play-game.ps1 --trail-half-life 60 --trail-follow 0"
     Write-Host ""
     exit 0
 }
@@ -146,6 +185,21 @@ if ($Colonies -lt 1 -or $Colonies -gt 2)  { Write-Host "  X --colonies fuera de 
 if ($Ticks -lt 30 -or $Ticks -gt 4000000) { Write-Host "  X --ticks fuera de rango [30, 4000000]: $Ticks" -ForegroundColor Red; exit 2 }
 if ($Speed -lt 10 -or $Speed -gt 160)      { Write-Host "  X --speed fuera de rango [10, 160]: $Speed" -ForegroundColor Red; exit 2 }
 if ($FrameEvery -lt 1 -or $FrameEvery -gt 60) { Write-Host "  X --frame-every fuera de rango [1, 60]: $FrameEvery" -ForegroundColor Red; exit 2 }
+
+# F8: montones y rastro. Mismos rangos que RecruitmentTuning (la tabla unica
+# que comparten el CLI, el lanzador de bash y el mundo).
+if ($Clusters -lt 0 -or $Clusters -gt 64) { Write-Host "  X --clusters fuera de rango [0, 64]: $Clusters" -ForegroundColor Red; exit 2 }
+if ($ClusterSize -notmatch '^[0-9]+:[0-9]+$') {
+    Write-Host "  X --cluster-size debe ser MIN:MAX (p. ej. 6:10): '$ClusterSize'" -ForegroundColor Red
+    exit 2
+}
+$sizeMin, $sizeMax = $ClusterSize.Split(':')
+if ([int]$sizeMin -lt 1 -or [int]$sizeMin -gt 40) { Write-Host "  X --cluster-size minimo fuera de rango [1, 40]: $sizeMin" -ForegroundColor Red; exit 2 }
+if ([int]$sizeMax -lt [int]$sizeMin -or [int]$sizeMax -gt 40) { Write-Host "  X --cluster-size maximo fuera de rango [$sizeMin, 40]: $sizeMax" -ForegroundColor Red; exit 2 }
+if ($ClusterRadius -lt 1 -or $ClusterRadius -gt 120) { Write-Host "  X --cluster-radius fuera de rango [1, 120] u: $ClusterRadius" -ForegroundColor Red; exit 2 }
+if ($TrailDeposit -lt 0 -or $TrailDeposit -gt 5) { Write-Host "  X --trail-deposit fuera de rango [0, 5]: $TrailDeposit" -ForegroundColor Red; exit 2 }
+if ($TrailHalfLife -lt 1 -or $TrailHalfLife -gt 3600) { Write-Host "  X --trail-half-life fuera de rango [1, 3600] s: $TrailHalfLife" -ForegroundColor Red; exit 2 }
+if ($TrailFollow -lt 0 -or $TrailFollow -gt 20) { Write-Host "  X --trail-follow fuera de rango [0, 20] rad/s: $TrailFollow" -ForegroundColor Red; exit 2 }
 if (-not $Species -or $Species -notmatch '^[A-Za-z]+(,[A-Za-z]+)*$') {
     Write-Host "  X --species invalida: '$Species' (p. ej. lasius o lasius,eciton)" -ForegroundColor Red
     exit 2
@@ -184,11 +238,18 @@ $lines = @(
     "poolPath=$PoolPath",
     "grid=$Grid",
     "maze=1",
+    "recruitment=$(if ($Recruitment) { 1 } else { 0 })",
     "colonies=$Colonies",
     "ticks=$Ticks",
     "species=$Species",
     "speed=$speedText",
-    "frameEvery=$FrameEvery"
+    "frameEvery=$FrameEvery",
+    "clusters=$Clusters",
+    "clusterSize=$ClusterSize",
+    "clusterRadius=$($ClusterRadius.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
+    "trailDeposit=$($TrailDeposit.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
+    "trailHalfLife=$($TrailHalfLife.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
+    "trailFollow=$($TrailFollow.ToString([System.Globalization.CultureInfo]::InvariantCulture))"
 )
 Set-Content -Path $SettingsFile -Value $lines -Encoding ASCII
 
@@ -258,6 +319,12 @@ Write-Host "  Ticks:        $Ticks"
 Write-Host "  Especie:      $Species"
 Write-Host "  Velocidad:    $($speedText)x"
 Write-Host "  Frame every:  $FrameEvery"
+if ($Recruitment) {
+    Write-Host "  Montones:     $Clusters ($sizeMin-$sizeMax items, radio $ClusterRadius u)"
+    Write-Host "  Rastro:       $TrailDeposit x QMaxFood/s - vida media $TrailHalfLife s - sigue $TrailFollow rad/s"
+} else {
+    Write-Host "  Montones:     (reclutamiento apagado)"
+}
 Write-Host "  Ajustes:      $SettingsFile"
 Write-Host ""
 

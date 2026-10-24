@@ -12,7 +12,13 @@
 #   bash scripts/play-game.sh --pool pretrain-neat
 #   bash scripts/play-game.sh --grid 256 --ticks 12000
 #   bash scripts/play-game.sh --species lasius,eciton --speed 60
+#   bash scripts/play-game.sh --clusters 2 --cluster-size 12:16   montones grandes
+#   bash scripts/play-game.sh --trail-half-life 60 --trail-follow 0  rastro efímero y ciego
 #   bash scripts/play-game.sh --dry-run                      no abre Unity
+#
+# PERILLAS DEL RECLUTAMIENTO (F8): --clusters, --cluster-size MIN:MAX,
+# --cluster-radius, --trail-deposit, --trail-half-life y --trail-follow dejan
+# comparar configuraciones sin tocar código. Los defaults son los del mundo.
 #
 # CONTROLES EN JUEGO:
 #   Click     → inspeccionar hormiga (ver su cerebro NEAT/MLP)
@@ -30,28 +36,48 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT="$ROOT/src/App/AntSim.Unity"
 
-# F7: pool entrenado con obstáculos (se resuelve a artifacts/pretrain-maze.antgenome).
+# F7: pool entrenado con obstáculos y línea de visión (se resuelve a
+# artifacts/pretrain-maze-los3.antgenome).
 # `--pool pretrain-warm-v2` sigue disponible para comparar con la referencia.
-POOL="pretrain-maze"
+POOL="pretrain-maze-los3"
 GRID=96
 COLONIES=2
 TICKS=216000
 SPECIES="lasius"
 SPEED=120
 FRAME_EVERY=1
+RECRUITMENT=1
 DRY_RUN=0
+# F8: perillas del reclutamiento (montones de comida y rastro de feromonas).
+CLUSTERS=8
+CLUSTER_SIZE="6:10"
+CLUSTER_RADIUS=18
+TRAIL_DEPOSIT=1
+TRAIL_HALF_LIFE=2100
+TRAIL_FOLLOW=8
 
 usage() {
   cat <<'EOF'
 
   play-game.sh [--pool nombre] [--grid 96|256] [--colonies 1|2]
                [--ticks N] [--species lasius|atta|eciton] [--speed 10-160]
-               [--frame-every N] [--dry-run]
+               [--frame-every N] [--no-recruitment] [--dry-run]
+               [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U]
+               [--trail-deposit F] [--trail-half-life S] [--trail-follow G]
+
+  Reclutamiento (F8) — default entre paréntesis:
+    --clusters N            montones de comida que siembra el mundo (8)
+    --cluster-size MIN:MAX  ítems por montón (6:10)
+    --cluster-radius U      radio del montón en unidades (18)
+    --trail-deposit F       rastro de comida de la cargada, × QMaxFood/s (1)
+    --trail-half-life S     vida media del rastro en segundos (2100 = 7x la clásica)
+    --trail-follow G        giro que provoca el rastro, rad/s (8; 0 = no lo sigue)
 
   Ejemplos:
     bash scripts/play-game.sh
     bash scripts/play-game.sh --pool pretrain-neat --grid 256 --ticks 12000
-    bash scripts/play-game.sh --species lasius,eciton --speed 30
+    bash scripts/play-game.sh --clusters 2 --cluster-size 12:16 --cluster-radius 30
+    bash scripts/play-game.sh --trail-half-life 60 --trail-follow 0
 
 EOF
 }
@@ -65,6 +91,13 @@ while [[ $# -gt 0 ]]; do
     --species)     SPECIES="${2:-}"; shift 2 ;;
     --speed)       SPEED="${2:-}"; shift 2 ;;
     --frame-every) FRAME_EVERY="${2:-}"; shift 2 ;;
+    --clusters)       CLUSTERS="${2:-}"; shift 2 ;;
+    --cluster-size)   CLUSTER_SIZE="${2:-}"; shift 2 ;;
+    --cluster-radius) CLUSTER_RADIUS="${2:-}"; shift 2 ;;
+    --trail-deposit)  TRAIL_DEPOSIT="${2:-}"; shift 2 ;;
+    --trail-half-life) TRAIL_HALF_LIFE="${2:-}"; shift 2 ;;
+    --trail-follow)   TRAIL_FOLLOW="${2:-}"; shift 2 ;;
+    --no-recruitment) RECRUITMENT=0; shift ;;
     --dry-run)     DRY_RUN=1; shift ;;
     --help|-h)     usage; exit 0 ;;
     *) echo "✗ opción desconocida: $1" >&2; usage; exit 2 ;;
@@ -90,6 +123,18 @@ fail() { echo "✗ $1" >&2; exit 2; }
 awk -v s="$SPEED" 'BEGIN{exit !(s+0>=10 && s+0<=160)}'              || fail "--speed fuera de rango [10, 160]: $SPEED"
 [[ "$SPECIES" =~ ^[A-Za-z]+(,[A-Za-z]+)*$ ]]                         || fail "--species inválida: '$SPECIES' (p. ej. lasius o lasius,eciton)"
 
+# F8: montones y rastro. Mismos rangos que RecruitmentTuning (la tabla única
+# que comparten el CLI, el lanzador de Windows y el mundo).
+[[ "$CLUSTERS" =~ ^[0-9]+$ ]] && (( CLUSTERS >= 0 && CLUSTERS <= 64 )) || fail "--clusters fuera de rango [0, 64]: $CLUSTERS"
+[[ "$CLUSTER_SIZE" =~ ^[0-9]+:[0-9]+$ ]]                             || fail "--cluster-size debe ser MIN:MAX (p. ej. 6:10): '$CLUSTER_SIZE'"
+SIZE_MIN="${CLUSTER_SIZE%%:*}"; SIZE_MAX="${CLUSTER_SIZE##*:}"
+(( SIZE_MIN >= 1 && SIZE_MIN <= 40 ))                               || fail "--cluster-size mínimo fuera de rango [1, 40]: $SIZE_MIN"
+(( SIZE_MAX >= SIZE_MIN && SIZE_MAX <= 40 ))                        || fail "--cluster-size máximo fuera de rango [$SIZE_MIN, 40]: $SIZE_MAX"
+awk -v r="$CLUSTER_RADIUS" 'BEGIN{exit !(r+0>=1 && r+0<=120)}'      || fail "--cluster-radius fuera de rango [1, 120] u: $CLUSTER_RADIUS"
+awk -v d="$TRAIL_DEPOSIT" 'BEGIN{exit !(d+0>=0 && d+0<=5)}'         || fail "--trail-deposit fuera de rango [0, 5]: $TRAIL_DEPOSIT"
+awk -v h="$TRAIL_HALF_LIFE" 'BEGIN{exit !(h+0>=1 && h+0<=3600)}'    || fail "--trail-half-life fuera de rango [1, 3600] s: $TRAIL_HALF_LIFE"
+awk -v g="$TRAIL_FOLLOW" 'BEGIN{exit !(g+0>=0 && g+0<=20)}'         || fail "--trail-follow fuera de rango [0, 20] rad/s: $TRAIL_FOLLOW"
+
 # ── Resolver pool ───────────────────────────────────────────────────────────
 POOL_PATH=""
 if [[ "$POOL" == */* || "$POOL" == *"\\"* || "$POOL" == *.antgenome ]]; then
@@ -109,10 +154,15 @@ fi
 # ── Archivo de configuración que Unity leerá al arrancar ────────────────────
 SETTINGS_DIR="${TEMP:-${TMPDIR:-/tmp}}"
 SETTINGS_FILE="$SETTINGS_DIR/antsim-launch.txt"
+# La ruta del pool viaja al Editor, no a bash: en MSYS `$ROOT` es `/e/...` y
+# `File.Exists` de Unity no resuelve esa forma (el lanzador avisaba «el pool
+# indicado no existe» y la escena arrancaba SIN semilla). Se convierte a la ruta
+# de Windows; en Linux/macOS `cygpath` no existe y queda tal cual.
+POOL_PATH_WIN="$(cygpath -w "$POOL_PATH" 2>/dev/null || printf '%s' "$POOL_PATH")"
 {
     echo "# Generado por scripts/play-game.sh; lo aplica SceneBootstrapper.PlayFromLaunchSettings"
     echo "pool=$POOL"
-    echo "poolPath=$POOL_PATH"
+    echo "poolPath=$POOL_PATH_WIN"
     echo "grid=$GRID"
     echo "colonies=$COLONIES"
     echo "ticks=$TICKS"
@@ -120,6 +170,13 @@ SETTINGS_FILE="$SETTINGS_DIR/antsim-launch.txt"
     echo "speed=$SPEED"
     echo "frameEvery=$FRAME_EVERY"
     echo "maze=1"
+    echo "recruitment=$RECRUITMENT"
+    echo "clusters=$CLUSTERS"
+    echo "clusterSize=$CLUSTER_SIZE"
+    echo "clusterRadius=$CLUSTER_RADIUS"
+    echo "trailDeposit=$TRAIL_DEPOSIT"
+    echo "trailHalfLife=$TRAIL_HALF_LIFE"
+    echo "trailFollow=$TRAIL_FOLLOW"
 } > "$SETTINGS_FILE"
 
 # ── Buscar Unity ────────────────────────────────────────────────────────────
@@ -178,6 +235,11 @@ echo "Ticks:        $TICKS"
 echo "Especie:      $SPECIES"
 echo "Velocidad:    ${SPEED}x"
 echo "Frame every:  $FRAME_EVERY"
+echo "Reclutamiento: $([[ "$RECRUITMENT" == "1" ]] && echo sí || echo no) (cúmulos + rastro de comida)"
+if [[ "$RECRUITMENT" == "1" ]]; then
+    echo "Montones:     $CLUSTERS ($SIZE_MIN-$SIZE_MAX ítems, radio $CLUSTER_RADIUS u)"
+    echo "Rastro:       ${TRAIL_DEPOSIT}x QMaxFood/s · vida media ${TRAIL_HALF_LIFE} s · sigue ${TRAIL_FOLLOW} rad/s"
+fi
 echo "Ajustes:      $SETTINGS_FILE"
 echo ""
 
