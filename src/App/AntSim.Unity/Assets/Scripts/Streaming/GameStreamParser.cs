@@ -324,6 +324,11 @@ namespace AntSim.Unity.Scripts.Streaming
         public string? FinalHash { get; private set; }
         public ulong FinalTick { get; private set; }
 
+        /// <summary>F8: la línea `end` dice `extinct:true` cuando la partida se
+        /// cortó por extinción (no por agotar el horizonte). Es la señal con la que
+        /// el juego distingue «se murieron todas» de «se acabó el tiempo».</summary>
+        public bool Extinct { get; private set; }
+
         /// <summary>
         /// Parsea una línea del stream. Devuelve el TickView de los ticks completos;
         /// la cabecera y la línea end actualizan estado interno y devuelven null.
@@ -357,6 +362,7 @@ namespace AntSim.Unity.Scripts.Streaming
                 var p = new Reader(raw);
                 FinalTick = (ulong)p.Num("tick");
                 FinalHash = p.Str("hash");
+                Extinct = raw.Contains("\"extinct\":true");
                 return null;
             }
 

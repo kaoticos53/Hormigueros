@@ -68,6 +68,13 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Panel del modal de importación (contiene el texto y los botones).")]
         public GameObject? ImportModal;
 
+        [Header("F8: cifras de reclutamiento (montones y rastro)")]
+        [Tooltip("Línea con los montones y el rastro con los que se siembra el mundo. La crea el bootstrapper; el modelo puro compone el texto.")]
+        public UnityEngine.UI.Text? RecruitmentText;
+
+        [Tooltip("Línea con lo que HAY en el tablero: montones vivos, ítems, celdas de rastro pintadas y su banda.")]
+        public UnityEngine.UI.Text? RecruitmentLiveText;
+
         [Header("Control de velocidad (30% a 1000%)")]
         [Tooltip("Slider uGUI de velocidad (rango 0.3 a 10.0).")]
         public UnityEngine.UI.Slider? SpeedSlider;
@@ -80,9 +87,14 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private readonly Streaming.ColonyCardModel _cards = new();
         private readonly Streaming.CommandHistoryModel _history = new();
+        private readonly Streaming.RecruitmentLiveModel _recruitmentLive = new();
         private Streaming.HudToastsModel? _toasts;
+        private Presenter.PheromoneTileBehaviour? _phero;
         private ulong _lastTick;
         private float _lastSpeed = 1f;
+
+        /// <summary>Modelo puro de las cifras del tablero (tests e inspección).</summary>
+        public Streaming.RecruitmentLiveModel RecruitmentLive => _recruitmentLive;
 
         /// <summary>Modelo puro de tarjetas (tests y HUDs alternativos).</summary>
         public Streaming.ColonyCardModel Cards => _cards;
@@ -141,6 +153,7 @@ namespace AntSim.Unity.Scripts.Presenter
             // existe solo en su tick). Los toasts envejecen con sim, no con frame.
             var toasts = Toasts;
             var sparklines = Sparklines;
+            Streaming.GameStreamParser.TickView? lastView = null;
             while (p.TryDequeuePresented(out var view) && view != null)
             {
                 _cards.Observe(view);
@@ -154,12 +167,19 @@ namespace AntSim.Unity.Scripts.Presenter
                     for (int i = 0; i < sparklines.Length; i++)
                         if (sparklines[i] != null) sparklines[i]!.Observe(view);
                 _lastTick = view.Tick;
+                lastView = view;
             }
+            // Las cifras del tablero se cuentan UNA vez por frame con el último
+            // tick presentado: a 120× hay decenas de ticks por frame y el HUD no
+            // necesita (ni puede permitirse) agrupar montones en cada uno.
+            _recruitmentLive.Observe(lastView, presenter.ActiveRecruitment.ClusterRadius);
             toasts.Tick(Time.deltaTime * Mathf.Max(presenter.Speed, 0f));
             _lastSpeed = presenter.Speed;
 
             RenderCards();
             RenderStatus();
+            RenderRecruitment();
+            RenderRecruitmentLive();
             RenderSpeedControls();
             RenderToasts();
             RenderStockBars();
@@ -180,6 +200,52 @@ namespace AntSim.Unity.Scripts.Presenter
             // F6: sin contador de generación de sesión. La generación que importa
             // es la de NACIMIENTOS (LearningPanel, births/64), que vive sola.
             if (StatusText.text != line) StatusText.text = line;
+        }
+
+        /// <summary>
+        /// F8 — montones y rastro tal como se van a simular. El texto lo compone el
+        /// modelo puro (<see cref="Streaming.HudElementLayoutModel.RecruitmentLine"/>)
+        /// con las MISMAS perillas que el presenter manda al CLI: el HUD no puede
+        /// anunciar una configuración y el mundo correr otra.
+        /// </summary>
+        private void RenderRecruitment()
+        {
+            var text = RecruitmentText;
+            var presenter = Presenter;
+            if (text == null || presenter == null) return;
+            string line = Streaming.HudElementLayoutModel.RecruitmentLine(
+                presenter.ActiveRecruitment, presenter.Recruitment);
+            if (text.text != line) text.text = line;
+        }
+
+        /// <summary>
+        /// F8 — lo que HAY en el tablero, frente a lo que se pidió al mundo. Los
+        /// montones y los ítems salen del tick presentado; el rastro, de la capa
+        /// que el render está pintando (la curva de `PheromoneRamp` decide qué
+        /// celda se ve). Así la cifra del HUD y los píxeles no pueden discrepar:
+        /// si dice «75 celdas» y el tablero está limpio, el fallo es del render.
+        /// </summary>
+        private void RenderRecruitmentLive()
+        {
+            var text = RecruitmentLiveText;
+            var presenter = Presenter;
+            if (text == null || presenter == null) return;
+
+            // El quad de feromonas se busca en la escena (como las gráficas): en
+            // una `Game.unity` anterior al campo la referencia no existe.
+            if (_phero == null) _phero = FindAnyObjectByType<Presenter.PheromoneTileBehaviour>();
+            if (_phero != null)
+            {
+                var model = _phero.Model;
+                _recruitmentLive.ObserveTrail(
+                    Streaming.PheromoneSelectorModel.NameOf(_phero.Selector.Kind),
+                    model.Width, model.Height, model.Cells);
+            }
+
+            string line = presenter.Recruitment
+                ? Streaming.HudElementLayoutModel.RecruitmentLiveLine(_recruitmentLive)
+                : "";
+            if (text.text != line) text.text = line;
         }
 
         /// <summary>F5.1: el modal de importación se enseña/oculta por la REGLA del

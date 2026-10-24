@@ -68,6 +68,9 @@ namespace AntSim.Unity.Scripts.Streaming
         public GameStreamParser.HeaderView? Header => _parser.Header;
         public string? FinalHash => _parser.FinalHash;
         public ulong FinalTick => _parser.FinalTick;
+        /// <summary>F8: la línea `end` dijo `extinct:true` (la ronda se cerró por
+        /// extinción, no por agotar el horizonte).</summary>
+        public bool Extinct => _parser.Extinct;
 
         /// <summary>Último TickView completo recibido (F4.2): el repartidor del
         /// HUD (tarjetas, toasts, inspector) lo consume una vez por tick.</summary>

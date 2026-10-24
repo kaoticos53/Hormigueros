@@ -130,11 +130,27 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.FrameEvery = settings.FrameEvery;
             presenter.Species = settings.Species;
             presenter.Maze = settings.Maze;             // F6: terreno con obstáculos
+            presenter.Recruitment = settings.Recruitment; // F8: cúmulos + reflejos de rastro
+            // F8: las perillas de montones y rastro, tal como las pidió el lanzador
+            // (`--clusters`, `--cluster-size`, `--trail-…`). El presenter las manda
+            // al CLI y el mundo las aplica ANTES de sembrar.
+            presenter.ClusterCount = settings.ClusterCount;
+            presenter.ClusterMin = settings.ClusterMin;
+            presenter.ClusterMax = settings.ClusterMax;
+            presenter.ClusterRadius = settings.ClusterRadius;
+            presenter.TrailDeposit = settings.TrailDeposit;
+            presenter.TrailHalfLife = settings.TrailHalfLife;
+            presenter.TrailFollow = settings.TrailFollow;
             presenter.ExportElite = true;              // la élite se guarda al acabar
-            // PoolPath (ruta absoluta del lanzador) manda; si no, el nombre se
-            // resuelve como el default histórico: artifacts/<nombre>.antgenome.
+            // PoolPath (la ruta YA resuelta del lanzador) manda; si no, el nombre
+            // se resuelve como el default histórico: artifacts/<nombre>.antgenome.
+            // `play-game` pasa la ruta ABSOLUTA resuelta, y grabarla tal cual en la
+            // escena la ataba a esta máquina: Game.unity versionado decía
+            // «E:\…\artifacts\pretrain-maze-los3.antgenome» y el contrato del pool
+            // por defecto (DefaultPoolContractTests) saltaba. Si la ruta cae dentro
+            // del repo se guarda RELATIVA, que es lo que viaja en el commit.
             presenter.SeedPoolPath = !string.IsNullOrEmpty(settings.PoolPath)
-                ? settings.PoolPath
+                ? RepoRelativePool(settings.PoolPath)
                 : (!string.IsNullOrEmpty(settings.Pool) ? PoolToRepoRelative(settings.Pool) : null);
             presenter.Speed = settings.Speed;
             // Mallas a ESCALA NATURAL (cápsula 2 u × 1 u, esfera 1 u de diámetro):
@@ -234,6 +250,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             // (home de la colonia 0), así que el aspecto no cambia al abrir la
             // escena; F y G recorren las demás. Con el canal múltiple
             // (--phero-layers) el HUD puede enseñar cualquier colonia y tipo.
+            // F8: la capa inicial la decide el propio render en Play (food si la
+            // partida lleva reclutamiento); el selector no se serializa, así que
+            // fijarlo aquí no llegaría a la escena.
 
             // — Canvas del HUD —
             var canvasGo = new GameObject("HUD Canvas");
@@ -351,6 +370,44 @@ namespace AntSim.Unity.Scripts.EditorTools
             // los motivos del aspecto pobre del HUD).
             hints.text = Streaming.HudElementLayoutModel.HintsText;
 
+            // — F8: cifras de reclutamiento (encima de las pistas) —
+            // Quien compara dos configuraciones lanzadas seguidas tiene que leer en
+            // el juego lo mismo que se escribió en el lanzador: la línea sale del
+            // mismo modelo que usa el HUD al refrescar y de las perillas del
+            // presenter ya aplicadas arriba (`montones=… · rastro=…`).
+            var recruitment = NewText(canvasGo.transform, "RecruitmentLine",
+                new Vector2(0, 50),
+                new Vector2(Streaming.HudElementLayoutModel.RecruitmentWidth,
+                            Streaming.HudElementLayoutModel.RecruitmentHeight),
+                TextAnchor.LowerCenter, 14);
+            // Tinta de CUERPO, no la atenuada de las pistas: esta línea es el dato
+            // que se viene a comparar entre dos lanzamientos, y en el Play pass de
+            // la primera versión (InkDim) las cifras se leían con esfuerzo.
+            recruitment.color = Ink;
+            recruitment.rectTransform.anchorMin = new Vector2(0.5f, 0f);
+            recruitment.rectTransform.anchorMax = new Vector2(0.5f, 0f);
+            recruitment.rectTransform.pivot = new Vector2(0.5f, 0f);
+            recruitment.rectTransform.anchoredPosition = new Vector2(0f, 50f);
+            recruitment.text = Streaming.HudElementLayoutModel.RecruitmentLine(
+                presenter.ActiveRecruitment, presenter.Recruitment);
+
+            // — F8: cifras DEL TABLERO (montones vivos, ítems, rastro pintado) —
+            // Segunda línea, misma columna centrada: arriba lo que se PIDIÓ al
+            // mundo, debajo lo que HAY. Nace vacía (el modelo puro no publica
+            // ceros antes del primer tick, que se leerían como «no hay montones»)
+            // y el HUD la rellena con el tick presentado.
+            var recruitmentLive = NewText(canvasGo.transform, "RecruitmentLiveLine",
+                new Vector2(0, 82),
+                new Vector2(Streaming.HudElementLayoutModel.RecruitmentLiveWidth,
+                            Streaming.HudElementLayoutModel.RecruitmentLiveHeight),
+                TextAnchor.LowerCenter, 14);
+            recruitmentLive.color = Ink;
+            recruitmentLive.rectTransform.anchorMin = new Vector2(0.5f, 0f);
+            recruitmentLive.rectTransform.anchorMax = new Vector2(0.5f, 0f);
+            recruitmentLive.rectTransform.pivot = new Vector2(0.5f, 0f);
+            recruitmentLive.rectTransform.anchoredPosition = new Vector2(0f, 82f);
+            recruitmentLive.text = "";
+
             // — HUD layout: reparte el stream a todo —
             var hudGo = new GameObject("HudLayout");
             var hud = hudGo.AddComponent<Presenter.HudLayoutBehaviour>();
@@ -361,6 +418,8 @@ namespace AntSim.Unity.Scripts.EditorTools
             hud.HistoryText = history;
             hud.StatusText = status;
             hud.HintsText = hints;
+            hud.RecruitmentText = recruitment;
+            hud.RecruitmentLiveText = recruitmentLive;
 
             // — Click de selección (§5): raycast pantalla→mundo → PickNearest —
             var pickGo = new GameObject("AntPickClickHandler");
@@ -431,9 +490,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             capRt.offsetMax = new Vector2(-20f, -62f);
             pathCaption.text = "ruta del archivo .antgenome (relativa al repo o absoluta)";
 
+            // El campo arranca con el pool que la escena está usando: regenerar
+            // la escena no puede dejar el diálogo apuntando a otro pool.
             var pathField = CreateInputField(modalRt, "PathField",
                 new Vector2(26f, -128f), new Vector2(-20f, -90f),
-                "artifacts/pretrain-warm-v2.antgenome");
+                !string.IsNullOrEmpty(presenter.SeedPoolPath)
+                    ? presenter.SeedPoolPath
+                    : PoolToRepoRelative(Streaming.LaunchSettings.Defaults().Pool));
 
             var importText = PanelText(modalRt, "ImportDialog", 14, Ink, TextAnchor.UpperLeft);
             var bodyRt = importText.rectTransform;
@@ -620,6 +683,24 @@ namespace AntSim.Unity.Scripts.EditorTools
 
             string project = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, ".."));
             return System.IO.Path.Combine(project, "Library", "antsim-launch.txt");
+        }
+
+        /// <summary>
+        /// Ruta de pool tal como debe quedar en la ESCENA VERSIONADA: relativa al
+        /// repo (`artifacts/…`) cuando cae dentro de él, absoluta solo si el pool
+        /// vive fuera (ahí no hay nada mejor que hacer: es la ruta del jugador).
+        /// El presenter la resuelve contra la raíz en tiempo de ejecución, así que
+        /// la relativa funciona igual y la escena deja de depender de la máquina.
+        /// </summary>
+        private static string RepoRelativePool(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return path;
+            string norm = path.Replace('\\', '/');
+            string? repoRoot = Streaming.RepoPathResolver.RepoRootFromDataPath(Application.dataPath);
+            if (string.IsNullOrEmpty(repoRoot)) return path;
+            string prefix = repoRoot!.Replace('\\', '/').TrimEnd('/') + "/";
+            if (!norm.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase)) return path;
+            return norm.Substring(prefix.Length);
         }
 
         /// <summary>

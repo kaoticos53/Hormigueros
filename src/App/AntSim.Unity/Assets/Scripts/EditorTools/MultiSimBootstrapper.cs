@@ -364,6 +364,9 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.Seed = seed;
             presenter.SeedPoolPath = pool;
             presenter.ReplayFile = replayFile; // smoke: reproducir archivo, no CLI
+            // F8: el medidor mide el mundo CLÁSICO — el reclutamiento (cúmulos +
+            // rastro de comida) es conducta de PARTIDA y cambiaría lo que se mide.
+            presenter.Recruitment = false;
             presenter.PheroEvery = 30;
             presenter.RenderLayer = layer;
             // Mismas siluetas PROPIAS que la escena simple, con nombre por vista

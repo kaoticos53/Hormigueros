@@ -36,8 +36,33 @@ namespace AntSim.Unity.Scripts.Presenter
         [Header("Terreno (F6)")]
         [Tooltip("Laberinto con obstáculos: la CLI lo genera desde la semilla y la cabecera del stream trae los rectángulos que se pintan aquí. Sin él, el tablero es el plano clásico.")]
         public bool Maze = false;
+
+        [Header("Reclutamiento por rastro (F8)")]
+        [Tooltip("Siembra CÚMULOS de comida (6–10 ítems apilados, además de lo que pida el mundo) y da a las hormigas dos reflejos innatos: la que vuelve cargada deja rastro de comida hacia el montón y de casa hacia el nido, y la que busca gira hacia el lado con más rastro de comida. Es lo que hace visible y útil el canal E; con esto apagado el mundo es el clásico.")]
+        public bool Recruitment = true;
         [Tooltip("Al terminar el horizonte, guarda la élite evolucionada en artifacts/evolved-<semilla>.antgenome (la evolución es por nacimientos; no hay botón de generación).")]
         public bool ExportElite = false;
+
+        // — F8: PERILLAS del reclutamiento (las rellena el lanzador) —
+        // Centinela -1 = «default del mundo». Tiene que ser NEGATIVO y no 0: una
+        // escena guardada antes de F8 no trae estos campos y Unity los deserializa
+        // a 0, que en --clusters es un valor VÁLIDO (0 montones, control A/B). Con
+        // 0 como centinela el tablero nacería sin montones sin avisar.
+        [Header("Montones y rastro (F8)")]
+        [Tooltip("Montones de comida sembrados además de los ítems sueltos. -1 = default del mundo (8); 0 = ninguno (control A/B).")]
+        public int ClusterCount = -1;
+        [Tooltip("Ítems por montón, mínimo. -1 = default del mundo (6).")]
+        public int ClusterMin = -1;
+        [Tooltip("Ítems por montón, máximo. -1 = default del mundo (10).")]
+        public int ClusterMax = -1;
+        [Tooltip("Radio del montón en unidades de mundo. -1 = default del mundo (18).")]
+        public float ClusterRadius = -1f;
+        [Tooltip("Rastro de comida que deja la hormiga cargada (fracción de QMaxFood por segundo). -1 = default (1).")]
+        public float TrailDeposit = -1f;
+        [Tooltip("Vida media del rastro de comida, en segundos. -1 = default (2100).")]
+        public float TrailHalfLife = -1f;
+        [Tooltip("Ganancia del reflejo que sigue el rastro (rad/s a plena asimetría). -1 = default (8).")]
+        public float TrailFollow = -1f;
 
         [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
         [Tooltip("Canal E (F4.5): feromonas de la colonia 0 cada N ticks. 0 = desactivado.")]
@@ -67,6 +92,14 @@ namespace AntSim.Unity.Scripts.Presenter
         /// recarga la escena y un campo de instancia se perdería al recargarla.</summary>
         private static string? _seedPoolForNextScene;
 
+        /// <summary>F8 — semilla de la ronda que debe arrancar la PRÓXIMA escena.
+        /// 0 = no hay ronda armada (se usa el campo <see cref="Seed"/>).</summary>
+        private static ulong _seedForNextScene;
+
+        /// <summary>F8 — número de ronda (0 = primera). Viaja en estático por el
+        /// mismo motivo que el pool: la ronda nueva recarga la escena.</summary>
+        private static int _roundForNextScene;
+
         /// <summary>Arma los args que consumirá la próxima escena (reinicio/import).</summary>
         public static void ArmPendingArgsForNextScene(string[] args)
             => _pendingArgsForNextScene = args ?? System.Array.Empty<string>();
@@ -74,6 +107,29 @@ namespace AntSim.Unity.Scripts.Presenter
         /// <summary>Arma el pool que sembrará la próxima escena (import F4.3).</summary>
         public static void ArmSeedPoolForNextScene(string poolPath)
             => _seedPoolForNextScene = poolPath;
+
+        /// <summary>F8: arma la semilla (y con ella el laberinto) de la próxima ronda.</summary>
+        public static void ArmSeedForNextScene(ulong seed)
+            => _seedForNextScene = seed == 0UL ? 1UL : seed;
+
+        /// <summary>F8: arma el número de ronda de la próxima escena.</summary>
+        public static void ArmRoundForNextScene(int round) => _roundForNextScene = round;
+
+        /// <summary>
+        /// Los estáticos de arriba sobreviven a la recarga de escena (es lo que
+        /// buscan), pero NO deben sobrevivir a un Play nuevo: al volver a pulsar
+        /// Play se espera la ronda 1 con la semilla de la escena, no la ronda 7 de
+        /// la sesión anterior. SubsystemRegistration corre una vez por sesión de
+        /// juego, antes del primer Start.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ClearRoundArming()
+        {
+            _pendingArgsForNextScene = System.Array.Empty<string>();
+            _seedPoolForNextScene = null;
+            _seedForNextScene = 0UL;
+            _roundForNextScene = 0;
+        }
         [Header("Replay (debug sin CLI): prioridad sobre StreamGame si no está vacío")]
         [Tooltip("Ruta de un stream volcado a archivo (p. ej. artifacts/stream-fixture-256.jsonl). Vacío = lanza el CLI.")]
         public string? ReplayFile;
@@ -198,6 +254,29 @@ namespace AntSim.Unity.Scripts.Presenter
         private volatile bool _streaming;
         private Streaming.RenderState? _lastState; // último estado muestreado (p. ej. para el inspector)
 
+        // Arranque DIFERIDO del hilo del stream (ver StartPump): Start deja aquí
+        // lo resuelto y el primer Update crea el proceso/hilo.
+        private bool _pumpPending;
+        private string? _repoRoot;
+        private string _seedPoolResolved = "";
+        private string? _exportPath;
+
+        // — F8: ronda encadenada ————————————————————————————————
+        // Cuando la ronda se cierra (extinción o horizonte) se recarga la escena
+        // con la semilla y el pool de la ronda siguiente; los estáticos de arriba
+        // son el único estado que sobrevive a esa recarga.
+        private int _round;             // 0 = primera ronda de la sesión
+        private bool _roundBegun;       // el hilo del stream se lanzó al menos una vez
+        private bool _roundArmed;       // la ronda terminó y espera su recarga
+        private float _roundStartedAt;
+        private float _roundRestartAt;
+        /// <summary>Margen mínimo desde el arranque para dar la ronda por terminada:
+        /// un CLI que no existe deja el hilo en false sin haber emitido nada, y sin
+        /// este margen se encadenarían rondas vacías en bucle.</summary>
+        private const float RoundMinSeconds = 2f;
+        /// <summary>Lo que se ve la colonia ya vacía antes de recargar la escena.</summary>
+        private const float RoundPauseSeconds = 2.5f;
+
         /// <summary>Indica si el worker en segundo plano está transmitiendo datos.</summary>
         public bool IsStreaming => _streaming;
 
@@ -317,6 +396,17 @@ namespace AntSim.Unity.Scripts.Presenter
             // lo deseable.
             Application.runInBackground = true;
 
+            // F8: si la escena se recarga para abrir otra ronda, la semilla y el
+            // número vienen armados por el presentador anterior (el pool se recoge
+            // más abajo, con las rutas resueltas).
+            if (_seedForNextScene != 0UL)
+            {
+                Seed = _seedForNextScene;
+                _seedForNextScene = 0UL;
+            }
+            _round = _roundForNextScene;
+            _roundStartedAt = Time.time;
+
             // Un reinicio de escena (reiniciar-con-plan / importar pool) deja aquí
             // el plan armado: se recoge y se limpia para que no se aplique dos veces.
             if (_pendingArgsForNextScene.Length > 0)
@@ -351,18 +441,69 @@ namespace AntSim.Unity.Scripts.Presenter
             // produce más rápido de lo que se consume. Sin tope, la cola acumula
             // ticks durante una hora. 600 ticks = 20 s de simulación de colchón.
             _presenter.MaxPending = 600;
-            _streaming = true;
 
-            // La élite se guarda al terminar el horizonte (evolución por
-            // nacimientos: no hay reinicio de generación que la conserve).
-            string? exportPath = null;
+            // Los valores que necesita el hilo del stream se guardan aquí: el
+            // hilo no arranca en Start (ver `_pumpPending`).
+            _repoRoot = repoRoot;
+            _seedPoolResolved = seedPool;
+            _pumpPending = true;
+
+            // La élite se guarda al terminar la ronda (evolución por nacimientos:
+            // no hay reinicio de generación que la conserve). El nombre lleva la
+            // semilla de ESTA ronda: es la que siembra la siguiente, y no se pisa
+            // con la de la anterior.
+            _exportPath = null;
             if (ExportElite && string.IsNullOrEmpty(ReplayFile))
             {
-                exportPath = repoRoot != null
+                _exportPath = repoRoot != null
                     ? System.IO.Path.Combine(repoRoot, "artifacts", $"evolved-{Seed}.antgenome")
                     : null;
             }
 
+            Debug.Log($"[AntSim] Ronda {_round + 1} · semilla {Seed} · grid {Grid}" +
+                      (_round > 0 ? " (encadenada: laberinto nuevo)" : ""));
+        }
+
+        /// <summary>
+        /// F8 — las perillas de montones y rastro que ESTA partida manda al CLI,
+        /// con los defaults del mundo en los campos sin rellenar. El HUD las
+        /// publica para que se vean las cifras con las que se siembra.
+        /// </summary>
+        public Streaming.RecruitmentKnobs ActiveRecruitment => RecruitmentKnobsOrDefault();
+
+        /// <summary>
+        /// F8 — lo que viaja al CLI como cúmulos/rastro. El lanzador rellena los
+        /// campos; con el centinela -1 se queda el default del mundo, así que una
+        /// escena vieja (o un Play directo desde el inspector) sigue jugando la
+        /// partida de siempre y no un mundo a medio configurar.
+        /// </summary>
+        private Streaming.RecruitmentKnobs RecruitmentKnobsOrDefault()
+        {
+            var tuning = Streaming.RecruitmentKnobs.Default;
+            if (ClusterCount >= 0) tuning.Clusters = ClusterCount;
+            if (ClusterMin >= 0) tuning.ClusterMin = ClusterMin;
+            if (ClusterMax >= 0) tuning.ClusterMax = ClusterMax;
+            if (ClusterRadius >= 0f) tuning.ClusterRadius = ClusterRadius;
+            if (TrailDeposit >= 0f) tuning.TrailDeposit = TrailDeposit;
+            if (TrailHalfLife >= 0f) tuning.TrailHalfLife = TrailHalfLife;
+            if (TrailFollow >= 0f) tuning.TrailFollow = TrailFollow;
+            return tuning;
+        }
+
+        /// <summary>
+        /// Arranca el hilo que bombea el stream (CLI o replay). Lo llama el PRIMER
+        /// <see cref="Update"/>, no <see cref="Start"/>: crear el proceso del CLI
+        /// (<c>Process.Start</c>) dentro de la carga con la que el editor entra en
+        /// Play deja el hilo principal del editor bloqueado — sin un solo Update,
+        /// ventana "no responde" y el CLI escribiendo a una tubería que nadie lee.
+        /// Medido con la partida del laberinto (seed 42, grid 96, 216k ticks): en
+        /// Start se cuelga siempre; diferido un frame, la partida corre. No cambia
+        /// la partida: el replay ya presenta con un tick de retardo.
+        /// </summary>
+        private void StartPump()
+        {
+            _streaming = true;
+            _roundBegun = true;
             // Hilo DEDICADO (no del pool): una partida de 2 h bloquea este hilo
             // esperando la contrapresión; ocupar un hilo del pool una hora no es
             // aceptable.
@@ -372,17 +513,23 @@ namespace AntSim.Unity.Scripts.Presenter
                 {
                     if (!string.IsNullOrEmpty(ReplayFile))
                     {
-                        string replay = repoRoot != null
-                            ? Streaming.RepoPathResolver.Resolve(ReplayFile, baseDir: null, repoRoot)
+                        string replay = _repoRoot != null
+                            ? Streaming.RepoPathResolver.Resolve(ReplayFile, baseDir: null, _repoRoot)
                             : ReplayFile;
                         _source.StreamFile(replay, line => _presenter.Feed(line));
                     }
                     else
                         _source.StreamGame(Seed, Ticks, Grid, Colonies, FrameEvery,
-                            seedPool.Length > 0 ? seedPool : null,
+                            _seedPoolResolved.Length > 0 ? _seedPoolResolved : null,
                             line => _presenter.Feed(line), PendingDropArgs,
                             PheroEvery, ActivEvery, InspectId, Species,
-                            maze: Maze, exportPath: exportPath);
+                            maze: Maze, exportPath: _exportPath,
+                            recruitment: Recruitment,
+                            recruitmentKnobs: RecruitmentKnobsOrDefault(),
+                            // F8: la ronda acaba cuando se mueren todas — no al
+                            // agotar el horizonte de 2 h. El CLI exporta la élite en
+                            // ese tick y es lo que siembra la ronda siguiente.
+                            untilExtinct: true);
                 }
                 catch (Exception ex)
                 {
@@ -420,6 +567,11 @@ namespace AntSim.Unity.Scripts.Presenter
 
         private void Update()
         {
+            if (_pumpPending)
+            {
+                _pumpPending = false;
+                StartPump();
+            }
             // Atajos de teclado: + / = aumentan velocidad, - / _ reducen velocidad, Espacio pausa/reanuda
             if (Input.GetKeyDown(IncreaseSpeedKey) || Input.GetKeyDown(IncreaseSpeedKey2))
             {
@@ -446,6 +598,66 @@ namespace AntSim.Unity.Scripts.Presenter
             var state = _presenter.Sample(Frac());
             _lastState = state;
             Draw(state);
+
+            MaybeAdvanceRound();
+        }
+
+        /// <summary>
+        /// F8 — cierra la ronda cuando el stream termina y abre la siguiente.
+        ///
+        /// El final de ronda NO se decide aquí mirando la extinción: el CLI ya
+        /// corta en ese tick (`--until-extinct`) y exporta la élite, así que basta
+        /// con esperar a que el hilo del stream acabe. Se exige que la ronda haya
+        /// empezado y que haya llegado la cabecera —un CLI ausente también deja el
+        /// hilo en false— y un margen mínimo, para no encadenar rondas en bucle si
+        /// el arranque falla. Un replay es UNA corrida: no encadena.
+        /// </summary>
+        private void MaybeAdvanceRound()
+        {
+            if (!string.IsNullOrEmpty(ReplayFile)) return;
+
+            if (!_roundArmed)
+            {
+                if (!_roundBegun || _streaming || _presenter.Header == null) return;
+                if (Time.time - _roundStartedAt < RoundMinSeconds) return;
+
+                _roundArmed = true;
+                _roundRestartAt = Time.time + RoundPauseSeconds;
+                Debug.Log($"[AntSim] Ronda {_round + 1} terminada en el tick {_presenter.FinalTick}" +
+                          (_presenter.Extinct ? " (extinción)" : " (horizonte)") +
+                          $" · nueva ronda en {RoundPauseSeconds:0.#} s");
+                return;
+            }
+
+            if (Time.time >= _roundRestartAt) StartNextRound();
+        }
+
+        /// <summary>
+        /// F8 — abre la ronda siguiente: semilla derivada de la anterior (el mundo y
+        /// su laberinto salen de ella) y cerebros de la élite que acaba de exportar
+        /// la ronda muerta. La escena se recarga —el mecanismo que ya usa el
+        /// reinicio con plan— porque así el HUD, las gráficas y el mundo arrancan
+        /// limpios; el estado viaja en los estáticos armados.
+        /// </summary>
+        private void StartNextRound()
+        {
+            int next = _round + 1;
+            ulong nextSeed = Streaming.RoundModel.NextSeed(Seed, next);
+            string elite = _exportPath != null && System.IO.File.Exists(_exportPath) ? _exportPath : "";
+            string pool = Streaming.RoundModel.NextSeedPool(elite, _seedPoolResolved);
+
+            ArmSeedForNextScene(nextSeed);
+            ArmSeedPoolForNextScene(pool);
+            ArmRoundForNextScene(next);
+            ArmPendingArgsForNextScene(System.Array.Empty<string>());
+
+            Debug.Log($"[AntSim] Ronda {next + 1}: semilla {nextSeed} (laberinto nuevo) · " +
+                      (elite.Length > 0
+                          ? $"cerebros de la élite evolucionada ({System.IO.Path.GetFileName(elite)})"
+                          : $"mismo pool ({System.IO.Path.GetFileName(pool)}): no hubo élite exportada"));
+
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
 
         /// <summary>

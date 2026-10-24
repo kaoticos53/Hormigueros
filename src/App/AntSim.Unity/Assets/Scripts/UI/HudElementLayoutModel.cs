@@ -45,6 +45,65 @@ namespace AntSim.Unity.Scripts.Streaming
             "D: drops (Z deshace)   ·   F: feromonas   ·   G: colonia   ·   I: importar pool   ·   " +
             "\u2b07: soltar .antgenome";
 
+        /// <summary>Caja de la línea de RECLUTAMIENTO (F8). Va encima de la barra de
+        /// pistas, centrada: son las cifras con las que se sembró el mundo —montones
+        /// y rastro— así que quien compara dos configuraciones lanzadas seguidas las
+        /// lee en el juego, no en el log. El ancho sale de la fuente (7 px por
+        /// carácter a fs 14) y el caso PEOR está fijado en la suite.</summary>
+        public const float RecruitmentWidth = 820f;
+        public const float RecruitmentHeight = 26f;
+
+        /// <summary>Lo que dice la línea cuando el mundo es el clásico: sin esto el
+        /// hueco quedaría vacío y no se sabría si el reclutamiento está apagado o si
+        /// el HUD no lo pinta.</summary>
+        public const string RecruitmentOffText =
+            "reclutamiento apagado · mundo clásico (sin montones ni rastro de comida)";
+
+        /// <summary>
+        /// Cifras de reclutamiento tal como las va a aplicar el mundo: montones
+        /// (cuántos y de qué tamaño) y rastro de comida (fuerza, vida media y
+        /// seguimiento). Se componen con los MISMOS valores que viajan al CLI
+        /// (<see cref="RecruitmentKnobs"/>), así que la línea no puede decir algo
+        /// distinto de lo que se está simulando.
+        /// </summary>
+        public static string RecruitmentLine(RecruitmentKnobs knobs, bool enabled = true)
+        {
+            if (!enabled) return RecruitmentOffText;
+            return "reclutamiento · montones=" + knobs.Clusters +
+                   " (" + knobs.ClusterMin + "–" + knobs.ClusterMax + " ítems, radio " +
+                   F(knobs.ClusterRadius) + " u) · rastro=" + F(knobs.TrailDeposit) +
+                   "× / " + F(knobs.TrailHalfLife) + " s / sigue " + F(knobs.TrailFollow) + " rad/s";
+        }
+
+        private static string F(float v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+        /// <summary>Caja de la línea de cifras DEL TABLERO (F8): montones, ítems y
+        /// celdas de rastro pintadas. Va debajo de la línea de configuración, en la
+        /// misma columna centrada, y su ancho es el mismo: la cifra más larga que se
+        /// puede publicar es la de un mundo de 256² (65 536 celdas) con 9 999 ítems,
+        /// y ese caso está fijado en la suite.</summary>
+        public const float RecruitmentLiveWidth = 820f;
+        public const float RecruitmentLiveHeight = 26f;
+
+        /// <summary>
+        /// Lo que HAY en el tablero, frente a lo que se pidió al mundo: montones
+        /// vivos, comida y el rastro que el render está pintando de verdad (celdas
+        /// con alfa &gt; 0, con la curva de `PheromoneRamp`), con su máximo y el ancho
+        /// del corte en la celda más fuerte. Vacío mientras no haya tick: una línea
+        /// con ceros se leería como «no hay montones» en vez de «aún no sé».
+        /// </summary>
+        public static string RecruitmentLiveLine(RecruitmentLiveModel live)
+        {
+            if (live == null || !live.HasWorld) return "";
+            string layer = live.Layer.Length == 0 ? "—" : live.Layer;
+            string line = "tablero · montones " + live.Piles + " · ítems " + live.Items +
+                          " · rastro " + layer + " " + live.TrailCells + " celdas";
+            if (live.TrailCells > 0)
+                line += " (máx " + live.TrailMax + ", banda " + live.BandWidthUnits +
+                        "×" + live.BandHeightUnits + " u)";
+            return line;
+        }
+
         /// <summary>Caja de las DOS líneas del panel de aprendizaje: la banda que la
         /// tarjeta reserva entre la curva de fitness (62–88) y la base. Mismo ancho
         /// que el cuerpo de la tarjeta, y el modelo tuvo que recortar su texto para

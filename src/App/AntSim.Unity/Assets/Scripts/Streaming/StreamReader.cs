@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 
 namespace AntSim.Unity.Scripts.Streaming
@@ -57,7 +58,8 @@ namespace AntSim.Unity.Scripts.Streaming
         public void StreamGame(ulong seed, int ticks, int grid, int colonies, int frameEvery,
             string? seedPoolPath, Action<string> onLine, IReadOnlyList<string>? extraArgs = null,
             int pheroEvery = 0, int activEvery = 0, uint inspectId = 0, string? species = null,
-            bool maze = false, string? exportPath = null)
+            bool maze = false, string? exportPath = null, bool untilExtinct = false,
+            bool recruitment = false, RecruitmentKnobs? recruitmentKnobs = null)
         {
             var psi = new ProcessStartInfo
             {
@@ -80,8 +82,56 @@ namespace AntSim.Unity.Scripts.Streaming
                 psi.ArgumentList.Add("--maze");
             if (!string.IsNullOrWhiteSpace(exportPath))
             { psi.ArgumentList.Add("--export"); psi.ArgumentList.Add(exportPath); }
+            // F8: con esto el CLI cierra la ronda cuando no queda ninguna hormiga ni
+            // cría y exporta la élite EN ESE MOMENTO — la semilla de la ronda nueva.
+            if (untilExtinct)
+                psi.ArgumentList.Add("--until-extinct");
+            // F8: cúmulos de comida + reflejos de rastro. Con la bandera, el canal E
+            // tiene algo que enseñar: el rastro de COMIDA (no solo el de casa).
+            if (recruitment)
+            {
+                psi.ArgumentList.Add("--recruitment");
+                // F8: montones y rastro. Se envían SOLO si difieren del default del
+                // mundo: con los valores de fábrica la línea de comandos queda
+                // idéntica a la de siempre (y los pines del stream no se tocan).
+                if (recruitmentKnobs != null && !recruitmentKnobs.IsDefault)
+                {
+                    psi.ArgumentList.Add("--clusters");
+                    psi.ArgumentList.Add(recruitmentKnobs.Clusters.ToString(CultureInfo.InvariantCulture));
+                    psi.ArgumentList.Add("--cluster-size");
+                    psi.ArgumentList.Add(recruitmentKnobs.ClusterMin.ToString(CultureInfo.InvariantCulture) + ":" +
+                                        recruitmentKnobs.ClusterMax.ToString(CultureInfo.InvariantCulture));
+                    psi.ArgumentList.Add("--cluster-radius");
+                    psi.ArgumentList.Add(recruitmentKnobs.ClusterRadius.ToString("0.###", CultureInfo.InvariantCulture));
+                    psi.ArgumentList.Add("--trail-deposit");
+                    psi.ArgumentList.Add(recruitmentKnobs.TrailDeposit.ToString("0.###", CultureInfo.InvariantCulture));
+                    psi.ArgumentList.Add("--trail-half-life");
+                    psi.ArgumentList.Add(recruitmentKnobs.TrailHalfLife.ToString("0.###", CultureInfo.InvariantCulture));
+                    psi.ArgumentList.Add("--trail-follow");
+                    psi.ArgumentList.Add(recruitmentKnobs.TrailFollow.ToString("0.###", CultureInfo.InvariantCulture));
+                }
+            }
             if (pheroEvery > 0)
-            { psi.ArgumentList.Add("--phero-every"); psi.ArgumentList.Add(pheroEvery.ToString()); }
+            {
+                psi.ArgumentList.Add("--phero-every"); psi.ArgumentList.Add(pheroEvery.ToString());
+                // F8: se piden las CUATRO capas de cada colonia —comida, casa,
+                // alarma y huella—, porque el tablero las pinta a la vez con un
+                // color por tipo. Antes solo viajaban food y home y el render
+                // enseñaba una cada vez (F ciclaba); con todas en el canal E el
+                // espectador ve el rastro completo sin teclas y sin alternar.
+                if (recruitment)
+                {
+                    psi.ArgumentList.Add("--phero-layers");
+                    var spec = new System.Text.StringBuilder();
+                    for (int c = 0; c < colonies; c++)
+                    {
+                        if (spec.Length > 0) spec.Append(',');
+                        spec.Append(c).Append(":food,").Append(c).Append(":home,")
+                            .Append(c).Append(":alarm,").Append(c).Append(":footprint");
+                    }
+                    psi.ArgumentList.Add(spec.ToString());
+                }
+            }
             if (activEvery > 0)
             {
                 psi.ArgumentList.Add("--activ-every"); psi.ArgumentList.Add(activEvery.ToString());
