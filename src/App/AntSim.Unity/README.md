@@ -177,7 +177,7 @@ los dos valores:
 
 | Escena | Entrada que la escribió | grid | colonias | ticks | frameEvery | velocidad | semilla(s) | pool(s) |
 |---|---|---|---|---|---|---|---|---|
-| `Assets/Scenes/Game.unity` | **`SceneBootstrapper.CreateGameScene`** con `LaunchSettings.Defaults()` (F6). El Play pass la reescribe en su bloque 4 con `TICKS`/`B4_SPEED`, que siguen a esos defaults | 96 | 2 | 216000 | 1 | 120 | 42 | `pretrain-warm-v2` |
+| `Assets/Scenes/Game.unity` | **`SceneBootstrapper.CreateGameScene`** con `LaunchSettings.Defaults()` (F6). El Play pass la reescribe en su bloque 4 con `TICKS`/`B4_SPEED`, que siguen a esos defaults | 96 | 2 | 216000 | 1 | 120 | 42 | `pretrain-maze-los3` |
 | `Assets/Scenes/MultiSim.unity` | **Medidor de rendimiento**: `-executeMethod …MultiSimBootstrapper.CreateMultiSimPerfScene` | 256 | 2 por vista | 12000 | 5 | 10 | 42–45 (una por vista) | warm-v2 · warm-4 · warm3 · warm2 (autodetectados de `artifacts/`) |
 
 Lo que **no** hay que confundir, porque es justo lo que se perdía:
@@ -304,7 +304,7 @@ las unidades justo en los iconos y hacía parecer que la fuente mentía).
 
 Para mirar el `.ttf` sin abrir Unity, `python scripts/unity/validate-font.py
 <ruta>/AntSim.ttf` valida tablas, nombres, avances y `cmap` con fontTools y
-rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 713 tests de la
+rasteriza una muestra a 14/17/24 px con Pillow. En headless, los 767 tests de la
 suite incluyen `GameFontTests` —que cubre también el alfabeto contra los
 literales que el HUD usa de verdad, y **los avances LEÍDOS de la tabla `hmtx`**
 frente a los del modelo, glifo a glifo por la `cmap`— y
@@ -471,6 +471,37 @@ el paso `Assets de Unity (el churn de re-serialización no entra)` recorre los
 commits del push y falla si alguno metió un asset que no cambia nada; su selftest
 es también un paso del job `test`, junto a los de las otras herramientas.
 
+## Rondas encadenadas (F8)
+
+La partida no termina en un final seco: cuando no queda **ninguna hormiga ni cría**
+el CLI corta en ese tick (`--until-extinct`), exporta la élite de la colonia 0 y
+el presentador abre otra ronda **con un laberinto nuevo** sembrada con esos
+cerebros.
+
+Cómo está partido, y por qué:
+
+- **Quién decide** — `RoundModel` (puro, sin UnityEngine, en la suite):
+  `AllColoniesDead` es la condición (adultas, huevos, larvas y pupas a cero en
+  TODAS las colonias; una lista vacía no es extinción), `NextSeed` deriva la
+  semilla de la ronda siguiente (splitmix64 sobre semilla + ronda: determinista y
+  distinta en cada ronda) y `NextSeedPool` elige la élite exportada si existe o
+  mantiene el pool actual si no.
+- **Quién corta la partida** — el CLI, no el editor: `GameScenario` comprueba
+  `WorldSim.AllColoniesExtinct` tras escribir cada tick, sale del bucle y la línea
+  `end` viaja con `"extinct":true`. Así la élite se exporta EN EL TICK de la
+  extinción, no 180 000 ticks después.
+- **Quién cambia el mundo** — una recarga de escena, el mismo mecanismo del
+  «reiniciar con plan»: el HUD, las gráficas, la cámara y el mundo arrancan
+  limpios, y la semilla/ronda/pool de la siguiente viajan en estáticos
+  (`ArmSeedForNextScene`, `ArmSeedPoolForNextScene`, `ArmRoundForNextScene`) que
+  `ClearRoundArming` borra al empezar un Play nuevo — si no, un Play nuevo
+  heredaría la ronda 7 de la sesión anterior.
+- **Lo que se ve**: `[AntSim] Ronda 1 · semilla 42 …`, `Ronda 1 terminada en el
+  tick 35537 (extinción) · nueva ronda en 2,5 s` y `Ronda 2: semilla … (laberinto
+  nuevo) · cerebros de la élite evolucionada (evolved-42.antgenome)`. La pausa de
+  2,5 s deja ver la colonia vacía antes de recargar. Un replay no encadena: es una
+  sola corrida.
+
 ## Aspecto del mundo y del HUD (F5.1)
 
 Lo que se ve y por qué, en una tabla — el resto de decisiones están comentadas en
@@ -611,9 +642,10 @@ escena se guarda y se registra en build settings sola.
 
 ### Ajustes finos
 
-- `SimPresenterBehaviour`: semilla/grid/colonias/ticks/`SeedPoolPath` (p. ej.
-  `artifacts/pretrain-warm-v2.antgenome` para ver el relevo pre-entrenado) y
-  velocidad 0/1/2/4/16×.
+- `SimPresenterBehaviour`: semilla/grid/colonias/ticks/`SeedPoolPath` (el de
+  por defecto es `artifacts/pretrain-maze-los3.antgenome`, entrenado en el
+  laberinto del juego; `artifacts/pretrain-warm-v2.antgenome` es el de
+  referencia) y velocidad 0/1/2/4/16×.
 - **Siembra desde el picker (F4.3)**: `PoolPickerBehaviour.SeedPoolFor(id)`
   devuelve la ruta del `.antgenome` que el propio preset declara en su repro
   canónico — asígnala a `SeedPoolPath` y la partida arranca con ese pool.
@@ -639,12 +671,40 @@ escena se guarda y se registra en build settings sola.
   `--phero-every 30` y el quad `PheromoneTiles` (lo crea el bootstrapper) pinta
   el rastro de la colonia 0 vía RenderTexture. `PheromoneTileModel` (puro)
   decodifica el paquete RLE. **Con dos colonias compitiendo**, añade
-  `--phero-layers 0:home,1:home,1:alarm`: cada tick trae entonces las capas
-  pedidas y `F` cicla la capa (home/food/alarm, cada una con su color) y `G` la
-  colonia; `PheromoneSelectorModel` (puro) decide qué capa se pinta y con qué
-  color, y el render pinta **vacío** si esa capa no viene (nunca deja el frame
+  `--phero-layers` con `food`, `home`, `alarm` y `footprint` de cada colonia:
+  cada tick trae entonces las cuatro capas y el tablero las pinta **a la vez**,
+  cada tipo con su color (ámbar comida, verde casa, rojo alarma, violeta huella)
+  mediante `PheromoneCompositeModel` (puro), que mezcla donde se cruzan. `F`
+  pasa de «todas» a una capa suelta y la cicla; `G` cambia de colonia. El render
+  pinta **vacío** si la colonia elegida no trae capas (nunca deja el frame
   anterior, que se leería como dato de otra colonia). La emisión es telemetría
-  pura: el hash del mundo no cambia (test).
+  pura: el hash del mundo no cambia (test). En la ronda el rastro es de **una
+  celda de ancho** (sin difusión) y vive **7×** más (comida 2 100 s), así que el
+  camino permanece entre visita y visita.
+  **Desde F8 (reclutamiento)** el juego arranca con `Recruitment = true`: la
+  comida se siembra además en 8 cúmulos ricos (10 ep) y al alcance de la
+  colonia, la que busca deja rastro de casa y la cargada de comida, y la que
+  busca gira hacia el lado que huele más. El presenter pide entonces
+  `--recruitment` y las DOS capas (`food` + `home`) de **cada** colonia, la
+  escena pinta la capa de comida por defecto y el quad conserva el último
+  paquete entre emisiones (el canal E llega cada `PheroEvery` ticks; borrarlo
+  en el resto era el parpadeo). El depósito de comida va a **una celda** (el
+  camino que pisa la hormiga, no una banda de 3) y al componer la textura se
+  gira 180°: las UV del `Plane` de Unity empiezan en el rincón opuesto y el mapa
+  salía espejado (`ProbeRecruitmentShot` lo mide: 93 % de celdas sobre su píxel
+  ámbar, 2,5 % girado). La textura no pinta el byte como alfa: `PheromoneRamp`
+  (puro) descarta la cola de difusión por debajo del 18 % del máximo de la capa y
+  lleva el resto del borde (0,30) al núcleo opaco, así que el rastro se lee como
+  camino y no como mancha — menos superficie y más contraste, sin tocar el dato.
+  El HUD publica **dos** líneas: la configuración que viaja al CLI (`montones=… ·
+  rastro=…`) y lo que HAY en el tablero (`montones vivos · ítems · rastro <capa>
+  N celdas · máx · banda`), contado con la MISMA curva del render; si la cifra no
+  cuadra con los píxeles, el fallo está en el render. Las dos líneas las contrasta
+  con el tablero `scripts/unity/ProbeRecruitmentHud.cs` (guarda el frame en
+  `Temp/`, y una copia en `artifacts/`). Las consecuencias se documentan en
+  [`docs/fase7-obstaculos.md` §8bis](../../../docs/fase7-obstaculos.md).
+  Apagarlo (mundo clásico) es `play-game.sh --no-recruitment` o desmarcar
+  `Recruitment` en el presenter.
 - **Mini-grafo MLP (F5.0, canal F)**: lanza el CLI con `--activ-every 30
   --inspect <antId>` y el stream trae en cada tick las 33 activaciones del
   cerebro de la hormiga inspeccionada (base64 s8). `ActivationViewModel`
@@ -672,6 +732,13 @@ escena se guarda y se registra en build settings sola.
   advertencia ⚠ (campo `card` del JSON canónico).
 
 ## Fixtures de stream (artifacts/, no trackeados — se regeneran con el repro)
+
+Los que consumen las escenas del multi-visor también viven solo en disco:
+`multiview-v0..v3.jsonl` y `multiview-atta.jsonl` (10 MB cada uno, los que
+reproducen `CreateMultiSimSmokeScene*`) y `smoke-seeds/*.jsonl` +
+`smoke-warmv2-stream.jsonl` (13 MB cada uno, el e2e del relevo). Un clon limpio
+NO los trae: hay que volcar esas partidas con el CLI antes de montar esas
+escenas, o la vista se queda sin stream que reproducir.
 
 | Archivo | Mundo | Uso |
 |---|---|---|

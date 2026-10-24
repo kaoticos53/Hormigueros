@@ -331,11 +331,15 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode pretrain --seed 4242 --pop 2
 # abierto y sube solo cuando la colonia cierra descargas de verdad; el cerebro
 # crece 8→16→24 si se estanca en el terreno completo. Dos fases: cuenca clásica
 # (600 gens con mantenimiento) y laberinto + cola clásica (600 gens + 60 de
-# cola). Sin gráficos, ~11 min, y el juego arranca con este pool por defecto:
-# forrajea en las DOS superficies (58 descargas con --maze y 421 sin él).
+# cola). Sin gráficos, ~11 min. El juego arranca con el pool de la tirada CORTA
+# (660 gens), que forrajea en las DOS superficies: 102 descargas con --maze y 271
+# sin él, frente a 39 y 242 del pool de referencia.
 bash scripts/pretrain-maze.sh                       # 1 260 gens → artifacts/pretrain-maze.antgenome
+GENS=300 OUT=artifacts/pretrain-maze-los3.antgenome \
+  BASE_OUT=artifacts/pretrain-maze-los3-base.antgenome \
+  LOG=artifacts/pretrain-maze-los3.log bash scripts/pretrain-maze.sh   # el pool por defecto
 python scripts/pretrain-maze-transfer.py            # transferencia en la partida canónica (--maze)
-python scripts/pretrain-maze-transfer.py --no-maze  # y la regresión en campo abierto
+python scripts/pretrain-maze-transfer.py --no-maze --out artifacts/pretrain-maze-transfer-classic.txt
 
 # Sembrar una partida con la población pre-entrenada (transferencia validada:
 # pickups 0 → 4–7 frente a la élite aleatoria en 300 s)
@@ -355,7 +359,11 @@ dotnet run --project src/Tools/AntSim.Cli -- --mode verify --ticks 1200 \
 
 El juego tiene un modo visual completo: laberinto con paredes dibujadas desde la semilla, hormigas animadas, HUD con tarjetas de colonia, semáforo de relevo, inspector de cerebros y drag & drop de pools.
 
-La partida arranca a **120×** (100 % de la base del control de velocidad, rango 10×–160×) y dura **216 000 ticks = 2 h de simulación**. No hay botón de «siguiente generación»: la evolución ocurre sola, porque los nacimientos salen del torneo sobre la élite ordenada por fitness de por vida y cada muerte la actualiza; al terminar el horizonte la élite se guarda en `artifacts/evolved-<semilla>.antgenome` (`ExportElite` del presenter).
+La partida arranca a **120×** (100 % de la base del control de velocidad, rango 10×–160×) y dura **216 000 ticks = 2 h de simulación**. No hay botón de «siguiente generación»: la evolución ocurre sola, porque los nacimientos salen del torneo sobre la élite ordenada por fitness de por vida y cada muerte la actualiza; al terminar la ronda la élite se guarda en `artifacts/evolved-<semilla>.antgenome` (`ExportElite` del presenter).
+
+**Rondas encadenadas.** La partida no acaba en un final seco: cuando no queda **ninguna hormiga ni cría** —o se agota el horizonte— el CLI corta en ese tick (`--until-extinct`), exporta la élite y el juego abre otra ronda **con un laberinto nuevo** (semilla derivada de la anterior) sembrada con **esos cerebros evolucionados**. Se ve en el log del editor: `[AntSim] Ronda 1 …`, `Ronda 1 terminada en el tick 35537 (extinción)`, `Ronda 2: semilla … (laberinto nuevo) · cerebros de la élite evolucionada`.
+
+**Rastro de reclutamiento (feromonas que se ven).** La comida se siembra **también en cúmulos** —8 montones de 6–10 ítems de 10 ep, dentro del radio que la colonia patrulla (100–220 u del nido)— encima de la siembra aleatoria de siempre, y el rastro lo dejan según lo que hacen, sin que el cerebro lo decida: la que **busca** deja rastro de **casa** (la vuelta al nido) y la que vuelve **cargada** deja rastro de **comida** hacia el montón; la que busca sin carga gira hacia el lado que huele más comida. El tablero lo enseña **con un color por tipo** y a la vez: `food` (ámbar), `home` (verde), `alarm` (rojo) y huella CHC (violeta). El rastro es **una celda de ancho (8 u, menos que el largo de una obrera de 13,8 u)** y no difunde —no se ensancha como humo—, y su vida media es **7× la clásica (2 100 s la comida, 140 s casa, 7 s alarma, 1 680 s huella)**, así que el camino sigue ahí cuando la colonia vuelve al montón minutos después. **Medido en 8 semillas: 349 descargas frente a 206 del mundo clásico, ganando en las 8** (media 43,6 vs 25,8); `scripts/recruitment-probe.py` reproduce la tabla. `--no-recruitment` (o `Recruitment = false`) devuelve el mundo clásico byte a byte; detalle y cifras en [`docs/fase7-obstaculos.md` §8bis](docs/fase7-obstaculos.md).
 
 ```bash
 # Lanzar Unity con la escena lista para Play (los ajustes se inyectan
@@ -367,6 +375,12 @@ bash scripts/play-game.sh                                # Linux/macOS
 
 # --dry-run imprime los ajustes y el comando sin abrir Unity.
 
+# Perillas del reclutamiento (F8): comparar configuraciones SIN tocar código.
+# Los defaults son los del mundo; cualquier otro valor viaja al CLI y el mundo
+# lo aplica antes de sembrar la comida.
+.\scripts\play-game.ps1 --clusters 2 --cluster-size 12:16 --cluster-radius 30
+.\scripts\play-game.ps1 --trail-half-life 60 --trail-follow 0   # rastro efímero y ciego
+
 # O abrir el proyecto manualmente en Unity 6000.x:
 #   1. File - Open Project - selecciona src/App/AntSim.Unity
 #   2. Menu AntSim - Jugar (o AntSim - Crear escena de juego + Play)
@@ -377,24 +391,43 @@ bash scripts/play-game.sh                                # Linux/macOS
 |-------|--------|
 | Click | Inspeccionar hormiga (ver cerebro MLP/NEAT) |
 | D     | Modo marcar drops (click en el suelo, Z deshace) |
-| F     | Rotar capa de feromonas (home → food → alarm) |
+| F     | Feromonas: todas las capas ↔ una sola (y la rota) |
 | G     | Rotar colonia en la capa de feromonas |
 | I     | Abrir diálogo de importar pool (.antgenome) |
 | J     | Saltar cámara a la alerta seleccionada |
 | Espacio | Pausar/reanudar |
 | ⬇     | Arrastrar .antgenome desde el explorador para importar |
 
+**Montones y rastro desde el lanzador** (F8; `0` montones o `0` seguimiento son controles A/B válidos):
+
+| Bandera | Default | Rango | Qué mueve |
+|---|---|---|---|
+| `--clusters` | `8` | `0`–`64` | montones de comida sembrados además de los ítems sueltos |
+| `--cluster-size` | `6:10` | `1`–`40` | ítems por montón (el tamaño se sortea en la banda) |
+| `--cluster-radius` | `18` | `1`–`120` u | radio del montón en unidades de mundo |
+| `--trail-deposit` | `1` | `0`–`5` | rastro que deja la cargada, × QMaxFood/s |
+| `--trail-half-life` | `2100` | `1`–`3600` s | vida media del rastro de comida (7× la clásica) |
+| `--trail-follow` | `8` | `0`–`20` rad/s | giro que provoca el rastro (0 = lo huele pero no lo sigue) |
+
+La misma configuración se lee **dentro del juego**: encima de la barra de pistas el HUD imprime `reclutamiento · montones=8 (6–10 ítems, radio 18 u) · rastro=1× / 2100 s / sigue 8 rad/s` (con `· reclutamiento apagado · mundo clásico` cuando la bandera está off), compuesto con las MISMAS perillas que viajan al CLI — así dos lanzamientos seguidos se comparan sin abrir el log del editor.
+
+Los mismos nombres existen como `--clusters`, `--cluster-size MIN:MAX`, `--cluster-radius`, `--trail-deposit`, `--trail-half-life` y `--trail-follow` en el CLI (`--mode game`, junto a `--recruitment`), y el lanzador los imprime al arrancar y los escribe en el archivo de ajustes (`clusters=`, `clusterSize=`, …): el log del editor dice lo que se aplicó de verdad.
+
 **Configurar desde el inspector de SimPresenterBehaviour:**
-- `SeedPoolPath` = `artifacts/pretrain-warm-v2.antgenome` (o `pretrain-neat.antgenome`)
+- `SeedPoolPath` = `artifacts/pretrain-maze-los3.antgenome` (el de por defecto; `pretrain-warm-v2.antgenome` es el de referencia)
 - `Species` = `lasius` (o `lasius,eciton` para invasión)
 - `Grid` = 96 (grid 96² = 768 u) o 256 (grid 256² = 2048 u)
 - `Ticks` = 216000 (2 h de simulación; 30 min de reloj a 120×)
 - `Speed` = 120 (100 % de la base; 10×–160× en el control)
 - `Maze` = laberinto con bucles generado de la semilla (sin él, el tablero es el plano clásico)
+- `Recruitment` = cúmulos de comida + reflejos de rastro (el tablero pinta las cuatro capas a la vez, comida en ámbar; `F` deja una sola y la cicla)
+- `ClusterCount` / `ClusterMin` / `ClusterMax` / `ClusterRadius` = montones sembrados (centinela `-1` = default del mundo: `8`, `6`, `10`, `18`)
+- `TrailDeposit` / `TrailHalfLife` / `TrailFollow` = rastro de comida (centinela `-1` = `1`, `300`, `8`)
 - `ExportElite` = guarda la élite evolucionada al acabar la partida
 - `InspectId` = id de la hormiga a inspeccionar
 
 **Pools disponibles:**
+- `pretrain-maze-los3` — **el de por defecto**: entrenado en el laberinto del juego, con línea de visión
 - `pretrain-warm-v2` — pool de referencia, buen relevo y forrajeo
 - `pretrain-neat` — pool NEAT con grafos evolutivos
 - `pretrain-warm3-v2` — especialista en relevo profundo
@@ -458,14 +491,14 @@ bash scripts/commit-layers.sh --selftest       # el reparto entero, en un repo d
 
 | Check | Qué protege |
 |---|---|
-| `dotnet test` | la suite headless (713/713), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor) |
+| `dotnet test` | la suite headless (767/767), incluido el pin del hash del stream canónico y los **contratos de lo generado**: los ASSETS (el `.ttf`, las mallas, y los materiales y texturas versionados contra sus modelos: editar el modelo sin regenerar falla aquí) y las **ESCENAS** (qué entrada y qué configuración produjo cada `.unity` del repo, contrastado contra `GeneratedSceneCatalog` y contra las constantes de sus productores: regenerar deja de depender de recordar los valores del Play pass y del medidor), más el **pool por defecto** (lanzadores, `LaunchSettings`, `Game.unity` y el catálogo tienen que sembrar el mismo `.antgenome`) |
 | `scripts/check-stream-fixture.sh` | determinismo: regenera el stream canónico y compara su hash fijado |
 | `scripts/check-replay-command.sh` | la partida con plan de drops (3000 y 6000 ticks) reproduce sus hashes |
 | `scripts/check-atta-command.sh` | la partida canónica de la cortadora (F5.2a) |
 | `scripts/check-invasion-command.sh` | la partida canónica del saqueo (F5.2b) |
 | `scripts/check-neat-command.sh` | la invasión con pool NEAT v2 (cierre F5.2c) |
 | `scripts/system-sweep.sh --selftest` | el ajuste fijo/marginal del barrido de costes (§4.10), sin editor |
-| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 713 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
+| `scripts/check-doc-figures.sh` | **las cifras de los documentos no derivan**: toda afirmación de pines o de tests tiene que coincidir con el repo (6 pines, 767 tests), y un documento nuevo con cifras sin clasificar falla en vez de pasar desapercibido |
 | `scripts/check-unity-assets.sh` | **el editor no mete ruido al repo**: abrir el proyecto o construir un player reescribe la escena, los materiales y los ajustes de URP sin cambiar lo que significan (orden de los documentos, numeración de las anclas `&N`, sitio del bloque `AssetVersion`). El verificador lo decide por equivalencia estructural —mismos objetos, mismos campos y el mismo cableado— y falla si algún commit del push metió un asset así, con la lista exacta de ficheros a descartar. `--selftest` prueba el analizador y `--list` publica su alcance. `--discard` da el paso siguiente y ACTÚA, por los dos caminos que hacen falta para que el diff contra HEAD sea lo que cambió: restaura las rutas que certifica idénticas (el churn puro) y a las que **cambian de verdad** les quita la forma —anclas de sesión, orden, blancos— reescribiéndolas en canónico **sin tocar el contenido**, que es exactamente lo que hace el generador al cerrar una escritura; funciona porque el ancla canónica es el hash del contenido, así que un documento intacto vuelve a ser el mismo byte que en HEAD (medido en `Game.unity`, 425 documentos: una pasada que re-ancla todo y cambia UNA línea escalar pasa de 10 669 líneas de diff a 2). No toca las que canonicalizan —son las que quitan la trampa— y sólo escribe si la forma canónica pasa el `compare` (si no significa lo mismo, se planta y lo dice); después vuelve a clasificar y a mirar el índice para confirmarlo. `--dry-run` mide lo mismo sin tocar nada. El MISMO chequeo es la **puerta 1** de `.githooks/pre-push`, con el rango sacado de las refs que el push manda |
 | `scripts/check-unity-compile.sh --selftest` | el analizador de logs de compilación (no necesita editor) |
 | `scripts/check-unity-references.sh` | **un commit no deja un asset sin su dato**: un editor puede destruir una referencia sin cambiar nada más y sin dejar error —medido dos veces: los materiales de feromonas que quedaron con `_BaseMap`/`_MainTex` en `fileID: 0` (commiteados en `d4aebc3`, el material de reposo pintado BLANCO OPACO sobre el tablero) y `PheromoneMat.mat` al cerrarse el editor el 2026-10-08—. El YAML sigue siendo válido, así que nada lo veía hasta que una prueba se topaba con la pérdida. `--range A..B` compara cada commit con SU PADRE —lo que empuja un push son los commits, no el árbol— y nombra el slot y la guía perdidos; sin argumentos comprueba el árbol contra HEAD, `--watch` espera al cierre del editor y `--selftest` verifica los dos detectores y el modo del push sin repo. Un borrado deliberado de un objeto con su propia guía (p. ej. el botón «Sig. Gen» de F6, que se llevó consigo su `Text`) se declara CON MOTIVO en `scripts/unity-reference-allowlist.txt`, con alcance ruta+guía. Es la **puerta 2** de `.githooks/pre-push` |

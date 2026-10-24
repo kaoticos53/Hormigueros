@@ -45,10 +45,21 @@ quedaba 8× fuera de cámara).
 | `--species` | `lasius` | `lasius`, `atta`, `eciton` o combinaciones con coma |
 | `--speed` | `120` | `10`–`160` |
 | `--frame-every` | `1` | `1`–`60` |
+| `--no-recruitment` | — | apaga los cúmulos de comida y los reflejos de rastro (mundo clásico) |
+| `--clusters` | `8` | `0`–`64` montones de comida (0 = sin montones, control A/B) |
+| `--cluster-size` | `6:10` | `1`–`40` ítems por montón, como `MIN:MAX` |
+| `--cluster-radius` | `18` | `1`–`120` u de radio del montón |
+| `--trail-deposit` | `1` | `0`–`5` × QMaxFood/s que deja la hormiga cargada |
+| `--trail-half-life` | `300` | `1`–`3600` s de vida media del rastro |
+| `--trail-follow` | `8` | `0`–`20` rad/s de giro que provoca el rastro |
 | `--dry-run` | — | imprime los ajustes y el comando, sin abrir Unity |
 
 La consola del editor imprime `Lanzador -> pool=… grid=…` al entrar; si algo no
-cuadra, ahí se ve qué se aplicó de verdad.
+cuadra, ahí se ve qué se aplicó de verdad. Con reclutamiento encendido esa línea
+añade los montones y el rastro (`montones=8 (6–10 ítems, radio 18 u) ·
+rastro=1× / 2100 s / sigue 8`), que es exactamente lo que el mundo va a sembrar:
+las perillas se aplican **antes** de sembrar la comida, así que un valor
+publicado y el mundo que se ve no pueden discrepar.
 
 Si Unity **ya está abierto con este proyecto**, ciérralo antes: Unity no abre
 dos veces el mismo proyecto y el lanzamiento no aplicaría nada (el script lo
