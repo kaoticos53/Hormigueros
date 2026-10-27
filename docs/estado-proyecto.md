@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
-*Actualizado: 2026-10-22 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 767/767 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+*Actualizado: 2026-10-25 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
+suite: 775/775 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -63,14 +63,517 @@ cría el CLI corta en ese tick (`--until-extinct`), exporta la élite y otra
 ronda arranca con **laberinto nuevo** (semilla derivada) sembrada con esos
 cerebros. Detalle y medidas en [`fase7-obstaculos.md`](fase7-obstaculos.md).
 
+**F11 → F11b (medida; paga con el rastro CON PRECIO, aún sin adoptar en el
+lanzador) — ¿debe decidir la red cuándo dejar feromona?**
+La vara de F10 (seleccionar por **descargas en la partida del lanzador** en vez de
+por el fitness del currículo: grid 96, dos colonias con rival salvaje, cúmulos,
+rastro y relevo) sirvió para preguntar si el rastro de reclutamiento tiene que
+abrirlo el cerebro en vez del reflejo fijo de F8. Con `--trail-by-brain` las dos
+gotas del reflejo se escalan por `DepositFood`/`DepositHome` (0 = no deja nada,
+1 = el reflejo de siempre) y la partida de evaluación corre con esa misma puerta.
+**No paga.** Dos tiradas de 200 generaciones con el mismo warm-start, semilla y
+presupuesto (pop 32, 3 semillas × 24 000 ticks por genoma, 28 núcleos, 2 h 48
+min en paralelo): el brazo con puerta acaba **8 % por debajo** en la media de la
+población (76,6 vs 82,8 en la escala de descargas) y **5 % en el pico** del mejor
+(117 vs 123); los dos
+arrancan igual (gen 1–10: 49,7 vs 50,5 de media). En la partida completa
+(216 000 ticks, 8 semillas que la selección no vio y comprobación de que cada
+partida llega al último tick) el MISMO pool con la puerta rinde **473 contra 705**
+descargas del reflejo fijo (−33 %; pareado: +232 ± 106, 7/8 semillas), y el pool
+entrenado con la puerta queda **peor incluso con el reflejo fijo encendido**
+(422 vs 705; pareado: +283 ± 58, 8/8 semillas): la puerta no solo empobrece el
+rastro, desvía la selección a una cuenca peor. De referencia, en esas mismas 8
+semillas: warm-start **599** → 200 generaciones con el reflejo fijo **705**
+(+106 ± 75, 7/8) → las 400 de F10 **911** (+205 ± 60 frente a las 200, 8/8). La
+causa más probable es mecánica: la puerta solo puede ADELGAZAR el rastro —la
+salida está en [0,1] y no tiene razón para sentarse en 1 todo el rato— y F8 ya
+midió que menos rastro es menos reclutamiento (331 → 371 descargas al subir el
+seguimiento de 0 a 8 rad/s); con un depósito gratis, además, no hay nada que
+empuje la salida hacia 1 salvo el propio pico de fitness. No se ha medido la
+salida media del enjambre (no hay sonda para eso todavía), así que esa parte es
+inferencia, no dato.
+Lo que faltaba para que la pregunta fuera justa era un PRECIO, y ya está: **F11b,
+la glándula**. Cada gota de feromona de comida y de casa sale de la reserva
+personal de la hormiga (`Ant.Gland`), que se gasta al depositar y **solo se
+rellena dentro del nido** (`--trail-gland 25 --trail-gland-refill 6`: 25 s de
+depósito a plena tasa, 6 s de vacía a llena). Con eso la cargada ya no puede
+marcar los primeros metros a plena tasa y dejar el corredor vacío: si quiere que
+el rastro llegue lejos tiene que RACIONARLO, y ahí la salida del cerebro tiene
+algo que decidir en vez de una constante que solo podía empeorar. Se cobran los
+dos canales del cerebro y los dos del reclutamiento; la alarma y la huella CHC
+no salen de la glándula. Sin precio (`--trail-gland 0`, el default) el mundo es
+byte a byte el de F8. Cubierto por cuatro pruebas de `GameFitTests` (la puerta
+cerrada no deposita, la mitad de salida es la mitad de feromona, la glándula
+cobra el depósito y solo se rellena en el nido) y el lanzador no expone las
+banderas.
+La tirada que lo juzga —200 generaciones, pop 32, semilla 7, mismo warm-start,
+un brazo con la puerta del cerebro y otro con el reflejo fijo, el MISMO precio en
+los dos— está hecha (`scripts/run-gland-200.sh`, 1 h 45 min en paralelo; logs en
+`artifacts/pretrain-partida-200-gl-*.log`): **con el precio, la puerta SÍ paga**.
+En la selección el brazo con puerta acaba con más media de población (70 954 vs
+66 857; diferencia pareada +4 097 por generación, sd 3 485, t = 16,6; gana
+174/200 generaciones) y más descargas por generación (92,8 vs 88,2; pareado
++4,54, t = 10,0, 146/200), aunque en las últimas 20 generaciones los dos se
+igualan (77 578 vs 76 117). El mejor genoma también es mejor (121 465 vs 110 125).
+Lo que decide es la partida completa (`scripts/gland-bench.py`: 216 000 ticks,
+laberinto, las 8 semillas del veredicto de F11 —42,7,99,1234,3,11,555,2024—, el
+precio encendido en los CUATRO brazos, todas terminan en el tick 216 000):
+
+| pool entrenado | quién decide el rastro | descargas por partida | total |
+|---|---|---|---|
+| puerta | la puerta del cerebro | 207,6 ± 53,0 | 1 661 |
+| puerta | reflejo fijo | 177,9 ± 50,7 | 1 423 |
+| reflejo fijo | la puerta del cerebro | 163,8 ± 56,6 | 1 310 |
+| reflejo fijo | reflejo fijo | 169,6 ± 58,0 | 1 357 |
+
+- **De punta a punta** (lo que se desplegaría: pool-puerta con puerta contra
+  pool-reflejo con reflejo): **+38 ± 13** descargas por partida (error típico;
+  gana en 6/8 semillas), **+22 %** en total. Con 24 semillas (F11c) la misma
+  comparación queda en +22,8 ± 8,2 y gana 17/24: la muestra de 8 exageraba el
+  tamaño, no el signo.
+- **La puerta dentro del pool que la entrenó**: 177,9 → 207,6 (+30 ± 11, 7/8).
+  En el pool entrenado SIN puerta es neutra (169,6 → 163,8, −6 ± 10, 4/8): la
+  puerta no vale por sí sola, vale con un cerebro que aprendió a racionarla.
+- **Entrenar con la puerta deja mejor pool**: 1 423 contra 1 357 con el reflejo
+  fijo en los dos (+8 ± 8, 6/8) — lo contrario que en F11, donde entrenar con la
+  puerta desviaba la selección a una cuenca peor.
+El precio no es gratis, y se mide dentro de esta misma tirada (el pool que aprendió
+con la puerta, las mismas 8 semillas, solo cambian la glándula y la puerta):
+**218,1** descargas de media sin precio y con el reflejo → **207,6** con precio y
+con puerta → **177,9** con precio y sin puerta. El precio cuesta ~19 % al rastro
+fijo y la puerta lo recupera casi entero (−4,8 % frente al mundo gratis). O sea:
+el precio se paga en descargas y se cobra en una decisión que la red puede
+aprender a tomar; el mundo sin precio sigue rindiendo más en absoluto, pero es el
+mundo de F11, donde la decisión no tenía nada que decidir. Que la puerta y el
+precio pasen visiblemente al lanzador o a la escena —donde hoy no se exponen—
+queda pendiente de decisión: aquí solo se mide.
+El precio, además, se puede BARRER, y se ha barrido (`scripts/gland-price-sweep.py`:
+216 000 ticks, laberinto, 24 semillas que la selección no vio —las 8 de F11 más 16
+nuevas—, los dos pools × las dos puertas, la glándula en 0/10/25/40/60 s y la
+recarga fija en 6 s; 480 partidas, evidencia en
+`artifacts/pretrain-partida-gl-price-sweep.txt`). Lo que aporta la puerta dentro
+del pool que aprendió con ella, precio por precio:
+
+| glándula | puerta − reflejo fijo | t | semillas | total |
+|---|---|---|---|---|
+| gratis (0 s) | +30,5 ± 13,6 | 2,2 | 14/24 | 5 174 vs 4 443 |
+| 10 s | +27,2 ± 7,2 | 3,8 | 17/24 | 4 292 vs 3 638 |
+| 25 s | +13,1 ± 6,7 | 2,0 | 15/24 | 4 330 vs 4 016 |
+| 40 s | +5,3 ± 9,0 | 0,6 | 13/24 | 4 386 vs 4 259 |
+| 60 s | +23,8 ± 8,1 | 2,9 | 17/24 | 4 705 vs 4 133 |
+
+- **Ningún precio gana a otro de forma clara** (la mayor diferencia entre precios
+  es 25,2 ± 14,6 descargas, t = 1,7): el barrido no corona un precio, dice dónde
+  la ventaja de la puerta es ROBUSTA y dónde no lo es.
+- **A 10 s es donde más se repite**: t = 3,8, el mayor, 17/24 semillas y ningún
+  desastre (la peor semilla pierde 15). Es también el presupuesto que más duele
+  —el reflejo fijo baja a 151,6 de media contra 185,1 gratis, −18 %— y la puerta
+  recupera 27 de esas 33 descargas. Si hubiera que desplegar un precio hoy, es
+  este —con el matiz de F11c, más abajo: sirve para ENTRENAR bajo él, y sin la
+  puerta.
+- **A 60 s también paga** (t = 2,9), pero por otra razón: con 60 s de depósito
+  acumulado el presupuesto casi no ata y el mundo se parece al gratis, que sigue
+  siendo el que más rinde en absoluto (215,6 con puerta).
+- **A 40 s se desdibuja** (+5,3, t = 0,6). No es significativamente peor que los
+  otros precios y no hay mecanismo que explique un valle justo ahí: se lee como
+  ruido, no como óptimo intermedio.
+- **El precio no rescata la puerta**: en el pool entrenado sin ella, la puerta
+  aporta entre −14 y +10 a todos los precios, ninguno con t > 1. Lo que hace que
+  la puerta valga sigue siendo haberla entrenado, no el precio elegido.
+Con 24 semillas el retrato de 8 se suaviza, y conviene decirlo: a 25 s la puerta
+gana +13,1 ± 6,7, no +30 ± 11, y el precio le cuesta al reflejo 10 % (185,1 →
+167,3), no 19 %. La dirección se mantiene; el tamaño medido con 8 semillas era
+optimista.
+**F11c — el precio emparejado (2026-10-25): entrenar a 10 s hunde la puerta y
+mejora el reflejo.** La duda que dejaba el barrido era si un cerebro que aprende
+a racionar 10 s rinde más que uno que aprendió a racionar 25. Se repitió la
+tirada entera con el precio emparejado (`GLAND=10 SUFFIX=p10
+scripts/run-gland-200.sh`: 200 generaciones por brazo, mismo warm-start, semilla
+7, pop 32, 3 × 24 000 ticks por genoma, 1 h 45 min en paralelo, los dos brazos
+con EXIT=0) y los dos pools nuevos se jugaron a los DOS precios con las 24
+semillas que la selección no vio (`scripts/gland-bench.py --gland 10|25
+--pool-gate … --pool-fixed …`: 384 partidas; veredicto completo en
+`artifacts/pretrain-partida-200-p10-veredicto.txt`). En la selección el brazo con
+puerta se hunde: **61 213** de media contra **70 053** del reflejo a 10 s
+(−8 840 por generación, sd 279, t = −31,7; pierde 200/200 generaciones). Es el
+mismo signo que F11 con el rastro gratis y el contrario que F11b a 25 s
+(+4 097, t = 16,6): con 10 s de presupuesto la puerta no tiene nada que ganar y
+sí mucho que perder.
+
+| entrena | juega | puerta+puerta | puerta+fijo | fijo+puerta | fijo+fijo |
+|---|---|---|---|---|---|
+| 10 s | 10 s | 159,5 | 144,3 | 179,1 | **189,0** |
+| 10 s | 25 s | 156,9 | 150,3 | 190,2 | **200,7** |
+| 25 s | 10 s | **178,8** | 151,6 | 171,9 | 161,5 |
+| 25 s | 25 s | **180,4** | 167,3 | 163,8 | 157,6 |
+
+- **Entrenar a 10 s es PEOR con la puerta**: mismo cerebro y mismo precio de
+  juego, el pool entrenado a 10 s rinde 19,4 ± 6,9 descargas menos jugando con la
+  puerta a 10 s (gana 6/24 semillas) y 23,5 ± 6,9 menos a 25 s (5/24).
+- **Y es MUCHO mejor sin ella**: el reflejo entrenado a 10 s da 27,4 ± 7,9 más
+  jugando a 10 s (16/24) y 43,1 ± 8,9 más a 25 s (20/24). Es el mejor pool medido
+  hasta ahora en los dos precios (189,0 y 200,7), por encima del campeón de F11b
+  (178,8 y 180,4).
+- **La puerta dentro de su propio pool sigue pagando, pero menos**: +15,1 ± 5,4
+  a 10 s (t = 2,8, 16/24) y +13,1 ± 6,7 a 25 s (t = 2,0).
+- **De punta a punta a 10 s la puerta pierde**: −29,5 ± 6,2 (gana 4/24) cuando los
+  dos pools se entrenaron a 10 s; a 25 s sigue ganando +22,8 ± 8,2 (17/24).
+
+Lo que compra rendimiento no es la puerta: es **entrenar con el rastro caro**.
+Con 10 s el reflejo deja rastros más flacos —el presupuesto los trunca—, la
+colonia no puede apoyarse tanto en la feromona y la selección acaba premiando
+hormigas que forrajean mejor por su cuenta; al devolverles 25 s rinden más que
+las entrenadas con 25 desde el principio. La puerta, en cambio, necesita
+presupuesto holgado para tener algo que racionar: a 10 s desvía la selección a
+una cuenca peor, como en F11. Aviso de tamaño: cada celda de esa tabla es UNA
+tirada de 200 generaciones (semilla de GA 7); las comparaciones pareadas por
+semilla de juego son sólidas para ESTOS pools, pero «entrenar a 10 s sin la
+puerta» necesitaría réplicas con otras semillas de GA antes de ser receta.
+Esas réplicas están hechas en F11d, justo abajo, y cambian la lectura: el 200,7
+era el mejor sorteo de cuatro, no el nivel de la receta, y la ventaja de entrenar
+a 10 s no sobrevive al ruido de reentrenar.
+
+**F11d — las réplicas (2026-10-26): el pool campeón era la tirada más afortunada
+de cuatro.** El aviso de tamaño de F11c se pagó: la misma receta —200
+generaciones a 10 s **sin** la puerta, mismo warm-start, pop 32, 3 × 24 000 ticks
+por genoma— repetida con tres semillas de GA más (`SEED=11 ARMS=fijo GLAND=10
+SUFFIX=p10s11 scripts/run-gland-200.sh`, y lo mismo con 13 y 23: 2 h 33 min las
+tres en paralelo, las tres con EXIT=0), y los cuatro pools jugados a los dos
+precios con las mismas 24 semillas no vistas (`scripts/gland-bench.py --pools
+p10-s7=… p10-s11=… p10-s13=… p10-s23=… --ref p10-s7 --prices 10,25`: 384
+partidas; evidencia en `artifacts/pretrain-partida-200-p10-replicas.txt`). Como
+`--seed` siembra también las partidas de la selección —las dos cosas salen del
+mismo entero—, cada réplica cubre el sorteo entero: el GA y los mundos en que
+puntúa.
+
+| pool (10 s, sin puerta) | selección (descargas/gen, últimas 20) | jugado 10 s | jugado 25 s |
+|---|---|---|---|
+| semilla 7 | 97,8 | 189,0 | **200,7** |
+| semilla 11 | 94,2 | 140,5 | 145,2 |
+| semilla 13 | 106,1 | 180,6 | 189,3 |
+| semilla 23 | 95,9 | 187,0 | 190,9 |
+| **media de las cuatro** | — | **174,3 ± 11,4** | **181,5 ± 12,4** |
+
+Cifras con el reflejo fijo, que es como se entrenaron los cuatro; ± es el error
+típico de la media de las cuatro y la dispersión entre pools es sd 22,8 (10 s) y
+24,7 (25 s).
+
+- **La semilla 7 es la mejor de las cuatro en los dos precios**, y esa es justo
+  la ventaja que F11c leyó como ventaja de la receta: las otras tres dan
+  −14,7 ± 5,3 descargas pareadas a 10 s (ganan 6/24 semillas) y −19,1 ± 5,4 a
+  25 s (4/24) frente a ella.
+- **Dos pools de la MISMA receta se llevan 48,5 descargas a 10 s** (189,0 contra
+  140,5) y 55,5 a 25 s (200,7 contra 145,2). La sd de reentrenar (23–25) es del
+  tamaño de los efectos que F11c midió (+27,4 y +43,1): aquello era un sorteo
+  contra otro, no una receta contra otra.
+- **Frente a los pools de F11b (entrenados a 25 s) la media queda a la par del
+  campeón** con puerta —181,5 contra 180,4 a 25 s, 174,3 contra 178,8 a 10 s— y
+  por encima del brazo sin puerta (157,6 / 161,5), pero con UNA sola tirada
+  enfrente y ±12 de error: no confirma ni descarta que entrenar a 10 s sea
+  mejor. Lo que sí queda claro es que 200,7 no es el nivel de la receta, sino su
+  mejor sorteo; el nivel ronda 180.
+- **La puerta no aporta nada en estos pools** —entrenados sin ella—: +0,9 de
+  media a 10 s y +0,2 a 25 s (rangos −9,8…+13,6 y −10,4…+14,8), consistente con
+  el +10 ± 10 que F11c ya daba por no significativo en ese brazo. La puerta paga
+  en los pools que la entrenaron (F11b/F11c), no en estos.
+- **La selección ordena mal el juego**: la semilla 13 lideró la selección (106,1
+  descargas por generación en las últimas 20) y quedó segunda jugando (180,6);
+  la 7 fue segunda en selección (97,8) y primera jugando (189,0). El rango de
+  selección (94–106) es mucho más estrecho que el de juego (140–189).
+
+Veredicto práctico: desplegar el pool de la semilla 7 sigue siendo defendible
+—es el mejor de cuatro sorteos—, pero «entrenar a 10 s sin la puerta» no puede
+venderse como mejor receta: para eso faltan réplicas del brazo de 25 s, que
+están hechas en F11e, justo abajo, y no la cierran. Los `*.antgenome` de las
+réplicas son locales (están en `.gitignore`); lo versionado es el cómo (`SEED`,
+`ARMS`) y la medición.
+
+**F11e — el precio de entrenamiento, réplica a réplica (2026-10-26): 10 s gana
+en 3 de 4 sorteos, y eso no basta para llamarlo receta.** Faltaban las réplicas
+del otro brazo y ya están: las mismas semillas de GA (7, 11, 13 y 23) pero con la
+glándula a **25 s** durante el entrenamiento (`GLAND=25 ARMS=fijo SEED=…
+SUFFIX=p25s… scripts/run-gland-200.sh`, 2 h 32 min las tres nuevas en paralelo,
+las tres con EXIT=0). Los cuatro pools nuevos se jugaron con las mismas 384
+partidas que los de F11d —4 pools × 2 precios × 2 puertas × 24 semillas no
+vistas— y la comparación entre recetas se parea **por semilla de GA**, que es lo
+que comparten: mismo sorteo y mismos genomas de arranque, sólo cambia el precio
+del rastro al entrenar (`scripts/gland-recipe-compare.py`; evidencia en
+`artifacts/pretrain-partida-200-p25-replicas.txt` y los dos veredictos
+`…-p25-veredicto.txt` y `…-p25-veredicto-puerta.txt`).
+
+| receta (sin puerta) | jugado 10 s | jugado 25 s |
+|---|---|---|
+| entrenada a 10 s (4 tiradas) | **174,3** (140–189) | **181,5** (145–201) |
+| entrenada a 25 s (4 tiradas) | **152,6** (119–184) | **153,3** (122–185) |
+
+- **La media favorece a 10 s en los dos precios**: +21,6 ± 3,0 descargas pareadas
+  por semilla de partida a 10 s (gana 24/24) y +28,2 ± 4,7 a 25 s (23/24). Los
+  mismos signos que F11c leyó con una tirada por brazo, con la magnitud
+  recortada (F11c: +27,4 y +43,1).
+- **Pero por tirada de GA el efecto se sostiene en 3 de 4**: +27, −43, +34, +68 a
+  10 s y +43, −40, +40, +69 a 25 s. La sd entre tiradas es 46–47, el doble de la
+  media, así que el error típico de la media de cuatro es ±23 y t ≈ 1 (0,93 y
+  1,19). A ese ritmo harían falta decenas de pares de réplicas (~36) para que la
+  diferencia llegue a t = 2, no las dos o tres que estimaba F11d: «entrenar a
+  10 s» queda como indicio repetido, no como receta demostrada.
+- **La semilla 11 invierte el signo, y lo hace en las cuatro celdas** (−40…−45):
+  es justo la tirada en que el pool de 10 s es el peor de su receta (140,5) y el
+  de 25 s el mejor de la suya (183,5). La interacción tirada × precio se come el
+  efecto principal.
+- **Con la puerta encendida el retrato es el mismo**: 175,1 contra 157,9 jugando
+  a 10 s (+17,2 ± 24,5 por tirada, 3/4) y 181,7 contra 158,8 a 25 s (+22,9 ±
+  25,4, 3/4).
+- **En los pools entrenados a 25 s la puerta paga un poco**, y es lo único que
+  cambia de signo respecto a F11d: +10,3 / +4,2 / +2,2 / +4,3 a 10 s de juego y
+  +6,2 / +8,5 / +0,9 / +6,0 a 25 s, los ocho positivos pero pequeños (media
+  +5,3, el mayor con t = 1,4). En los entrenados a 10 s sigue mezclada (−9,8…
+  +13,6 jugando a 10 s, −10,4…+14,8 a 25 s). Es plausible que un presupuesto
+  entrenado holgado le deje a la puerta algo que racionar; con cuatro tiradas no
+  pasa de sospecha.
+
+Veredicto: el precio del rastro durante el entrenamiento **no** es la palanca
+que F11c sugería. Mueve 20–28 descargas de media a favor de 10 s, pero dos
+sorteos de la misma receta se llevan hasta 65: elegir la tirada pesa más que
+elegir el precio, y la forma barata de aprovecharlo es **seleccionar el pool por
+la partida completa** —varias tiradas, quedarse la que mejor juega— en vez de
+confiar en una. El aviso vale también para F11b: su campeón con puerta es UNA
+tirada por brazo, y esta campaña muestra que un sorteo se lleva ±45. Para
+sostener «la puerta paga» con el rastro caro faltan réplicas del brazo CON
+puerta; ese es el experimento que queda abierto, y está hecho en F11f, justo
+abajo.
+
+**F11f — la puerta, réplica a réplica (2026-10-26): el campeón de F11b es su
+mejor sorteo, y lo que compra la receta con puerta es suelo, no techo.** Se
+repitieron las tres tiradas que le faltaban al brazo CON puerta: la misma receta
+—200 generaciones a 25 s, mismo warm-start, pop 32, 3 × 24 000 ticks por
+genoma— con las semillas de GA 11, 13 y 23 (`GLAND=25 ARMS=red SEED=…
+SUFFIX=p25g… scripts/run-gland-200.sh`: 2 h 30 min las tres en paralelo, 9 005 /
+9 001 / 9 017 s, las tres con EXIT=0), y los cuatro pools jugados con las mismas
+384 partidas de siempre —4 pools × 2 precios × 2 puertas × 24 semillas no
+vistas— (`scripts/gland-bench.py --pools p25g-s7=… p25g-s11=… p25g-s13=…
+p25g-s23=… --ref p25g-s7 --prices 10,25`; evidencia en
+`artifacts/pretrain-partida-200-p25g-replicas.txt`).
+
+| pool (25 s, con puerta) | selección (descargas/gen, últimas 20) | jugado 10 s | jugado 25 s |
+|---|---|---|---|
+| semilla 7 (el campeón de F11b) | 100,3 | **178,8** | **180,4** |
+| semilla 11 | 104,0 | 147,3 | 155,0 |
+| semilla 13 | 95,4 | 170,8 | 171,7 |
+| semilla 23 | 97,0 | 157,2 | 163,4 |
+| **media de las cuatro** | — | **163,5** | **167,6** |
+
+Cifras con la puerta ENCENDIDA al jugar, que es como se entrenaron; los mismos
+cuatro pools con el reflejo fijo dan 152,8 (10 s) y 162,6 (25 s).
+
+- **El campeón es el primer sorteo de cuatro, por un margen normal**: 178,8 y
+  180,4 con la puerta puesta, +8,1 y +8,7 sobre el segundo, a z ≈ +1,1 de la
+  media de sus cuatro tiradas (dispersión 11–14) — un máximo de cuatro sorteos
+  suele estar a +1,0. Así que 180,4 no es un milagro ni el nivel de la receta: el
+  nivel es 167,6 jugando con ella a 25 s, y el campeón lo exagera en 13.
+- **Con el reflejo fijo el campeón cae a media tabla de su propia receta**:
+  167,3 (segundo, −1,8) a 25 s y 151,6 (tercero, −15,2) a 10 s, z = −0,08. El
+  pool de F11b es campeón sólo con la puerta puesta: su ventaja vive en la
+  interacción, no en el pool.
+- **La receta con puerta no tiene el techo más alto, tiene el suelo**: entre
+  tiradas se mueve 8,8–14,8 (rango 149,7–169,1 con el reflejo a 25 s) mientras la
+  receta sin puerta se mueve 26,1–27,0 (rango 121,5–185,0). El mejor sorteo de la
+  receta sin puerta (185,0 / 193,5) le gana al mejor de la receta con puerta
+  (180,4), pero su peor sorteo cae a 121,5 cuando el de la puerta no baja de
+  149,7: para desplegar UN pool, como es el caso, la receta con puerta es la
+  apuesta con menos varianza.
+- **Receta contra receta, pareado por tirada de GA** (`scripts/
+  gland-recipe-compare.py`; veredictos en `…-p25g-vs-p25-fijo.txt` y
+  `…-puerta.txt`): +9,2 ± 3,0 descargas a 25 s con el reflejo (t = 3,1; 22/24
+  semillas) y +8,9 ± 3,4 con la puerta puesta (t = 2,6; 19/24); a 10 s se queda en
+  +0,2 (t = 0,1) y +5,6 (t = 1,4). El signo se sostiene en 3 de 4 sorteos en las
+  cuatro celdas, y la que invierte es otra vez la semilla 11 (−35…−51), la misma
+  que domina F11e.
+- **La puerta paga dentro del pool, ahora también en los que no la entrenaron**
+  (`scripts/gland-gate-replicas.py`; evidencia en
+  `artifacts/pretrain-partida-200-p25g-champion.txt`): sumando los OCHO
+  entrenamientos independientes de 25 s —cuatro por receta— jugar el depósito con
+  el cerebro vale +8,0 ± 3,3 descargas a 10 s de precio (t = 2,4; 7/8 tiradas a
+  favor) y +5,2 ± 1,6 a 25 s (t = 3,4; 7/8). Por receta: +10,7 (10 s) y +5,1
+  (25 s) en los entrenados con puerta (t = 2,9 / 1,7), y +5,3 / +5,4 en los
+  entrenados con el reflejo (t = 1,9 / 1,4). La sospecha de F11e —que en los
+  pools de 25 s la puerta aportaba un poco— sobrevive en el agregado, con el
+  aviso de que los ocho comparten las 24 semillas de partida.
+- **La selección vuelve a ordenar mal el juego**: el pool que lideró la selección
+  (semilla 11, 104,0 descargas por generación) es el PEOR jugando (155,0) y el
+  que fue segundo (semilla 7, 100,3) es el mejor (180,4). El rango de selección
+  (95–104) es tres veces más estrecho que el de juego (155–180).
+
+Veredicto: F11b acertaba el signo y exageraba el tamaño. Con el rastro caro,
+entrenar con la puerta puesta deja una receta cuyo nivel es ~168 —jugando con la
+puerta a 25 s— y cuyo peor sorteo de cuatro sigue 28 descargas por encima del
+peor sorteo de la receta del reflejo; y la puerta, además, paga al jugar en 7 de
+8 entrenamientos, incluidos los que no la entrenaron. Lo que no puede venderse es
+«el pool de la puerta da 180»: eso es su mejor sorteo, y el mismo sorteo puesto a
+jugar con el reflejo fijo baja a 167. Queda abierto si con más sorteos el nivel
+de la receta con puerta se separa del de la receta sin puerta —+9 con t ≈ 3 sobre
+cuatro tiradas, con una que invierte— o si las dos convergen hacia 160; eso es
+F11g, justo abajo.
+
+**F11g — la comparación entre recetas con siete tiradas (2026-10-27): el signo
+aguanta, el tamaño se queda en la mitad y las dos recetas convergen a ~160.** Se
+repitió la campaña de F11f con tres sorteos nuevos por receta —semillas de GA 29,
+31 y 37, ninguna usada en F11b/F11d/F11f— en las DOS recetas a la vez, con la
+receta de siempre (200 generaciones a 25 s, mismo warm-start, pop 32, 3 ×
+24 000 ticks por genoma; `GLAND=25 ARMS=red|fijo SEED=… SUFFIX=p25g…|p25s…
+scripts/run-gland-200.sh`, las seis tiradas en paralelo: 20 108 / 20 110 /
+20 110 / 20 110 / 20 110 / 20 109 s, las seis con EXIT=0), y los siete pools de
+cada receta se jugaron con las mismas 24 semillas no vistas —14 pools × 2 precios
+× 2 puertas × 24 semillas = 1 344 partidas— (`scripts/gland-bench.py --pools …
+--prices 10,25`, una campaña por receta; evidencia en
+`artifacts/pretrain-partida-200-p25g7-replicas.txt` y `…-p257-replicas.txt`).
+
+| receta (7 tiradas) | ¿entrenada con puerta? | jugado 10 s | jugado 25 s |
+|---|---|---|---|
+| con puerta | puerta | 160,3 (144–179) | **166,3** (155–180) |
+| con puerta | reflejo | 154,1 (133–171) | 161,7 (147–177) |
+| sin puerta | puerta | 158,0 (124–188) | 162,2 (128–194) |
+| sin puerta | reflejo | 154,9 (119–184) | 155,6 (122–185) |
+
+- **El hallazgo de F11f se queda en la mitad y pierde el t = 3**: la comparación
+  pareada por semilla de partida (24) da, receta con puerta menos receta sin
+  puerta, +6,1 ± 2,4 descargas a 25 s con el reflejo (t = 2,5; 19/24 semillas) y
+  +4,1 ± 3,2 con la puerta puesta (t = 1,3; 17/24); a 10 s se queda en −0,8 ± 2,1
+  y +2,3 ± 2,4. Con cuatro tiradas los mismos números eran +9,2 ± 3,0 (t = 3,1),
+  +8,9 ± 3,4 (t = 2,6), +0,2 y +5,6: **siete de los doce pares nuevos caen por
+  debajo de la media de su celda** y el efecto se recorta sin desaparecer.
+- **Por tirada de GA el signo se sostiene en 5 de 7 pares** en la celda del
+  reflejo a 25 s y en 4 de 7 en la de la puerta —y en 5/7 y 3/7 a 10 s—. La
+  semilla 11 —la que invierte desde F11e— vuelve a ir en contra
+  en las dos celdas de 25 s (−35 y −38); sin ella, los otros seis pares van
+  0…+43 con el reflejo y −9…+36 con la puerta.
+- **El campeón de F11b sigue siendo el primero de siete, con la puerta puesta**
+  (180,4 y 178,8, +8,7 y +8,1 sobre el segundo, z = +1,64 y +1,46; un máximo de
+  siete sorteos suele estar a +1,35). Con el reflejo fijo cae a media tabla de su
+  propia receta: 167,3 (puesto 3/7, z = +0,52) a 25 s y 151,6 (5/7, z = −0,19) a
+  10 s. Que un sorteo gane en las dos celdas donde el entrenamiento y el juego
+  comparten la puerta, y en ninguna de las otras dos, es la interacción que F11f
+  describió, ahora con siete tiradas detrás.
+- **Lo que compra la receta con puerta sigue siendo suelo, con menos margen del
+  que parecía**: la dispersión entre sus tiradas es 8,6–13,2 donde la receta del
+  reflejo se mueve 18,7–20,3 (con cuatro tiradas eran 8,8–14,8 contra 26,1–27,9:
+  el hueco se estrecha porque los tres sorteos nuevos del reflejo son de media
+  tabla, no porque la puerta se estire). Su peor sorteo de los siete queda en
+  155,0 con la puerta a 25 s y 146,7 con el reflejo (144,0 y 132,8 a 10 s),
+  contra 127,5 y 121,5 del peor sin puerta con la puerta, y 123,7 y 119,3 con el
+  reflejo.
+- **La puerta paga al jugar, ahora sobre CATORCE entrenamientos independientes**
+  (`scripts/gland-gate-replicas.py`; evidencia en
+  `artifacts/pretrain-partida-200-p25g7-champion.txt`): +4,7 ± 2,3 descargas a
+  10 s de precio (t = 2,0; 10/14 tiradas a favor) y +5,6 ± 1,9 a 25 s (t = 2,9;
+  12/14). Por receta: +6,2 (10 s) y +4,6 (25 s) en los siete entrenados con
+  puerta, +3,1 y +6,6 en los siete entrenados con el reflejo. Los ocho de F11f
+  daban +8,0 y +5,2: el agregado a 25 s aguanta (t ≈ 3), el de 10 s se recorta a
+  la mitad.
+- **La selección vuelve a ordenar mal en la receta con puerta**: el pool que
+  lideró la selección de sus siete (semilla 11, 104,0 descargas por generación)
+  es el PEOR jugando (155,0 con la puerta a 25 s) y el que iba segundo (semilla
+  31, 102,0) queda en media tabla (163,3 con la puerta, 176,9 con el reflejo). El
+  rango de selección de los siete (95,4–104,0) sigue siendo tres veces más
+  estrecho que el de juego (155,0–180,4). En la receta del reflejo el orden es
+  algo mejor —sus dos extremos de selección (84,9 y 101,3) son su peor y su mejor
+  jugada, 127,5 y 193,5— pero el rango de selección (84,9–102,3) es igual de
+  estrecho frente a 127,5–193,5 de juego.
+
+Veredicto: la pregunta que F11f dejó abierta se responde con la segunda mitad —
+**las dos recetas convergen**, no se separan. Con siete sorteos cada una, el nivel
+con puerta puesta al juego es 166,3 contra 162,2 (con el reflejo, 161,7 contra
+155,6) y ninguna celda llega a t = 3: la ventaja sigue del lado de la receta con
+puerta en tres de las cuatro celdas, con la mitad del tamaño que F11f midió y con
+la semilla 11 en contra. Lo que no encoge es lo que sostiene la decisión de
+despliegue: los siete sorteos de la receta con puerta no bajan de 146,7 (155,0
+jugando con ella) mientras los del reflejo llegan a 119,3, y la puerta del
+cerebro paga al jugar en 12 de 14 entrenamientos (t = 2,9 a 25 s). Para cerrar
+el eje del todo haría falta lo mismo
+que F11e pedía para el precio: más réplicas, no más partidas; eso es F11h, justo
+abajo.
+
+**F11h — el brazo de 10 s, de cuatro a siete tiradas (2026-10-27): el precio
+sigue pagando en la receta del reflejo —la mitad de lo que decía F11e— y en la
+de la puerta se vuelve un castigo de 12 a 18 descargas.** Se añadieron las mismas
+tres semillas de GA nuevas (29, 31, 37) a las DOS recetas del brazo de 10 s, con
+la receta de siempre pero `GLAND=10 REFILL=6` (`ARMS=red|fijo SEED=…
+SUFFIX=p10g…|p10s… scripts/run-gland-200.sh`; las seis en paralelo: 17 615 /
+17 674 / 17 702 / 17 615 / 17 678 / 17 699 s, las seis con EXIT=0), y se jugaron
+los pools con las 24 semillas de siempre —7 pools sin puerta × 2 precios × 2
+puertas × 24 + 4 pools con puerta × lo mismo = 1 056 partidas—
+(`scripts/gland-bench.py --pools … --prices 10,25`; evidencia en
+`artifacts/pretrain-partida-200-p107-replicas.txt` y `…-p10g4-replicas.txt`). El
+lado CON puerta no llega a siete: a 10 s solo existía el pool de F11c, así que
+sus tres nuevas lo llevan a CUATRO y ese lado del eje se compara sobre cuatro
+sorteos, no sobre siete.
+
+| entrenada a 10 s | jugado 10 s | jugado 25 s |
+|---|---|---|
+| sin puerta (7 tiradas) | 165,1 (114–189) | **168,7** (115–201) |
+| con puerta (4 tiradas) | 154,1 (147–159) | 154,4 (150–159) |
+
+- **En la receta del reflejo el precio sigue pagando, con la mitad del tamaño y
+  con la mitad de sorteos a favor**: 10 s menos 25 s da +10,2 ± 2,6 descargas
+  jugando a 10 s (t = 4,0; 18/24 semillas) y +13,1 ± 3,4 jugando a 25 s
+  (t = 3,8; 18/24); F11e medía +21,6 ± 3,0 y +28,2 ± 4,7. Por tirada de GA gana
+  en 5 de 7 en las dos celdas. Pero el pareado por SORTEO (que es la unidad
+  independiente: la sd entre tiradas es 42) deja t ≈ 0,6 y 0,8 — el precio sigue
+  siendo palanca de segundo orden frente a elegir la tirada, ahora con siete
+  sorteos y no con cuatro.
+- **Los dos sorteos que pierden son distintos de los de F11e**: la semilla 11
+  vuelve a ir en contra (−43 y −40), pero ahora la acompaña la 37 (−47 y −42),
+  que es un entrenamiento malo de verdad —su selección se hunde a 85,6 descargas
+  por generación donde las otras tres tiradas del brazo están en 97,8–100,5, y
+  su fitness medio de las últimas 20 generaciones es 61 796 contra 77 512–79 714
+  de las otras tres—. Es la primera vez que la métrica de selección avisa de algo
+  que luego se
+  ve jugando, y no la salva: en el mismo brazo el pool de la puerta de F11c
+  tiene la selección más baja (87,8) y es el que mejor juega.
+- **En la receta de la puerta el precio se invierte y ya no es una tirada
+  afortunada**: 10 s menos 25 s da −6,7 ± 2,2 (t = −3,1) y −8,7 ± 2,1 (t = −4,1)
+  con el reflejo al jugar, y −6,2 ± 3,2 y −11,9 ± 2,6 (t = −4,5) con la puerta;
+  gana 10 s en 1 de 4 sorteos, y en la celda de 25 s con la puerta en 0 de 4. La
+  señal no es una tirada mala: la dispersión entre sus cuatro tiradas es 3,2–5,1
+  descargas (contra 8,6–13,2 en la receta con puerta de 25 s), es decir las
+  cuatro salen igual de mediocres. F11c decía −19 y −23 con UNA tirada por
+  precio; con cuatro la mitad del castigo es real y el resto era el sorteo.
+- **La interacción es el hallazgo**: la puerta necesita el presupuesto holgado.
+  Al MISMO precio de entrenamiento, la puerta cuesta 15,8 ± 3,5 descargas con el
+  reflejo al jugar (t = −4,5; 5/24 semillas) y 12,8 ± 2,8 con la puerta (t =
+  −4,6) cuando se entrena a 10 s —y 3 de 4 sorteos lo confirman—, mientras que a
+  25 s la puerta GANA +4…+6 (F11g). Y un pool entrenado a 10 s tampoco sabe
+  aprovecharla al jugar: con 11 pools, la puerta paga +3,4 ± 2,3 a 10 s de
+  precio (t = 1,5; 8/11) y −0,5 ± 2,6 a 25 s (t = −0,2; 5/11), justo lo
+  contrario de los 14 pools entrenados a 25 s (+5,6 ± 1,9, t = 2,9; F11g).
+- **El campeón de F11c aguanta a medias**: p10-s7 sigue siendo el primero de
+  siete con el reflejo al jugar (189,0 a 10 s y 200,7 a 25 s; z = +0,85 y
+  +1,06) pero con la puerta puesta cae al segundo, donde la semilla 23 le saca
+  15–21 descargas (200,5 y 205,7). Su z es bajo aunque su ventaja absoluta sea
+  grande porque la receta de 10 s se mueve 27–30 descargas entre tiradas: el
+  doble de lo que se mueve la receta con puerta de 25 s.
+
+Veredicto: el eje del precio de entrenamiento queda medido con siete pares en el
+lado que importaba y con cuatro en el otro, y lo que dice es más específico que
+«10 s entrena mejor»: **10 s paga en la receta del reflejo (+10 a +13, la mitad
+de lo que F11e estimó) y castiga en la receta de la puerta (−7 a −12, y 12 a 18
+contra el reflejo al mismo precio)**. La puerta del cerebro no es una salida
+que se pueda regalar: con presupuesto corto el cerebro aprende a no depositarla
+y el pool sale plano; con presupuesto holgado, y sólo entonces, la puerta paga
+al jugar. Queda abierto cuánto de eso es la glándula y cuánto el horizonte de
+selección (24 000 ticks, 400 s): a 10 s de glándula el depósito cuesta cuatro
+veces menos por evento de lo que cuesta a 25 s, y el fitness no lo nota porque
+sólo cuenta descargas.
+
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
 a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
-NEAT canónica. **767/767 tests** en Windows y verdes en Linux en CI en cada push,
-igual que los 6 scripts de pin. El job `test` incluye además **seis pasos que
+NEAT canónica. <!-- cifras-historicas: el cierre de v0.8.0 (run #37). -->Aquel
+cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **775/775
+tests** en Windows y verdes en Linux en CI en cada push, igual que los 6 scripts
+de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
 guardas del Unity CLI, el veredicto del hook pre-push, el **selftest del barrido
 de costes** (el que prueba el ajuste fijo/marginal de §4.10), el guardarraíl de

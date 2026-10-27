@@ -12,7 +12,7 @@ un bucle de jugador completo demostrado end-to-end.
 
 <!-- /cifras-historicas -->
 
-**Estado ACTUAL** (HEAD `v0.8.0`, suite **767/767**, **6 pines** de hash): las
+**Estado ACTUAL** (HEAD `v0.8.0`, suite **775/775**, **6 pines** de hash): las
 seis sub-fases de Fase 5 están **CERRADAS** — F5.0, F5.1 + F5.1bis, F5.2a, F5.2b,
 F5.2c y F5.3. Lo que sigue abierto es deuda menor de presentación (F5.1, §2) y el
 camino `unity: full` de CI. El registro cronológico con las cifras vive en
@@ -505,7 +505,7 @@ grafo NEAT del mejor cortador visible. Matiz: las partidas canónicas usan presa
 
 | Riesgo | Estado (Fase 5 en curso) |
 |---|---|
-| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 767/767 en Windows y Linux |
+| Determinismo roto | mitigado: 6 pines de hash en CI (stream canónico, replay 3000/6000, Atta, invasión, NEAT) + la constante del fixture en la suite; 775/775 en Windows y Linux |
 | Fricción Unity↔netstandard | resuelto: modelos puros compilados en la suite desde F4.1 |
 | Pre-entrenamiento no converge | resuelto: cadena de pools validada con transferencia 4/5 verdes |
 | Feromonas costosas | **cerrado (F5.3 rodajas 3 y 3bis)**: LOD de difusión EXACTO por bloques de 8×8 — 8.7 % del grid visitado en un mundo forrajeado y la reconstrucción de la lista por debajo del 1 % del tick; el RLE ya resolvía el envío del canal E |
