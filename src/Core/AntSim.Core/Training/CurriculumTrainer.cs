@@ -124,6 +124,10 @@ public sealed class CurriculumTrainer
     private readonly List<MlpGenome> _population = new();
     private readonly List<GenerationStats> _report = new();
     private readonly ObstacleCurriculum? _obstacles;
+    // F10: protocolo de PARTIDA. Con un evaluador de juego la selección puntúa
+    // descargas reales (montones + rastro + rival) en vez del fitness densado de
+    // la arena; la geometría de la etapa y el currículo de obstáculos no aplican.
+    private readonly Func<ulong, MlpGenome, ArenaResult>? _gameEvaluator;
     private readonly bool _parallel;
     private readonly ulong _mazeSeed;
     private readonly int _classicEvery;
@@ -158,9 +162,18 @@ public sealed class CurriculumTrainer
         IReadOnlyList<int>? hiddenLadder = null,
         bool parallel = false,
         int classicEvery = 0,
-        int classicTail = 0)
+        int classicTail = 0,
+        Func<ulong, MlpGenome, ArenaResult>? gameEvaluator = null)
     {
         if (populationSize < 2) throw new ArgumentOutOfRangeException(nameof(populationSize), "Mínimo 2 genomas.");
+        // Dos varas de medir a la vez no tienen sentido: el evaluador de partida
+        // sustituye a la arena, y el currículo de obstáculos vive DENTRO de la
+        // arena (dificultad, horizonte y observación de descargas).
+        if (gameEvaluator != null && obstacleCurriculum != null)
+            throw new ArgumentException(
+                "gameEvaluator y obstacleCurriculum son excluyentes: la partida real sustituye a la arena, no la complementa.",
+                nameof(gameEvaluator));
+        _gameEvaluator = gameEvaluator;
         _seed = seed;
         _rng = new DeterministicRandom(seed);
         _populationSize = populationSize;
@@ -424,80 +437,27 @@ public sealed class CurriculumTrainer
             // par: banda ancha completa (min/max de la etapa)
         }
 
-        // — F7: terreno de la etapa. La dificultad viene del controlador; el
-        //   horizonte se acorta cuando el mapa es fácil (ver ObstacleCurriculum)
-        //   y el mapa es SIEMPRE el mismo con paredes retiradas (anidamiento).
-        //   Cada `classicEvery` generaciones se evalúa SIN terreno (mantenimiento):
-        //   entrenar solo en el laberinto olvida el forrajeo de campo abierto
-        //   (medido: 242 → 40 descargas en la partida clásica). Esas generaciones
-        //   NO alimentan al controlador de dificultad.
-        float difficulty = _obstacles?.Difficulty ?? 0f;
-        int cells = stage.ArenaCells ?? ArenaEvaluator.GridCells;
-
-        // — F7: dos regímenes clásicos, con papeles distintos —
-        // · MANTENIMIENTO (intercalado, 1 de cada N): la banda y el horizonte del
-        //   currículo clásico. Su papel es no dejar que la población se vaya del
-        //   régimen de forrajeo clásico mientras el laberinto manda; medido, es el
-        //   que conserva el ciclo completo (242 → 40 sin mantenimiento).
-        // · COLA (forceClassic, al final): el régimen de la PARTIDA sin laberinto
-        //   —comida uniforme en todo el mapa (≥ 200 u del nido, hasta la media
-        //   diagonal) y horizonte de 2–3 generaciones de hormigas—. Es la fase que
-        //   recupera la métrica del juego (medido: 60 generaciones de banda estrecha
-        //   y 3 600 ticks afinaban la arena y hundían la partida, 172 → 46).
-        bool classicGen = forceClassic || (_obstacles != null && _classicEvery > 0
-            && generation % _classicEvery == 0);
-        if (forceClassic)
-        {
-            min = WorldSim.NestMinSpawnDistance;
-            max = 0.5f * MathF.Sqrt(2f) * (cells * SimConstants.CellSizeUnits);
-        }
-
-        // El horizonte clásico NO depende del terreno: atarlo al presupuesto del
-        // currículo de obstáculos dejaba las generaciones de mantenimiento a
-        // 1 800 ticks con dificultad baja — menos de lo que dura un viaje de ida y
-        // vuelta a 200 u (~4 400) — y esas generaciones no veían NINGUNA descarga
-        // (medido: 600 generaciones seguidas con `unloads=0`), así que seleccionaban
-        // ruido. El mantenimiento corre con el horizonte de la etapa "mundo" clásica.
-        int budget = forceClassic
-            ? ClassicTickBudget
-            : _obstacles != null
-                ? Math.Min(stage.TickBudget, _obstacles.TickBudget)
-                : stage.TickBudget;
-        MazeLayout? layout = _obstacles != null && !classicGen
-            ? MazeLayout.Pruned(_mazeSeed, cells, 1, difficulty)
-            : null;
-
+        // Vectores compartidos por los DOS protocolos (partida y arena): el
+        // fitness y los contadores de eventos que alimentan el reporte.
         int count = _population.Count;
         var fitness = new double[count];
         var unloads = new int[count];
         var pickups = new int[count];
+        float difficulty = 0f;
+        bool classicGen = false;
 
-        if (_parallel)
+        // — F10: protocolo de PARTIDA. Con evaluador de juego no se construye
+        //   terreno ni arena, y el currículo no se mueve: cada genoma corre
+        //   partidas completas (cúmulos + rastro + rival) y su fitness son las
+        //   descargas. La etapa solo aporta su tope de generaciones.
+        if (_gameEvaluator != null)
         {
-            // Una semilla PROPIA por genoma: el resultado de cada evaluación no
-            // depende de cuántos hilos la ejecuten ni del orden — el entrenamiento
-            // paralelo es determinista byte a byte.
-            Parallel.For(0, count, i =>
-            {
-                var arena = new ArenaEvaluator(GenomeSeed(stageIndex, generation, i), min, max, budget,
-                    TrialsPerGenome, stage.ArenaCells, layout);
-                var result = arena.Evaluate(_population[i]);
-                fitness[i] = result.Fitness;
-                unloads[i] = result.Unloads;
-                pickups[i] = result.Pickups;
-            });
+            FitGame(stageIndex, generation, count, fitness, unloads, pickups);
         }
         else
         {
-            var arena = new ArenaEvaluator(arenaSeed, min, max, budget, TrialsPerGenome,
-                stage.ArenaCells, layout);
-            for (int i = 0; i < count; i++)
-            {
-                var result = arena.Evaluate(_population[i]);
-                fitness[i] = result.Fitness;
-                unloads[i] = result.Unloads;
-                pickups[i] = result.Pickups;
-            }
+            FitArena(stage, stageIndex, generation, forceClassic, arenaSeed, count, min, max,
+                fitness, unloads, pickups, out difficulty, out classicGen);
         }
 
         double sum = 0.0;
@@ -531,6 +491,119 @@ public sealed class CurriculumTrainer
             bestUnloads, bestPickups, difficulty, grown, classicGen);
         _report.Add(stats);
         _onGeneration?.Invoke(stats);
+    }
+
+    /// <summary>
+    /// F10 — rama de PARTIDA: cada genoma se puntúa con el evaluador de juego
+    /// (descargas de la colonia que lo porta, con montones, rastro y rival) en
+    /// vez del fitness densado de la arena.
+    /// </summary>
+    private void FitGame(int stageIndex, int generation, int count,
+        double[] fitness, int[] unloads, int[] pickups)
+    {
+        if (_parallel)
+        {
+            Parallel.For(0, count, i =>
+            {
+                var r = _gameEvaluator!(GenomeSeed(stageIndex, generation, i), _population[i]);
+                fitness[i] = r.Fitness;
+                unloads[i] = r.Unloads;
+                pickups[i] = r.Pickups;
+            });
+        }
+        else
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var r = _gameEvaluator!(GenomeSeed(stageIndex, generation, i), _population[i]);
+                fitness[i] = r.Fitness;
+                unloads[i] = r.Unloads;
+                pickups[i] = r.Pickups;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rama de ARENA (F3–F7): el régimen de siempre —colonia completa sobre la
+    /// arena de WorldSim, con banda de distancia, terreno opcional y densados del
+    /// ciclo. Rellena los vectores compartidos y devuelve la dificultad y si la
+    /// generación fue clásica (mantenimiento o cola).
+    /// </summary>
+    private void FitArena(CurriculumStage stage, int stageIndex, int generation, bool forceClassic,
+        ulong arenaSeed, int count, float min, float max,
+        double[] fitness, int[] unloads, int[] pickups,
+        out float difficulty, out bool classicGen)
+    {
+        // — F7: terreno de la etapa. La dificultad viene del controlador; el
+        //   horizonte se acorta cuando el mapa es fácil (ver ObstacleCurriculum)
+        //   y el mapa es SIEMPRE el mismo con paredes retiradas (anidamiento).
+        //   Cada `classicEvery` generaciones se evalúa SIN terreno (mantenimiento):
+        //   entrenar solo en el laberinto olvida el forrajeo de campo abierto
+        //   (medido: 242 → 40 descargas en la partida clásica). Esas generaciones
+        //   NO alimentan al controlador de dificultad.
+        difficulty = _obstacles?.Difficulty ?? 0f;
+        int cells = stage.ArenaCells ?? ArenaEvaluator.GridCells;
+
+        // — F7: dos regímenes clásicos, con papeles distintos —
+        // · MANTENIMIENTO (intercalado, 1 de cada N): la banda y el horizonte del
+        //   currículo clásico. Su papel es no dejar que la población se vaya del
+        //   régimen de forrajeo clásico mientras el laberinto manda; medido, es el
+        //   que conserva el ciclo completo (242 → 40 sin mantenimiento).
+        // · COLA (forceClassic, al final): el régimen de la PARTIDA sin laberinto
+        //   —comida uniforme en todo el mapa (≥ 200 u del nido, hasta la media
+        //   diagonal) y horizonte de 2–3 generaciones de hormigas—. Es la fase que
+        //   recupera la métrica del juego (medido: 60 generaciones de banda estrecha
+        //   y 3 600 ticks afinaban la arena y hundían la partida, 172 → 46).
+        classicGen = forceClassic || (_obstacles != null && _classicEvery > 0
+            && generation % _classicEvery == 0);
+        if (forceClassic)
+        {
+            min = WorldSim.NestMinSpawnDistance;
+            max = 0.5f * MathF.Sqrt(2f) * (cells * SimConstants.CellSizeUnits);
+        }
+
+        // El horizonte clásico NO depende del terreno: atarlo al presupuesto del
+        // currículo de obstáculos dejaba las generaciones de mantenimiento a
+        // 1 800 ticks con dificultad baja — menos de lo que dura un viaje de ida y
+        // vuelta a 200 u (~4 400) — y esas generaciones no veían NINGUNA descarga
+        // (medido: 600 generaciones seguidas con `unloads=0`), así que seleccionaban
+        // ruido. El mantenimiento corre con el horizonte de la etapa "mundo" clásica.
+        int budget = forceClassic
+            ? ClassicTickBudget
+            : _obstacles != null
+                ? Math.Min(stage.TickBudget, _obstacles.TickBudget)
+                : stage.TickBudget;
+        MazeLayout? layout = _obstacles != null && !classicGen
+            ? MazeLayout.Pruned(_mazeSeed, cells, 1, difficulty)
+            : null;
+
+        if (_parallel)
+        {
+            // Una semilla PROPIA por genoma: el resultado de cada evaluación no
+            // depende de cuántos hilos la ejecuten ni del orden — el entrenamiento
+            // paralelo es determinista byte a byte.
+            Parallel.For(0, count, i =>
+            {
+                var arena = new ArenaEvaluator(GenomeSeed(stageIndex, generation, i), min, max, budget,
+                    TrialsPerGenome, stage.ArenaCells, layout);
+                var result = arena.Evaluate(_population[i]);
+                fitness[i] = result.Fitness;
+                unloads[i] = result.Unloads;
+                pickups[i] = result.Pickups;
+            });
+        }
+        else
+        {
+            var arena = new ArenaEvaluator(arenaSeed, min, max, budget, TrialsPerGenome,
+                stage.ArenaCells, layout);
+            for (int i = 0; i < count; i++)
+            {
+                var result = arena.Evaluate(_population[i]);
+                fitness[i] = result.Fitness;
+                unloads[i] = result.Unloads;
+                pickups[i] = result.Pickups;
+            }
+        }
     }
 
     /// <summary>Semilla de evaluación de un genoma, independiente del orden y de los hilos.</summary>

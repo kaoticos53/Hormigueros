@@ -44,12 +44,32 @@ public sealed class RecruitmentTuning
     /// asimetría; 0 = lo huele pero no lo sigue).</summary>
     public float TrailFollow { get; set; } = 8f;
 
+    /// <summary>F11 — ¿el depósito del reflejo lo abre el CEREBRO? false (default)
+    /// es el rastro fijo de F8: la cargada deja su rastro y la que busca el suyo,
+    /// siempre y con la misma fuerza. true lo escala por las salidas
+    /// <c>DepositFood</c>/<c>DepositHome</c>: la hormiga decide si deja rastro y
+    /// cuánto. Control A/B del experimento: mismo mundo, misma tirada, una
+    /// constante en vez de una salida.</summary>
+    public bool TrailByBrain { get; set; }
+
+    /// <summary>F11b — PRECIO DEL RASTRO: segundos de depósito a plena tasa que
+    /// caben en la glándula de una hormiga (0 = gratis, el default de F8). Con
+    /// precio la reserva se gasta al depositar y solo se rellena en el nido, así
+    /// que el cerebro tiene algo que decidir de verdad: dónde y cuánto gastarla.
+    /// Con 0 el mundo no cambia ni un byte.</summary>
+    public float TrailGlandSeconds { get; set; }
+
+    /// <summary>F11b — segundos que tarda la glándula en llenarse dentro del nido.</summary>
+    public float TrailGlandRefillSeconds { get; set; } = 3f;
+
     public const int MaxClusters = 64;
     public const int MaxClusterItems = 40;
     public const float MaxClusterRadius = 120f;
     public const float MaxTrailDeposit = 5f;
     public const float MaxTrailHalfLife = 3600f;
     public const float MaxTrailFollow = 20f;
+    public const float MaxTrailGland = 120f;
+    public const float MaxTrailGlandRefill = 60f;
 
     public static RecruitmentTuning Default => new RecruitmentTuning();
 
@@ -58,7 +78,8 @@ public sealed class RecruitmentTuning
     public bool IsDefault =>
         Clusters == 8 && ClusterMin == 6 && ClusterMax == 10
         && ClusterRadius == 18f && TrailDeposit == 1f
-        && TrailHalfLife == 2100f && TrailFollow == 8f;
+        && TrailHalfLife == 2100f && TrailFollow == 8f && !TrailByBrain
+        && TrailGlandSeconds == 0f && TrailGlandRefillSeconds == 3f;
 
     /// <summary>Copia los valores al mundo. El mundo los necesita ANTES de
     /// sembrar (el constructor crea los montones), así que se llama desde su
@@ -72,6 +93,9 @@ public sealed class RecruitmentTuning
         sim.RecruitmentFoodDeposit = TrailDeposit;
         sim.RecruitmentFoodHalfLife = TrailHalfLife;
         sim.FoodTrailAttract = TrailFollow;
+        sim.RecruitmentTrailByBrain = TrailByBrain;
+        sim.RecruitmentGlandSeconds = TrailGlandSeconds;
+        sim.RecruitmentGlandRefillSeconds = TrailGlandRefillSeconds;
     }
 
     /// <summary>Reglas de rango. Devuelve false con el motivo en
@@ -96,6 +120,10 @@ public sealed class RecruitmentTuning
         { error = $"trailHalfLife fuera de rango [1, {F(MaxTrailHalfLife)}] s: {F(TrailHalfLife)}"; return false; }
         if (TrailFollow < 0f || TrailFollow > MaxTrailFollow)
         { error = $"trailFollow fuera de rango [0, {F(MaxTrailFollow)}] rad/s: {F(TrailFollow)}"; return false; }
+        if (TrailGlandSeconds < 0f || TrailGlandSeconds > MaxTrailGland)
+        { error = $"trailGland fuera de rango [0, {F(MaxTrailGland)}] s (0 = sin precio): {F(TrailGlandSeconds)}"; return false; }
+        if (TrailGlandRefillSeconds < 0.05f || TrailGlandRefillSeconds > MaxTrailGlandRefill)
+        { error = $"trailGlandRefill fuera de rango [0.05, {F(MaxTrailGlandRefill)}] s: {F(TrailGlandRefillSeconds)}"; return false; }
         return true;
     }
 
@@ -104,7 +132,11 @@ public sealed class RecruitmentTuning
     /// configuraciones necesita los números, no una frase.</summary>
     public string Describe() =>
         $"montones={Clusters} ({ClusterMin}–{ClusterMax} ítems, radio {F(ClusterRadius)} u) · " +
-        $"rastro={F(TrailDeposit)}× / {F(TrailHalfLife)} s / sigue {F(TrailFollow)}";
+        $"rastro={F(TrailDeposit)}× / {F(TrailHalfLife)} s / sigue {F(TrailFollow)}" +
+        (TrailByBrain ? " / puerta del cerebro" : "") +
+        (TrailGlandSeconds > 0f
+            ? $" / glándula {F(TrailGlandSeconds)} s (recarga {F(TrailGlandRefillSeconds)} s en el nido)"
+            : "");
 
     private static string F(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
 }

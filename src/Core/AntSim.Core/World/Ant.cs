@@ -46,6 +46,17 @@ public sealed class Ant
     public bool DiedInCombat;       // F5.2b.1: la energía llegó a 0 por golpes (no por hambre)
 
     /// <summary>
+    /// F11b — GLÁNDULA DE RASTRO: reserva normalizada [0,1] de feromona que la
+    /// hormiga puede dejar. Se gasta al depositar y solo se rellena DENTRO del
+    /// nido, así que el depósito deja de ser gratis: lo que se gasta cerca del
+    /// nido no se puede gastar a lo largo del camino. Solo se cobra con la
+    /// glándula encendida (<see cref="WorldSim.RecruitmentGlandSeconds"/> &gt; 0)
+    /// y en el mundo de reclutamiento; en el resto del juego nadie la mira y
+    /// vale 1 de por vida (el campo ni se hashea ni se guarda).
+    /// </summary>
+    public float Gland = 1f;         // [0,1] fracción de la glándula disponible
+
+    /// <summary>
     /// Casta / rol etológico por edad y experiencia (polietismo temporal):
     /// - Nodriza (Nurse): joven (primer 25% de vida), permanece cuidando cría.
     /// - Forrajera (Forager): madura, busca y transporta alimento.
@@ -74,6 +85,7 @@ public sealed class Ant
         TrophallaxisCooldown = 0f;
         LifetimeFoodGathered = 0f;
         LifetimeDistanceExplored = 0f;
+        Gland = 1f; // nace con la glándula llena
     }
 }
 

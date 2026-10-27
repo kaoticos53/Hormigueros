@@ -19,7 +19,8 @@ namespace AntSim.Cli;
 ///          [--colonies N] [--import archivo.antgenome] [--seed-pool archivo.antgenome]
 ///          [--export archivo.antgenome] [--until-extinct] [--recruitment] [--clusters N]
 ///          [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F]
-///          [--trail-half-life S] [--trail-follow G] [--pop N] [--generations N] [--warm-start f]
+///          [--trail-half-life S] [--trail-follow G] [--trail-by-brain]
+///          [--trail-gland S] [--trail-gland-refill S] [--pop N] [--generations N] [--warm-start f]
 ///          [--save f] [--save-tick N] [--antlog f] [--load f]
 ///          [--colony-counts 1,2,4,8] [--lod-blocks 4,8,16,32,64] [--lod-colonies N]
 ///
@@ -115,6 +116,25 @@ internal static class Program
         uint inspectId = 0; // F5.0: hormiga inspeccionada (canal F de activaciones)
         int activEvery = 0; // F5.0: canal F opt-in (activaciones del MLP en el stream)
         bool presetsJson = false;   // --mode presets: salida JSON estructurada
+        // F10: SELECCIÓN POR DESCARGAS EN LA PARTIDA REAL. Con --fitness downloads
+        // el pretrain puntúa cada genoma corriendo partidas del lanzador (montones,
+        // rastro y rival) y cuenta descargas, en vez de usar el fitness densado del
+        // currículo. Los dos números de abajo son el horizonte y las semillas de
+        // cada partida de evaluación.
+        bool fitnessDownloads = false;
+        // F11: el rastro de reclutamiento lo abre el cerebro (DepositFood /
+        // DepositHome) en vez del reflejo fijo. Solo tiene efecto donde hay
+        // rastro: la partida (--recruitment) y la partida de evaluación
+        // (--fitness downloads).
+        bool trailByBrain = false;
+        // F11b: PRECIO del rastro —segundos de depósito a plena tasa que caben en
+        // la glándula de una hormiga (0 = gratis, el mundo de F8)—. Con precio la
+        // reserva se gasta al depositar y solo se rellena en el nido: el cerebro
+        // tiene que decidir DÓNDE y CUÁNTO gastarla, no solo si deja menos.
+        float trailGland = 0f;
+        float trailGlandRefill = 3f;
+        int gameTicks = GameEvaluator.DefaultTicks;
+        int gameTrials = GameEvaluator.DefaultTrials;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -212,6 +232,38 @@ internal static class Program
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out classicTail)
                         || classicTail < 0)
                         return Fail("--classic-tail requiere un entero ≥ 0 (generaciones clásicas de cola; 0 = ninguna).");
+                    break;
+                case "--fitness":
+                {
+                    // F10: la vara de medir del pretrain. 'arena' (default) es el
+                    // fitness del currículo de F7; 'downloads' es el marcador de la
+                    // partida real.
+                    string what = Next(args, ref i);
+                    if (what == "arena") fitnessDownloads = false;
+                    else if (what == "downloads" || what == "descargas") fitnessDownloads = true;
+                    else return Fail("--fitness debe ser 'arena' (fitness del currículo) o 'downloads' (descargas en la partida real).");
+                    break;
+                }
+                case "--trail-by-brain":
+                    trailByBrain = true;
+                    break;
+                case "--trail-gland":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out trailGland))
+                        return Fail("--trail-gland requiere un número (segundos de depósito a plena tasa; 0 = sin precio).");
+                    recruitmentTuning.TrailGlandSeconds = trailGland;
+                    break;
+                case "--trail-gland-refill":
+                    if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out trailGlandRefill))
+                        return Fail("--trail-gland-refill requiere un número (segundos de vacía a llena en el nido).");
+                    recruitmentTuning.TrailGlandRefillSeconds = trailGlandRefill;
+                    break;
+                case "--game-ticks":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out gameTicks) || gameTicks < 1)
+                        return Fail("--game-ticks requiere un entero positivo (ticks por partida de evaluación).");
+                    break;
+                case "--game-trials":
+                    if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out gameTrials) || gameTrials < 1)
+                        return Fail("--game-trials requiere un entero positivo (semillas por genoma).");
                     break;
                 case "--seed-pool":
                     seedPoolPath = Next(args, ref i);
@@ -484,6 +536,24 @@ internal static class Program
             if (recruitmentTuned && !recruitment)
                 return Fail("--clusters/--cluster-size/--cluster-radius/--trail-* solo tienen " +
                             "sentido con --recruitment (si no, el mundo clásico los ignora).");
+            // F11: la puerta del rastro solo existe donde hay rastro que abrir.
+            if (trailByBrain && mode != "game" && mode != "pretrain")
+                return Fail("--trail-by-brain se mide en la partida: --mode game (con --recruitment) " +
+                            "o --mode pretrain --fitness downloads.");
+            if (trailByBrain && mode == "game" && !recruitment)
+                return Fail("--trail-by-brain necesita --recruitment: sin reclutamiento no hay rastro que decidir.");
+            if (trailByBrain && mode == "pretrain" && !fitnessDownloads)
+                return Fail("--trail-by-brain necesita --fitness downloads: el fitness del currículo no tiene rastro que decidir.");
+            if (trailByBrain) recruitmentTuning.TrailByBrain = true;
+            // F11b: el precio solo existe donde hay rastro (y se cobra en la
+            // partida); en el mundo clásico la glándula no se mira.
+            if (trailGland > 0f && mode != "game" && mode != "pretrain")
+                return Fail("--trail-gland se mide en la partida: --mode game (con --recruitment) " +
+                            "o --mode pretrain --fitness downloads.");
+            if (trailGland > 0f && mode == "game" && !recruitment)
+                return Fail("--trail-gland necesita --recruitment: sin rastro no hay nada que cobrar.");
+            if (trailGland > 0f && mode == "pretrain" && !fitnessDownloads)
+                return Fail("--trail-gland necesita --fitness downloads: el fitness del currículo no tiene rastro.");
 
             // F6: el modo juego escribe TICK A TICK en stdout. Construirlo como
             // string (216.000 ticks) son gigabytes: el lanzador de la escena
@@ -515,7 +585,9 @@ internal static class Program
                         AntSim.Core.Brain.BrainContract.CurrentVersion).ToJson() + "\n",
                 "pretrain" => RunPretrain(seed, pop, generations, exportPath, warmStartPath, bandMin, bandMax, hybrid, fullWorld, neat, obstacles, hidden, grow,
                     classicEvery: classicEvery < 0 ? (obstacles ? 5 : 0) : classicEvery,
-                    classicTail: classicTail < 0 ? (obstacles ? CurriculumTrainer.DefaultClassicTail : 0) : classicTail),
+                    classicTail: classicTail < 0 ? (obstacles ? CurriculumTrainer.DefaultClassicTail : 0) : classicTail,
+                    fitnessDownloads: fitnessDownloads, gameTicks: gameTicks, gameTrials: gameTrials,
+                    trailByBrain: trailByBrain, trailGland: trailGland, trailGlandRefill: trailGlandRefill),
                 "bench" => PolicyBenchmarkScenario.Run(benchSeeds, bandMin, bandMax, ticks, trials, seedPoolPath, arenaCells),
                 "scale" => ScaleScenario.Run(grid, ticks, scaleColonyCounts, seed, seedPoolPath)
                     + (lodBlockSizes == null ? "" : "\n" + ScaleScenario.RunLodSweep(grid, ticks,
@@ -613,10 +685,21 @@ internal static class Program
     private static string RunPretrain(ulong seed, int pop, int generations, string? exportPath,
         string? warmStartPath, float bandMin, float bandMax, bool hybrid = false, bool fullWorld = false,
         bool neat = false, bool obstacles = false, int hidden = 8, bool grow = false,
-        int classicEvery = 0, int classicTail = 0)
+        int classicEvery = 0, int classicTail = 0, bool fitnessDownloads = false,
+        int gameTicks = GameEvaluator.DefaultTicks, int gameTrials = GameEvaluator.DefaultTrials,
+        bool trailByBrain = false, float trailGland = 0f, float trailGlandRefill = 3f)
     {
         if (obstacles && neat)
             throw new ArgumentException("--obstacles entrena el currículo MLP; --neat tiene su propio trainer (no se combinan).");
+        // F10: la partida real es una vara DISTINTA de las de arena. Los modos de
+        // arena (obstáculos, NEAT) traen la suya y no se apilan; el híbrido y el
+        // mundo completo describen geometrías de etapa que aquí no existen.
+        if (fitnessDownloads && (obstacles || neat))
+            throw new ArgumentException(
+                "--fitness downloads mide la partida real; no se combina con --obstacles ni con --neat.");
+        if (fitnessDownloads && (hybrid || fullWorld))
+            throw new ArgumentException(
+                "--fitness downloads selecciona en la partida: --hybrid y --full-world son geometrías de la arena y no aplican.");
         // Currículo calibrado (Fase 3bis, arena realista); --generations limita el
         // máximo por etapa y --band-min/--band-max re-bandan TODAS las etapas
         // (warm-start de refinado: extender el anillo de forrajeo sobre un pool ya
@@ -686,6 +769,25 @@ internal static class Program
             });
         }
 
+        // — F10: selección por DESCARGAS. Una sola etapa que dura toda la tirada;
+        //   su tope de generaciones lo fija --generations y su «arena» es el
+        //   evaluador de partida (cúmulos, rastro y rival salvaje). No hay
+        //   currículo de terreno ni escalera: la vara es el marcador del juego.
+        if (fitnessDownloads)
+        {
+            stages.Clear();
+            stages.Add(new CurriculumStage
+            {
+                Name = "partida",
+                MinDistance = bandMin,
+                MaxDistance = bandMax,
+                TickBudget = gameTicks,
+                CompetenceFitness = 0.0,
+                MinGenerations = 1,
+                MaxGenerations = generations > 0 ? generations : 300
+            });
+        }
+
         var sb = new System.Text.StringBuilder();
         sb.Append("seed ").Append(seed).Append(" pop ").Append(pop)
           .Append(" band ").Append(bandMin.ToString("0", CultureInfo.InvariantCulture))
@@ -697,6 +799,11 @@ internal static class Program
           .Append(grow ? " grow" : "")
           .Append(classicEvery > 0 ? $" classic-every {classicEvery}" : "")
           .Append(classicTail > 0 ? $" classic-tail {classicTail}" : "")
+          .Append(fitnessDownloads ? $" fitness=downloads game-ticks {gameTicks} game-trials {gameTrials}" : "")
+          .Append(trailByBrain ? " trail=por-la-red" : "")
+          .Append(trailGland > 0f
+              ? $" trail-gland {trailGland.ToString("0.###", CultureInfo.InvariantCulture)}s/{trailGlandRefill.ToString("0.###", CultureInfo.InvariantCulture)}s"
+              : "")
           .AppendLine();
 
         System.Collections.Generic.List<MlpGenome>? seeded = null;
@@ -708,6 +815,13 @@ internal static class Program
         }
 
         ObstacleCurriculum? curriculum = obstacles ? new ObstacleCurriculum() : null;
+        // F10: el evaluador de partida es el que puntúa; el trainer solo aporta
+        // población, selección y reproducción.
+        GameEvaluator? gameArena = fitnessDownloads
+            ? new GameEvaluator(gameTicks, gameTrials, trailByBrain: trailByBrain,
+                trailGlandSeconds: trailGland, trailGlandRefillSeconds: trailGlandRefill)
+            : null;
+        Func<ulong, MlpGenome, ArenaResult>? gameEval = gameArena is null ? null : gameArena.Evaluate;
         var ladder = new System.Collections.Generic.List<int> { hidden };
         if (grow)
         {
@@ -731,16 +845,38 @@ internal static class Program
                 // (el de la partida sin laberinto), no la dificultad de arriba.
                 if (stats.ClassicGen) sb.Append(" classic=1");
             }
+            else if (fitnessDownloads)
+            {
+                // El marcador que selecciona: descargas del mejor genoma de la
+                // generación (media de sus pruebas) y los pickups de desempate.
+                sb.Append(" unloads=").Append(stats.BestUnloads)
+                  .Append(" pickups=").Append(stats.BestPickups);
+            }
             sb.AppendLine();
             if (stats.GrownHidden > 0)
                 sb.Append("grow hidden=").Append(stats.GrownHidden).AppendLine();
+            // F11b: una tirada de 200 generaciones en la partida son horas, y con
+            // el texto retenido hasta el final el log no dice nada mientras corre
+            // (imposible saber si avanza o si se atascó). Se vuelca por generación
+            // y se vacía el acumulador: el mismo texto, en el mismo orden, pero a
+            // medida que se produce.
+            Console.Out.Write(sb.ToString());
+            sb.Clear();
         }, seedGenomes: seeded, obstacleCurriculum: curriculum,
-            hiddenLadder: ladder, parallel: obstacles, classicEvery: classicEvery,
-            classicTail: classicTail);
+            hiddenLadder: ladder, parallel: obstacles || fitnessDownloads,
+            classicEvery: classicEvery, classicTail: classicTail, gameEvaluator: gameEval);
 
         var trained = trainer.Run();
         sb.Append("trained ").Append(trained.Count).Append(" genomes, stages ").Append(trainer.Report[trainer.Report.Count - 1].Stage).AppendLine();
         sb.Append("brain ").Append(string.Join("→", trainer.BrainSizes)).AppendLine();
+        if (gameArena != null)
+            sb.Append("fitness downloads: ")
+              .Append(gameArena.Ticks).Append(" ticks × ").Append(gameArena.Trials)
+              .Append(" semillas por genoma (partida con montones, rastro y rival)")
+              .Append(gameArena.TrailByBrain ? ", rastro abierto por la red" : ", rastro fijo")
+              .Append(gameArena.TrailGlandSeconds > 0f
+                  ? $", glándula {gameArena.TrailGlandSeconds.ToString("0.###", CultureInfo.InvariantCulture)} s"
+                  : ", rastro gratis").AppendLine();
         if (curriculum != null)
             sb.Append("obstacle final=").Append(curriculum.Difficulty.ToString("0.0", CultureInfo.InvariantCulture))
               .Append(" escalations=").Append(curriculum.Escalations)
@@ -783,7 +919,9 @@ internal static class Program
             }
             else
             {
-                AntGenomeFile.WriteFile(exportPath, obstacles ? "pretrain-maze" : "pretrain", SpeciesDescriptor.LasiusNiger.Name,
+                AntGenomeFile.WriteFile(exportPath,
+                    obstacles ? "pretrain-maze" : fitnessDownloads ? "pretrain-game" : "pretrain",
+                    SpeciesDescriptor.LasiusNiger.Name,
                     seed, 0, trained, AntSim.Core.Brain.BrainContract.CurrentVersion);
                 sb.Append("exported ").Append(trained.Count).Append(" genomes to ").Append(exportPath).AppendLine();
             }
@@ -983,6 +1121,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N] [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F] [--trail-half-life S] [--trail-follow G]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N] [--fitness arena|downloads] [--game-ticks N] [--game-trials N] [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F] [--trail-half-life S] [--trail-follow G] [--trail-by-brain] [--trail-gland S] [--trail-gland-refill S]");
     }
 }

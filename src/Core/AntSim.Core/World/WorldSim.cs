@@ -266,7 +266,9 @@ public sealed class WorldSim
     ///   · las hormigas tienen dos REFLEJOS innatos (no salidas del cerebro): la
     ///     que vuelve cargada deposita rastro de comida (hacia el montón) y de
     ///     casa (hacia el nido), y la que busca sin carga gira hacia el lado con
-    ///     más rastro de comida (<see cref="ApplyTrailRecruitment"/>).
+    ///     más rastro de comida (<see cref="ApplyTrailRecruitment"/>). Con
+    ///     <see cref="RecruitmentTrailByBrain"/> esos dos depósitos los abre o
+    ///     cierra el cerebro en vez de ser constantes (F11).
     ///
     /// Es el mismo patrón que la tropotaxis de huella (F5.3): un reflejo
     /// periférico que el cerebro puede reforzar o corregir, no una decisión
@@ -280,6 +282,49 @@ public sealed class WorldSim
 
     /// <summary>Rastro de casa que deja la que vuelve cargada (F8).</summary>
     public float RecruitmentHomeDeposit { get; set; } = 0.25f;
+
+    /// <summary>
+    /// F11 — ¿EL RASTRO LO ABRE EL CEREBRO? Con esto encendido —y solo junto a
+    /// <see cref="Recruitment"/>— los dos depósitos del reflejo dejan de ser
+    /// constantes y se escalan por la salida del cerebro que les toca: la
+    /// hormiga CARGADA deja rastro de comida en proporción a
+    /// <c>DepositFood</c>, y la que BUSCA sin carga deja rastro de casa en
+    /// proporción a <c>DepositHome</c>.
+    ///
+    /// La salida a 1 reproduce el reflejo fijo de F8; a 0 la hormiga no deja
+    /// nada por su cuenta (queda lo que el cerebro deposite por los canales
+    /// genéricos, que también es suyo). Con esto apagado —el default— el bloque
+    /// de F8 no gasta ni una multiplicación de más y el mundo es byte a byte el
+    /// de siempre.
+    /// </summary>
+    public bool RecruitmentTrailByBrain { get; set; }
+
+    /// <summary>
+    /// F11b — EL PRECIO DEL RASTRO: segundos de depósito a plena tasa que caben
+    /// en la glándula de una hormiga (0 = sin precio, el default; el mundo es
+    /// byte a byte el de F8).
+    ///
+    /// Con precio, cada gota de feromona de la colonia sale de la reserva
+    /// personal de quien la deja (<see cref="Ant.Gland"/>) y la reserva solo se
+    /// rellena dentro del nido: el depósito deja de ser gratis y pasa a ser un
+    /// PRESUPUESTO. Ahí está la decisión que F11 no tenía: la hormiga que vuelve
+    /// cargada no puede dejar el rastro entero sin gastarlo todo en los primeros
+    /// metros —lo que pone el camino pegado a la fuente y deja el corredor
+    /// vacío—; si quiere que el rastro llegue lejos tiene que RACIONARLO. Sin
+    /// precio, la salida del cerebro solo podía adelgazar el rastro y F11 midió
+    /// que no paga.
+    ///
+    /// Se cobra la feromona de COMIDA y de CASA (los canales genéricos y los dos
+    /// del reclutamiento); la de alarma y la huella CHC no salen de esta
+    /// glándula. El gating es por capa: <c>amt / QMax</c> es el tiempo consumido,
+    /// así que un depósito a media tasa cuesta la mitad.
+    /// </summary>
+    public float RecruitmentGlandSeconds { get; set; }
+
+    /// <summary>F11b — segundos que tarda la glándula en pasar de vacía a llena
+    /// dentro del nido. Es lo que hace que el precio duele pero no ahogue: la
+    /// hormiga que descarga puede volver a marcar el camino.</summary>
+    public float RecruitmentGlandRefillSeconds { get; set; } = 3f;
 
     /// <summary>Ganancia del reflejo que sigue el rastro de comida, en rad/s a
     /// plena asimetría (F8). Del orden de la huella (8): mueve la conducta.
@@ -1165,15 +1210,21 @@ public sealed class WorldSim
         float deposited = 0f;
         if (ant.HasLoad && decision.DepositFood > 0f)
         {
-            float amt = decision.DepositFood * sp.QMaxFood * dt;
-            deposited += amt;
-            colony.FoodLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+            float amt = SpendGland(ant, decision.DepositFood * sp.QMaxFood * dt, sp.QMaxFood);
+            if (amt > 0f)
+            {
+                deposited += amt;
+                colony.FoodLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+            }
         }
         if (decision.DepositHome > 0f)
         {
-            float amt = decision.DepositHome * sp.QMaxHome * dt;
-            deposited += amt;
-            colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+            float amt = SpendGland(ant, decision.DepositHome * sp.QMaxHome * dt, sp.QMaxHome);
+            if (amt > 0f)
+            {
+                deposited += amt;
+                colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+            }
         }
         if (decision.DepositAlarm > 0f)
         {
@@ -1203,9 +1254,14 @@ public sealed class WorldSim
             float dxN = ant.X - colony.NestX;
             float dyN = ant.Y - colony.NestY;
             float away = MathF.Sqrt(dxN * dxN + dyN * dyN) / MathF.Max(RecruitmentTrailSourceDistance, 1f);
-            float amt = RecruitmentFoodDeposit * (0.4f + 0.6f * Math.Clamp(away, 0f, 1f)) * sp.QMaxFood * dt;
+            // F11: la PUERTA. Si el rastro lo decide el cerebro, la cresta se
+            // escala por su salida de depósito de comida y con la puerta cerrada
+            // (salida 0) no se deposita NADA — ni cresta ni cola.
+            float gate = RecruitmentTrailByBrain ? decision.DepositFood : 1f;
+            float amt = RecruitmentFoodDeposit * gate * (0.4f + 0.6f * Math.Clamp(away, 0f, 1f)) * sp.QMaxFood * dt;
+            amt = SpendGland(ant, amt, sp.QMaxFood); // F11b: la glándula paga la cresta
             int cx = Cell(ant.X), cy = Cell(ant.Y);
-            colony.FoodLayer.Deposit(cx, cy, amt);
+            if (amt > 0f) colony.FoodLayer.Deposit(cx, cy, amt);
         }
         else if (Recruitment)
         {
@@ -1214,8 +1270,10 @@ public sealed class WorldSim
             // la capa `home`. No se sigue como guía (se probó y no mejoraba el
             // forrajeo: el cerebro ya deposita `home` por todas partes); lo que
             // guía a la comida es el rastro de la cargada.
-            colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y),
-                RecruitmentHomeDeposit * sp.QMaxHome * dt);
+            float amt = RecruitmentHomeDeposit * (RecruitmentTrailByBrain ? decision.DepositHome : 1f) * sp.QMaxHome * dt;
+            amt = SpendGland(ant, amt, sp.QMaxHome); // F11b: también sale de la reserva
+            if (amt > 0f)
+                colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
         }
         // F8 — LA FEROMONA DE LA PARTIDA NO SE PAGA CON LA RESERVA. En el mundo
         // de reclutamiento el rastro lo pone el REFLEJO (gratis, ver más abajo);
@@ -1246,6 +1304,11 @@ public sealed class WorldSim
                     ant.Energy = Math.Min(1.0f, ant.Energy + feedAmount / ant.EnergyCapacity);
                 }
             }
+            // F11b: la glándula de rastro se rellena SOLO aquí, dentro del nido.
+            // Es lo que convierte el depósito en un presupuesto: para volver a
+            // marcar el camino hay que volver a casa.
+            if (RecruitmentGlandSeconds > 0f && ant.Gland < 1f)
+                ant.Gland = MathF.Min(1f, ant.Gland + dt / MathF.Max(RecruitmentGlandRefillSeconds, 0.05f));
         }
 
         // — Interacción (gating físico) —
@@ -1722,6 +1785,34 @@ public sealed class WorldSim
         while (angle > MathF.PI) angle -= MathF.PI * 2f;
         while (angle < -MathF.PI) angle += MathF.PI * 2f;
         return angle;
+    }
+
+    /// <summary>
+    /// F11b — COBRA EL DEPÓSITO DE LA GLÁNDULA. Devuelve la cantidad que la
+    /// hormiga puede dejar de verdad y descuenta el tiempo de glándula que
+    /// consume; con el precio apagado (o fuera del mundo de reclutamiento)
+    /// devuelve <paramref name="amt"/> intacto y no toca ni un flotante.
+    ///
+    /// El presupuesto está en SEGUNDOS de depósito a plena tasa: como
+    /// <c>amt = tasa · QMax · dt</c>, <c>amt / QMax</c> son los segundos que se
+    /// gastan, así que media tasa cuesta la mitad y la capacidad vale igual
+    /// para cualquier capa. La reserva nunca se queda negativa: cuando el
+    /// presupuesto es menor que lo pedido se deposita solo lo que cabe (y a
+    /// partir de ahí, nada hasta volver al nido).
+    /// </summary>
+    private float SpendGland(Ant ant, float amt, float qMax)
+    {
+        if (!Recruitment || RecruitmentGlandSeconds <= 0f || amt <= 0f) return amt;
+        float cost = amt / MathF.Max(qMax, 1e-6f);           // s de glándula que pide
+        float budget = ant.Gland * RecruitmentGlandSeconds; // s de glándula que hay
+        if (cost > budget)
+        {
+            if (budget <= 0f) return 0f;
+            cost = budget;
+            amt = cost * qMax;
+        }
+        ant.Gland = MathF.Max(0f, ant.Gland - cost / RecruitmentGlandSeconds);
+        return amt;
     }
 
     /// <summary>Hash canónico del estado completo (hashes de hito / verificación).</summary>
