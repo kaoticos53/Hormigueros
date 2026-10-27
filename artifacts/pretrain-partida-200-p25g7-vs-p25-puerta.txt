@@ -1,0 +1,56 @@
+# 25g contra 25: réplicas de dos recetas de entrenamiento
+# 25g: p25g-s11, p25g-s13, p25g-s23, p25g-s29, p25g-s31, p25g-s37, p25g-s7 · 25: p25-s11, p25-s13, p25-s23, p25-s29, p25-s31, p25-s37, p25-s7
+# 24 semillas de partida que no vio ninguna tirada, rastro comparado: puerta
+
+## Jugado con la glándula a 10 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 25g | p25g-s11 | 147.3 ± 50.2 |
+| 25g | p25g-s13 | 170.8 ± 63.9 |
+| 25g | p25g-s23 | 157.2 ± 42.9 |
+| 25g | p25g-s29 | 144.0 ± 38.0 |
+| 25g | p25g-s31 | 167.6 ± 59.4 |
+| 25g | p25g-s37 | 156.7 ± 47.7 |
+| 25g | p25g-s7 | 178.8 ± 56.8 |
+| 25 | p25-s11 | 187.7 ± 69.8 |
+| 25 | p25-s13 | 148.4 ± 49.0 |
+| 25 | p25-s23 | 123.7 ± 45.8 |
+| 25 | p25-s29 | 158.2 ± 61.7 |
+| 25 | p25-s31 | 161.7 ± 53.9 |
+| 25 | p25-s37 | 154.3 ± 42.3 |
+| 25 | p25-s7 | 171.9 ± 61.0 |
+
+- **25g − 25 (puerta, jugado 10 s)**: +2.3 ± 2.4 descargas (t = +1.0; gana en 17/24 semillas)
+  - 25g: media de sus 7 réplicas 160.3 (rango 144–179) · 25: 158.0 (rango 124–188)
+  - la tirada mueve hasta 64 descargas dentro de una receta; la receta mueve 2.3
+
+- **por tirada de GA (7):** s11 147 vs 188 = -40 · s13 171 vs 148 = +22 · s23 157 vs 124 = +33 · s29 144 vs 158 = -14 · s31 168 vs 162 = +6 · s37 157 vs 154 = +2 · s7 179 vs 172 = +7
+  - 5/7 tiradas a favor de 25g; diferencia entre tiradas -40…+33
+
+## Jugado con la glándula a 25 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 25g | p25g-s11 | 155.0 ± 45.3 |
+| 25g | p25g-s13 | 171.7 ± 56.1 |
+| 25g | p25g-s23 | 163.4 ± 45.3 |
+| 25g | p25g-s29 | 159.1 ± 58.3 |
+| 25g | p25g-s31 | 163.3 ± 46.4 |
+| 25g | p25g-s37 | 170.9 ± 55.4 |
+| 25g | p25g-s7 | 180.4 ± 61.4 |
+| 25 | p25-s11 | 193.5 ± 81.9 |
+| 25 | p25-s13 | 150.2 ± 51.0 |
+| 25 | p25-s23 | 127.5 ± 48.5 |
+| 25 | p25-s29 | 168.0 ± 60.8 |
+| 25 | p25-s31 | 172.1 ± 61.1 |
+| 25 | p25-s37 | 160.0 ± 60.1 |
+| 25 | p25-s7 | 163.8 ± 57.1 |
+
+- **25g − 25 (puerta, jugado 25 s)**: +4.1 ± 3.2 descargas (t = +1.3; gana en 17/24 semillas)
+  - 25g: media de sus 7 réplicas 166.3 (rango 155–180) · 25: 162.2 (rango 128–194)
+  - la tirada mueve hasta 66 descargas dentro de una receta; la receta mueve 4.1
+
+- **por tirada de GA (7):** s11 155 vs 194 = -38 · s13 172 vs 150 = +22 · s23 163 vs 128 = +36 · s29 159 vs 168 = -9 · s31 163 vs 172 = -9 · s37 171 vs 160 = +11 · s7 180 vs 164 = +17
+  - 4/7 tiradas a favor de 25g; diferencia entre tiradas -38…+36
+

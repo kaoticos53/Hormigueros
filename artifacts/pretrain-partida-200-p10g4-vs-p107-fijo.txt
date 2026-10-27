@@ -1,0 +1,50 @@
+# 10 g contra 10: réplicas de dos recetas de entrenamiento
+# 10 g: p10g-s29, p10g-s31, p10g-s37, p10g-s7 · 10: p10-s11, p10-s13, p10-s23, p10-s29, p10-s31, p10-s37, p10-s7
+# 24 semillas de partida que no vio ninguna tirada, rastro comparado: fijo
+
+## Jugado con la glándula a 10 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 10 g | p10g-s29 | 151.8 ± 48.6 |
+| 10 g | p10g-s31 | 146.7 ± 43.7 |
+| 10 g | p10g-s37 | 146.6 ± 48.1 |
+| 10 g | p10g-s7 | 144.3 ± 43.4 |
+| 10 | p10-s11 | 140.5 ± 39.8 |
+| 10 | p10-s13 | 180.6 ± 56.3 |
+| 10 | p10-s23 | 187.0 ± 68.8 |
+| 10 | p10-s29 | 164.8 ± 62.3 |
+| 10 | p10-s31 | 179.9 ± 67.4 |
+| 10 | p10-s37 | 114.0 ± 37.2 |
+| 10 | p10-s7 | 189.0 ± 70.8 |
+
+- **10 g − 10 (fijo, jugado 10 s)**: -17.7 ± 3.8 descargas (t = -4.7; gana en 1/24 semillas)
+  - 10 g: media de sus 4 réplicas 147.4 (rango 144–152) · 10: 165.1 (rango 114–189)
+  - la tirada mueve hasta 75 descargas dentro de una receta; la receta mueve 17.7
+
+- **por tirada de GA (4):** s29 152 vs 165 = -13 · s31 147 vs 180 = -33 · s37 147 vs 114 = +33 · s7 144 vs 189 = -45
+  - 1/4 tiradas a favor de 10 g; diferencia entre tiradas -45…+33
+
+## Jugado con la glándula a 25 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 10 g | p10g-s29 | 153.1 ± 45.9 |
+| 10 g | p10g-s31 | 150.7 ± 48.7 |
+| 10 g | p10g-s37 | 157.8 ± 55.1 |
+| 10 g | p10g-s7 | 150.3 ± 48.0 |
+| 10 | p10-s11 | 145.2 ± 41.0 |
+| 10 | p10-s13 | 189.3 ± 63.9 |
+| 10 | p10-s23 | 190.9 ± 68.3 |
+| 10 | p10-s29 | 161.5 ± 53.4 |
+| 10 | p10-s31 | 178.1 ± 68.8 |
+| 10 | p10-s37 | 115.5 ± 46.6 |
+| 10 | p10-s7 | 200.7 ± 72.8 |
+
+- **10 g − 10 (fijo, jugado 25 s)**: -15.8 ± 3.5 descargas (t = -4.5; gana en 5/24 semillas)
+  - 10 g: media de sus 4 réplicas 153.0 (rango 150–158) · 10: 168.7 (rango 115–201)
+  - la tirada mueve hasta 85 descargas dentro de una receta; la receta mueve 15.8
+
+- **por tirada de GA (4):** s29 153 vs 162 = -8 · s31 151 vs 178 = -27 · s37 158 vs 115 = +42 · s7 150 vs 201 = -50
+  - 1/4 tiradas a favor de 10 g; diferencia entre tiradas -50…+42
+

@@ -1,0 +1,50 @@
+# 10 g contra 25 g: réplicas de dos recetas de entrenamiento
+# 10 g: p10g-s29, p10g-s31, p10g-s37, p10g-s7 · 25 g: p25g-s11, p25g-s13, p25g-s23, p25g-s29, p25g-s31, p25g-s37, p25g-s7
+# 24 semillas de partida que no vio ninguna tirada, rastro comparado: fijo
+
+## Jugado con la glándula a 10 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 10 g | p10g-s29 | 151.8 ± 48.6 |
+| 10 g | p10g-s31 | 146.7 ± 43.7 |
+| 10 g | p10g-s37 | 146.6 ± 48.1 |
+| 10 g | p10g-s7 | 144.3 ± 43.4 |
+| 25 g | p25g-s11 | 132.8 ± 38.1 |
+| 25 g | p25g-s13 | 166.8 ± 55.7 |
+| 25 g | p25g-s23 | 160.2 ± 47.7 |
+| 25 g | p25g-s29 | 143.6 ± 45.2 |
+| 25 g | p25g-s31 | 170.6 ± 61.8 |
+| 25 g | p25g-s37 | 153.0 ± 48.2 |
+| 25 g | p25g-s7 | 151.6 ± 42.7 |
+
+- **10 g − 25 g (fijo, jugado 10 s)**: -6.7 ± 2.2 descargas (t = -3.1; gana en 5/24 semillas)
+  - 10 g: media de sus 4 réplicas 147.4 (rango 144–152) · 25 g: 154.1 (rango 133–171)
+  - la tirada mueve hasta 38 descargas dentro de una receta; la receta mueve 6.7
+
+- **por tirada de GA (4):** s29 152 vs 144 = +8 · s31 147 vs 171 = -24 · s37 147 vs 153 = -6 · s7 144 vs 152 = -7
+  - 1/4 tiradas a favor de 10 g; diferencia entre tiradas -24…+8
+
+## Jugado con la glándula a 25 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 10 g | p10g-s29 | 153.1 ± 45.9 |
+| 10 g | p10g-s31 | 150.7 ± 48.7 |
+| 10 g | p10g-s37 | 157.8 ± 55.1 |
+| 10 g | p10g-s7 | 150.3 ± 48.0 |
+| 25 g | p25g-s11 | 149.7 ± 48.1 |
+| 25 g | p25g-s13 | 169.1 ± 60.6 |
+| 25 g | p25g-s23 | 164.2 ± 52.8 |
+| 25 g | p25g-s29 | 146.7 ± 45.9 |
+| 25 g | p25g-s31 | 176.9 ± 62.3 |
+| 25 g | p25g-s37 | 157.9 ± 46.3 |
+| 25 g | p25g-s7 | 167.3 ± 51.1 |
+
+- **10 g − 25 g (fijo, jugado 25 s)**: -8.7 ± 2.1 descargas (t = -4.1; gana en 3/24 semillas)
+  - 10 g: media de sus 4 réplicas 153.0 (rango 150–158) · 25 g: 161.7 (rango 147–177)
+  - la tirada mueve hasta 30 descargas dentro de una receta; la receta mueve 8.7
+
+- **por tirada de GA (4):** s29 153 vs 147 = +6 · s31 151 vs 177 = -26 · s37 158 vs 158 = -0 · s7 150 vs 167 = -17
+  - 1/4 tiradas a favor de 10 g; diferencia entre tiradas -26…+6
+

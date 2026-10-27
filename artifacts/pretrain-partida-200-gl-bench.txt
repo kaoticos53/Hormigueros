@@ -1,0 +1,27 @@
+# F11b — la partida completa con el PRECIO del rastro (grid 96, laberinto, 216000 ticks, semillas 42,7,99,1234,3,11,555,2024)
+# glándula 25 s / recarga 6 s en los CUATRO brazos: aquí solo se compara qué pool y qué puerta, no el precio contra su ausencia
+
+| pool entrenado | rastro | descargas (media ± σ) | total | semillas con descargas | primera descarga (media) | fin de ronda |
+|---|---|---|---|---|---|---|
+| puerta (entrenado con la puerta) | puerta | 207.6 ± 53.0 | 1661 | 8/8 | 1158 | 216000 |
+| puerta (entrenado con la puerta) | fijo | 177.9 ± 50.7 | 1423 | 8/8 | 1213 | 216000 |
+| fijo (entrenado con el reflejo) | puerta | 163.8 ± 56.6 | 1310 | 8/8 | 1089 | 216000 |
+| fijo (entrenado con el reflejo) | fijo | 169.6 ± 58.0 | 1357 | 8/8 | 1090 | 216000 |
+
+## Pareado por semilla (a − b)
+
+- **tratamiento: pool-puerta con puerta − pool-fijo con reflejo**: +38 ± 13 descargas (a gana en 6/8 semillas; 1661 vs 1357 en total)
+- **la puerta dentro del pool que la entrenó**: -30 ± 11 descargas (a gana en 1/8 semillas; 1423 vs 1661 en total)
+- **la puerta dentro del pool del reflejo**: +6 ± 10 descargas (a gana en 4/8 semillas; 1357 vs 1310 en total)
+- **de pool, con el reflejo fijo**: +8 ± 8 descargas (a gana en 6/8 semillas; 1423 vs 1357 en total)
+
+| semilla | puerta puerta | puerta fijo | fijo puerta | fijo fijo |
+|---|---|---|---|---|
+| 42 | 185 | 100 | 99 | 87 |
+| 7 | 179 | 153 | 139 | 134 |
+| 99 | 103 | 129 | 82 | 111 |
+| 1234 | 247 | 229 | 161 | 195 |
+| 3 | 253 | 237 | 252 | 212 |
+| 11 | 231 | 211 | 223 | 252 |
+| 555 | 281 | 228 | 212 | 237 |
+| 2024 | 182 | 136 | 142 | 129 |

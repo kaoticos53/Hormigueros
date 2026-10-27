@@ -1,0 +1,66 @@
+# El campeón de una campaña de réplicas y el efecto de la puerta del cerebro
+# campañas: 10 s sin puerta (p10-s11, p10-s13, p10-s23, p10-s29, p10-s31, p10-s37, p10-s7) · 10 s con puerta (p10g-s29, p10g-s31, p10g-s37, p10g-s7)
+# 24 semillas de partida que vio cada pool: 3,5,7,11,13,17,23,42,64,99,128,256,512,555,777,888,999,1234,1500,2024,2025,31337,60013,98765
+
+## 10 s sin puerta: el campeón «p10-s7» celda a celda
+
+- **p10-s7 · 10 s · fijo**: 189.0 descargas — puesto 1/7; el segundo da 187.0 (margen +2.0); la media de sus 7 tiradas 165.1 con dispersión 28.1 → z = +0.85
+  - p10-s7 189.0 > p10-s23 187.0 > p10-s13 180.6 > p10-s31 179.9 > p10-s29 164.8 > p10-s11 140.5 > p10-s37 114.0
+- **p10-s7 · 10 s · puerta**: 179.1 descargas — puesto 2/7; el segundo da 200.5 (margen -21.4); la media de sus 7 tiradas 166.6 con dispersión 27.3 → z = +0.46
+  - p10-s23 200.5 > p10-s7 179.1 > p10-s31 178.8 > p10-s13 174.9 > p10-s29 170.1 > p10-s11 146.0 > p10-s37 116.5
+- **p10-s7 · 25 s · fijo**: 200.7 descargas — puesto 1/7; el segundo da 190.9 (margen +9.8); la media de sus 7 tiradas 168.7 con dispersión 30.2 → z = +1.06
+  - p10-s7 200.7 > p10-s23 190.9 > p10-s13 189.3 > p10-s31 178.1 > p10-s29 161.5 > p10-s11 145.2 > p10-s37 115.5
+- **p10-s7 · 25 s · puerta**: 190.2 descargas — puesto 2/7; el segundo da 205.7 (margen -15.4); la media de sus 7 tiradas 167.2 con dispersión 29.9 → z = +0.77
+  - p10-s23 205.7 > p10-s7 190.2 > p10-s13 182.0 > p10-s29 166.9 > p10-s31 162.2 > p10-s11 148.8 > p10-s37 114.4
+
+## 10 s con puerta: puestos por celda
+
+- **10 s · fijo**: media de las tiradas 147.4, dispersión 3.2
+  - p10g-s29 151.8 > p10g-s31 146.7 > p10g-s37 146.6 > p10g-s7 144.3
+- **10 s · puerta**: media de las tiradas 154.1, dispersión 5.1
+  - p10g-s7 159.5 > p10g-s29 155.2 > p10g-s31 154.7 > p10g-s37 147.2
+- **25 s · fijo**: media de las tiradas 153.0, dispersión 3.5
+  - p10g-s37 157.8 > p10g-s29 153.1 > p10g-s31 150.7 > p10g-s7 150.3
+- **25 s · puerta**: media de las tiradas 154.4, dispersión 4.6
+  - p10g-s37 159.5 > p10g-s7 156.9 > p10g-s29 151.2 > p10g-s31 149.8
+
+## ¿Paga la puerta dentro de cada pool?
+
+Efecto = descargas con la puerta − descargas con el reflejo fijo, mismo pool y mismas semillas de partida.
+
+### 10 s sin puerta · jugado 10 s
+- **p10-s11**: +5.5 ± 6.5 (t = +0.9; gana 12/24)
+- **p10-s13**: -5.7 ± 5.1 (t = -1.1; gana 11/24)
+- **p10-s23**: +13.6 ± 6.3 (t = +2.1; gana 15/24)
+- **p10-s29**: +5.3 ± 6.9 (t = +0.8; gana 12/24)
+- **p10-s31**: -1.1 ± 6.1 (t = -0.2; gana 13/24)
+- **p10-s37**: +2.5 ± 4.0 (t = +0.6; gana 11/24)
+- **p10-s7**: -9.8 ± 10.2 (t = -1.0; gana 11/24)
+- **las 7 tiradas a la vez, por semilla de partida**: +1.5 ± 2.6 (t = +0.6; gana 14/24)
+
+### 10 s sin puerta · jugado 25 s
+- **p10-s11**: +3.6 ± 7.7 (t = +0.5; gana 12/24)
+- **p10-s13**: -7.3 ± 8.3 (t = -0.9; gana 12/24)
+- **p10-s23**: +14.8 ± 7.4 (t = +2.0; gana 17/24)
+- **p10-s29**: +5.4 ± 5.4 (t = +1.0; gana 14/24)
+- **p10-s31**: -15.9 ± 7.5 (t = -2.1; gana 8/24)
+- **p10-s37**: -1.0 ± 4.1 (t = -0.3; gana 12/24)
+- **p10-s7**: -10.4 ± 9.6 (t = -1.1; gana 11/24)
+- **las 7 tiradas a la vez, por semilla de partida**: -1.6 ± 2.7 (t = -0.6; gana 12/24)
+
+### 10 s con puerta · jugado 10 s
+- **p10g-s29**: +3.4 ± 5.4 (t = +0.6; gana 15/24)
+- **p10g-s31**: +8.0 ± 4.9 (t = +1.6; gana 13/24)
+- **p10g-s37**: +0.6 ± 4.0 (t = +0.2; gana 15/24)
+- **p10g-s7**: +15.1 ± 5.4 (t = +2.8; gana 16/24)
+- **las 4 tiradas a la vez, por semilla de partida**: +6.8 ± 2.8 (t = +2.4; gana 17/24)
+
+### 10 s con puerta · jugado 25 s
+- **p10g-s29**: -1.9 ± 4.3 (t = -0.4; gana 11/24)
+- **p10g-s31**: -0.9 ± 5.2 (t = -0.2; gana 11/24)
+- **p10g-s37**: +1.6 ± 4.1 (t = +0.4; gana 18/24)
+- **p10g-s7**: +6.6 ± 6.6 (t = +1.0; gana 15/24)
+- **las 4 tiradas a la vez, por semilla de partida**: +1.4 ± 2.8 (t = +0.5; gana 12/24)
+
+- **11 pools · jugado 10 s**: la puerta paga +3.4 ± 2.3 descargas al promediar las tiradas (t = +1.5; 8/11 tiradas a favor)
+- **11 pools · jugado 25 s**: la puerta paga -0.5 ± 2.6 descargas al promediar las tiradas (t = -0.2; 5/11 tiradas a favor)

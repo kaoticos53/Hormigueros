@@ -1,0 +1,44 @@
+# 25 g contra 25: réplicas de dos recetas de entrenamiento
+# 25 g: p25g-s11, p25g-s13, p25g-s23, p25g-s7 · 25: p25-s11, p25-s13, p25-s23, p25-s7
+# 24 semillas de partida que no vio ninguna tirada, rastro comparado: puerta
+
+## Jugado con la glándula a 10 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 25 g | p25g-s11 | 147.3 ± 50.2 |
+| 25 g | p25g-s13 | 170.8 ± 63.9 |
+| 25 g | p25g-s23 | 157.2 ± 42.9 |
+| 25 g | p25g-s7 | 178.8 ± 56.8 |
+| 25 | p25-s11 | 187.7 ± 69.8 |
+| 25 | p25-s13 | 148.4 ± 49.0 |
+| 25 | p25-s23 | 123.7 ± 45.8 |
+| 25 | p25-s7 | 171.9 ± 61.0 |
+
+- **25 g − 25 (puerta, jugado 10 s)**: +5.6 ± 3.9 descargas (t = +1.4; gana en 17/24 semillas)
+  - 25 g: media de sus 4 réplicas 163.5 (rango 147–179) · 25: 157.9 (rango 124–188)
+  - la tirada mueve hasta 64 descargas dentro de una receta; la receta mueve 5.6
+
+- **por tirada de GA (4):** s11 147 vs 188 = -40 · s13 171 vs 148 = +22 · s23 157 vs 124 = +33 · s7 179 vs 172 = +7
+  - 3/4 tiradas a favor de 25 g; diferencia entre tiradas -40…+33
+
+## Jugado con la glándula a 25 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 25 g | p25g-s11 | 155.0 ± 45.3 |
+| 25 g | p25g-s13 | 171.7 ± 56.1 |
+| 25 g | p25g-s23 | 163.4 ± 45.3 |
+| 25 g | p25g-s7 | 180.4 ± 61.4 |
+| 25 | p25-s11 | 193.5 ± 81.9 |
+| 25 | p25-s13 | 150.2 ± 51.0 |
+| 25 | p25-s23 | 127.5 ± 48.5 |
+| 25 | p25-s7 | 163.8 ± 57.1 |
+
+- **25 g − 25 (puerta, jugado 25 s)**: +8.9 ± 3.4 descargas (t = +2.6; gana en 19/24 semillas)
+  - 25 g: media de sus 4 réplicas 167.6 (rango 155–180) · 25: 158.8 (rango 128–194)
+  - la tirada mueve hasta 66 descargas dentro de una receta; la receta mueve 8.9
+
+- **por tirada de GA (4):** s11 155 vs 194 = -38 · s13 172 vs 150 = +22 · s23 163 vs 128 = +36 · s7 180 vs 164 = +17
+  - 3/4 tiradas a favor de 25 g; diferencia entre tiradas -38…+36
+

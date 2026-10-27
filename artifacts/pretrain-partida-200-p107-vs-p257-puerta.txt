@@ -1,0 +1,56 @@
+# 10s contra 25s: réplicas de dos recetas de entrenamiento
+# 10s: p10-s11, p10-s13, p10-s23, p10-s29, p10-s31, p10-s37, p10-s7 · 25s: p25-s11, p25-s13, p25-s23, p25-s29, p25-s31, p25-s37, p25-s7
+# 24 semillas de partida que no vio ninguna tirada, rastro comparado: puerta
+
+## Jugado con la glándula a 10 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 10s | p10-s11 | 146.0 ± 50.9 |
+| 10s | p10-s13 | 174.9 ± 56.0 |
+| 10s | p10-s23 | 200.5 ± 72.1 |
+| 10s | p10-s29 | 170.1 ± 63.0 |
+| 10s | p10-s31 | 178.8 ± 65.5 |
+| 10s | p10-s37 | 116.5 ± 40.3 |
+| 10s | p10-s7 | 179.1 ± 57.1 |
+| 25s | p25-s11 | 187.7 ± 69.8 |
+| 25s | p25-s13 | 148.4 ± 49.0 |
+| 25s | p25-s23 | 123.7 ± 45.8 |
+| 25s | p25-s29 | 158.2 ± 61.7 |
+| 25s | p25-s31 | 161.7 ± 53.9 |
+| 25s | p25-s37 | 154.3 ± 42.3 |
+| 25s | p25-s7 | 171.9 ± 61.0 |
+
+- **10s − 25s (puerta, jugado 10 s)**: +8.6 ± 2.9 descargas (t = +2.9; gana en 19/24 semillas)
+  - 10s: media de sus 7 réplicas 166.6 (rango 117–201) · 25s: 158.0 (rango 124–188)
+  - la tirada mueve hasta 84 descargas dentro de una receta; la receta mueve 8.6
+
+- **por tirada de GA (7):** s11 146 vs 188 = -42 · s13 175 vs 148 = +26 · s23 201 vs 124 = +77 · s29 170 vs 158 = +12 · s31 179 vs 162 = +17 · s37 117 vs 154 = -38 · s7 179 vs 172 = +7
+  - 5/7 tiradas a favor de 10s; diferencia entre tiradas -42…+77
+
+## Jugado con la glándula a 25 s
+
+| receta | pool | descargas (media ± σ) |
+|---|---|---|
+| 10s | p10-s11 | 148.8 ± 53.6 |
+| 10s | p10-s13 | 182.0 ± 53.8 |
+| 10s | p10-s23 | 205.7 ± 79.0 |
+| 10s | p10-s29 | 166.9 ± 56.5 |
+| 10s | p10-s31 | 162.2 ± 59.7 |
+| 10s | p10-s37 | 114.4 ± 39.4 |
+| 10s | p10-s7 | 190.2 ± 62.7 |
+| 25s | p25-s11 | 193.5 ± 81.9 |
+| 25s | p25-s13 | 150.2 ± 51.0 |
+| 25s | p25-s23 | 127.5 ± 48.5 |
+| 25s | p25-s29 | 168.0 ± 60.8 |
+| 25s | p25-s31 | 172.1 ± 61.1 |
+| 25s | p25-s37 | 160.0 ± 60.1 |
+| 25s | p25-s7 | 163.8 ± 57.1 |
+
+- **10s − 25s (puerta, jugado 25 s)**: +5.0 ± 3.9 descargas (t = +1.3; gana en 17/24 semillas)
+  - 10s: media de sus 7 réplicas 167.2 (rango 114–206) · 25s: 162.2 (rango 128–194)
+  - la tirada mueve hasta 91 descargas dentro de una receta; la receta mueve 5.0
+
+- **por tirada de GA (7):** s11 149 vs 194 = -45 · s13 182 vs 150 = +32 · s23 206 vs 128 = +78 · s29 167 vs 168 = -1 · s31 162 vs 172 = -10 · s37 114 vs 160 = -46 · s7 190 vs 164 = +26
+  - 3/7 tiradas a favor de 10s; diferencia entre tiradas -46…+78
+

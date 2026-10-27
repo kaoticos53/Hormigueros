@@ -1,0 +1,44 @@
+# La partida completa con el PRECIO del rastro (grid 96, laberinto, 216000 ticks, semillas 42,7,99,1234,3,11,555,2024,5,13,17,23,64,128,256,512,777,888,999,1500,2025,31337,60013,98765)
+# glándula 25 s / recarga 6 s en los CUATRO brazos: aquí solo se compara qué pool y qué puerta, no el precio contra su ausencia
+# pools: puerta=artifacts/pretrain-partida-200-gl-red.antgenome · fijo=artifacts/pretrain-partida-200-gl-fijo.antgenome
+
+| pool entrenado | rastro | descargas (media ± σ) | total | semillas con descargas | primera descarga (media) | fin de ronda |
+|---|---|---|---|---|---|---|
+| puerta (entrenado con la puerta) | puerta | 180.4 ± 60.1 | 4330 | 24/24 | 1146 | 216000 |
+| puerta (entrenado con la puerta) | fijo | 167.3 ± 50.0 | 4016 | 24/24 | 1199 | 216000 |
+| fijo (entrenado con el reflejo) | puerta | 163.8 ± 55.9 | 3932 | 24/24 | 1118 | 216000 |
+| fijo (entrenado con el reflejo) | fijo | 157.6 ± 48.3 | 3782 | 24/24 | 1122 | 216000 |
+
+## Pareado por semilla (a − b)
+
+- **tratamiento: pool-puerta con puerta − pool-fijo con reflejo**: +23 ± 8 descargas (a gana en 17/24 semillas; 4330 vs 3782 en total)
+- **la puerta dentro del pool que la entrenó**: -13 ± 7 descargas (a gana en 9/24 semillas; 4016 vs 4330 en total)
+- **la puerta dentro del pool del reflejo**: -6 ± 8 descargas (a gana en 9/24 semillas; 3782 vs 3932 en total)
+- **de pool, con el reflejo fijo**: +10 ± 6 descargas (a gana en 15/24 semillas; 4016 vs 3782 en total)
+
+| semilla | puerta puerta | puerta fijo | fijo puerta | fijo fijo |
+|---|---|---|---|---|
+| 42 | 185 | 100 | 99 | 87 |
+| 7 | 179 | 153 | 139 | 134 |
+| 99 | 103 | 129 | 82 | 111 |
+| 1234 | 247 | 229 | 161 | 195 |
+| 3 | 253 | 237 | 252 | 212 |
+| 11 | 231 | 211 | 223 | 252 |
+| 555 | 281 | 228 | 212 | 237 |
+| 2024 | 182 | 136 | 142 | 129 |
+| 5 | 208 | 131 | 151 | 149 |
+| 13 | 97 | 102 | 105 | 86 |
+| 17 | 243 | 240 | 259 | 161 |
+| 23 | 140 | 151 | 142 | 193 |
+| 64 | 134 | 167 | 159 | 110 |
+| 128 | 156 | 149 | 126 | 170 |
+| 256 | 138 | 154 | 127 | 144 |
+| 512 | 135 | 150 | 161 | 161 |
+| 777 | 181 | 215 | 217 | 174 |
+| 888 | 117 | 128 | 118 | 116 |
+| 999 | 212 | 200 | 254 | 209 |
+| 1500 | 80 | 97 | 105 | 116 |
+| 2025 | 263 | 248 | 178 | 225 |
+| 31337 | 84 | 73 | 77 | 74 |
+| 60013 | 240 | 199 | 187 | 187 |
+| 98765 | 241 | 189 | 256 | 150 |

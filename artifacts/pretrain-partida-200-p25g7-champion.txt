@@ -1,0 +1,72 @@
+# El campeón de una campaña de réplicas y el efecto de la puerta del cerebro
+# campañas: 25 s con puerta (p25g-s11, p25g-s13, p25g-s23, p25g-s29, p25g-s31, p25g-s37, p25g-s7) · 25 s sin puerta (p25-s11, p25-s13, p25-s23, p25-s29, p25-s31, p25-s37, p25-s7)
+# 24 semillas de partida que vio cada pool: 3,5,7,11,13,17,23,42,64,99,128,256,512,555,777,888,999,1234,1500,2024,2025,31337,60013,98765
+
+## 25 s con puerta: el campeón «p25g-s7» celda a celda
+
+- **p25g-s7 · 10 s · fijo**: 151.6 descargas — puesto 5/7; el segundo da 170.6 (margen -19.0); la media de sus 7 tiradas 154.1 con dispersión 13.2 → z = -0.19
+  - p25g-s31 170.6 > p25g-s13 166.8 > p25g-s23 160.2 > p25g-s37 153.0 > p25g-s7 151.6 > p25g-s29 143.6 > p25g-s11 132.8
+- **p25g-s7 · 10 s · puerta**: 178.8 descargas — puesto 1/7; el segundo da 170.8 (margen +8.1); la media de sus 7 tiradas 160.3 con dispersión 12.7 → z = +1.46
+  - p25g-s7 178.8 > p25g-s13 170.8 > p25g-s31 167.6 > p25g-s23 157.2 > p25g-s37 156.7 > p25g-s11 147.3 > p25g-s29 144.0
+- **p25g-s7 · 25 s · fijo**: 167.3 descargas — puesto 3/7; el segundo da 176.9 (margen -9.5); la media de sus 7 tiradas 161.7 con dispersión 10.9 → z = +0.52
+  - p25g-s31 176.9 > p25g-s13 169.1 > p25g-s7 167.3 > p25g-s23 164.2 > p25g-s37 157.9 > p25g-s11 149.7 > p25g-s29 146.7
+- **p25g-s7 · 25 s · puerta**: 180.4 descargas — puesto 1/7; el segundo da 171.7 (margen +8.7); la media de sus 7 tiradas 166.3 con dispersión 8.6 → z = +1.64
+  - p25g-s7 180.4 > p25g-s13 171.7 > p25g-s37 170.9 > p25g-s23 163.4 > p25g-s31 163.3 > p25g-s29 159.1 > p25g-s11 155.0
+
+## 25 s sin puerta: puestos por celda
+
+- **10 s · fijo**: media de las tiradas 154.9, dispersión 19.5
+  - p25-s11 183.5 > p25-s7 161.5 > p25-s29 161.5 > p25-s37 160.6 > p25-s31 151.4 > p25-s13 146.2 > p25-s23 119.3
+- **10 s · puerta**: media de las tiradas 158.0, dispersión 19.9
+  - p25-s11 187.7 > p25-s7 171.9 > p25-s31 161.7 > p25-s29 158.2 > p25-s37 154.3 > p25-s13 148.4 > p25-s23 123.7
+- **25 s · fijo**: media de las tiradas 155.6, dispersión 18.7
+  - p25-s11 185.0 > p25-s31 160.2 > p25-s29 158.1 > p25-s37 157.7 > p25-s7 157.6 > p25-s13 149.2 > p25-s23 121.5
+- **25 s · puerta**: media de las tiradas 162.2, dispersión 20.3
+  - p25-s11 193.5 > p25-s31 172.1 > p25-s29 168.0 > p25-s7 163.8 > p25-s37 160.0 > p25-s13 150.2 > p25-s23 127.5
+
+## ¿Paga la puerta dentro de cada pool?
+
+Efecto = descargas con la puerta − descargas con el reflejo fijo, mismo pool y mismas semillas de partida.
+
+### 25 s con puerta · jugado 10 s
+- **p25g-s11**: +14.6 ± 5.5 (t = +2.7; gana 18/24)
+- **p25g-s13**: +4.0 ± 5.5 (t = +0.7; gana 11/24)
+- **p25g-s23**: -3.1 ± 4.2 (t = -0.7; gana 9/24)
+- **p25g-s29**: +0.4 ± 3.8 (t = +0.1; gana 12/24)
+- **p25g-s31**: -3.0 ± 3.8 (t = -0.8; gana 10/24)
+- **p25g-s37**: +3.6 ± 7.0 (t = +0.5; gana 13/24)
+- **p25g-s7**: +27.2 ± 7.2 (t = +3.8; gana 17/24)
+- **las 7 tiradas a la vez, por semilla de partida**: +6.2 ± 2.9 (t = +2.2; gana 13/24)
+
+### 25 s con puerta · jugado 25 s
+- **p25g-s11**: +5.4 ± 4.4 (t = +1.2; gana 16/24)
+- **p25g-s13**: +2.6 ± 6.2 (t = +0.4; gana 12/24)
+- **p25g-s23**: -0.8 ± 4.7 (t = -0.2; gana 13/24)
+- **p25g-s29**: +12.5 ± 6.8 (t = +1.8; gana 12/24)
+- **p25g-s31**: -13.6 ± 8.0 (t = -1.7; gana 10/24)
+- **p25g-s37**: +13.0 ± 6.6 (t = +2.0; gana 18/24)
+- **p25g-s7**: +13.1 ± 6.7 (t = +2.0; gana 15/24)
+- **las 7 tiradas a la vez, por semilla de partida**: +4.6 ± 2.8 (t = +1.6; gana 15/24)
+
+### 25 s sin puerta · jugado 10 s
+- **p25-s11**: +4.2 ± 8.4 (t = +0.5; gana 12/24)
+- **p25-s13**: +2.2 ± 4.9 (t = +0.5; gana 13/24)
+- **p25-s23**: +4.3 ± 3.8 (t = +1.1; gana 13/24)
+- **p25-s29**: -3.2 ± 7.9 (t = -0.4; gana 10/24)
+- **p25-s31**: +10.3 ± 6.2 (t = +1.7; gana 17/24)
+- **p25-s37**: -6.3 ± 4.5 (t = -1.4; gana 7/24)
+- **p25-s7**: +10.3 ± 9.9 (t = +1.0; gana 12/24)
+- **las 7 tiradas a la vez, por semilla de partida**: +3.1 ± 2.2 (t = +1.4; gana 15/24)
+
+### 25 s sin puerta · jugado 25 s
+- **p25-s11**: +8.5 ± 9.2 (t = +0.9; gana 13/24)
+- **p25-s13**: +0.9 ± 3.6 (t = +0.3; gana 11/24)
+- **p25-s23**: +6.0 ± 4.4 (t = +1.4; gana 13/24)
+- **p25-s29**: +9.9 ± 9.8 (t = +1.0; gana 16/24)
+- **p25-s31**: +12.0 ± 7.5 (t = +1.6; gana 17/24)
+- **p25-s37**: +2.3 ± 6.3 (t = +0.4; gana 8/24)
+- **p25-s7**: +6.2 ± 8.4 (t = +0.7; gana 13/24)
+- **las 7 tiradas a la vez, por semilla de partida**: +6.6 ± 4.1 (t = +1.6; gana 14/24)
+
+- **14 pools · jugado 10 s**: la puerta paga +4.7 ± 2.3 descargas al promediar las tiradas (t = +2.0; 10/14 tiradas a favor)
+- **14 pools · jugado 25 s**: la puerta paga +5.6 ± 1.9 descargas al promediar las tiradas (t = +2.9; 12/14 tiradas a favor)
