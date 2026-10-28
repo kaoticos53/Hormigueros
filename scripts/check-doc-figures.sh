@@ -17,6 +17,22 @@
 #           «6 pines» con 5 scripts de check)
 #   tests = nº de casos descubiertos por la suite (dotnet test --list-tests)
 #
+# Y desde F11h también LAS CIFRAS DE LA PARTIDA que afirma el documento de estado
+# —la tabla de recetas del brazo de 10 s y los t de sus comparaciones—. Esas no
+# se pueden MEDIR en cada push: cada celda son partidas de 216 000 ticks (las
+# 1 056 de F11h son horas de máquina), así que se derivan del VOLCADO versionado
+# que las produjo —`scripts/partida-figures.py` lee los nueve dumps de
+# `artifacts/` y devuelve cada cifra formateada como la escribe el documento— y
+# se exige que el texto siga diciéndola. Dos detalles que no son cosméticos:
+#
+#   · el fragmento se busca en el texto LÓGICO del documento —párrafos y viñetas
+#     unidos en una línea, sin el énfasis de markdown y sin las regiones
+#     históricas—, no en sus líneas: el documento va re-envolviendo sus párrafos,
+#     y buscar por líneas haría que un re-envolturaje silenciara la cifra.
+#   · si el volcado no está o no trae la línea esperada, la comprobación FALLA
+#     (fail-closed): una cifra que no se puede derivar dejaría el documento sin
+#     comprobar, que es justo lo que este guardarraíl existe para impedir.
+#
 # DOS ESCAPATORIAS, las dos EXPLÍCITAS (una cifra sin marcar se comprueba
 # siempre: el guardarraíl es fail-closed):
 #
@@ -40,6 +56,7 @@
 #   scripts/check-doc-figures.sh --tests N    # usa N en vez de medir la suite
 #   scripts/check-doc-figures.sh --selftest   # verifica el analizador, sin repo
 #   scripts/check-doc-figures.sh --list       # qué escanea, qué clasifica y con qué cifras
+#   python scripts/partida-figures.py --list   # qué volcado alimenta cada cifra de partida
 #
 # Códigos: 0 sin deriva · 1 hay deriva (o un documento sin clasificar) · 2 uso
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,7 +95,15 @@ CLOSE_MARK="<!-- /cifras-historicas"
 # El programa va a un fichero temporal, no a una variable: `read` con IFS por
 # defecto COLAPSA los saltos de línea del texto que captura (los trata como
 # separadores), y el programa llegaba a awk como una sola línea deformada.
-PROG="$(mktemp)"; trap 'rm -f "$PROG"' EXIT
+PROG="$(mktemp)"
+# Los temporales de las cifras de partida se crean ANTES del trap y este los
+# recoge todos: si el trap se declarara antes, un fallo en medio dejaría basura
+# en /tmp, y si se declarara dos veces valdría solo el último.
+PARTIDA_FIGS="$(mktemp)"
+PARTIDA_TXT="$(mktemp)"
+PARTIDA_ERR="$(mktemp)"
+PARTIDA_SALIDA="$(mktemp)"
+trap 'rm -f "$PROG" "$PARTIDA_FIGS" "$PARTIDA_TXT" "$PARTIDA_ERR" "$PARTIDA_SALIDA"' EXIT
 cat > "$PROG" <<'AWK'
 BEGIN { dentro = 0 }
 {
@@ -133,6 +158,73 @@ AWK
 analizar_fichero() {
   awk -v FILE="$1" -v PINS="$2" -v TESTS="$3" \
       -v OPEN="$OPEN_MARK" -v CLOSE="$CLOSE_MARK" -f "$PROG" "$1"
+}
+
+# ── Las cifras de la PARTIDA (F11h): el derivador y su comprobación ──────────
+# El derivador va en Python (`scripts/partida-figures.py`) porque lee NUEVE
+# volcados de tres formatos distintos y les calcula una dispersión y un t; el
+# resto sigue siendo bash. El intérprete se resuelve como en los demás
+# guardarraíles: `python3` en el runner de CI, `python` en Git Bash de Windows y
+# `py` como último recurso.
+PARTIDA_TOOL="scripts/partida-figures.py"
+
+resolver_python() {
+  local cand
+  for cand in python3 python py; do
+    if command -v "$cand" >/dev/null 2>&1; then printf '%s' "$cand"; return 0; fi
+  done
+  return 1
+}
+
+# texto_normalizado FICHERO -> el documento en TEXTOS LÓGICOS por stdout.
+# Une cada párrafo y cada viñeta en UNA línea (una continuación es una línea
+# sangrada que no abre bloque nuevo), quita el énfasis de markdown —`**` no es
+# parte del texto— y descarta las regiones históricas, que son la escapatoria
+# declarada del propio documento. Se hace por texto y no por línea porque el
+# documento va re-envolviendo sus párrafos: buscar la cifra dentro de una línea
+# haría que un re-envolturaje la dejara de ver.
+texto_normalizado() {
+  awk -v OPEN="$OPEN_MARK" -v CLOSE="$CLOSE_MARK" '
+    BEGIN { dentro = 0; buf = "" }
+    {
+      sub(/\r$/, "")
+      if (index($0, OPEN) > 0)  { dentro = 1; next }
+      if (index($0, CLOSE) > 0) { dentro = 0; next }
+      if (dentro) next
+      linea = $0
+      gsub(/\*\*/, "", linea)
+      sub(/^[ \t]+/, "", linea)
+      if (linea == "") { if (buf != "") { print buf; buf = "" } ; next }
+      if (linea ~ /^([-*#>]|[0-9]+\.)/) { if (buf != "") print buf; buf = linea; next }
+      if (buf == "") { buf = linea; next }
+      buf = buf " " linea
+    }
+    END { if (buf != "") print buf }
+  ' "$1"
+}
+
+# comprobar_fragmentos TEXTO CLAVES SALIDA -> escribe en SALIDA las que faltan y
+# deja el recuento en FALTAN. Las claves llegan del derivador: «clave<TAB>lo que
+# el documento tiene que decir». La salida va a un FICHERO y no por stdout porque
+# el llamador la capturaría con `$(...)`, y eso corre la función en un subproceso:
+# el recuento se quedaría en 0 sin que nada avisara (medido al probar esto).
+FALTAN=0
+comprobar_fragmentos() {
+  local texto="$1" claves="$2" salida="$3" clave frag
+  FALTAN=0
+  : > "$salida"
+  while IFS=$'\t' read -r clave frag; do
+    # El fichero de claves lo escribe Python: en Windows sus líneas acaban en
+    # CRLF y el CR se colaría dentro del fragmento, que entonces no casaría
+    # nunca. Se quita de los dos campos, venga el fichero de donde venga.
+    clave="${clave%$'\r'}"; frag="${frag%$'\r'}"
+    [[ -n "$clave" ]] || continue
+    if grep -qF -- "$frag" "$texto"; then
+      continue
+    fi
+    printf '%s: el documento no dice «%s»\n' "$clave" "$frag" >> "$salida"
+    FALTAN=$((FALTAN + 1))
+  done < "$claves"
 }
 
 # ── Medición de la verdad ────────────────────────────────────────────────────
@@ -220,6 +312,46 @@ if [[ "${1:-}" == "--selftest" ]]; then
   else
     echo "  X la región histórica no exime la línea de fuera"; FALLO=1
   fi
+  # ── Las cifras de la PARTIDA: el fragmento se busca en TEXTOS, no en líneas ──
+  # La celda va partida por un salto de línea y el número en negrita, como en el
+  # documento real: las dos cosas tienen que dar igual. Una cifra dentro de la
+  # región histórica no cuenta (es la escapatoria declarada) y una que no está se
+  # declara. Con las tres claves a la vez, «viva» y «negrita» se encuentran y
+  # faltan exactamente dos.
+  printf -- '- **una celda\n  partida por la mitad**: 12,3 (4–9)\n' > "$T/partida.md"
+  printf -- '| fila | **165,1** (114–189) |\n' >> "$T/partida.md"
+  printf -- '<!-- cifras-historicas: prueba -->\n9,9 (1–2)\n<!-- /cifras-historicas -->\n' \
+    >> "$T/partida.md"
+  printf 'viva\t12,3 (4–9)\nnegrita\t165,1 (114–189)\nhistorica\t9,9 (1–2)\nausente\tno está por ningún lado\n' \
+    > "$T/partida.claves"
+  texto_normalizado "$T/partida.md" > "$T/partida.norm"
+  comprobar_fragmentos "$T/partida.norm" "$T/partida.claves" "$T/partida.faltan"
+  if [[ "$FALTAN" == "2" ]] && grep -q '^historica:' "$T/partida.faltan" &&
+     grep -q '^ausente:' "$T/partida.faltan" &&
+     ! grep -q '^viva:' "$T/partida.faltan"; then
+    echo "  ok la cifra de partida se busca en el texto (envuelta y en negrita) y se exime la histórica"
+  else
+    echo "  X la comprobación de cifras de partida falla (faltan=$FALTAN)"
+    sed 's/^/      /' "$T/partida.faltan"
+    FALLO=1
+  fi
+
+  # El derivador de las cifras de partida también se prueba aquí: con volcados de
+  # mentira (formato, aritmética del pareado por sorteo, fail-closed) y sin tocar
+  # el repo. Va con el mismo criterio que el resto —sin intérprete es un fallo, no
+  # un salto—: el guardarraíl entero depende de él.
+  PY="$(resolver_python || true)"
+  if [[ -z "$PY" ]]; then
+    echo "  X no hay Python 3 en el PATH: no puedo probar el derivador de cifras de partida"
+    FALLO=1
+  elif salida="$(PYTHONUTF8=1 "$PY" "$ROOT/$PARTIDA_TOOL" --selftest 2>&1)"; then
+    printf '%s\n' "$salida" | tail -3 | sed 's/^/  /'
+  else
+    echo "  X el selftest del derivador de cifras de partida falla"
+    printf '%s\n' "$salida" | sed 's/^/      /'
+    FALLO=1
+  fi
+
   # Clasificación de documentos: bitácora vs estado.
   if clasificado "docs/fase5-2b-eciton.md" && clasificado "docs/fase4-resumen.md" &&
      ! clasificado "README.md" && ! clasificado "docs/estado-proyecto.md"; then
@@ -256,6 +388,8 @@ if [[ "${1:-}" == "--list" ]]; then
   for f in "${SCANNED[@]}"; do printf '  %s\n' "$f"; done
   echo "clasificados como bitácora de fase cerrada (con fecha en cada entrada):"
   for g in "${RECORD_GLOBS[@]}"; do printf '  %s\n' "$g"; done
+  echo "cifras de la partida (F11h): las deriva $PARTIDA_TOOL de los volcados de artifacts/"
+  echo "  el detalle cifra a cifra y su volcado: python $PARTIDA_TOOL --list"
   exit 0
 fi
 
@@ -269,6 +403,37 @@ for f in "${SCANNED[@]}"; do
     VIOL=$((VIOL + $(printf '%s\n' "$salida" | grep -c . || true)))
   fi
 done
+
+# ── Las cifras de la PARTIDA (F11h) contra sus volcados ─────────────────────
+# El derivador decide QUÉ dice el documento y de dónde lo saca; aquí solo se
+# exige que lo diga. Si el derivador no puede trabajar (sin Python, sin volcado,
+# sin la línea esperada) eso es una violación, no un «no comprobado»: un
+# documento que se queda sin comprobar es exactamente lo que este guardarraíl
+# existe para impedir.
+FIGURAS=0
+PY="$(resolver_python || true)"
+if [[ -z "$PY" ]]; then
+  echo "$PARTIDA_TOOL: no hay Python 3 en el PATH (python3, python o py)"
+  VIOL=$((VIOL + 1))
+else
+  if PYTHONUTF8=1 "$PY" "$ROOT/$PARTIDA_TOOL" > "$PARTIDA_FIGS" 2> "$PARTIDA_ERR" &&
+     [[ -s "$PARTIDA_FIGS" ]]; then
+    : > "$PARTIDA_TXT"
+    for f in "${SCANNED[@]}"; do
+      [[ -f "$f" ]] && texto_normalizado "$f" >> "$PARTIDA_TXT"
+    done
+    FIGURAS="$(grep -c . "$PARTIDA_FIGS")"
+    comprobar_fragmentos "$PARTIDA_TXT" "$PARTIDA_FIGS" "$PARTIDA_SALIDA"
+    if [[ "$FALTAN" -gt 0 ]]; then
+      cat "$PARTIDA_SALIDA"
+      VIOL=$((VIOL + FALTAN))
+    fi
+  else
+    echo "$PARTIDA_TOOL no pudo derivar las cifras de la partida:"
+    sed 's/^/    /' "$PARTIDA_ERR" | head -5
+    VIOL=$((VIOL + 1))
+  fi
+fi
 
 # Un documento CON CIFRAS que no esté escaneado ni clasificado es un olvido: el
 # guardarraíl no puede cubrir lo que nadie declaró. Un solo grep sobre el
@@ -285,10 +450,12 @@ done < <(git ls-files '*.md')
 
 if [[ "$VIOL" -gt 0 ]]; then
   echo ""
-  echo "X $VIOL cifra(s) en deriva. Dos arreglos posibles, ninguno silencioso:"
+  echo "X $VIOL cifra(s) en deriva. Arreglos posibles, ninguno silencioso:"
   echo "  · el documento está desactualizado → corrige la cifra a $PINES pines / $TESTS tests"
   echo "  · la cifra es un registro con fecha → rodéala de las marcas del documento:"
   echo "      $OPEN_MARK … -->    y    $CLOSE_MARK -->"
+  echo "  · es una cifra de PARTIDA (F11h) → o el documento cambió, o cambió el volcado que la"
+  echo "    alimenta: el detalle de cada cifra y su volcado lo da python $PARTIDA_TOOL --list"
   exit 1
 fi
-echo "✓ las cifras de los documentos coinciden con el repo ($PINES pines, $TESTS tests)"
+echo "✓ las cifras de los documentos coinciden con el repo ($PINES pines, $TESTS tests y $FIGURAS cifras de partida contra sus volcados)"
