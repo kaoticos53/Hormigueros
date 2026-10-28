@@ -1,0 +1,72 @@
+# Réplicas de entrenamiento (F11d): la MISMA receta, 7 tiradas de GA
+# grid 96, laberinto, 216000 ticks, 24 semillas de partida que ninguna tirada vio: 42,7,99,1234,3,11,555,2024,5,13,17,23,64,128,256,512,777,888,999,1500,2025,31337,60013,98765
+# pp = pool entrenado con la puerta · ff = pool entrenado sin ella; cada pool se juzga con las dos puertas
+
+## Jugado con la glándula a 10 s
+
+| pool (receta) | rastro | descargas (media ± σ) | total | semillas con descargas |
+|---|---|---|---|---|
+| p10g-s7 | puerta | 159.5 ± 60.9 | 3827 | 24/24 |
+| p10g-s7 | fijo | 144.3 ± 43.4 | 3464 | 24/24 |
+| p10g-s29 | puerta | 155.2 ± 47.8 | 3726 | 24/24 |
+| p10g-s29 | fijo | 151.8 ± 48.6 | 3644 | 24/24 |
+| p10g-s31 | puerta | 154.7 ± 53.1 | 3712 | 24/24 |
+| p10g-s31 | fijo | 146.7 ± 43.7 | 3520 | 24/24 |
+| p10g-s37 | puerta | 147.2 ± 49.3 | 3533 | 24/24 |
+| p10g-s37 | fijo | 146.6 ± 48.1 | 3518 | 24/24 |
+| p10g-s41 | puerta | 161.6 ± 61.1 | 3879 | 24/24 |
+| p10g-s41 | fijo | 156.5 ± 56.4 | 3755 | 24/24 |
+| p10g-s43 | puerta | 143.8 ± 45.4 | 3450 | 24/24 |
+| p10g-s43 | fijo | 141.6 ± 40.9 | 3399 | 24/24 |
+| p10g-s47 | puerta | 149.5 ± 47.2 | 3587 | 24/24 |
+| p10g-s47 | fijo | 150.6 ± 43.9 | 3615 | 24/24 |
+
+- **puerta a 10 s**: las réplicas dan 159, 155, 155, 147, 162, 144, 149 → media **153.1** (rango 144–162); la referencia p10g-s7 da 159.5
+  - pareado réplica-media − p10g-s7 por semilla: -6.4 ± 3.7 descargas (gana en 12/24 semillas)
+- **fijo a 10 s**: las réplicas dan 144, 152, 147, 147, 156, 142, 151 → media **148.3** (rango 142–156); la referencia p10g-s7 da 144.3
+  - pareado réplica-media − p10g-s7 por semilla: +4.0 ± 2.8 descargas (gana en 16/24 semillas)
+
+### ¿La puerta paga dentro de cada pool, a 10 s?
+
+- **p10g-s7**: +15.1 ± 5.4 (t = +2.8; gana 16/24)
+- **p10g-s29**: +3.4 ± 5.4 (t = +0.6; gana 15/24)
+- **p10g-s31**: +8.0 ± 4.9 (t = +1.6; gana 13/24)
+- **p10g-s37**: +0.6 ± 4.0 (t = +0.2; gana 15/24)
+- **p10g-s41**: +5.2 ± 7.3 (t = +0.7; gana 14/24)
+- **p10g-s43**: +2.1 ± 3.8 (t = +0.6; gana 11/24)
+- **p10g-s47**: -1.2 ± 5.0 (t = -0.2; gana 13/24)
+
+## Jugado con la glándula a 25 s
+
+| pool (receta) | rastro | descargas (media ± σ) | total | semillas con descargas |
+|---|---|---|---|---|
+| p10g-s7 | puerta | 156.9 ± 55.5 | 3766 | 24/24 |
+| p10g-s7 | fijo | 150.3 ± 48.0 | 3607 | 24/24 |
+| p10g-s29 | puerta | 151.2 ± 47.7 | 3630 | 24/24 |
+| p10g-s29 | fijo | 153.1 ± 45.9 | 3675 | 24/24 |
+| p10g-s31 | puerta | 149.8 ± 51.8 | 3595 | 24/24 |
+| p10g-s31 | fijo | 150.7 ± 48.7 | 3616 | 24/24 |
+| p10g-s37 | puerta | 159.5 ± 57.2 | 3827 | 24/24 |
+| p10g-s37 | fijo | 157.8 ± 55.1 | 3788 | 24/24 |
+| p10g-s41 | puerta | 159.1 ± 50.8 | 3819 | 24/24 |
+| p10g-s41 | fijo | 170.3 ± 57.0 | 4087 | 24/24 |
+| p10g-s43 | puerta | 146.0 ± 46.1 | 3503 | 24/24 |
+| p10g-s43 | fijo | 146.2 ± 49.9 | 3509 | 24/24 |
+| p10g-s47 | puerta | 159.2 ± 59.0 | 3821 | 24/24 |
+| p10g-s47 | fijo | 160.3 ± 59.4 | 3847 | 24/24 |
+
+- **puerta a 25 s**: las réplicas dan 157, 151, 150, 159, 159, 146, 159 → media **154.5** (rango 146–159); la referencia p10g-s7 da 156.9
+  - pareado réplica-media − p10g-s7 por semilla: -2.4 ± 4.8 descargas (gana en 14/24 semillas)
+- **fijo a 25 s**: las réplicas dan 150, 153, 151, 158, 170, 146, 160 → media **155.5** (rango 146–170); la referencia p10g-s7 da 150.3
+  - pareado réplica-media − p10g-s7 por semilla: +5.2 ± 3.1 descargas (gana en 16/24 semillas)
+
+### ¿La puerta paga dentro de cada pool, a 25 s?
+
+- **p10g-s7**: +6.6 ± 6.6 (t = +1.0; gana 15/24)
+- **p10g-s29**: -1.9 ± 4.3 (t = -0.4; gana 11/24)
+- **p10g-s31**: -0.9 ± 5.2 (t = -0.2; gana 11/24)
+- **p10g-s37**: +1.6 ± 4.1 (t = +0.4; gana 18/24)
+- **p10g-s41**: -11.2 ± 8.0 (t = -1.4; gana 11/24)
+- **p10g-s43**: -0.2 ± 6.1 (t = -0.0; gana 14/24)
+- **p10g-s47**: -1.1 ± 5.0 (t = -0.2; gana 12/24)
+

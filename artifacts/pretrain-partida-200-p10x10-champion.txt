@@ -1,0 +1,78 @@
+# El campeón de una campaña de réplicas y el efecto de la puerta del cerebro
+# campañas: 10 s sin puerta (p10-s11, p10-s13, p10-s23, p10-s29, p10-s31, p10-s37, p10-s41, p10-s43, p10-s47, p10-s7) · 10 s con puerta (p10g-s29, p10g-s31, p10g-s37, p10g-s41, p10g-s43, p10g-s47, p10g-s7)
+# 24 semillas de partida que vio cada pool: 3,5,7,11,13,17,23,42,64,99,128,256,512,555,777,888,999,1234,1500,2024,2025,31337,60013,98765
+
+## 10 s sin puerta: el campeón «p10-s7» celda a celda
+
+- **p10-s7 · 10 s · fijo**: 189.0 descargas — puesto 2/10; el segundo da 190.0 (margen -1.0); la media de sus 10 tiradas 165.7 con dispersión 24.9 → z = +0.93
+  - p10-s41 190.0 > p10-s7 189.0 > p10-s23 187.0 > p10-s13 180.6 > p10-s31 179.9 > p10-s29 164.8 > p10-s43 161.3 > p10-s47 150.6 > p10-s11 140.5 > p10-s37 114.0
+- **p10-s7 · 10 s · puerta**: 179.1 descargas — puesto 3/10; el segundo da 200.5 (margen -21.4); la media de sus 10 tiradas 167.6 con dispersión 24.2 → z = +0.48
+  - p10-s23 200.5 > p10-s41 192.3 > p10-s7 179.1 > p10-s31 178.8 > p10-s13 174.9 > p10-s29 170.1 > p10-s43 162.9 > p10-s47 155.3 > p10-s11 146.0 > p10-s37 116.5
+- **p10-s7 · 25 s · fijo**: 200.7 descargas — puesto 2/10; el segundo da 201.7 (margen -1.0); la media de sus 10 tiradas 170.2 con dispersión 27.7 → z = +1.10
+  - p10-s41 201.7 > p10-s7 200.7 > p10-s23 190.9 > p10-s13 189.3 > p10-s31 178.1 > p10-s43 170.5 > p10-s29 161.5 > p10-s47 149.1 > p10-s11 145.2 > p10-s37 115.5
+- **p10-s7 · 25 s · puerta**: 190.2 descargas — puesto 3/10; el segundo da 205.7 (margen -15.4); la media de sus 10 tiradas 170.2 con dispersión 26.2 → z = +0.76
+  - p10-s23 205.7 > p10-s41 196.9 > p10-s7 190.2 > p10-s13 182.0 > p10-s47 169.3 > p10-s29 166.9 > p10-s43 165.7 > p10-s31 162.2 > p10-s11 148.8 > p10-s37 114.4
+
+## 10 s con puerta: puestos por celda
+
+- **10 s · fijo**: media de las tiradas 148.3, dispersión 5.0
+  - p10g-s41 156.5 > p10g-s29 151.8 > p10g-s47 150.6 > p10g-s31 146.7 > p10g-s37 146.6 > p10g-s7 144.3 > p10g-s43 141.6
+- **10 s · puerta**: media de las tiradas 153.1, dispersión 6.5
+  - p10g-s41 161.6 > p10g-s7 159.5 > p10g-s29 155.2 > p10g-s31 154.7 > p10g-s47 149.5 > p10g-s37 147.2 > p10g-s43 143.8
+- **25 s · fijo**: media de las tiradas 155.5, dispersión 8.1
+  - p10g-s41 170.3 > p10g-s47 160.3 > p10g-s37 157.8 > p10g-s29 153.1 > p10g-s31 150.7 > p10g-s7 150.3 > p10g-s43 146.2
+- **25 s · puerta**: media de las tiradas 154.5, dispersión 5.5
+  - p10g-s37 159.5 > p10g-s47 159.2 > p10g-s41 159.1 > p10g-s7 156.9 > p10g-s29 151.2 > p10g-s31 149.8 > p10g-s43 146.0
+
+## ¿Paga la puerta dentro de cada pool?
+
+Efecto = descargas con la puerta − descargas con el reflejo fijo, mismo pool y mismas semillas de partida.
+
+### 10 s sin puerta · jugado 10 s
+- **p10-s11**: +5.5 ± 6.5 (t = +0.9; gana 12/24)
+- **p10-s13**: -5.7 ± 5.1 (t = -1.1; gana 11/24)
+- **p10-s23**: +13.6 ± 6.3 (t = +2.1; gana 15/24)
+- **p10-s29**: +5.3 ± 6.9 (t = +0.8; gana 12/24)
+- **p10-s31**: -1.1 ± 6.1 (t = -0.2; gana 13/24)
+- **p10-s37**: +2.5 ± 4.0 (t = +0.6; gana 11/24)
+- **p10-s41**: +2.3 ± 6.0 (t = +0.4; gana 15/24)
+- **p10-s43**: +1.6 ± 6.1 (t = +0.3; gana 12/24)
+- **p10-s47**: +4.7 ± 6.3 (t = +0.7; gana 16/24)
+- **p10-s7**: -9.8 ± 10.2 (t = -1.0; gana 11/24)
+- **las 10 tiradas a la vez, por semilla de partida**: +1.9 ± 2.3 (t = +0.8; gana 14/24)
+
+### 10 s sin puerta · jugado 25 s
+- **p10-s11**: +3.6 ± 7.7 (t = +0.5; gana 12/24)
+- **p10-s13**: -7.3 ± 8.3 (t = -0.9; gana 12/24)
+- **p10-s23**: +14.8 ± 7.4 (t = +2.0; gana 17/24)
+- **p10-s29**: +5.4 ± 5.4 (t = +1.0; gana 14/24)
+- **p10-s31**: -15.9 ± 7.5 (t = -2.1; gana 8/24)
+- **p10-s37**: -1.0 ± 4.1 (t = -0.3; gana 12/24)
+- **p10-s41**: -4.8 ± 6.6 (t = -0.7; gana 11/24)
+- **p10-s43**: -4.8 ± 6.4 (t = -0.8; gana 12/24)
+- **p10-s47**: +20.2 ± 7.5 (t = +2.7; gana 17/24)
+- **p10-s7**: -10.4 ± 9.6 (t = -1.1; gana 11/24)
+- **las 10 tiradas a la vez, por semilla de partida**: -0.0 ± 2.3 (t = -0.0; gana 12/24)
+
+### 10 s con puerta · jugado 10 s
+- **p10g-s29**: +3.4 ± 5.4 (t = +0.6; gana 15/24)
+- **p10g-s31**: +8.0 ± 4.9 (t = +1.6; gana 13/24)
+- **p10g-s37**: +0.6 ± 4.0 (t = +0.2; gana 15/24)
+- **p10g-s41**: +5.2 ± 7.3 (t = +0.7; gana 14/24)
+- **p10g-s43**: +2.1 ± 3.8 (t = +0.6; gana 11/24)
+- **p10g-s47**: -1.2 ± 5.0 (t = -0.2; gana 13/24)
+- **p10g-s7**: +15.1 ± 5.4 (t = +2.8; gana 16/24)
+- **las 7 tiradas a la vez, por semilla de partida**: +4.8 ± 2.4 (t = +2.0; gana 15/24)
+
+### 10 s con puerta · jugado 25 s
+- **p10g-s29**: -1.9 ± 4.3 (t = -0.4; gana 11/24)
+- **p10g-s31**: -0.9 ± 5.2 (t = -0.2; gana 11/24)
+- **p10g-s37**: +1.6 ± 4.1 (t = +0.4; gana 18/24)
+- **p10g-s41**: -11.2 ± 8.0 (t = -1.4; gana 11/24)
+- **p10g-s43**: -0.2 ± 6.1 (t = -0.0; gana 14/24)
+- **p10g-s47**: -1.1 ± 5.0 (t = -0.2; gana 12/24)
+- **p10g-s7**: +6.6 ± 6.6 (t = +1.0; gana 15/24)
+- **las 7 tiradas a la vez, por semilla de partida**: -1.0 ± 2.2 (t = -0.4; gana 12/24)
+
+- **17 pools · jugado 10 s**: la puerta paga +3.1 ± 1.5 descargas al promediar las tiradas (t = +2.1; 13/17 tiradas a favor)
+- **17 pools · jugado 25 s**: la puerta paga -0.4 ± 2.2 descargas al promediar las tiradas (t = -0.2; 6/17 tiradas a favor)
