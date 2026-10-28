@@ -564,6 +564,80 @@ selección (24 000 ticks, 400 s): a 10 s de glándula el depósito cuesta cuatro
 veces menos por evento de lo que cuesta a 25 s, y el fitness no lo nota porque
 sólo cuenta descargas.
 
+**F11i — la celda corta llega a siete tiradas (2026-10-28): el castigo del
+precio en la receta de la puerta se confirma y crece, y el campeón de F11c
+pierde el primer puesto.** F11h dejó el brazo de 10 s con cuatro tiradas en la
+receta de la puerta y siete en la del reflejo, así que esa celda estimaba su
+media con cuatro sorteos. Aquí se añaden las mismas tres semillas de GA (41, 43
+y 47) a las DOS recetas —sembrar sólo un lado no añadiría ni un par, sólo
+desplazaría una media sin con qué emparejarla— con la receta de siempre y
+`GLAND=10 REFILL=6` (`ARMS=red|fijo SEED=… SUFFIX=p10g…|p10s…
+scripts/run-gland-200.sh`; las seis en paralelo: 18 149 / 18 100 / 18 131 /
+18 099 / 18 102 / 18 097 s, las seis con EXIT=0), y se jugaron los pools con las
+24 semillas de siempre —10 pools sin puerta × 2 precios × 2 puertas × 24 + 7
+pools con puerta × lo mismo = 1 632 partidas— (`scripts/gland-bench.py --pools …
+--prices 10,25`; evidencia en `artifacts/pretrain-partida-200-p10x10-replicas.txt`
+y `…-p10g7-replicas.txt`, el contraste entre recetas en `…-p10x10-vs-p257.txt` y
+`…-p10g7-vs-p25g7.txt`, y el efecto de la puerta en `…-p10x10-champion.txt`).
+Las tres tiradas nuevas son de tabla media-alta —190,0 / 161,3 / 150,6 con el
+reflejo al jugar a 10 s— así que no mueven el nivel del eje; lo que hacen es
+llevar cada celda de 10 s a siete.
+
+| entrenada a 10 s | jugado 10 s | jugado 25 s |
+|---|---|---|
+| sin puerta (10 tiradas) | 165,7 (114–190) | **170,2** (115–202) |
+| con puerta (7 tiradas) | 153,1 (144–162) | 154,5 (146–159) |
+
+- **El precio en la receta del reflejo se sostiene y crece un poco**: 10 s menos
+  25 s da +10,9 ± 2,3 descargas jugando a 10 s (t = +4,7; 21/24 semillas) y
+  +14,6 ± 3,2 jugando a 25 s (t = +4,6; 20/24); F11h medía +10,2 ± 2,6 y
+  +13,1 ± 3,4, con 18/24 semillas en las dos celdas. Por tirada de GA gana en
+  5 de 7 otra vez, y los dos sorteos en contra siguen siendo la 11 (−43 y −40) y
+  la 37 (−47 y −42).
+- **El castigo en la receta de la puerta se confirma y es algo más grande, no
+  menor**: 10 s menos 25 s da −7,3 ± 3,1 descargas jugando a 10 s (t = −2,3;
+  6/24 semillas) y −11,7 ± 2,6 jugando a 25 s (t = −4,5; 4/24); F11h daba
+  −6,7 ± 2,2 y −8,7 ± 2,1. Por tirada de GA gana 10 s en 1 de 4 sorteos —los
+  nuevos 41/43/47 no existen a 25 s— y en la celda de 25 s en 0 de 4. Lo que
+  cambia con las tres tiradas nuevas es la DISPERSIÓN: con cuatro se estimaba
+  3,2–5,1 descargas dentro de la receta y con siete es 6,5 en la celda de 10 s y
+  8,1 en la de 25 s, así que el efecto es mayor pero su t de 10 s baja: las
+  tiradas no salen tan iguales como parecía.
+- **La puerta sobre las DIECISIETE tiradas de 10 s llega a t ≈ 2**: al jugar a
+  10 s paga +3,1 ± 1,5 descargas (t = +2,1; 13/17 tiradas a favor) y al jugar a
+  25 s −0,4 ± 2,2 (t = −0,2; 6/17); con once pools F11h medía +3,4 ± 2,3
+  (t = 1,5; 8/11). El signo es el mismo y ahora es nominalmente significativo,
+  pero sigue siendo la mitad del efecto de entrenar a 25 s (+5,6 ± 1,9, t = 2,9;
+  F11g): «un pool entrenado a corto no sabe aprovechar la puerta» se suaviza a
+  «la aprovecha a medias».
+- **El campeón de F11c pierde el primer puesto, y quien manda ahora es un
+  sorteo, no una receta**: con diez tiradas, p10-s7 es SEGUNDO con el reflejo
+  (189,0 a 10 s y 200,7 a 25 s; z = +0,93 y +1,10, a 1,0 descarga del líder en
+  las dos celdas) y TERCERO con la puerta (179,1 y 190,2; z = +0,48 y +0,76). La
+  semilla 41 —una de las tres nuevas— encabeza tres de las cuatro celdas de
+  10 s (190,0 y 201,7 entrenando sin puerta, 161,6 entrenando con ella) y es
+  tercera en la cuarta por 0,4. Su z es +0,98 en su mejor celda: un máximo de
+  diez sorteos suele estar a +1,54, así que el nuevo líder tampoco se separa del
+  pelotón —lo que se mueve la receta entre tiradas (24,9 de dispersión) es el
+  doble de lo que separa a las dos recetas (10,9)—.
+- **La selección acierta los extremos y no el resto**: sobre las diez tiradas
+  del reflejo, el rango de selección va de 61,8k a 82,8k (media de las últimas 20
+  generaciones) y el de juego de 114,0 a 190,0. El peor en las dos cosas es la
+  semilla 37 (61,8k → 114,0) y el peor jugando de los demás también está abajo
+  en selección (la 11: 72,5k → 140,5); el mejor jugando es la 41, segunda en
+  selección (82,1k). Pero las seis primeras de selección (75,5–82,8k) juegan
+  entre 150,6 y 190,0: dentro de la cabeza, el orden de selección es ruido.
+
+Veredicto: el eje del precio queda ahora con siete tiradas en las DOS celdas de
+10 s y el castigo de la receta de la puerta no era un artefacto de cuatro
+sorteos —**al revés: con siete es mayor (−7 a −12)— y el precio sigue pagando en
+la del reflejo, ahora con más semillas de partida a favor (21/24 y 20/24, donde
+F11h veía 18/24 en las dos celdas)**. Lo que el eje NO puede separar sigue siendo lo mismo que F11h
+declaró abierto: a 10 s de glándula el depósito cuesta cuatro veces menos por
+evento y la selección sólo mira 400 s de una partida de 3 600, y las dos cosas
+van juntas en el mismo brazo. Eso es lo que mide el control de F11j, que sube
+sólo el horizonte a 800 s sin tocar el precio.
+
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
