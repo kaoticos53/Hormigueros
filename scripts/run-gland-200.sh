@@ -14,17 +14,23 @@
 # brazo sin puerta, y SEED cambia la tirada del GA —y con ella las semillas de
 # las partidas de selección, que salen de la misma semilla— para ver si el pool
 # que deja entrenar a 10 s se debe a la receta o a la tirada.
+# TICKS es el HORIZONTE de evaluación de la selección (F10: 24 000 ticks = 400 s
+# de partida). Se parametriza para el control de F11j —qué parte del castigo de
+# la puerta es el precio de la glándula y qué parte el horizonte—, que sube SOLO
+# este número. El valor por omisión es el de todas las tiradas anteriores, así
+# que las recetas ya publicadas se reproducen tal cual.
 GLAND="${GLAND:-25}"
 REFILL="${REFILL:-6}"
 SEED="${SEED:-7}"
 SUFFIX="${SUFFIX:-gl}"
 ARMS="${ARMS:-red fijo}"
+TICKS="${TICKS:-24000}"
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 COMMON=(--mode pretrain --seed "$SEED" --pop 32 --band-min 200 --band-max 260 --hidden 24
-        --fitness downloads --game-ticks 24000 --game-trials 3 --generations 200
+        --fitness downloads --game-ticks "$TICKS" --game-trials 3 --generations 200
         --warm-start artifacts/pretrain-maze-3k.antgenome
         --trail-gland "$GLAND" --trail-gland-refill "$REFILL")
 
