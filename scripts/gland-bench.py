@@ -145,7 +145,7 @@ def main_replicas(args) -> int:
     if not prices or not seeds:
         print("--prices y --seeds no pueden quedar vacíos", file=sys.stderr)
         return 2
-    if not build_cli():
+    if not args.no_build and not build_cli():
         return 2
 
     gates = (("puerta", True), ("fijo", False))
@@ -242,6 +242,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--pool-fixed", default=POOL_FIXED,
                     help="pool entrenado con el reflejo fijo")
     ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--no-build", action="store_true",
+                    help="no recompilar: usar el antsim.dll que ya está en bin/Release "
+                         "(hace falta cuando otro proceso lo tiene cargado y el build no "
+                         "puede copiarlo)")
     ap.add_argument("--out", default="artifacts/pretrain-partida-200-gl-bench.txt")
     ap.add_argument("--pools", action="extend", nargs="+", metavar="ETIQUETA=RUTA",
                     help="modo réplicas: mide cada pool a los dos precios y con las dos puertas")
@@ -263,11 +267,12 @@ def main(argv: list[str]) -> int:
         "fijo (entrenado con el reflejo)": args.pool_fixed,
     }
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
-    build = subprocess.run(["dotnet", "build", "src/Tools/AntSim.Cli", "-c", "Release",
-                            "-v", "q", "--nologo"], cwd=ROOT, capture_output=True, text=True)
-    if build.returncode != 0:
-        print(build.stdout[-2000:] + build.stderr[-2000:], file=sys.stderr)
-        return 2
+    if not args.no_build:
+        build = subprocess.run(["dotnet", "build", "src/Tools/AntSim.Cli", "-c", "Release",
+                                "-v", "q", "--nologo"], cwd=ROOT, capture_output=True, text=True)
+        if build.returncode != 0:
+            print(build.stdout[-2000:] + build.stderr[-2000:], file=sys.stderr)
+            return 2
 
     arms = [(pool_name, gate_name, pool, gate)
             for pool_name, pool in pools.items()
