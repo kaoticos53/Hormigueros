@@ -667,7 +667,7 @@ sorteos pareados y no sobre los diez pools de aquel eje.
 | 25 s · fijo | 24k | 158,9 | 173,8 | −14,8 | −8,5 % |
 | 25 s · fijo | 48k | 195,4 | 230,3 | **−34,9** | −15,2 % |
 | 25 s · puerta | 24k | 154,8 | 177,3 | −22,5 | −12,7 % |
-| 25 s · puerta | 48k | 205,8 | 247,8 | **−42,0** | −17,0 % |
+| 25 s · puerta | 48k | 205,8 | 247,8 | **−42,0** | −16,9 % |
 
 - **Ninguna de las cuatro celdas se mueve hacia cero: las cuatro se alejan.** El
   cambio del efecto al doblar el horizonte, pareado por sorteo de GA
@@ -685,10 +685,10 @@ sorteos pareados y no sobre los diez pools de aquel eje.
   pasa de 167,3 a 233,4 descargas. Leído como porcentaje de su brazo de
   referencia, el castigo pasa de −10,6 % a −15,3 % (10 s, reflejo), de −10,9 % a
   −14,1 % (10 s, puerta), de −8,5 % a −15,2 % (25 s, reflejo) y de −12,7 % a
-  −17,0 % (25 s, puerta).
+  −16,9 % (25 s, puerta).
 - **Entre tiradas sigue mandando el sorteo, no el horizonte**: dentro de los seis
-  pools nuevos, la celda de 10 s con la puerta va de 183,0 a 228,5 entre sorteos
-  y la del reflejo de 170,8 a 236,8 —un rango de 46 a 66 descargas, más grande
+  pools nuevos, la celda de 10 s con la puerta va de 183,0 a 266,9 entre sorteos
+  y la del reflejo de 170,8 a 273,2 —un rango de 84 a 102 descargas, más grande
   que el efecto que se mide—. La conclusión no descansa en esas medias sueltas
   sino en los deltas pareados, que van los cuatro al mismo lado: un t de −17
   sobre tres sorteos significa «los tres se movieron igual», no una población de
@@ -712,9 +712,8 @@ cierra: 2× es una manipulación, no el horizonte de la partida (216 000 ticks,
 nueve veces la ventana de 24 000), así que un nulo a 48 000 deja abiertos los
 horizontes mayores; falta la celda de 25 s a 48 000, que es el 2×2 completo
 (precio × horizonte) y lo único que reparte el castigo entre las dos causas con
-todas las casillas; y las cifras de esta sección todavía no las deriva
-`scripts/partida-figures.py` (cubre el eje del precio de F11h), así que el
-guardarraíl aún no las fija.
+todas las casillas; y las cifras de esta sección las deriva `scripts/partida-figures.py`
+de los tres volcados del control, así que el guardarraíl las exige en cada push.
 
 **F11k — cuánto rastro deposita cada brazo (2026-10-29): la hipótesis del
 mecanismo de F11j no se sostiene — a 10 s la glándula niega el 85 % y el rastro
@@ -740,7 +739,7 @@ Ventana de 48 000 ticks, glándula de 10 s (media de 24 semillas de partida):
 | entrenado con puerta | puerta | **211,9** | 7 320 | 85 % |
 | entrenado con puerta | reflejo | 38,8 | 9 223 | 87 % |
 | entrenado con reflejo | puerta | 134,6 | 7 396 | 85 % |
-| entrenado con reflejo | reflejo | 35,7 | 9 642 | 87 % |
+| entrenado con reflejo | reflejo | 35,7 | 9 641 | 87 % |
 
 - **La glándula es el tope, no la intención**: entre el 82 y el 89 % de lo
   pedido se queda sin presupuesto en las veinticuatro celdas de 10 s. La cresta
@@ -748,18 +747,19 @@ Ventana de 48 000 ticks, glándula de 10 s (media de 24 semillas de partida):
   28 027,3 a 35,7 en el del reflejo: ×93 y ×785. Con el reflejo fijo la cresta
   queda prácticamente apagada.
 - **El rastro de casa se come el presupuesto**: abrir la puerta baja el rastro
-  de casa de 9 223 a 7 320 (y de 9 642 a 7 396 en el brazo del reflejo) y, con
+  de casa de 9 223 a 7 320 (y de 9 641 a 7 396 en el brazo del reflejo) y, con
   el presupuesto que eso deja libre, la cresta sube en los doce pools: de
   +16,3 a +382,2, con 24/24 semillas a favor en diez de las doce celdas y 23/24
   en las otras dos. Sin precio, en cambio, el brazo de la puerta deja un 30 %
   MENOS de cresta que el del reflejo (19 714,7 contra 28 027,3): es un grifo que
   sólo se nota cuando el agua escasea.
 - **El doble de ventana no dobla la cresta**: sin precio el acumulado crece
-  ×1,90–2,10 en los veinticuatro brazos —ahí sí «el doble de tiempo»—; con la
-  glándula de 10 s crece ×1,15–1,23 con el reflejo fijo y ×1,22–1,60 con la
-  puerta, mientras el rastro de casa sí se dobla (3 538 → 7 124 en
-  p10h2g-s41) y el presupuesto gastado también (4 538,7 → 9 090,1 s). Lo que no
-  escala con la ventana es la señal que recluta: la cresta está limitada por
+  ×1,72–2,10 en los veinticuatro brazos —×1,90–2,10 en los doce entrenados a
+  48 000, ahí sí «el doble de tiempo»—; con la glándula de 10 s crece ×1,15–1,23
+  con el reflejo fijo y ×1,22–1,60 con la puerta, mientras el rastro de casa sí
+  se dobla (3 538 → 7 124 en p10h2g-s41) y el presupuesto gastado también
+  (4 538,7 → 9 090,1 s). Lo que no escala con la ventana es la señal que
+  recluta: la cresta está limitada por
   viaje, no por el tiempo de partida.
 - **El brazo que pierde en descargas no es el que deposita menos**: con la
   puerta puesta, el pool entrenado con puerta deja 211,9 de cresta contra 134,6
@@ -784,8 +784,9 @@ Lo que esta medición NO dice: ni dónde queda la cresta ni cómo de continua es
 de selección (24 000 y 48 000 ticks), no en la partida completa de 216 000; los
 contadores suman las dos colonias y los dos canales, y con tres sorteos por
 receta la dispersión entre pools es grande (la cresta del brazo de la puerta va
-de 106 a 381 a 48k). Las cifras de esta sección tampoco las deriva todavía
-`scripts/partida-figures.py`, así que el guardarraíl aún no las fija.
+de 106 a 381 a 48k). Las cifras de esta sección las deriva `scripts/partida-figures.py`
+del volcado de depósitos, así que el guardarraíl las exige en cada push.
+
 
 **F11m — el lanzador NO cobra la glándula (2026-10-29): a 25 s el rastro de
 comida cae ×767 y la cosecha no se mueve.** F11j dejó el precio como única
