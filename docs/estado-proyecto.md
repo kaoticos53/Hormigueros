@@ -787,6 +787,57 @@ receta la dispersión entre pools es grande (la cresta del brazo de la puerta va
 de 106 a 381 a 48k). Las cifras de esta sección tampoco las deriva todavía
 `scripts/partida-figures.py`, así que el guardarraíl aún no las fija.
 
+**F11m — el lanzador NO cobra la glándula (2026-10-29): a 25 s el rastro de
+comida cae ×767 y la cosecha no se mueve.** F11j dejó el precio como única
+causa del castigo y F11g/F11i dejaron el 25 s como condición de despliegue para
+entrenar con la puerta. La pregunta que quedaba era si la partida de fábrica —la
+que abre el lanzador— debía jugar también con ese precio. Se midió el par
+completo con la MISMA partida del lanzador (grid 96, laberinto, reclutamiento,
+216 000 ticks, el pool de fábrica `pretrain-maze-los3`, el REFLEJO decidiendo y
+sin puerta del cerebro) a 0 y a 25 s, con las 24 semillas de partida de siempre
+(`scripts/gland-launcher-cost.py`; evidencia en
+`artifacts/pretrain-partida-200-lanzador-gland.txt`).
+
+| glándula | rastro de comida | rastro de casa | negado | glándula gastada | descargas |
+|---|---|---|---|---|---|
+| 0 s (de fábrica) | 34 223,4 ± 9 735,7 | 89 816 ± 20 253 | 0 % | 0 s | 108,4 ± 31,4 |
+| 25 s | **44,6 ± 26,6** | **15 326 ± 4 974** | **87,8 %** | 19 213 s | 113,9 ± 32,6 |
+
+- **En el lanzador el precio no disciplina ninguna decisión: sólo raciona.** La
+  partida decide el depósito con el reflejo de F8 y no expone `--trail-by-brain`,
+  así que no hay salida del cerebro que cobrar; y el pool que carga está
+  entrenado sin precio. La evidencia del 25 s (F11g/F11h/F11i/F11j) es sobre
+  ENTRENAR con la puerta, y no se traslada a este par pool/reflejo.
+- **Lo que se pierde es exactamente lo que el lanzador enseña.** El rastro de
+  comida cae de 34 223,4 a 44,6 —99,9 %, ×767— en las 24 semillas (0/24 a favor;
+  −34 178,8 ± 1 987,8, t = −17,2) y el de casa de 89 816 a 15 326 (−74 490,4 ±
+  3 515,4, t = −21,2; 0/24). Lo que queda de comida no es un rastro: es el
+  residuo de los depósitos que el presupuesto alcanzó a pagar.
+- **La cosecha no cambia.** Las descargas pasan de 108,4 a 113,9 (+5,5 ± 4,6,
+  t = +1,2; 16/24 semillas), dentro del ruido: el precio no compra ni cuesta
+  comida recogida, sólo borra la señal.
+- **El negado sigue siendo el 88 %**, no el 0 % que sugiere «el doble de
+  presupuesto»: a 25 s el reflejo pide mucho más de lo que la glándula puede
+  pagar en una partida de 3 600 s (19 213 s gastados entre las dos colonias).
+
+Decisión: **no**. La partida de fábrica sigue con `--trail-gland 0` —el default
+que el mundo ya trae— y el lanzador no gana perillas nuevas. El precio sigue
+siendo una palanca de entrenamiento y de evaluación, y quien quiera mirar la
+condición de despliegue la reproduce en el CLI, que es donde juegan todos los
+benches: `--mode game --maze --recruitment --trail-gland 25 --trail-gland-refill 6`.
+
+Coste de haberlo adoptado: el 99,9 % del rastro de comida y el 83 % del de casa
+a cambio de +5,5 descargas que no son señal, más dos ajustes nuevos que
+atravesarían `LaunchSettings`, `RecruitmentKnobs`, el cableado al CLI de la
+vista, la línea del HUD y sus pruebas de espejo (ocho ficheros) para enseñar una
+decisión que nadie toma. Coste de no adoptarlo: el lanzador no muestra la
+condición de 25 s de un vistazo; se compensa con el CLI, que sí la reproduce.
+
+Lo que cambiaría la decisión: que el lanzador expusiera la puerta del cerebro y
+cargara un pool entrenado a 25 s —entonces el precio sería la condición de ESE
+pool y no un impuesto a un reflejo que no decide—, o una glándula bastante más
+holgada que dejara de negar el 88 % sin borrar el rastro.
+
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit

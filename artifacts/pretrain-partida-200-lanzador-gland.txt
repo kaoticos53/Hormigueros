@@ -1,0 +1,27 @@
+# ¿Qué le cuesta al lanzador cobrar la glándula?
+# pool artifacts/pretrain-maze-los3.antgenome · grid 96 · laberinto · reclutamiento · 216000 ticks · reflejo decidiendo (sin --trail-by-brain) · recarga 6 s
+# 24 semillas de partida: 42,7,99,1234,3,11,555,2024,5,13,17,23,64,128,256,512,777,888,999,1500,2025,31337,60013,98765
+# 0 s = la partida de fábrica del lanzador; 25 s = el precio con el que F11g/F11i entrenan y con el que juegan los benches de despliegue
+
+| glándula | comida | casa | negado % | glándula (s) | descargas |
+|---|---|---|---|---|---|
+| 0 s | 34223.4 ± 9735.7 | 89816 ± 20253 | 0.0 % | 0 | 108.4 ± 31.4 |
+| 25 s | 44.6 ± 26.6 | 15326 ± 4974 | 87.8 % | 19213 | 113.9 ± 32.6 |
+
+- **rastro de comida: 25 s − 0 s** = -34178.8 ± 1987.8 (t = -17.2)
+  - 25 s deja más en 0/24 semillas
+- **rastro de casa: 25 s − 0 s** = -74490.4 ± 3515.4 (t = -21.2)
+  - 25 s deja más en 0/24 semillas
+- **descargas: 25 s − 0 s** = +5.5 ± 4.6 (t = +1.2)
+  - 25 s deja más en 16/24 semillas
+
+## Cómo se lee
+
+El precio a 25 s no disciplina ninguna decisión en el lanzador —el reflejo deposita
+siempre lo mismo—: sólo decide cuánto de lo pedido se paga. Si el negado es alto y el
+rastro depositado cae frente a 0 s, el precio no cambia la cosecha de la colonia
+(descargas), cambia lo que el jugador VE: el rastro de F8 que el lanzador existe
+para enseñar.
+
+Estas cifras no las deriva `scripts/partida-figures.py`: el documento que las cite
+las acompaña de este volcado y de la orden que lo reproduce.
