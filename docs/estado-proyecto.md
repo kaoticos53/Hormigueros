@@ -839,6 +839,65 @@ cargara un pool entrenado a 25 s —entonces el precio sería la condición de E
 pool y no un impuesto a un reflejo que no decide—, o una glándula bastante más
 holgada que dejara de negar el 88 % sin borrar el rastro.
 
+<!-- F11l: esqueleto pendiente de reparto. Al llegar el volcado, rellenar la tabla, las cuatro
+     viñetas y el veredicto, dar de alta las claves en scripts/partida-figures.py y en
+     scripts/check-doc-figures.sh, y sólo entonces quitar este comentario. -->
+
+**F11l — el 2×2 completo, precio × horizonte (2026-10-29, campaña en curso):
+pendiente de reparto.** F11j dobló el horizonte de selección SÓLO a 10 s —donde
+la puerta pierde— y encontró que el castigo crece; con eso el horizonte queda
+descartado como causa a ese precio, pero no dice qué hace cuando el precio es
+holgado. Si a 25 s doblar la ventana cuesta del orden de lo que costó en aquel
+control, el horizonte es ADITIVO —un peaje fijo por mirar poco, que se suma al
+nivel del precio— y el reparto del castigo entre las dos
+causas queda cerrado; si no cuesta nada, las dos causas no son separables y el
+horizonte sólo muerde donde el depósito es barato. Ésta es la casilla que falta
+para tener las cuatro del 2×2 (precio de entrenamiento × horizonte de
+selección) con todas sus celdas pobladas, y se entrena con la misma receta de
+búsqueda que el resto del eje (`GLAND=25 REFILL=6 TICKS=48000`; semillas de GA
+7/11/13, las de F11g, para leer el salto de horizonte sorteo a sorteo y no el de
+precio, que queda sin parear en las dos filas de 48 000) en las dos variantes
+del depósito y en dos tandas de tres (`artifacts/p25h2-driver.sh`).
+
+Las otras tres casillas no se repiten: se leen de sus volcados —10 s · 24k de
+F11i, 10 s · 48k de F11j y 25 s · 24k de F11g— y sólo los dos brazos nuevos se
+juegan con las 24 semillas de partida de siempre (6 pools × 2 precios × 2
+rastros × 24 = 576 partidas, `artifacts/p25h2-bench-run.sh`, que se niega a
+repartir si falta una tirada).
+
+| entrenado | horizonte | jugado con puerta | jugado con reflejo | efecto | en relativo |
+|---|---|---|---|---|---|
+| 10 s | 24k | — (F11i) | — (F11i) | — | — |
+| 10 s | 48k | — (F11j) | — (F11j) | — | — |
+| 25 s | 24k | — (F11g) | — (F11g) | — | — |
+| 25 s | 48k | **pendiente** | **pendiente** | **pendiente** | **pendiente** |
+
+- **(pendiente) el salto de horizonte a 25 s, pareado por sorteo de GA**: signo,
+tamaño y t del cambio del efecto al doblar la ventana, en las dos recetas, con
+los tres deltas individuales a la vista —lo que hizo concluyente el control de
+10 s no fue la media sino que los tres sorteos se movieran igual—.
+- **(pendiente) el relativo**: el nivel absoluto no es comparable entre
+horizontes (a 48 000 ticks la partida del fitness dura el doble y el brazo de
+referencia también sube), así que la lectura va como porcentaje de su brazo.
+- **(pendiente) la dispersión entre tiradas**: rango de la celda nueva por
+sorteo, para decir si el efecto medido es mayor o menor que lo que mueve el
+sorteo.
+- **(pendiente) la lectura**: aditivo o no separable, y qué queda abierto en
+cualquiera de los dos casos.
+
+Veredicto: pendiente. Se escribe cuando `artifacts/pretrain-partida-200-p25h2-veredicto.txt`
+exista; hasta entonces no hay nada que redactar, porque un reparto sobre
+volcados a medias es peor que ninguno y el guion del bench lo dice en su log en
+vez de escribirlo.
+
+Cómo se cierra: el driver escribe `hecho` al acabar las dos tandas, el watcher
+del bench juega las 576 partidas y reparte las cuatro casillas con
+`scripts/gland-matrix-compare.py`; con ese volcado se rellenan la tabla, las
+cuatro viñetas y el veredicto, se dan de alta las claves nuevas en
+`scripts/partida-figures.py` y en `scripts/check-doc-figures.sh` —para que el
+guardarraíl exija cada cifra en cada push, como en F11j/F11k— y se quita el
+comentario que marca este esqueleto.
+
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
