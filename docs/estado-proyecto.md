@@ -638,6 +638,77 @@ evento y la selección sólo mira 400 s de una partida de 3 600, y las dos cosas
 van juntas en el mismo brazo. Eso es lo que mide el control de F11j, que sube
 sólo el horizonte a 800 s sin tocar el precio.
 
+**F11k — cuánto rastro deposita cada brazo (2026-10-29): la hipótesis del
+mecanismo de F11j no se sostiene — a 10 s la glándula niega el 85 % y el rastro
+de casa se come el presupuesto.** F11j dejó el castigo de la puerta a 10 s
+explicado por el precio y con un mecanismo plausible y sin medir: con 800 s de
+selección el rastro del reflejo tendría el doble de tiempo para acumularse y
+reclutar, mientras que el cerebro entrenado a precio barato habría aprendido a
+depositar poco. Para mirarlo se instrumentó el mundo: `--trail-report` —nueva
+bandera de `--mode game`— añade a la línea `end` el rastro acumulado de comida y
+de casa —el reflejo de reclutamiento MÁS el canal genérico del cerebro—, lo que
+la glándula no pudo pagar y los segundos de presupuesto gastados; leer la capa
+al final no sirve porque evapora. Se jugaron los doce pools de F11i/F11j (seis
+de 48 000 ticks y seis de 24 000, sorteos 41/43/47) con
+`scripts/gland-deposits.py` a las dos ventanas de selección, con los dos rastros
+y con y sin precio —12 pools × 2 rastros × 2 ventanas × 2 precios × 24 semillas
+= 2 304 partidas— (evidencia en
+`artifacts/pretrain-partida-200-p10h2-deposits.txt`).
+
+Ventana de 48 000 ticks, glándula de 10 s (media de 24 semillas de partida):
+
+| brazo (48k) | jugado con | rastro de comida | rastro de casa | negado |
+|---|---|---|---|---|
+| entrenado con puerta | puerta | **211,9** | 7 320 | 85 % |
+| entrenado con puerta | reflejo | 38,8 | 9 223 | 87 % |
+| entrenado con reflejo | puerta | 134,6 | 7 396 | 85 % |
+| entrenado con reflejo | reflejo | 35,7 | 9 642 | 87 % |
+
+- **La glándula es el tope, no la intención**: entre el 82 y el 89 % de lo
+  pedido se queda sin presupuesto en las veinticuatro celdas de 10 s. La cresta
+  de comida cae de 19 714,7 (sin precio) a 211,9 en el brazo de la puerta y de
+  28 027,3 a 35,7 en el del reflejo: ×93 y ×785. Con el reflejo fijo la cresta
+  queda prácticamente apagada.
+- **El rastro de casa se come el presupuesto**: abrir la puerta baja el rastro
+  de casa de 9 223 a 7 320 (y de 9 642 a 7 396 en el brazo del reflejo) y, con
+  el presupuesto que eso deja libre, la cresta sube en los doce pools: de
+  +16,3 a +382,2, con 24/24 semillas a favor en diez de las doce celdas y 23/24
+  en las otras dos. Sin precio, en cambio, el brazo de la puerta deja un 30 %
+  MENOS de cresta que el del reflejo (19 714,7 contra 28 027,3): es un grifo que
+  sólo se nota cuando el agua escasea.
+- **El doble de ventana no dobla la cresta**: sin precio el acumulado crece
+  ×1,90–2,10 en los veinticuatro brazos —ahí sí «el doble de tiempo»—; con la
+  glándula de 10 s crece ×1,15–1,23 con el reflejo fijo y ×1,22–1,60 con la
+  puerta, mientras el rastro de casa sí se dobla (3 538 → 7 124 en
+  p10h2g-s41) y el presupuesto gastado también (4 538,7 → 9 090,1 s). Lo que no
+  escala con la ventana es la señal que recluta: la cresta está limitada por
+  viaje, no por el tiempo de partida.
+- **El brazo que pierde en descargas no es el que deposita menos**: con la
+  puerta puesta, el pool entrenado con puerta deja 211,9 de cresta contra 134,6
+  del entrenado con reflejo; con el reflejo fijo, 38,8 contra 35,7 —lo mismo—.
+  «El cerebro entrenado a 10 s aprendió a depositar poco» no se ve por ningún
+  lado; lo que se ve es un reparto distinto del mismo presupuesto.
+
+Veredicto: las dos mitades de la explicación de F11j fallan a la vez. El brazo
+del reflejo no acumula «el doble de rastro» con el doble de ventana —al precio
+donde vive el castigo su cresta está apagada y sólo dobla el rastro de casa—, y
+el cerebro entrenado con la glándula barata no aprendió a depositar poco: con la
+puerta abierta deja seis veces más rastro de comida que el brazo del reflejo
+(211,9 contra 35,7) y con el reflejo fijo prácticamente lo mismo (38,8 contra
+35,7). El precio sigue siendo la causa que F11j midió, pero el canal no es el
+volumen sino el **reparto del presupuesto**: a 10 s la glándula niega el 85 % y
+el reflejo se lo gasta en el camino de vuelta, dejando la señal de reclutamiento
+casi a cero. Es también por qué alargar la ventana no ayuda: la cresta está
+limitada por viaje, no por tiempo de partida.
+
+Lo que esta medición NO dice: ni dónde queda la cresta ni cómo de continua es
+—lo que recluta es la colocación, no la masa—; todo está medido en las ventanas
+de selección (24 000 y 48 000 ticks), no en la partida completa de 216 000; los
+contadores suman las dos colonias y los dos canales, y con tres sorteos por
+receta la dispersión entre pools es grande (la cresta del brazo de la puerta va
+de 106 a 381 a 48k). Las cifras de esta sección tampoco las deriva todavía
+`scripts/partida-figures.py`, así que el guardarraíl aún no las fija.
+
 ## Lo que ya funciona (verificado, no prometido)
 
 **Core headless y determinista** — semilla + comandos ⇒ mundo idéntico bit
