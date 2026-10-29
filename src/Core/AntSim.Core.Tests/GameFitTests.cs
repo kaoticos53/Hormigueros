@@ -243,6 +243,56 @@ public class GameFitTests
             $"la recarga del nido no aportó rastro: {home} en el nido contra {away} fuera");
     }
 
+    /// <summary>
+    /// F11k — LOS CONTADORES DEL INFORME. La línea `end` puede decir cuánto
+    /// rastro se depositó y cuánto se quedó sin presupuesto; el contador no puede
+    /// inventarlo ni perder gotas. Sin precio, todo lo pedido se deposita y no
+    /// hay nada negado; con la glándula corta y las hormigas lejos del nido, una
+    /// parte de lo pedido se queda en la reserva y lo depositado baja.
+    /// </summary>
+    private static (double Deposited, double Denied, double GlandSeconds) GlandReport(
+        ulong seed, float glandSeconds, float deposit, int ticks)
+    {
+        var tuning = RecruitmentTuning.Default;
+        tuning.TrailGlandSeconds = glandSeconds;
+        var sim = new WorldSim(seed, gridCells: GameEvaluator.GridCells, colonyCount: 1,
+            maze: false, recruitment: true, recruitmentTuning: tuning);
+        var colony = sim.Colonies[0];
+        var brain = new ConstantBrain(deposit);
+        float far = SimConstants.CellSizeUnits * 4f;
+        float farX = colony.NestX > sim.WorldWidth * 0.5f ? far : sim.WorldWidth - far;
+        float farY = colony.NestY > sim.WorldHeight * 0.5f ? far : sim.WorldHeight - far;
+        for (int i = 0; i < colony.Adults.Count; i++)
+        {
+            var ant = colony.Adults[i];
+            ant.Brain = brain;
+            ant.X = farX;
+            ant.Y = farY + i * 3f * SimConstants.CellSizeUnits;
+        }
+        for (int i = 0; i < ticks; i++) sim.Step();
+        return (sim.TrailFoodDeposited + sim.TrailHomeDeposited,
+                sim.TrailGlandDenied, sim.TrailGlandSpentSeconds);
+    }
+
+    [Fact]
+    public void Rastro_Informe_CuentaElDepositoYLoQueNiegaLaGlandula()
+    {
+        // Doce ticks (0,2 s): el depósito se queda por debajo del tope por celda,
+        // así que lo que se mide es la reserva y no el techo de la capa.
+        var free = GlandReport(4242UL, glandSeconds: 0f, deposit: 1f, ticks: 12);
+        var small = GlandReport(4242UL, glandSeconds: 0.05f, deposit: 1f, ticks: 12);
+
+        Assert.True(free.Deposited > 0.0, "sin precio no se contó ningún depósito");
+        Assert.Equal(0.0, free.Denied);
+        Assert.Equal(0.0, free.GlandSeconds);
+
+        Assert.True(small.Denied > 0.0,
+            "la glándula corta no negó nada: la prueba no mide el precio");
+        Assert.True(small.GlandSeconds > 0.0);
+        Assert.True(small.Deposited < free.Deposited * 0.5,
+            $"con la glándula corta se depositó casi lo mismo: {small.Deposited} contra {free.Deposited}");
+    }
+
     [Fact]
     public void Trainer_NoAdmiteArenaYPartidaALaVez()
     {
