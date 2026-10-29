@@ -18,10 +18,11 @@
 #   tests = nº de casos descubiertos por la suite (dotnet test --list-tests)
 #
 # Y desde F11h también LAS CIFRAS DE LA PARTIDA que afirma el documento de estado
+# (F11h, el eje del precio; F11j, el control del horizonte; F11k, el rastro depositado)
 # —la tabla de recetas del brazo de 10 s y los t de sus comparaciones—. Esas no
 # se pueden MEDIR en cada push: cada celda son partidas de 216 000 ticks (las
 # 1 056 de F11h son horas de máquina), así que se derivan del VOLCADO versionado
-# que las produjo —`scripts/partida-figures.py` lee los nueve dumps de
+# que las produjo —`scripts/partida-figures.py` lee los trece volcados de
 # `artifacts/` y devuelve cada cifra formateada como la escribe el documento— y
 # se exige que el texto siga diciéndola. Dos detalles que no son cosméticos:
 #
@@ -160,7 +161,7 @@ analizar_fichero() {
       -v OPEN="$OPEN_MARK" -v CLOSE="$CLOSE_MARK" -f "$PROG" "$1"
 }
 
-# ── Las cifras de la PARTIDA (F11h): el derivador y su comprobación ──────────
+# ── Las cifras de la PARTIDA (F11h–F11k): el derivador y su comprobación ────
 # El derivador va en Python (`scripts/partida-figures.py`) porque lee NUEVE
 # volcados de tres formatos distintos y les calcula una dispersión y un t; el
 # resto sigue siendo bash. El intérprete se resuelve como en los demás
@@ -388,7 +389,7 @@ if [[ "${1:-}" == "--list" ]]; then
   for f in "${SCANNED[@]}"; do printf '  %s\n' "$f"; done
   echo "clasificados como bitácora de fase cerrada (con fecha en cada entrada):"
   for g in "${RECORD_GLOBS[@]}"; do printf '  %s\n' "$g"; done
-  echo "cifras de la partida (F11h): las deriva $PARTIDA_TOOL de los volcados de artifacts/"
+  echo "cifras de la partida (F11h–F11k): las deriva $PARTIDA_TOOL de los volcados de artifacts/"
   echo "  el detalle cifra a cifra y su volcado: python $PARTIDA_TOOL --list"
   exit 0
 fi
@@ -404,7 +405,7 @@ for f in "${SCANNED[@]}"; do
   fi
 done
 
-# ── Las cifras de la PARTIDA (F11h) contra sus volcados ─────────────────────
+# ── Las cifras de la PARTIDA (F11h–F11k) contra sus volcados ───────────────
 # El derivador decide QUÉ dice el documento y de dónde lo saca; aquí solo se
 # exige que lo diga. Si el derivador no puede trabajar (sin Python, sin volcado,
 # sin la línea esperada) eso es una violación, no un «no comprobado»: un
@@ -454,7 +455,7 @@ if [[ "$VIOL" -gt 0 ]]; then
   echo "  · el documento está desactualizado → corrige la cifra a $PINES pines / $TESTS tests"
   echo "  · la cifra es un registro con fecha → rodéala de las marcas del documento:"
   echo "      $OPEN_MARK … -->    y    $CLOSE_MARK -->"
-  echo "  · es una cifra de PARTIDA (F11h) → o el documento cambió, o cambió el volcado que la"
+  echo "  · es una cifra de PARTIDA (F11h–F11k) → o el documento cambió, o cambió el volcado que la"
   echo "    alimenta: el detalle de cada cifra y su volcado lo da python $PARTIDA_TOOL --list"
   exit 1
 fi
