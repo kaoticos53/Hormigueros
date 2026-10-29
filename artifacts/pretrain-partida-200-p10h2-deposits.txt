@@ -1,0 +1,267 @@
+# Cuánto rastro deposita cada brazo (F11k): ¿aprendió el cerebro barato a depositar poco?
+# pools: p10h2g-s41 (artifacts/pretrain-partida-200-p10h2g41-red.antgenome) · p10h2g-s43 (artifacts/pretrain-partida-200-p10h2g43-red.antgenome) · p10h2g-s47 (artifacts/pretrain-partida-200-p10h2g47-red.antgenome) · p10h2s-s41 (artifacts/pretrain-partida-200-p10h2s41-fijo.antgenome) · p10h2s-s43 (artifacts/pretrain-partida-200-p10h2s43-fijo.antgenome) · p10h2s-s47 (artifacts/pretrain-partida-200-p10h2s47-fijo.antgenome) · p10g-s41 (artifacts/pretrain-partida-200-p10g41-red.antgenome) · p10g-s43 (artifacts/pretrain-partida-200-p10g43-red.antgenome) · p10g-s47 (artifacts/pretrain-partida-200-p10g47-red.antgenome) · p10s-s41 (artifacts/pretrain-partida-200-p10s41-fijo.antgenome) · p10s-s43 (artifacts/pretrain-partida-200-p10s43-fijo.antgenome) · p10s-s47 (artifacts/pretrain-partida-200-p10s47-fijo.antgenome)
+# 24 semillas de partida · ventanas 24000,48000 ticks · precios de juego 0,10 s (0 = sin glándula) · recarga 6 s
+# comida+casa = lo depositado por el reflejo de reclutamiento Y por el canal genérico del cerebro; negado = lo pedido que la glándula no pudo pagar
+
+## Precio de juego 0 s (sin glándula)
+
+### Ventana de 24000 ticks
+
+| pool | rastro | comida | casa | negado % | glándula (s) |
+|---|---|---|---|---|---|
+| p10h2g-s41 | puerta | 8355.3 | 18183.1 | 0 % | 0.0 |
+| p10h2g-s41 | fijo | 13374.0 | 22434.0 | 0 % | 0.0 |
+| p10h2g-s43 | puerta | 10324.5 | 17379.8 | 0 % | 0.0 |
+| p10h2g-s43 | fijo | 14187.4 | 22039.3 | 0 % | 0.0 |
+| p10h2g-s47 | puerta | 10511.6 | 15135.1 | 0 % | 0.0 |
+| p10h2g-s47 | fijo | 14884.6 | 19665.2 | 0 % | 0.0 |
+| p10h2s-s41 | puerta | 7315.7 | 20292.4 | 0 % | 0.0 |
+| p10h2s-s41 | fijo | 13803.5 | 24508.4 | 0 % | 0.0 |
+| p10h2s-s43 | puerta | 10471.8 | 17363.4 | 0 % | 0.0 |
+| p10h2s-s43 | fijo | 15586.8 | 21773.1 | 0 % | 0.0 |
+| p10h2s-s47 | puerta | 5859.0 | 17645.0 | 0 % | 0.0 |
+| p10h2s-s47 | fijo | 12471.5 | 21910.4 | 0 % | 0.0 |
+| p10g-s41 | puerta | 6860.8 | 15844.3 | 0 % | 0.0 |
+| p10g-s41 | fijo | 11722.0 | 20461.2 | 0 % | 0.0 |
+| p10g-s43 | puerta | 10429.2 | 17226.7 | 0 % | 0.0 |
+| p10g-s43 | fijo | 15498.4 | 21553.4 | 0 % | 0.0 |
+| p10g-s47 | puerta | 6017.9 | 18048.6 | 0 % | 0.0 |
+| p10g-s47 | fijo | 11842.3 | 23021.9 | 0 % | 0.0 |
+| p10s-s41 | puerta | 11269.3 | 14795.1 | 0 % | 0.0 |
+| p10s-s41 | fijo | 15264.4 | 19640.3 | 0 % | 0.0 |
+| p10s-s43 | puerta | 10948.0 | 16217.3 | 0 % | 0.0 |
+| p10s-s43 | fijo | 14649.7 | 20770.9 | 0 % | 0.0 |
+| p10s-s47 | puerta | 11287.1 | 15909.8 | 0 % | 0.0 |
+| p10s-s47 | fijo | 15463.3 | 20682.8 | 0 % | 0.0 |
+
+- **p10h2g · puerta**: comida 9730.5 ± 689.7 (8355, 10324, 10512)
+- **p10h2g · fijo**: comida 14148.7 ± 436.5 (13374, 14187, 14885)
+- **p10h2s · puerta**: comida 7882.2 ± 1361.4 (7316, 10472, 5859)
+- **p10h2s · fijo**: comida 13954.0 ± 902.4 (13804, 15587, 12472)
+- **p10g · puerta**: comida 7769.3 ± 1352.0 (6861, 10429, 6018)
+- **p10g · fijo**: comida 13020.9 ± 1239.3 (11722, 15498, 11842)
+- **p10s · puerta**: comida 11168.1 ± 110.2 (11269, 10948, 11287)
+- **p10s · fijo**: comida 15125.8 ± 244.9 (15264, 14650, 15463)
+
+- **p10h2g-s41: puerta − fijo** → -5018.7 ± 340.8 de rastro (gana 0/24 semillas)
+- **p10h2g-s43: puerta − fijo** → -3862.9 ± 349.9 de rastro (gana 1/24 semillas)
+- **p10h2g-s47: puerta − fijo** → -4373.1 ± 274.5 de rastro (gana 0/24 semillas)
+- **p10h2s-s41: puerta − fijo** → -6487.8 ± 359.7 de rastro (gana 0/24 semillas)
+- **p10h2s-s43: puerta − fijo** → -5115.0 ± 306.6 de rastro (gana 0/24 semillas)
+- **p10h2s-s47: puerta − fijo** → -6612.6 ± 275.8 de rastro (gana 0/24 semillas)
+- **p10g-s41: puerta − fijo** → -4861.1 ± 404.1 de rastro (gana 0/24 semillas)
+- **p10g-s43: puerta − fijo** → -5069.2 ± 310.5 de rastro (gana 0/24 semillas)
+- **p10g-s47: puerta − fijo** → -5824.4 ± 288.5 de rastro (gana 0/24 semillas)
+- **p10s-s41: puerta − fijo** → -3995.1 ± 314.6 de rastro (gana 0/24 semillas)
+- **p10s-s43: puerta − fijo** → -3701.7 ± 242.2 de rastro (gana 0/24 semillas)
+- **p10s-s47: puerta − fijo** → -4176.1 ± 425.9 de rastro (gana 1/24 semillas)
+
+### Ventana de 48000 ticks
+
+| pool | rastro | comida | casa | negado % | glándula (s) |
+|---|---|---|---|---|---|
+| p10h2g-s41 | puerta | 16689.0 | 35600.7 | 0 % | 0.0 |
+| p10h2g-s41 | fijo | 26264.7 | 45488.1 | 0 % | 0.0 |
+| p10h2g-s43 | puerta | 21432.9 | 36776.1 | 0 % | 0.0 |
+| p10h2g-s43 | fijo | 28194.5 | 45318.8 | 0 % | 0.0 |
+| p10h2g-s47 | puerta | 21022.2 | 29448.8 | 0 % | 0.0 |
+| p10h2g-s47 | fijo | 29380.9 | 40961.8 | 0 % | 0.0 |
+| p10h2s-s41 | puerta | 15315.0 | 39939.1 | 0 % | 0.0 |
+| p10h2s-s41 | fijo | 28966.8 | 49218.4 | 0 % | 0.0 |
+| p10h2s-s43 | puerta | 21095.7 | 35826.1 | 0 % | 0.0 |
+| p10h2s-s43 | fijo | 31432.4 | 44834.0 | 0 % | 0.0 |
+| p10h2s-s47 | puerta | 12296.1 | 35392.8 | 0 % | 0.0 |
+| p10h2s-s47 | fijo | 23682.8 | 44074.6 | 0 % | 0.0 |
+| p10g-s41 | puerta | 12037.7 | 31283.8 | 0 % | 0.0 |
+| p10g-s41 | fijo | 20200.7 | 42422.6 | 0 % | 0.0 |
+| p10g-s43 | puerta | 19901.3 | 34708.7 | 0 % | 0.0 |
+| p10g-s43 | fijo | 29033.2 | 45363.4 | 0 % | 0.0 |
+| p10g-s47 | puerta | 11332.2 | 36207.1 | 0 % | 0.0 |
+| p10g-s47 | fijo | 23246.9 | 46063.5 | 0 % | 0.0 |
+| p10s-s41 | puerta | 21983.9 | 28940.2 | 0 % | 0.0 |
+| p10s-s41 | fijo | 29303.7 | 41432.0 | 0 % | 0.0 |
+| p10s-s43 | puerta | 20860.9 | 33717.9 | 0 % | 0.0 |
+| p10s-s43 | fijo | 27724.7 | 42178.9 | 0 % | 0.0 |
+| p10s-s47 | puerta | 22001.7 | 31197.0 | 0 % | 0.0 |
+| p10s-s47 | fijo | 29521.4 | 41946.0 | 0 % | 0.0 |
+
+- **p10h2g · puerta**: comida 19714.7 ± 1517.5 (16689, 21433, 21022)
+- **p10h2g · fijo**: comida 27946.7 ± 908.1 (26265, 28194, 29381)
+- **p10h2s · puerta**: comida 16235.6 ± 2581.6 (15315, 21096, 12296)
+- **p10h2s · fijo**: comida 28027.3 ± 2285.9 (28967, 31432, 23683)
+- **p10g · puerta**: comida 14423.7 ± 2746.3 (12038, 19901, 11332)
+- **p10g · fijo**: comida 24160.3 ± 2590.3 (20201, 29033, 23247)
+- **p10s · puerta**: comida 21615.5 ± 377.3 (21984, 20861, 22002)
+- **p10s · fijo**: comida 28849.9 ± 566.1 (29304, 27725, 29521)
+
+- **p10h2g-s41: puerta − fijo** → -9575.7 ± 816.7 de rastro (gana 0/24 semillas)
+- **p10h2g-s43: puerta − fijo** → -6761.6 ± 664.7 de rastro (gana 0/24 semillas)
+- **p10h2g-s47: puerta − fijo** → -8358.7 ± 765.6 de rastro (gana 1/24 semillas)
+- **p10h2s-s41: puerta − fijo** → -13651.8 ± 705.4 de rastro (gana 0/24 semillas)
+- **p10h2s-s43: puerta − fijo** → -10336.7 ± 750.1 de rastro (gana 0/24 semillas)
+- **p10h2s-s47: puerta − fijo** → -11386.7 ± 611.1 de rastro (gana 0/24 semillas)
+- **p10g-s41: puerta − fijo** → -8163.0 ± 837.3 de rastro (gana 0/24 semillas)
+- **p10g-s43: puerta − fijo** → -9132.0 ± 901.4 de rastro (gana 0/24 semillas)
+- **p10g-s47: puerta − fijo** → -11914.7 ± 647.0 de rastro (gana 0/24 semillas)
+- **p10s-s41: puerta − fijo** → -7319.8 ± 803.9 de rastro (gana 0/24 semillas)
+- **p10s-s43: puerta − fijo** → -6863.8 ± 821.1 de rastro (gana 0/24 semillas)
+- **p10s-s47: puerta − fijo** → -7519.7 ± 840.4 de rastro (gana 1/24 semillas)
+
+### La ventana 48000 contra 24000 ticks (precio 0 s)
+
+- **p10h2g-s41 · puerta**: 8355.3 → 16689.0 (×2.00)
+- **p10h2g-s41 · fijo**: 13374.0 → 26264.7 (×1.96)
+- **p10h2g-s43 · puerta**: 10324.5 → 21432.9 (×2.08)
+- **p10h2g-s43 · fijo**: 14187.4 → 28194.5 (×1.99)
+- **p10h2g-s47 · puerta**: 10511.6 → 21022.2 (×2.00)
+- **p10h2g-s47 · fijo**: 14884.6 → 29380.9 (×1.97)
+- **p10h2s-s41 · puerta**: 7315.7 → 15315.0 (×2.09)
+- **p10h2s-s41 · fijo**: 13803.5 → 28966.8 (×2.10)
+- **p10h2s-s43 · puerta**: 10471.8 → 21095.7 (×2.01)
+- **p10h2s-s43 · fijo**: 15586.8 → 31432.4 (×2.02)
+- **p10h2s-s47 · puerta**: 5859.0 → 12296.1 (×2.10)
+- **p10h2s-s47 · fijo**: 12471.5 → 23682.8 (×1.90)
+- **p10g-s41 · puerta**: 6860.8 → 12037.7 (×1.75)
+- **p10g-s41 · fijo**: 11722.0 → 20200.7 (×1.72)
+- **p10g-s43 · puerta**: 10429.2 → 19901.3 (×1.91)
+- **p10g-s43 · fijo**: 15498.4 → 29033.2 (×1.87)
+- **p10g-s47 · puerta**: 6017.9 → 11332.2 (×1.88)
+- **p10g-s47 · fijo**: 11842.3 → 23246.9 (×1.96)
+- **p10s-s41 · puerta**: 11269.3 → 21983.9 (×1.95)
+- **p10s-s41 · fijo**: 15264.4 → 29303.7 (×1.92)
+- **p10s-s43 · puerta**: 10948.0 → 20860.9 (×1.91)
+- **p10s-s43 · fijo**: 14649.7 → 27724.7 (×1.89)
+- **p10s-s47 · puerta**: 11287.1 → 22001.7 (×1.95)
+- **p10s-s47 · fijo**: 15463.3 → 29521.4 (×1.91)
+
+## Precio de juego 10 s
+
+### Ventana de 24000 ticks
+
+| pool | rastro | comida | casa | negado % | glándula (s) |
+|---|---|---|---|---|---|
+| p10h2g-s41 | puerta | 93.0 | 3538.0 | 87 % | 4538.7 |
+| p10h2g-s41 | fijo | 23.9 | 4422.7 | 88 % | 5558.3 |
+| p10h2g-s43 | puerta | 85.1 | 3837.4 | 87 % | 4903.1 |
+| p10h2g-s43 | fijo | 27.0 | 4501.1 | 88 % | 5660.2 |
+| p10h2g-s47 | puerta | 267.6 | 3380.7 | 86 % | 4560.3 |
+| p10h2g-s47 | fijo | 44.4 | 4437.8 | 87 % | 5602.8 |
+| p10h2s-s41 | puerta | 35.2 | 3662.6 | 87 % | 4622.2 |
+| p10h2s-s41 | fijo | 18.9 | 4368.9 | 89 % | 5484.7 |
+| p10h2s-s43 | puerta | 158.6 | 3581.5 | 87 % | 4675.1 |
+| p10h2s-s43 | fijo | 33.1 | 4679.9 | 88 % | 5891.2 |
+| p10h2s-s47 | puerta | 105.5 | 3544.9 | 84 % | 4563.0 |
+| p10h2s-s47 | fijo | 39.4 | 4682.5 | 86 % | 5902.4 |
+| p10g-s41 | puerta | 154.7 | 3405.8 | 84 % | 4450.6 |
+| p10g-s41 | fijo | 35.2 | 4566.0 | 86 % | 5751.5 |
+| p10g-s43 | puerta | 108.4 | 3688.6 | 86 % | 4746.1 |
+| p10g-s43 | fijo | 31.8 | 4396.3 | 88 % | 5535.1 |
+| p10g-s47 | puerta | 57.0 | 3656.1 | 84 % | 4641.4 |
+| p10g-s47 | fijo | 25.3 | 4551.3 | 87 % | 5720.7 |
+| p10s-s41 | puerta | 255.6 | 3447.6 | 86 % | 4629.0 |
+| p10s-s41 | fijo | 41.6 | 4431.5 | 88 % | 5591.4 |
+| p10s-s43 | puerta | 125.9 | 3642.1 | 87 % | 4709.9 |
+| p10s-s43 | fijo | 33.0 | 4530.1 | 88 % | 5703.9 |
+| p10s-s47 | puerta | 301.7 | 3296.4 | 87 % | 4497.6 |
+| p10s-s47 | fijo | 41.3 | 4403.0 | 88 % | 5555.4 |
+
+- **p10h2g · puerta**: comida 148.6 ± 59.6 (93, 85, 268)
+- **p10h2g · fijo**: comida 31.8 ± 6.4 (24, 27, 44)
+- **p10h2s · puerta**: comida 99.8 ± 35.7 (35, 159, 106)
+- **p10h2s · fijo**: comida 30.4 ± 6.1 (19, 33, 39)
+- **p10g · puerta**: comida 106.7 ± 28.2 (155, 108, 57)
+- **p10g · fijo**: comida 30.8 ± 2.9 (35, 32, 25)
+- **p10s · puerta**: comida 227.7 ± 52.6 (256, 126, 302)
+- **p10s · fijo**: comida 38.6 ± 2.8 (42, 33, 41)
+
+- **p10h2g-s41: puerta − fijo** → +69.1 ± 5.0 de rastro (gana 24/24 semillas)
+- **p10h2g-s43: puerta − fijo** → +58.1 ± 4.8 de rastro (gana 24/24 semillas)
+- **p10h2g-s47: puerta − fijo** → +223.2 ± 11.3 de rastro (gana 24/24 semillas)
+- **p10h2s-s41: puerta − fijo** → +16.3 ± 2.1 de rastro (gana 24/24 semillas)
+- **p10h2s-s43: puerta − fijo** → +125.5 ± 9.1 de rastro (gana 24/24 semillas)
+- **p10h2s-s47: puerta − fijo** → +66.1 ± 5.0 de rastro (gana 24/24 semillas)
+- **p10g-s41: puerta − fijo** → +119.4 ± 11.4 de rastro (gana 24/24 semillas)
+- **p10g-s43: puerta − fijo** → +76.6 ± 7.7 de rastro (gana 24/24 semillas)
+- **p10g-s47: puerta − fijo** → +31.7 ± 4.0 de rastro (gana 24/24 semillas)
+- **p10s-s41: puerta − fijo** → +214.0 ± 13.6 de rastro (gana 24/24 semillas)
+- **p10s-s43: puerta − fijo** → +92.8 ± 6.8 de rastro (gana 24/24 semillas)
+- **p10s-s47: puerta − fijo** → +260.4 ± 14.1 de rastro (gana 24/24 semillas)
+
+### Ventana de 48000 ticks
+
+| pool | rastro | comida | casa | negado % | glándula (s) |
+|---|---|---|---|---|---|
+| p10h2g-s41 | puerta | 148.6 | 7123.5 | 85 % | 9090.1 |
+| p10h2g-s41 | fijo | 28.6 | 9367.2 | 87 % | 11744.6 |
+| p10h2g-s43 | puerta | 105.7 | 7535.7 | 86 % | 9551.7 |
+| p10h2g-s43 | fijo | 33.1 | 8963.2 | 88 % | 11245.3 |
+| p10h2g-s47 | puerta | 381.4 | 7300.9 | 84 % | 9603.0 |
+| p10h2g-s47 | fijo | 54.7 | 9338.7 | 85 % | 11741.7 |
+| p10h2s-s41 | puerta | 47.4 | 7460.9 | 86 % | 9385.4 |
+| p10h2s-s41 | fijo | 21.9 | 9674.9 | 87 % | 12121.1 |
+| p10h2s-s43 | puerta | 212.5 | 7091.2 | 87 % | 9129.6 |
+| p10h2s-s43 | fijo | 39.4 | 9770.6 | 87 % | 12262.4 |
+| p10h2s-s47 | puerta | 143.9 | 7636.7 | 82 % | 9725.8 |
+| p10h2s-s47 | fijo | 45.9 | 9478.9 | 86 % | 11906.0 |
+| p10g-s41 | puerta | 221.9 | 6833.6 | 82 % | 8819.3 |
+| p10g-s41 | fijo | 41.9 | 9667.9 | 84 % | 12137.3 |
+| p10g-s43 | puerta | 136.8 | 7337.9 | 85 % | 9343.3 |
+| p10g-s43 | fijo | 38.3 | 8889.9 | 87 % | 11160.2 |
+| p10g-s47 | puerta | 69.3 | 7687.7 | 82 % | 9696.2 |
+| p10g-s47 | fijo | 29.9 | 9636.2 | 85 % | 12082.6 |
+| p10s-s41 | puerta | 350.8 | 7229.8 | 84 % | 9475.8 |
+| p10s-s41 | fijo | 47.8 | 9537.3 | 86 % | 11981.3 |
+| p10s-s43 | puerta | 176.7 | 7706.0 | 85 % | 9853.4 |
+| p10s-s43 | fijo | 40.1 | 9773.4 | 86 % | 12266.9 |
+| p10s-s47 | puerta | 431.5 | 6825.8 | 85 % | 9071.7 |
+| p10s-s47 | fijo | 49.4 | 9533.8 | 86 % | 11978.9 |
+
+- **p10h2g · puerta**: comida 211.9 ± 85.7 (149, 106, 381)
+- **p10h2g · fijo**: comida 38.8 ± 8.1 (29, 33, 55)
+- **p10h2s · puerta**: comida 134.6 ± 47.9 (47, 213, 144)
+- **p10h2s · fijo**: comida 35.7 ± 7.2 (22, 39, 46)
+- **p10g · puerta**: comida 142.7 ± 44.2 (222, 137, 69)
+- **p10g · fijo**: comida 36.7 ± 3.6 (42, 38, 30)
+- **p10s · puerta**: comida 319.7 ± 75.2 (351, 177, 432)
+- **p10s · fijo**: comida 45.7 ± 2.9 (48, 40, 49)
+
+- **p10h2g-s41: puerta − fijo** → +120.1 ± 9.6 de rastro (gana 24/24 semillas)
+- **p10h2g-s43: puerta − fijo** → +72.6 ± 6.8 de rastro (gana 23/24 semillas)
+- **p10h2g-s47: puerta − fijo** → +326.8 ± 20.0 de rastro (gana 24/24 semillas)
+- **p10h2s-s41: puerta − fijo** → +25.5 ± 2.9 de rastro (gana 24/24 semillas)
+- **p10h2s-s43: puerta − fijo** → +173.1 ± 13.8 de rastro (gana 24/24 semillas)
+- **p10h2s-s47: puerta − fijo** → +98.0 ± 8.3 de rastro (gana 24/24 semillas)
+- **p10g-s41: puerta − fijo** → +180.0 ± 17.6 de rastro (gana 24/24 semillas)
+- **p10g-s43: puerta − fijo** → +98.5 ± 10.3 de rastro (gana 24/24 semillas)
+- **p10g-s47: puerta − fijo** → +39.4 ± 5.2 de rastro (gana 23/24 semillas)
+- **p10s-s41: puerta − fijo** → +303.1 ± 24.4 de rastro (gana 24/24 semillas)
+- **p10s-s43: puerta − fijo** → +136.7 ± 13.2 de rastro (gana 24/24 semillas)
+- **p10s-s47: puerta − fijo** → +382.2 ± 33.2 de rastro (gana 24/24 semillas)
+
+### La ventana 48000 contra 24000 ticks (precio 10 s)
+
+- **p10h2g-s41 · puerta**: 93.0 → 148.6 (×1.60)
+- **p10h2g-s41 · fijo**: 23.9 → 28.6 (×1.20)
+- **p10h2g-s43 · puerta**: 85.1 → 105.7 (×1.24)
+- **p10h2g-s43 · fijo**: 27.0 → 33.1 (×1.22)
+- **p10h2g-s47 · puerta**: 267.6 → 381.4 (×1.43)
+- **p10h2g-s47 · fijo**: 44.4 → 54.7 (×1.23)
+- **p10h2s-s41 · puerta**: 35.2 → 47.4 (×1.35)
+- **p10h2s-s41 · fijo**: 18.9 → 21.9 (×1.16)
+- **p10h2s-s43 · puerta**: 158.6 → 212.5 (×1.34)
+- **p10h2s-s43 · fijo**: 33.1 → 39.4 (×1.19)
+- **p10h2s-s47 · puerta**: 105.5 → 143.9 (×1.36)
+- **p10h2s-s47 · fijo**: 39.4 → 45.9 (×1.17)
+- **p10g-s41 · puerta**: 154.7 → 221.9 (×1.43)
+- **p10g-s41 · fijo**: 35.2 → 41.9 (×1.19)
+- **p10g-s43 · puerta**: 108.4 → 136.8 (×1.26)
+- **p10g-s43 · fijo**: 31.8 → 38.3 (×1.20)
+- **p10g-s47 · puerta**: 57.0 → 69.3 (×1.22)
+- **p10g-s47 · fijo**: 25.3 → 29.9 (×1.18)
+- **p10s-s41 · puerta**: 255.6 → 350.8 (×1.37)
+- **p10s-s41 · fijo**: 41.6 → 47.8 (×1.15)
+- **p10s-s43 · puerta**: 125.9 → 176.7 (×1.40)
+- **p10s-s43 · fijo**: 33.0 → 40.1 (×1.21)
+- **p10s-s47 · puerta**: 301.7 → 431.5 (×1.43)
+- **p10s-s47 · fijo**: 41.3 → 49.4 (×1.20)
+
