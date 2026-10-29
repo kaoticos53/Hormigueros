@@ -1,0 +1,82 @@
+# El horizonte de selección contra el precio de la glándula
+# brazos: 24k puerta (artifacts/pretrain-partida-200-p10g7-replicas.log) · 24k reflejo (artifacts/pretrain-partida-200-p10x10-replicas.log) · 48k puerta (artifacts/pretrain-partida-200-p10h2g-replicas.log) · 48k reflejo (artifacts/pretrain-partida-200-p10h2s-replicas.log)
+# 3 sorteos de GA pareados por receta (s41, s43, s47) · precios de juego 10 s, 25 s · rastro fijo y puerta
+# El NIVEL no es comparable entre horizontes (la partida a 48k es el doble de larga): se compara el EFECTO de la puerta dentro de cada horizonte, no la suma.
+
+## Jugado con la glándula a 10 s · rastro fijo
+
+| horizonte | brazo con puerta | brazo con reflejo | efecto |
+|---|---|---|---|
+| 24k | 149.6 | 167.3 | -17.7 |
+| 48k | 197.6 | 233.4 | -35.8 |
+
+- **24k · jugado 10 s · fijo**: entrenar con la puerta da -17.7 ± 9.7 descargas (t = -1.8; 0/3 sorteos a favor)
+  - por sorteo: s41 156.5 vs 190.0 = -33.5 · s43 141.6 vs 161.3 = -19.7 · s47 150.6 vs 150.6 = +0.0
+- **48k · jugado 10 s · fijo**: entrenar con la puerta da -35.8 ± 8.8 descargas (t = -4.1; 0/3 sorteos a favor)
+  - por sorteo: s41 185.1 vs 235.9 = -50.8 · s43 236.8 vs 273.2 = -36.5 · s47 170.8 vs 191.0 = -20.2
+
+## Jugado con la glándula a 10 s · rastro puerta
+
+| horizonte | brazo con puerta | brazo con reflejo | efecto |
+|---|---|---|---|
+| 24k | 151.6 | 170.2 | -18.5 |
+| 48k | 201.6 | 234.6 | -33.0 |
+
+- **24k · jugado 10 s · puerta**: entrenar con la puerta da -18.5 ± 7.2 descargas (t = -2.6; 0/3 sorteos a favor)
+  - por sorteo: s41 161.6 vs 192.3 = -30.7 · s43 143.8 vs 162.9 = -19.1 · s47 149.5 vs 155.3 = -5.8
+- **48k · jugado 10 s · puerta**: entrenar con la puerta da -33.0 ± 12.9 descargas (t = -2.6; 0/3 sorteos a favor)
+  - por sorteo: s41 183.0 vs 235.2 = -52.2 · s43 228.5 vs 266.9 = -38.4 · s47 193.3 vs 201.7 = -8.4
+
+## Jugado con la glándula a 25 s · rastro fijo
+
+| horizonte | brazo con puerta | brazo con reflejo | efecto |
+|---|---|---|---|
+| 24k | 158.9 | 173.8 | -14.8 |
+| 48k | 195.4 | 230.3 | -34.9 |
+
+- **24k · jugado 25 s · fijo**: entrenar con la puerta da -14.8 ± 13.2 descargas (t = -1.1; 1/3 sorteos a favor)
+  - por sorteo: s41 170.3 vs 201.7 = -31.4 · s43 146.2 vs 170.5 = -24.2 · s47 160.3 vs 149.1 = +11.2
+- **48k · jugado 25 s · fijo**: entrenar con la puerta da -34.9 ± 14.1 descargas (t = -2.5; 0/3 sorteos a favor)
+  - por sorteo: s41 175.9 vs 235.3 = -59.5 · s43 222.8 vs 257.4 = -34.7 · s47 187.5 vs 198.0 = -10.6
+
+## Jugado con la glándula a 25 s · rastro puerta
+
+| horizonte | brazo con puerta | brazo con reflejo | efecto |
+|---|---|---|---|
+| 24k | 154.8 | 177.3 | -22.5 |
+| 48k | 205.8 | 247.8 | -42.0 |
+
+- **24k · jugado 25 s · puerta**: entrenar con la puerta da -22.5 ± 8.1 descargas (t = -2.8; 0/3 sorteos a favor)
+  - por sorteo: s41 159.1 vs 196.9 = -37.8 · s43 146.0 vs 165.7 = -19.7 · s47 159.2 vs 169.3 = -10.1
+- **48k · jugado 25 s · puerta**: entrenar con la puerta da -42.0 ± 17.0 descargas (t = -2.5; 0/3 sorteos a favor)
+  - por sorteo: s41 194.0 vs 245.8 = -51.8 · s43 217.3 vs 282.7 = -65.4 · s47 206.2 vs 215.1 = -8.8
+
+## Cuánto mueve el horizonte el efecto de la puerta
+
+Base: 24k (24 000 ticks). Delta = efecto en el horizonte mayor − efecto en 24k, pareado por sorteo de GA. Positivo = el horizonte recupera parte del castigo; ≈0 = no lo recupera.
+
+### jugado 10 s · rastro fijo
+- **48k − 24k**: el efecto pasa de -17.7 a -35.8 → -18.1 ± 1.1 descargas (t = -17.0; 0/3 sorteos a favor)
+  - por sorteo: s41 -33.5 → -50.8 = -17.3 · s43 -19.7 → -36.5 = -16.8 · s47 +0.0 → -20.2 = -20.2
+
+### jugado 10 s · rastro puerta
+- **48k − 24k**: el efecto pasa de -18.5 a -33.0 → -14.5 ± 6.0 descargas (t = -2.4; 0/3 sorteos a favor)
+  - por sorteo: s41 -30.7 → -52.2 = -21.5 · s43 -19.1 → -38.4 = -19.3 · s47 -5.8 → -8.4 = -2.6
+
+### jugado 25 s · rastro fijo
+- **48k − 24k**: el efecto pasa de -14.8 a -34.9 → -20.1 ± 5.2 descargas (t = -3.9; 0/3 sorteos a favor)
+  - por sorteo: s41 -31.4 → -59.5 = -28.0 · s43 -24.2 → -34.7 = -10.4 · s47 +11.2 → -10.6 = -21.7
+
+### jugado 25 s · rastro puerta
+- **48k − 24k**: el efecto pasa de -22.5 a -42.0 → -19.5 ± 13.8 descargas (t = -1.4; 1/3 sorteos a favor)
+  - por sorteo: s41 -37.8 → -51.8 = -14.0 · s43 -19.7 → -65.4 = -45.7 · s47 -10.1 → -8.8 = +1.3
+
+## Cómo se lee
+
+El castigo a 10 s que dejó medido F11i se reparte entre el precio y el horizonte según cuánto se mueva el efecto al doblar el horizonte, con el precio quieto:
+
+- si el delta es ≈ 0, el horizonte no explica el castigo y la causa es el precio;
+- si el delta lleva el efecto de un castigo a ≈ 0 o a positivo, el horizonte explica buena parte —la ventaja de reclutar bien se cobraba fuera de la ventana que la selección miraba—;
+- un delta parcial deja las dos causas repartiéndose el castigo, y entonces lo que hace falta es el 2×2 completo (también 25 s a 48 000 ticks), que este control no corre.
+
+Estas cifras todavía NO las deriva `scripts/partida-figures.py` (cubre el eje del precio de F11h, no este control): lo que el documento afirme de ellas hay que añadirlo al derivador y al guardarraíl antes de dar la sección por comprobada.
