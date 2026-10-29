@@ -638,6 +638,84 @@ evento y la selección sólo mira 400 s de una partida de 3 600, y las dos cosas
 van juntas en el mismo brazo. Eso es lo que mide el control de F11j, que sube
 sólo el horizonte a 800 s sin tocar el precio.
 
+**F11j — el control del horizonte (2026-10-29): el horizonte de selección no
+explica el castigo de la puerta a 10 s — doblarlo lo agranda.** F11h dejó
+abiertas dos causas con la misma pinta en los pools de 10 s: el PRECIO de la
+glándula (a 10 s el depósito cuesta cuatro veces menos por evento, y un fitness
+que sólo cuenta descargas no puede ver ese coste) y el HORIZONTE de selección
+(24 000 ticks = 400 s de una partida de 216 000 = 3 600 s, así que la ventaja de
+reclutar bien puede caer fuera de lo que la selección mira). Este control mueve
+sólo la segunda: la misma receta con `GLAND=10 REFILL=6` y `TICKS=48000`
+(`GLAND=10 REFILL=6 TICKS=48000 ARMS=red|fijo SEED=… SUFFIX=p10h2g…|p10h2s…
+scripts/run-gland-200.sh`; dos tandas de tres —03:38→12:39 con puerta y
+12:39→23:53 con el reflejo—: 32 454 / 32 453 / 32 453 s y 40 008 / 40 008 /
+40 442 s, las seis con EXIT=0), y se juegan los seis pools nuevos con las 24
+semillas de siempre —6 pools × 2 precios × 2 rastros × 24 semillas = 576
+partidas— (`scripts/gland-bench.py --pools … --prices 10,25`; evidencia en
+`artifacts/pretrain-partida-200-p10h2g-replicas.txt` y `…-p10h2s-replicas.txt`).
+Las semillas de GA son las mismas tres de F11i (41/43/47) para poder leer el
+cambio por sorteo, y las celdas de 24 000 ticks NO se repiten: ya están jugadas
+en F11i con esas mismas semillas, así que aquí se recalculan sobre los tres
+sorteos pareados y no sobre los diez pools de aquel eje.
+
+| jugado | horizonte | con puerta | con reflejo | efecto | en relativo |
+|---|---|---|---|---|---|
+| 10 s · fijo | 24k | 149,6 | 167,3 | −17,7 | −10,6 % |
+| 10 s · fijo | 48k | 197,6 | 233,4 | **−35,8** | −15,3 % |
+| 10 s · puerta | 24k | 151,6 | 170,2 | −18,5 | −10,9 % |
+| 10 s · puerta | 48k | 201,6 | 234,6 | **−33,0** | −14,1 % |
+| 25 s · fijo | 24k | 158,9 | 173,8 | −14,8 | −8,5 % |
+| 25 s · fijo | 48k | 195,4 | 230,3 | **−34,9** | −15,2 % |
+| 25 s · puerta | 24k | 154,8 | 177,3 | −22,5 | −12,7 % |
+| 25 s · puerta | 48k | 205,8 | 247,8 | **−42,0** | −17,0 % |
+
+- **Ninguna de las cuatro celdas se mueve hacia cero: las cuatro se alejan.** El
+  cambio del efecto al doblar el horizonte, pareado por sorteo de GA
+  (`scripts/gland-horizon-compare.py`; evidencia en
+  `artifacts/pretrain-partida-200-p10h2-veredicto.txt`), es −18,1 ± 1,1
+  descargas jugando a 10 s con el reflejo (t = −17,0; 0/3 sorteos a favor),
+  −14,5 ± 6,0 a 10 s con la puerta (t = −2,4; 0/3), −20,1 ± 5,2 a 25 s con el
+  reflejo (t = −3,9; 0/3) y −19,5 ± 13,8 a 25 s con la puerta (t = −1,4; 1/3).
+  La celda más limpia es la de 10 s con el reflejo, donde los tres deltas por
+  sorteo van de −16,8 a −20,2 (−17,3 / −16,8 / −20,2); el único delta individual
+  a favor es la semilla 47 a 25 s con la puerta (+1,3), y no rescata su celda.
+- **El nivel absoluto no es comparable entre horizontes; el relativo sí, y dice
+  lo mismo.** A 48 000 ticks la partida del fitness dura el doble (800 s contra
+  400 s) y por eso el brazo de referencia también sube: con el reflejo a 10 s
+  pasa de 167,3 a 233,4 descargas. Leído como porcentaje de su brazo de
+  referencia, el castigo pasa de −10,6 % a −15,3 % (10 s, reflejo), de −10,9 % a
+  −14,1 % (10 s, puerta), de −8,5 % a −15,2 % (25 s, reflejo) y de −12,7 % a
+  −17,0 % (25 s, puerta).
+- **Entre tiradas sigue mandando el sorteo, no el horizonte**: dentro de los seis
+  pools nuevos, la celda de 10 s con la puerta va de 183,0 a 228,5 entre sorteos
+  y la del reflejo de 170,8 a 236,8 —un rango de 46 a 66 descargas, más grande
+  que el efecto que se mide—. La conclusión no descansa en esas medias sueltas
+  sino en los deltas pareados, que van los cuatro al mismo lado: un t de −17
+  sobre tres sorteos significa «los tres se movieron igual», no una población de
+  sorteos.
+- **Lo que queda en pie como causa es el precio.** A 10 s de glándula el
+  depósito cuesta cuatro veces menos por evento, y darle el doble de partida
+  para juzgar no rescata al cerebro que decide el depósito: lo hunde más. El
+  mecanismo plausible —y **no medido aquí**— es que con 800 s el rastro del
+  reflejo tiene el doble de tiempo para acumularse y reclutar, mientras que el
+  cerebro entrenado a precio barato aprendió a depositar poco, y esa diferencia
+  se cobra más cuanto más larga es la partida. El bench sólo registra descargas,
+  no depósitos, así que eso es una hipótesis a contrastar, no un resultado.
+
+Veredicto: el horizonte de selección **no** explica el castigo de la puerta a
+10 s —doblar la ventana que mira la selección no lleva el efecto hacia cero, lo
+duplica— así que la causa que queda en pie es el **precio** de la glándula. El
+control sale en contra de la hipótesis que lo motivó, y la decisión de
+despliegue no cambia: entrenar con la puerta pide presupuesto holgado (25 s), y
+a 10 s la puerta se paga al jugar sólo a medias (F11i). Lo que este control NO
+cierra: 2× es una manipulación, no el horizonte de la partida (216 000 ticks,
+nueve veces la ventana de 24 000), así que un nulo a 48 000 deja abiertos los
+horizontes mayores; falta la celda de 25 s a 48 000, que es el 2×2 completo
+(precio × horizonte) y lo único que reparte el castigo entre las dos causas con
+todas las casillas; y las cifras de esta sección todavía no las deriva
+`scripts/partida-figures.py` (cubre el eje del precio de F11h), así que el
+guardarraíl aún no las fija.
+
 **F11k — cuánto rastro deposita cada brazo (2026-10-29): la hipótesis del
 mecanismo de F11j no se sostiene — a 10 s la glándula niega el 85 % y el rastro
 de casa se come el presupuesto.** F11j dejó el castigo de la puerta a 10 s
