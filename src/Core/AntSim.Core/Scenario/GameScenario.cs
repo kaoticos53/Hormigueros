@@ -63,13 +63,14 @@ public static class GameScenario
         float leafFraction = 0f,
         IReadOnlyList<SpeciesDescriptor>? species = null,
         bool maze = false, string? exportPath = null, bool untilExtinct = false,
-        bool recruitment = false, RecruitmentTuning? recruitmentTuning = null)
+        bool recruitment = false, RecruitmentTuning? recruitmentTuning = null,
+        bool trailReport = false)
     {
         var sw = new StringWriter(CultureInfo.InvariantCulture);
         RunTo(sw, seed, ticks, colonies, grid, frameEvery, seedPoolPath, drops,
             cloneFromElite, pheroEvery, inspectId, activEvery, pheroLayers,
             leafFraction, species, maze, exportPath, untilExtinct, recruitment,
-            recruitmentTuning);
+            recruitmentTuning, trailReport);
         return sw.ToString();
     }
 
@@ -90,7 +91,8 @@ public static class GameScenario
         float leafFraction = 0f,
         IReadOnlyList<SpeciesDescriptor>? species = null,
         bool maze = false, string? exportPath = null, bool untilExtinct = false,
-        bool recruitment = false, RecruitmentTuning? recruitmentTuning = null)
+        bool recruitment = false, RecruitmentTuning? recruitmentTuning = null,
+        bool trailReport = false)
     {
         if (output is null) throw new ArgumentNullException(nameof(output));
         if (ticks < 1) throw new ArgumentOutOfRangeException(nameof(ticks));
@@ -286,6 +288,15 @@ public static class GameScenario
           .Append(",\"hash\":\"").Append(sim.HashLine()).Append('"');
         if (exported) sb.Append(",\"exported\":true");
         if (extinct) sb.Append(",\"extinct\":true");
+        // F11k: informe de rastro, SOLO si se pide. Apagado por defecto para que
+        // el stream de la partida (y sus fixtures) siga siendo byte a byte el de
+        // siempre; los contadores no entran en el hash.
+        if (trailReport)
+            sb.Append(",\"trail\":{\"food\":").Append(F((float)sim.TrailFoodDeposited))
+              .Append(",\"home\":").Append(F((float)sim.TrailHomeDeposited))
+              .Append(",\"denied\":").Append(F((float)sim.TrailGlandDenied))
+              .Append(",\"gland\":").Append(F((float)sim.TrailGlandSpentSeconds))
+              .Append('}');
         sb.Append('}').AppendLine();
         output.Write(sb);
         output.Flush();

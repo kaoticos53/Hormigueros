@@ -326,6 +326,27 @@ public sealed class WorldSim
     /// hormiga que descarga puede volver a marcar el camino.</summary>
     public float RecruitmentGlandRefillSeconds { get; set; } = 3f;
 
+    /// <summary>F11k — CUÁNTO RASTRO SE DEPOSITÓ, acumulado en toda la partida y
+    /// en todas las colonias (capas de comida y de casa, sumando el reflejo de
+    /// reclutamiento y el canal genérico del cerebro). No entra en el hash ni en
+    /// el guardado: es un contador de instrumentación, para responder «cuánto
+    /// rastro deja cada brazo» sin leer la capa al final —que ya evaporó—.
+    /// Con <see cref="Recruitment"/> apagado se queda en 0.</summary>
+    public double TrailFoodDeposited { get; private set; }
+
+    /// <inheritdoc cref="TrailFoodDeposited"/>
+    public double TrailHomeDeposited { get; private set; }
+
+    /// <summary>F11k — lo que la glándula NO pudo pagar: cantidad pedida por los
+    /// depósitos que se quedaron sin presupuesto. Medido junto a
+    /// <see cref="TrailGlandSpentSeconds"/> dice si el precio es el que recorta el
+    /// rastro o si cada brazo deposita menos porque su puerta está más cerrada.</summary>
+    public double TrailGlandDenied { get; private set; }
+
+    /// <summary>F11k — segundos de glándula consumidos (a plena tasa), sumados en
+    /// toda la partida. Es el presupuesto que el rastro gastó de verdad.</summary>
+    public double TrailGlandSpentSeconds { get; private set; }
+
     /// <summary>Ganancia del reflejo que sigue el rastro de comida, en rad/s a
     /// plena asimetría (F8). Del orden de la huella (8): mueve la conducta.
     /// Calibrado contra el rastro real de la partida (12 % de las hormigas sin
@@ -1215,6 +1236,7 @@ public sealed class WorldSim
             {
                 deposited += amt;
                 colony.FoodLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+                TrailFoodDeposited += amt;
             }
         }
         if (decision.DepositHome > 0f)
@@ -1224,6 +1246,7 @@ public sealed class WorldSim
             {
                 deposited += amt;
                 colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+                TrailHomeDeposited += amt;
             }
         }
         if (decision.DepositAlarm > 0f)
@@ -1261,7 +1284,11 @@ public sealed class WorldSim
             float amt = RecruitmentFoodDeposit * gate * (0.4f + 0.6f * Math.Clamp(away, 0f, 1f)) * sp.QMaxFood * dt;
             amt = SpendGland(ant, amt, sp.QMaxFood); // F11b: la glándula paga la cresta
             int cx = Cell(ant.X), cy = Cell(ant.Y);
-            if (amt > 0f) colony.FoodLayer.Deposit(cx, cy, amt);
+            if (amt > 0f)
+            {
+                colony.FoodLayer.Deposit(cx, cy, amt);
+                TrailFoodDeposited += amt;
+            }
         }
         else if (Recruitment)
         {
@@ -1273,7 +1300,10 @@ public sealed class WorldSim
             float amt = RecruitmentHomeDeposit * (RecruitmentTrailByBrain ? decision.DepositHome : 1f) * sp.QMaxHome * dt;
             amt = SpendGland(ant, amt, sp.QMaxHome); // F11b: también sale de la reserva
             if (amt > 0f)
+            {
                 colony.HomeLayer.Deposit(Cell(ant.X), Cell(ant.Y), amt);
+                TrailHomeDeposited += amt;
+            }
         }
         // F8 — LA FEROMONA DE LA PARTIDA NO SE PAGA CON LA RESERVA. En el mundo
         // de reclutamiento el rastro lo pone el REFLEJO (gratis, ver más abajo);
@@ -1803,15 +1833,22 @@ public sealed class WorldSim
     private float SpendGland(Ant ant, float amt, float qMax)
     {
         if (!Recruitment || RecruitmentGlandSeconds <= 0f || amt <= 0f) return amt;
+        float requested = amt;                                // lo que la hormiga quería dejar
         float cost = amt / MathF.Max(qMax, 1e-6f);           // s de glándula que pide
         float budget = ant.Gland * RecruitmentGlandSeconds; // s de glándula que hay
         if (cost > budget)
         {
-            if (budget <= 0f) return 0f;
+            if (budget <= 0f)
+            {
+                TrailGlandDenied += requested;
+                return 0f;
+            }
             cost = budget;
             amt = cost * qMax;
+            TrailGlandDenied += requested - amt;
         }
         ant.Gland = MathF.Max(0f, ant.Gland - cost / RecruitmentGlandSeconds);
+        TrailGlandSpentSeconds += cost;
         return amt;
     }
 

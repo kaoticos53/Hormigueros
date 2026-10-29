@@ -133,6 +133,11 @@ internal static class Program
         // tiene que decidir DÓNDE y CUÁNTO gastarla, no solo si deja menos.
         float trailGland = 0f;
         float trailGlandRefill = 3f;
+        // F11k: informe de rastro en la línea `end` (depósito de comida y de casa,
+        // lo que la glándula no pudo pagar y el presupuesto gastado). Solo en la
+        // partida y con reclutamiento, y APAGADO por defecto: el stream de
+        // siempre no cambia ni un byte.
+        bool trailReport = false;
         int gameTicks = GameEvaluator.DefaultTicks;
         int gameTrials = GameEvaluator.DefaultTrials;
 
@@ -256,6 +261,9 @@ internal static class Program
                     if (!float.TryParse(Next(args, ref i), NumberStyles.Float, CultureInfo.InvariantCulture, out trailGlandRefill))
                         return Fail("--trail-gland-refill requiere un número (segundos de vacía a llena en el nido).");
                     recruitmentTuning.TrailGlandRefillSeconds = trailGlandRefill;
+                    break;
+                case "--trail-report":
+                    trailReport = true;
                     break;
                 case "--game-ticks":
                     if (!int.TryParse(Next(args, ref i), NumberStyles.None, CultureInfo.InvariantCulture, out gameTicks) || gameTicks < 1)
@@ -554,6 +562,11 @@ internal static class Program
                 return Fail("--trail-gland necesita --recruitment: sin rastro no hay nada que cobrar.");
             if (trailGland > 0f && mode == "pretrain" && !fitnessDownloads)
                 return Fail("--trail-gland necesita --fitness downloads: el fitness del currículo no tiene rastro.");
+            // F11k: el informe se lee de la partida y solo tiene sentido con rastro.
+            if (trailReport && mode != "game")
+                return Fail("--trail-report se lee en la partida: --mode game (con --recruitment).");
+            if (trailReport && !recruitment)
+                return Fail("--trail-report necesita --recruitment: sin rastro no hay depósito que contar.");
 
             // F6: el modo juego escribe TICK A TICK en stdout. Construirlo como
             // string (216.000 ticks) son gigabytes: el lanzador de la escena
@@ -570,7 +583,8 @@ internal static class Program
                     leafFraction: leafFraction, species: species,
                     maze: maze, exportPath: exportPath, untilExtinct: untilExtinct,
                     recruitment: recruitment,
-                    recruitmentTuning: recruitment ? recruitmentTuning : null);
+                    recruitmentTuning: recruitment ? recruitmentTuning : null,
+                    trailReport: trailReport);
                 return 0;
             }
 
@@ -1121,6 +1135,6 @@ internal static class Program
 
     private static void PrintUsage()
     {
-        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N] [--fitness arena|downloads] [--game-ticks N] [--game-trials N] [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F] [--trail-half-life S] [--trail-follow G] [--trail-by-brain] [--trail-gland S] [--trail-gland-refill S]");
+        Console.Out.WriteLine("Uso: antsim [--mode micro|world|evolve|pretrain|verify|game|presets|genome-info|bench] [--seed N] [--ticks N] [--grid N] [--colonies N] [--import f] [--seed-pool f] [--warm-start f] [--export f] [--pop N] [--generations N] [--band-min F] [--band-max F] [--leaf-fraction F] [--footprint F] [--species lista] [--save f] [--save-tick N] [--antlog f] [--load f] [--frame-every N] [--drop tick:x:y] [--phero-every N] [--phero-layers colonia:capa,…] [--inspect N] [--activ-every N] [--json] [--seeds 'lista'] [--trials N] [--arena-cells N] [--maze] [--obstacles] [--hidden N] [--grow] [--classic-every N] [--classic-tail N] [--fitness arena|downloads] [--game-ticks N] [--game-trials N] [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U] [--trail-deposit F] [--trail-half-life S] [--trail-follow G] [--trail-by-brain] [--trail-gland S] [--trail-gland-refill S] [--trail-report]");
     }
 }

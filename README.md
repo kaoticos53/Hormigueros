@@ -408,6 +408,7 @@ bash scripts/play-game.sh                                # Linux/macOS
 | `--trail-deposit` | `1` | `0`–`5` | rastro que deja la cargada, × QMaxFood/s |
 | `--trail-half-life` | `2100` | `1`–`3600` s | vida media del rastro de comida (7× la clásica) |
 | `--trail-follow` | `8` | `0`–`20` rad/s | giro que provoca el rastro (0 = lo huele pero no lo sigue) |
+| `--trail-report` | — | — | añade a la línea `end` el rastro depositado (comida y casa), lo que la glándula no pudo pagar y el presupuesto gastado; sin la bandera el stream no cambia |
 
 La misma configuración se lee **dentro del juego**: encima de la barra de pistas el HUD imprime `reclutamiento · montones=8 (6–10 ítems, radio 18 u) · rastro=1× / 2100 s / sigue 8 rad/s` (con `· reclutamiento apagado · mundo clásico` cuando la bandera está off), compuesto con las MISMAS perillas que viajan al CLI — así dos lanzamientos seguidos se comparan sin abrir el log del editor.
 
