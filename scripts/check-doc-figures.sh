@@ -18,13 +18,14 @@
 #   tests = nº de casos descubiertos por la suite (dotnet test --list-tests)
 #
 # Y desde F11h también LAS CIFRAS DE LA PARTIDA que afirma el documento de estado
-# (F11h, el eje del precio; F11j, el control del horizonte; F11k, el rastro depositado)
-# —la tabla de recetas del brazo de 10 s y los t de sus comparaciones—. Esas no
-# se pueden MEDIR en cada push: cada celda son partidas de 216 000 ticks (las
-# 1 056 de F11h son horas de máquina), así que se derivan del VOLCADO versionado
-# que las produjo —`scripts/partida-figures.py` lee los trece volcados de
-# `artifacts/` y devuelve cada cifra formateada como la escribe el documento— y
-# se exige que el texto siga diciéndola. Dos detalles que no son cosméticos:
+# (F11h, el eje del precio; F11j, el control del horizonte; F11k, el rastro
+# depositado; F11l, el 2×2 completo) —la tabla de recetas del brazo de 10 s y los
+# t de sus comparaciones—. Esas no se pueden MEDIR en cada push: cada celda son
+# partidas de 216 000 ticks (las 1 056 de F11h son horas de máquina), así que se
+# derivan del VOLCADO versionado que las produjo —`scripts/partida-figures.py`
+# lee los volcados de `artifacts/` y devuelve cada cifra formateada como la
+# escribe el documento— y se exige que el texto siga diciéndola. Dos detalles que
+# no son cosméticos:
 #
 #   · el fragmento se busca en el texto LÓGICO del documento —párrafos y viñetas
 #     unidos en una línea, sin el énfasis de markdown y sin las regiones
@@ -389,7 +390,7 @@ if [[ "${1:-}" == "--list" ]]; then
   for f in "${SCANNED[@]}"; do printf '  %s\n' "$f"; done
   echo "clasificados como bitácora de fase cerrada (con fecha en cada entrada):"
   for g in "${RECORD_GLOBS[@]}"; do printf '  %s\n' "$g"; done
-  echo "cifras de la partida (F11h–F11k): las deriva $PARTIDA_TOOL de los volcados de artifacts/"
+  echo "cifras de la partida (F11h–F11l): las deriva $PARTIDA_TOOL de los volcados de artifacts/"
   echo "  el detalle cifra a cifra y su volcado: python $PARTIDA_TOOL --list"
   exit 0
 fi
@@ -455,7 +456,7 @@ if [[ "$VIOL" -gt 0 ]]; then
   echo "  · el documento está desactualizado → corrige la cifra a $PINES pines / $TESTS tests"
   echo "  · la cifra es un registro con fecha → rodéala de las marcas del documento:"
   echo "      $OPEN_MARK … -->    y    $CLOSE_MARK -->"
-  echo "  · es una cifra de PARTIDA (F11h–F11k) → o el documento cambió, o cambió el volcado que la"
+  echo "  · es una cifra de PARTIDA (F11h–F11l) → o el documento cambió, o cambió el volcado que la"
   echo "    alimenta: el detalle de cada cifra y su volcado lo da python $PARTIDA_TOOL --list"
   exit 1
 fi

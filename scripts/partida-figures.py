@@ -26,6 +26,14 @@ Y desde F11j/F11k, del mismo documento:
     volcado sólo publica por pool —se promedian aquí—, el crecimiento de la cresta con el precio y
     el factor con que la ventana dobla el acumulado.
 
+Y desde F11l, del mismo documento:
+  · la tabla del 2×2 completo (precio de entrenamiento × horizonte de selección) jugada a 10 s de
+    glándula, con el nivel de los dos brazos —que se promedian aquí de las medias por pool—, el
+    efecto que trae el volcado y su relativo;
+  · el salto de horizonte a los dos precios con sus tres deltas por sorteo —el volcado los nombra
+    sin cifra y se calculan aquí—, el reparto del castigo con su predicción aditiva y la
+    interacción en las cuatro formas de jugar.
+
 DOS CIFRAS QUE EL VOLCADO OBLIGÓ A CORREGIR EN EL DOCUMENTO, y que por eso están aquí escritas:
   · el relativo de la celda 25 s · puerta a 48k: con las medias redondeadas del volcado (205,8 y
     247,8) da −16,9 %, no el −17,0 % que salía de las medias sin redondear;
@@ -56,6 +64,7 @@ import re
 import statistics
 import sys
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -446,11 +455,267 @@ def k_puerta_contra_reflejo(raiz: Path) -> dict:
             "d": num(media_celdas(raiz, 10, 48000, "p10h2s", "fijo", "comida"))}
 
 
+# ── F11l: el 2×2 completo (precio de entrenamiento × horizonte de selección) ──
+P25H2_VEREDICTO = "artifacts/pretrain-partida-200-p25h2-veredicto.txt"
+P25H2G_REPLICAS = "artifacts/pretrain-partida-200-p25h2g-replicas.txt"
+P25H2S_REPLICAS = "artifacts/pretrain-partida-200-p25h2s-replicas.txt"
+P25G7_REPLICAS = "artifacts/pretrain-partida-200-p25g7-replicas.txt"
+P257_REPLICAS = "artifacts/pretrain-partida-200-p257-replicas.txt"
+P10G7_REPLICAS = "artifacts/pretrain-partida-200-p10g7-replicas.txt"
+P10X10_REPLICAS = "artifacts/pretrain-partida-200-p10x10-replicas.txt"
+
+# Las cuatro casillas del 2×2, cada una con sus dos brazos: los pools entrenados con la puerta y los
+# entrenados con el reflejo. Las de 24 000 ticks no se repitieron (F11g y F11i ya las tenían).
+CELDAS_2X2 = {
+    (10, 24): (P10G7_REPLICAS, P10X10_REPLICAS),
+    (10, 48): (P10H2G_REPLICAS, P10H2S_REPLICAS),
+    (25, 24): (P25G7_REPLICAS, P257_REPLICAS),
+    (25, 48): (P25H2G_REPLICAS, P25H2S_REPLICAS),
+}
+
+RE_R_SECCION = re.compile(r"^## Jugado con la glándula a (\d+) s")
+RE_R_FILA = re.compile(r"^\|\s*(\S+)\s*\|\s*(puerta|fijo)\s*\|\s*([\d.]+)\s*±")
+# El volcado del 2×2 reutiliza los títulos de sus secciones para dos cosas distintas (la tabla de
+# efectos y, más abajo, el reparto), así que hay que recordar en cuál de las dos se está.
+RE_M_TABLA = re.compile(r"^## Jugado con la glándula a (\d+) s · rastro (\w+)")
+RE_M_DELTAS = re.compile(r"^### jugado (\d+) s · rastro (\w+)")
+RE_M_FILA = re.compile(r"^\| (\d+) s \| (\d+)k \| ([+-]?[\d.]+) ± ([\d.]+) \|")
+RE_M_DELTA = re.compile(
+    r"^- \*\*horizonte a (\d+) s\*\*: .* = ([+-][\d.]+) ± ([\d.]+) descargas "
+    r"\(t = ([+-][\d.]+);")
+RE_M_BASE = re.compile(r"^- castigo base \(10 s / 24k\): \*\*([+-][\d.]+)\*\*")
+RE_M_HORIZONTE2 = re.compile(r"^- horizonte ×2 con el precio quieto: \*\*([+-][\d.]+)\*\*")
+RE_M_PRECIO = re.compile(
+    r"^- precio 10 s → 25 s con el horizonte corto: \*\*([+-][\d.]+)\*\*")
+RE_M_REPARTO = re.compile(
+    r"^- celda 25 s / 48k: \*\*([+-][\d.]+)\*\* · predicción aditiva ([+-][\d.]+) ⇒ "
+    r"interacción \*\*([+-][\d.]+)\*\*")
+
+
+def _sorteo(pool: str) -> int:
+    """El sorteo de GA de un pool, leído de su sufijo («p25h2g-s11» → 11)."""
+    cola = pool.rsplit("-s", 1)[-1]
+    if not cola.isdigit():
+        raise FaltaCifra(f"pool sin sorteo reconocible: {pool}")
+    return int(cola)
+
+
+@lru_cache(maxsize=None)
+def _medias_pool(raiz: Path, fuente: str) -> dict[tuple[int, str, int], float]:
+    """Las medias por pool de una campaña de réplicas: (precio de juego, rastro, sorteo) → media."""
+    out: dict[tuple[int, str, int], float] = {}
+    precio = None
+    for linea in leer(raiz, fuente):
+        linea = linea.replace("\r", "")
+        m = RE_R_SECCION.match(linea)
+        if m:
+            precio = int(m.group(1))
+            continue
+        if linea.startswith("#"):
+            precio = None
+            continue
+        m = RE_R_FILA.match(linea)
+        if m and precio is not None:
+            out[(precio, m.group(2), _sorteo(m.group(1)))] = float(m.group(3))
+    if not out:
+        raise FaltaCifra(f"{fuente}: no hay medias por pool en el modo réplicas")
+    return out
+
+
+@lru_cache(maxsize=None)
+def _replicas_2x2(raiz: Path) -> dict:
+    """Las ocho campañas del 2×2: casilla → (medias del brazo con puerta, del brazo con reflejo)."""
+    return {celda: tuple(_medias_pool(raiz, f) for f in fuentes)
+            for celda, fuentes in CELDAS_2X2.items()}
+
+
+@lru_cache(maxsize=None)
+def sorteos_matriz(raiz: Path) -> dict:
+    """Los sorteos con que se lee cada casilla.
+
+    Primero los comunes a los dos brazos de la casilla; después, dentro de una fila de PRECIO, los
+    comunes a las dos casillas —así el salto de horizonte sale pareado sorteo a sorteo, que es la
+    razón de haber entrenado la celda nueva con 7/11/13 y no con otros—. Es la misma regla que
+    aplica `scripts/gland-matrix-compare.py` al repartir.
+    """
+    d = _replicas_2x2(raiz)
+    lectura = {c: {k[2] for k in g} & {k[2] for k in s} for c, (g, s) in d.items()}
+    for precio in {c[0] for c in d}:
+        fila = [c for c in d if c[0] == precio]
+        if len(fila) != 2:
+            raise FaltaCifra(f"la fila de {precio} s no tiene dos casillas: {fila}")
+        comunes = lectura[fila[0]] & lectura[fila[1]]
+        if len(comunes) >= 2:
+            for c in fila:
+                lectura[c] = comunes
+    for celda, s in lectura.items():
+        if len(s) < 2:
+            raise FaltaCifra(f"la casilla {celda[0]}s/{celda[1]}k no tiene dos sorteos con las "
+                             f"dos recetas: {sorted(s)}")
+    return {c: sorted(s) for c, s in lectura.items()}
+
+
+def _nivel(raiz: Path, celda: tuple[int, int], juego: int, rastro: str, brazo: str,
+           sort: int) -> float:
+    """La media de un pool: una casilla, un precio de juego, un rastro y un sorteo."""
+    armas = _replicas_2x2(raiz)[celda]
+    tabla = armas[0] if brazo == "puerta" else armas[1]
+    try:
+        return tabla[(juego, rastro, sort)]
+    except KeyError as e:
+        raise FaltaCifra(f"falta el pool del sorteo {sort} en {celda[0]}s/{celda[1]}k · "
+                         f"{brazo} a {juego} s · {rastro}") from e
+
+
+def nivel_matriz(raiz: Path, celda: tuple[int, int], juego: int, rastro: str,
+                 brazo: str) -> float:
+    """El nivel de un brazo en una casilla: la media de los pools de los sorteos que la leen."""
+    return statistics.mean([_nivel(raiz, celda, juego, rastro, brazo, s)
+                            for s in sorteos_matriz(raiz)[celda]])
+
+
+def matriz(raiz: Path) -> dict:
+    """El volcado del 2×2: el efecto de cada casilla, los saltos de horizonte y el reparto."""
+    out: dict = {"efecto": {}, "delta": {}, "reparto": {}}
+    estado = None
+    en_reparto = False
+    for linea in leer(raiz, P25H2_VEREDICTO):
+        linea = linea.replace("\r", "")
+        m = RE_M_TABLA.match(linea)
+        if m:
+            estado = ("tabla", int(m.group(1)), m.group(2))
+            continue
+        if linea.startswith("## Reparto del castigo"):
+            en_reparto, estado = True, None
+            continue
+        m = RE_M_DELTAS.match(linea)
+        if m:
+            estado = ("reparto" if en_reparto else "deltas", int(m.group(1)), m.group(2))
+            continue
+        if linea.startswith("## ") or linea.startswith("### "):
+            estado = None
+            continue
+        if estado is None:
+            continue
+        tipo, juego, rastro = estado
+        if tipo == "tabla":
+            m = RE_M_FILA.match(linea)
+            if m:
+                out["efecto"][(juego, rastro, int(m.group(1)), int(m.group(2)))] = float(m.group(3))
+            continue
+        if tipo == "deltas":
+            m = RE_M_DELTA.match(linea)
+            if m:
+                out["delta"][(juego, rastro, int(m.group(1)))] = (
+                    float(m.group(2)), float(m.group(3)), float(m.group(4)))
+            continue
+        r = out["reparto"].setdefault((juego, rastro), {})
+        m = RE_M_BASE.match(linea)
+        if m:
+            r["base"] = float(m.group(1))
+            continue
+        m = RE_M_HORIZONTE2.match(linea)
+        if m:
+            r["horizonte"] = float(m.group(1))
+            continue
+        m = RE_M_PRECIO.match(linea)
+        if m:
+            r["precio"] = float(m.group(1))
+            continue
+        m = RE_M_REPARTO.match(linea)
+        if m:
+            r["celda"], r["prediccion"], r["interaccion"] = (
+                float(m.group(1)), float(m.group(2)), float(m.group(3)))
+    if not out["efecto"]:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: no se reconoce ninguna casilla del 2×2")
+    if not out["delta"]:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: no se reconoce ningún salto de horizonte")
+    return out
+
+
+def celda_matriz(raiz: Path, precio: int, horizonte: int) -> dict:
+    """Una fila de la tabla de F11l, jugada a 10 s de glándula y con el rastro fijo.
+
+    El efecto sale del volcado (media pareada por sorteo); los dos niveles se promedian aquí de las
+    medias por pool de las réplicas. Por eso el efecto puede diferir en una décima de la resta de
+    las dos columnas redondeadas: el volcado resta medias sin redondear.
+    """
+    pu = nivel_matriz(raiz, (precio, horizonte), 10, "fijo", "puerta")
+    fi = nivel_matriz(raiz, (precio, horizonte), 10, "fijo", "reflejo")
+    ef = matriz(raiz)["efecto"].get((10, "fijo", precio, horizonte))
+    if ef is None:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: no hay efecto de {precio}s/{horizonte}k a 10 s · fijo")
+    if fi == 0:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: la referencia de {precio}s/{horizonte}k es 0")
+    return {"pu": num(pu), "fi": num(fi), "ef": num(ef), "pct": num(ef / fi * 100)}
+
+
+def salto_horizonte_matriz(raiz: Path, precio: int) -> dict:
+    """Cuánto mueve doblar el horizonte al efecto de la puerta, con ese precio de entrenamiento."""
+    v = matriz(raiz)["delta"].get((10, "fijo", precio))
+    if v is None:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: no hay salto de horizonte a {precio} s a 10 s · fijo")
+    return {"m": num_mas(v[0]), "se": num(v[1]), "t": num_mas(v[2])}
+
+
+def _delta_sorteo(raiz: Path, precio: int, sort: int) -> float:
+    """El salto de horizonte de UN sorteo: el mismo pool a 24k y a 48k, misma semilla de partida."""
+    def efecto(celda: tuple[int, int]) -> float:
+        return (_nivel(raiz, celda, 10, "fijo", "puerta", sort)
+                - _nivel(raiz, celda, 10, "fijo", "reflejo", sort))
+    return efecto((precio, 48)) - efecto((precio, 24))
+
+
+def saltos_por_sorteo(raiz: Path, precio: int) -> dict:
+    """Los tres deltas individuales del salto de horizonte.
+
+    El volcado publica la media pareada y el t, pero no los deltas de cada sorteo —los nombra sin
+    cifra—, así que se calculan aquí de las medias por pool. Es lo que hizo concluyente el control de
+    10 s: no la media, sino que los tres sorteos se movieran juntos.
+    """
+    ds = [_delta_sorteo(raiz, precio, s) for s in sorteos_matriz(raiz)[(precio, 48)]
+          if s in sorteos_matriz(raiz)[(precio, 24)]]
+    if len(ds) != 3:
+        raise FaltaCifra(f"el salto de horizonte a {precio} s no tiene tres sorteos pareados: {ds}")
+    return {"a": num_mas(ds[0]), "b": num_mas(ds[1]), "c": num_mas(ds[2])}
+
+
+def reparto_matriz(raiz: Path) -> dict:
+    """El reparto del castigo: base, los dos saltos, la predicción aditiva y la interacción."""
+    r = matriz(raiz)["reparto"].get((10, "fijo"))
+    if not r or len(r) < 5:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: no hay reparto a 10 s · fijo ({sorted(r or {})})")
+    return {"base": num(r["base"]), "dh": num(r["horizonte"]), "dp": num_mas(r["precio"]),
+            "celda": num(r["celda"]), "pred": num(r["prediccion"]),
+            "inter": num_mas(r["interaccion"])}
+
+
+def interacciones_matriz(raiz: Path) -> dict:
+    """Los extremos de la interacción en las cuatro formas de jugar el 2×2."""
+    vals = [d["interaccion"] for d in matriz(raiz)["reparto"].values() if "interaccion" in d]
+    if len(vals) != 4:
+        raise FaltaCifra(f"{P25H2_VEREDICTO}: esperaba cuatro interacciones y hay {len(vals)}")
+    return {"a": num_mas(min(vals)), "b": num_mas(max(vals))}
+
+
+def rango_celda_nueva(raiz: Path) -> dict:
+    """El efecto de la celda nueva sorteo a sorteo: la dispersión contra la que hay que leerla."""
+    celda = (25, 48)
+    ef = [_nivel(raiz, celda, 10, "fijo", "puerta", s)
+          - _nivel(raiz, celda, 10, "fijo", "reflejo", s) for s in sorteos_matriz(raiz)[celda]]
+    return {"lo": num(min(ef)), "hi": num_mas(max(ef))}
+
+
 def k_sin_precio_menos(raiz: Path) -> dict:
     """Cuánto menos de cresta deja el brazo de la puerta sin precio."""
     g = media_celdas(raiz, 0, 48000, "p10h2g", "puerta", "comida")
     s = media_celdas(raiz, 0, 48000, "p10h2s", "fijo", "comida")
     return {"p": str(round((1 - g / s) * 100)), "a": miles(g, 1), "b": miles(s, 1)}
+
+
+def _casilla_2x2(precio: int, horizonte: int) -> str:
+    """Las fuentes de una casilla del 2×2: el volcado del reparto y sus dos campañas de réplicas."""
+    return " + ".join((P25H2_VEREDICTO,) + CELDAS_2X2[(precio, horizonte)])
 
 
 # ── Las cifras del documento, una por línea: clave · volcado · plantilla ──────
@@ -557,6 +822,25 @@ CIFRAS: list[tuple[str, str, str]] = [
      "{a} de cresta contra {b} del entrenado con reflejo; con el reflejo fijo, {c} contra {d}"),
     ("F11k sin precio 30 % menos", P10H2_DEPOSITS,
      "un {p} % MENOS de cresta que el del reflejo ({a} contra {b})"),
+
+    # ── F11l: el 2×2 completo (tabla jugada a 10 s de glándula y con el rastro fijo) ──
+    # Los niveles vienen de las réplicas y el efecto del volcado del reparto: las dos fuentes de
+    # cada fila van declaradas, porque `--list` es lo que un lector sigue para llegar a la cifra.
+    ("F11l tabla · 10s/24k", _casilla_2x2(10, 24), "| 10 s | 24k | {pu} | {fi} | {ef} | {pct} % |"),
+    ("F11l tabla · 10s/48k", _casilla_2x2(10, 48), "| 10 s | 48k | {pu} | {fi} | {ef} | {pct} % |"),
+    ("F11l tabla · 25s/24k", _casilla_2x2(25, 24), "| 25 s | 24k | {pu} | {fi} | {ef} | {pct} % |"),
+    ("F11l tabla · 25s/48k", _casilla_2x2(25, 48), "| 25 s | 48k | {pu} | {fi} | {ef} | {pct} % |"),
+    # el salto de horizonte, que es la pregunta de la celda: a 10 s cuesta, a 25 s no
+    ("F11l salto de horizonte", P25H2_VEREDICTO,
+     "{m10} ± {se10} descargas a 10 s (t = {t10}) y {m25} ± {se25} a 25 s (t = {t25})"),
+    ("F11l deltas por sorteo · 25 s", _casilla_2x2(25, 48), "({a} / {b} / {c} al doblar la ventana)"),
+    # el reparto: aditivo o con interacción
+    ("F11l reparto", P25H2_VEREDICTO,
+     "base {base}, horizonte ×2 a 10 s {dh}, precio a 24k {dp}, predicción aditiva {pred} "
+     "y celda real {celda}: interacción {inter}"),
+    ("F11l interacciones en las cuatro formas de jugar", P25H2_VEREDICTO,
+     "la interacción va de {a} a {b} descargas en las cuatro formas de jugar"),
+    ("F11l dispersión de la celda nueva", _casilla_2x2(25, 48), "va de {lo} a {hi} entre sorteos"),
 ]
 
 # Qué celda del volcado alimenta cada cifra. Va aparte de la lista de arriba para
@@ -643,6 +927,18 @@ CELDAS = {
         "b": str(round(max(valores_pool(r, 10, 48000, "p10h2g", "puerta", "comida"))))},
     "F11k puerta contra reflejo": lambda r: k_puerta_contra_reflejo(r),
     "F11k sin precio 30 % menos": lambda r: k_sin_precio_menos(r),
+    # F11l
+    "F11l tabla · 10s/24k": lambda r: celda_matriz(r, 10, 24),
+    "F11l tabla · 10s/48k": lambda r: celda_matriz(r, 10, 48),
+    "F11l tabla · 25s/24k": lambda r: celda_matriz(r, 25, 24),
+    "F11l tabla · 25s/48k": lambda r: celda_matriz(r, 25, 48),
+    "F11l salto de horizonte": lambda r: {
+        **{k + "10": v for k, v in salto_horizonte_matriz(r, 10).items()},
+        **{k + "25": v for k, v in salto_horizonte_matriz(r, 25).items()}},
+    "F11l deltas por sorteo · 25 s": lambda r: saltos_por_sorteo(r, 25),
+    "F11l reparto": lambda r: reparto_matriz(r),
+    "F11l interacciones en las cuatro formas de jugar": lambda r: interacciones_matriz(r),
+    "F11l dispersión de la celda nueva": lambda r: rango_celda_nueva(r),
 }
 
 
@@ -794,6 +1090,86 @@ def _falsos_f11jk() -> dict[str, str]:
             P10H2S_REPLICAS: rep_s + "\n", P10H2_DEPOSITS: "\n".join(dep) + "\n"}
 
 
+def _falsos_f11l() -> dict[str, str]:
+    """Volcados de mentira para F11l: el 2×2 del horizonte, con cifras legibles a mano.
+
+    Los niveles de las réplicas se eligen para que la resta de los dos brazos de cada casilla sea la
+    que la tabla falsa del veredicto declara, y para que el salto de horizonte de 25 s salga con el
+    mismo signo en los tres sorteos: es lo único que la sección afirma de ellos.
+    """
+    # (juego, rastro) → (efecto 10s/24k, 25s/24k, 10s/48k, 25s/48k)
+    efectos = {
+        (10, "fijo"): ("-20.0", "-20.0", "-40.0", "-1.0"),
+        (10, "puerta"): ("-25.0", "-25.0", "-45.0", "-6.0"),
+        (25, "fijo"): ("-21.0", "-21.0", "-41.0", "-2.0"),
+        (25, "puerta"): ("-26.0", "-26.0", "-46.0", "-12.0"),
+    }
+    filas = ["# volcado de mentira (F11l)"]
+    for (juego, rastro), (e24, e2425, e48, e2548) in efectos.items():
+        filas += [
+            f"## Jugado con la glándula a {juego} s · rastro {rastro}",
+            "| precio de entrenamiento | horizonte | efecto (puerta − reflejo) | sorteos |",
+            "|---|---|---|---|",
+            f"| 10 s | 24k | {e24} ± 9.7 | 3 |",
+            f"| 25 s | 24k | {e2425} ± 3.0 | 3 |",
+            f"| 10 s | 48k | {e48} ± 8.8 | 3 |",
+            f"| 25 s | 48k | {e2548} ± 1.0 | 3 |",
+        ]
+    filas.append("## Cuánto mueve cada eje el efecto de la puerta")
+    for (juego, rastro), (e24, e2425, e48, e2548) in efectos.items():
+        filas += [
+            f"### jugado {juego} s · rastro {rastro}",
+            f"- **horizonte a 10 s**: 10 s / 24k → 10 s / 48k · {e24} → {e48} = -20.0 ± 1.1 "
+            "descargas (t = -31.5; pareado por sorteo: s41 · s43 · s47)",
+            f"- **horizonte a 25 s**: 25 s / 24k → 25 s / 48k · {e2425} → {e2548} = +19.0 ± 1.0 "
+            "descargas (t = +33.0; pareado por sorteo: s7 · s11 · s13)",
+        ]
+    filas.append("## Reparto del castigo entre las cuatro casillas")
+    for (juego, rastro), (e24, _e2425, _e48, e2548) in efectos.items():
+        filas += [
+            f"### jugado {juego} s · rastro {rastro}",
+            f"- castigo base (10 s / 24k): **{e24}**",
+            "- horizonte ×2 con el precio quieto: **-20.0**",
+            "- precio 10 s → 25 s con el horizonte corto: **+0.0**",
+            f"- celda 25 s / 48k: **{e2548}** · predicción aditiva {float(e24) - 20.0:.1f} ⇒ "
+            "interacción **%+.1f**" % (float(e2548) - float(e24) + 20.0),
+            "",
+        ]
+    veredicto = "\n".join(filas)
+
+    def replicas(prefijo: str, sorts: tuple[int, ...], niveles: dict[int, float]) -> str:
+        """Un volcado de réplicas de mentira: los dos rastros de cada pool, en los dos precios."""
+        salida = ["# volcado de mentira (F11l)"]
+        for juego in (10, 25):
+            salida += [
+                f"\n## Jugado con la glándula a {juego} s", "",
+                "| pool (receta) | rastro | descargas (media ± σ) | total | semillas |",
+                "|---|---|---|---|---|",
+            ]
+            for i, sort in enumerate(sorts):
+                base = niveles[juego] + i
+                salida.append(f"| {prefijo}-s{sort} | fijo | {base:.1f} ± 1.0 | 1 | 24/24 |")
+                salida.append(f"| {prefijo}-s{sort} | puerta | {base + 5:.1f} ± 1.0 | 1 | 24/24 |")
+        return "\n".join(salida) + "\n"
+
+    s10, s25 = (41, 43, 47), (7, 11, 13)
+    return {
+        # casilla 10 s / 24k: 150 contra 170
+        P10G7_REPLICAS: replicas("p10g", s10, {10: 150.0, 25: 140.0}),
+        P10X10_REPLICAS: replicas("p10", s10, {10: 170.0, 25: 160.0}),
+        # casilla 10 s / 48k: 190 contra 230
+        P10H2G_REPLICAS: replicas("p10h2g", s10, {10: 190.0, 25: 180.0}),
+        P10H2S_REPLICAS: replicas("p10h2s", s10, {10: 230.0, 25: 220.0}),
+        # casilla 25 s / 24k: 148 contra 168
+        P25G7_REPLICAS: replicas("p25g", s25, {10: 148.0, 25: 138.0}),
+        P257_REPLICAS: replicas("p25", s25, {10: 168.0, 25: 158.0}),
+        # casilla 25 s / 48k: 160 contra 161, el efecto que deja de verse
+        P25H2G_REPLICAS: replicas("p25h2g", s25, {10: 160.0, 25: 150.0}),
+        P25H2S_REPLICAS: replicas("p25h2s", s25, {10: 161.0, 25: 151.0}),
+        P25H2_VEREDICTO: veredicto + "\n",
+    }
+
+
 def selftest() -> int:
     """Comprueba el derivador sin repo: formato, aritmética y que la deriva se note."""
     lineas = {
@@ -825,6 +1201,7 @@ def selftest() -> int:
             "- **14 pools · jugado 25 s**: la puerta paga +5.6 ± 1.9 descargas al promediar las tiradas (t = +2.9; 12/14 tiradas a favor)\n"),
     }
     lineas.update(_falsos_f11jk())
+    lineas.update(_falsos_f11l())
     fallo = 0
 
     def decir(ok: bool, texto: str) -> None:
@@ -891,6 +1268,26 @@ def selftest() -> int:
               "23/24 en las otras dos",
               "los extremos y el recuento de semillas salen de las doce diferencias de 48 000")
 
+        # ── F11l: el 2×2 completo, los deltas por sorteo y el reparto ──
+        decir(figs["F11l tabla · 25s/48k"] ==
+              "| 25 s | 48k | 161,0 | 162,0 | " + MINUS + "1,0 | " + MINUS + "0,6 % |",
+              "la celda nueva sale con sus dos niveles, su efecto y su relativo")
+        decir(figs["F11l salto de horizonte"] ==
+              MINUS + "20,0 ± 1,1 descargas a 10 s (t = " + MINUS + "31,5) y "
+              "+19,0 ± 1,0 a 25 s (t = +33,0)",
+              "el salto de horizonte sale a los dos precios, con su t y su signo")
+        decir(figs["F11l deltas por sorteo · 25 s"] ==
+              "(+19,0 / +19,0 / +19,0 al doblar la ventana)",
+              "los deltas por sorteo se calculan de las medias por pool, no se copian")
+        decir(figs["F11l reparto"] ==
+              "base " + MINUS + "20,0, horizonte ×2 a 10 s " + MINUS + "20,0, precio a 24k "
+              "+0,0, predicción aditiva " + MINUS + "40,0 y celda real " + MINUS + "1,0: "
+              "interacción +39,0",
+              "el reparto sale con la predicción aditiva y la interacción")
+        decir(figs["F11l interacciones en las cuatro formas de jugar"] ==
+              "la interacción va de +34,0 a +39,0 descargas en las cuatro formas de jugar",
+              "los extremos de la interacción salen de las cuatro formas de jugar")
+
         # Que la deriva SE NOTE: cambiar el volcado cambia el fragmento exigido.
         (raiz / P107_REPLICAS).write_text(
             lineas[P107_REPLICAS].replace("**165.1**", "**167.9**"), encoding="utf-8")
@@ -923,6 +1320,21 @@ def selftest() -> int:
         except FaltaCifra:
             decir(True, "una línea con otro formato no se lee como cifra")
 
+        # Fail-closed en el 2×2: sin una de sus réplicas no hay casilla que derivar. Va en un
+        # directorio NUEVO porque las medias por pool se cachean por ruta: borrar el fichero del
+        # directorio ya leído devolvería la copia en memoria y el test no probaría nada.
+        with tempfile.TemporaryDirectory() as tmp2:
+            raiz2 = Path(tmp2)
+            (raiz2 / "artifacts").mkdir()
+            for fuente, texto in _falsos_f11l().items():
+                if fuente != P25H2G_REPLICAS:
+                    (raiz2 / fuente).write_text(texto, encoding="utf-8")
+            try:
+                celda_matriz(raiz2, 25, 48)
+                decir(False, "un 2×2 sin una de sus réplicas tiene que parar la derivación")
+            except FaltaCifra as e:
+                decir(P25H2G_REPLICAS in str(e), f"la réplica que falta se declara: {e}")
+
     print("✓ derivador de cifras de partida correcto" if fallo == 0
           else "✗ derivador de cifras de partida roto")
     return fallo
@@ -946,7 +1358,11 @@ def main(argv: list[str]) -> int:
         for clave, fuente, plantilla in CIFRAS:
             print(f"  {clave:<{ancho}}  {fuente}")
             print(f"  {'':<{ancho}}  → {plantilla}")
-        print(f"\n{len(CIFRAS)} cifras de {len({f for _c, f, _p in CIFRAS})} volcados de F11h–F11k")
+        # Una casilla del 2×2 lee varios volcados a la vez: para no contar de más, el resumen
+        # cuenta los que son un fichero y deja dicho que los demás suman sus réplicas.
+        sueltos = {f for _c, f, _p in CIFRAS if " + " not in f}
+        print(f"\n{len(CIFRAS)} cifras de {len(sueltos)} volcados de F11h–F11l "
+              f"(más las réplicas que cada casilla del 2×2 declara)")
         return 0
 
     try:

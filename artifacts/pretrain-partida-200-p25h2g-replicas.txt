@@ -1,0 +1,48 @@
+# Réplicas de entrenamiento (F11d): la MISMA receta, 3 tiradas de GA
+# grid 96, laberinto, 216000 ticks, 24 semillas de partida que ninguna tirada vio: 42,7,99,1234,3,11,555,2024,5,13,17,23,64,128,256,512,777,888,999,1500,2025,31337,60013,98765
+# pp = pool entrenado con la puerta · ff = pool entrenado sin ella; cada pool se juzga con las dos puertas
+
+## Jugado con la glándula a 10 s
+
+| pool (48k 25s con puerta) | rastro | descargas (media ± σ) | total | semillas con descargas |
+|---|---|---|---|---|
+| p25h2g-s7 | puerta | 196.1 ± 65.3 | 4707 | 24/24 |
+| p25h2g-s7 | fijo | 176.8 ± 62.0 | 4243 | 24/24 |
+| p25h2g-s11 | puerta | 277.3 ± 81.4 | 6656 | 24/24 |
+| p25h2g-s11 | fijo | 243.2 ± 86.4 | 5837 | 24/24 |
+| p25h2g-s13 | puerta | 192.4 ± 65.4 | 4617 | 24/24 |
+| p25h2g-s13 | fijo | 183.7 ± 60.0 | 4408 | 24/24 |
+
+- **puerta a 10 s**: las réplicas dan 196, 277, 192 → media **221.9** (rango 192–277); la referencia p25h2g-s7 da 196.1
+  - pareado réplica-media − p25h2g-s7 por semilla: +25.8 ± 4.7 descargas (gana en 21/24 semillas)
+- **fijo a 10 s**: las réplicas dan 177, 243, 184 → media **201.2** (rango 177–243); la referencia p25h2g-s7 da 176.8
+  - pareado réplica-media − p25h2g-s7 por semilla: +24.4 ± 4.0 descargas (gana en 21/24 semillas)
+
+### ¿La puerta paga dentro de cada pool, a 10 s?
+
+- **p25h2g-s7**: +19.3 ± 4.7 (t = +4.1; gana 19/24)
+- **p25h2g-s11**: +34.1 ± 11.3 (t = +3.0; gana 18/24)
+- **p25h2g-s13**: +8.7 ± 7.3 (t = +1.2; gana 13/24)
+
+## Jugado con la glándula a 25 s
+
+| pool (48k 25s con puerta) | rastro | descargas (media ± σ) | total | semillas con descargas |
+|---|---|---|---|---|
+| p25h2g-s7 | puerta | 207.4 ± 62.1 | 4977 | 24/24 |
+| p25h2g-s7 | fijo | 187.0 ± 61.8 | 4489 | 24/24 |
+| p25h2g-s11 | puerta | 323.4 ± 92.4 | 7761 | 24/24 |
+| p25h2g-s11 | fijo | 270.3 ± 95.8 | 6487 | 24/24 |
+| p25h2g-s13 | puerta | 197.5 ± 65.1 | 4741 | 24/24 |
+| p25h2g-s13 | fijo | 181.3 ± 70.1 | 4351 | 24/24 |
+
+- **puerta a 25 s**: las réplicas dan 207, 323, 198 → media **242.8** (rango 198–323); la referencia p25h2g-s7 da 207.4
+  - pareado réplica-media − p25h2g-s7 por semilla: +35.4 ± 6.5 descargas (gana en 22/24 semillas)
+- **fijo a 25 s**: las réplicas dan 187, 270, 181 → media **212.9** (rango 181–270); la referencia p25h2g-s7 da 187.0
+  - pareado réplica-media − p25h2g-s7 por semilla: +25.8 ± 5.8 descargas (gana en 19/24 semillas)
+
+### ¿La puerta paga dentro de cada pool, a 25 s?
+
+- **p25h2g-s7**: +20.3 ± 6.2 (t = +3.3; gana 17/24)
+- **p25h2g-s11**: +53.1 ± 18.2 (t = +2.9; gana 17/24)
+- **p25h2g-s13**: +16.2 ± 7.0 (t = +2.3; gana 17/24)
+

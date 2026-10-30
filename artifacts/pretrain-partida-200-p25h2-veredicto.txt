@@ -1,0 +1,107 @@
+# El 2×2 precio × horizonte: ¿dónde se cobra el castigo de la puerta?
+# casillas: 10s/24k (artifacts/pretrain-partida-200-p10g7-replicas.log, artifacts/pretrain-partida-200-p10x10-replicas.log) · 25s/24k (artifacts/pretrain-partida-200-p25g7-replicas.log, artifacts/pretrain-partida-200-p257-replicas.log) · 10s/48k (artifacts/pretrain-partida-200-p10h2g-replicas.log, artifacts/pretrain-partida-200-p10h2s-replicas.log) · 25s/48k (artifacts/pretrain-partida-200-p25h2g-replicas.log, artifacts/pretrain-partida-200-p25h2s-replicas.log)
+# precios de juego 10 s, 25 s · rastro fijo y puerta · sorteos con los que se lee cada casilla 10s/24k: 3, 25s/24k: 3, 10s/48k: 3, 25s/48k: 3
+# Los sorteos se alinean por fila de precio (las dos casillas de 10 s sobre 41/43/47 y las dos de 25 s sobre 7/11/13): el salto de HORIZONTE va pareado. El de PRECIO no comparte ningún sorteo y por eso se resta sin parear.
+# El NIVEL no es comparable entre horizontes (a 48k la partida es el doble de larga): se compara el EFECTO de la puerta dentro de cada casilla.
+
+## Jugado con la glándula a 10 s · rastro fijo
+
+| precio de entrenamiento | horizonte | efecto (puerta − reflejo) | sorteos |
+|---|---|---|---|
+| 10 s | 24k | -17.7 ± 9.7 | 3 |
+| 25 s | 24k | -13.4 ± 20.7 | 3 |
+| 10 s | 48k | -35.8 ± 8.8 | 3 |
+| 25 s | 48k | -0.8 ± 10.8 | 3 |
+
+## Jugado con la glándula a 10 s · rastro puerta
+
+| precio de entrenamiento | horizonte | efecto (puerta − reflejo) | sorteos |
+|---|---|---|---|
+| 10 s | 24k | -18.5 ± 7.2 | 3 |
+| 25 s | 24k | -3.7 ± 18.9 | 3 |
+| 10 s | 48k | -33.0 ± 12.9 | 3 |
+| 25 s | 48k | +8.6 ± 25.3 | 3 |
+
+## Jugado con la glándula a 25 s · rastro fijo
+
+| precio de entrenamiento | horizonte | efecto (puerta − reflejo) | sorteos |
+|---|---|---|---|
+| 10 s | 24k | -14.8 ± 13.2 | 3 |
+| 25 s | 24k | -1.9 ± 17.0 | 3 |
+| 10 s | 48k | -34.9 ± 14.1 | 3 |
+| 25 s | 48k | +3.1 ± 28.9 | 3 |
+
+## Jugado con la glándula a 25 s · rastro puerta
+
+| precio de entrenamiento | horizonte | efecto (puerta − reflejo) | sorteos |
+|---|---|---|---|
+| 10 s | 24k | -22.5 ± 8.1 | 3 |
+| 25 s | 24k | -0.1 ± 19.2 | 3 |
+| 10 s | 48k | -42.0 ± 17.0 | 3 |
+| 25 s | 48k | +24.8 ± 36.8 | 3 |
+
+## Cuánto mueve cada eje el efecto de la puerta
+
+### jugado 10 s · rastro fijo
+- **horizonte a 10 s**: 10 s / 24k → 10 s / 48k · -17.7 → -35.8 = -18.1 ± 1.1 descargas (t = -17.0; pareado por sorteo: s41 · s43 · s47)
+- **horizonte a 25 s**: 25 s / 24k → 25 s / 48k · -13.4 → -0.8 = +12.5 ± 31.4 descargas (t = +0.4; pareado por sorteo: s7 · s11 · s13)
+- **precio a 24k**: 10 s / 24k → 25 s / 24k · -17.7 → -13.4 = +4.3 ± 22.8 descargas (t = +0.2; sin parear: 25s/24k tiene 3 sorteos y 10s/24k 3, y no comparten ninguno)
+- **precio a 48k**: 10 s / 48k → 25 s / 48k · -35.8 → -0.8 = +35.0 ± 13.9 descargas (t = +2.5; sin parear: 25s/48k tiene 3 sorteos y 10s/48k 3, y no comparten ninguno)
+
+### jugado 10 s · rastro puerta
+- **horizonte a 10 s**: 10 s / 24k → 10 s / 48k · -18.5 → -33.0 = -14.5 ± 6.0 descargas (t = -2.4; pareado por sorteo: s41 · s43 · s47)
+- **horizonte a 25 s**: 25 s / 24k → 25 s / 48k · -3.7 → +8.6 = +12.2 ± 44.1 descargas (t = +0.3; pareado por sorteo: s7 · s11 · s13)
+- **precio a 24k**: 10 s / 24k → 25 s / 24k · -18.5 → -3.7 = +14.9 ± 20.2 descargas (t = +0.7; sin parear: 25s/24k tiene 3 sorteos y 10s/24k 3, y no comparten ninguno)
+- **precio a 48k**: 10 s / 48k → 25 s / 48k · -33.0 → +8.6 = +41.6 ± 28.4 descargas (t = +1.5; sin parear: 25s/48k tiene 3 sorteos y 10s/48k 3, y no comparten ninguno)
+
+### jugado 25 s · rastro fijo
+- **horizonte a 10 s**: 10 s / 24k → 10 s / 48k · -14.8 → -34.9 = -20.1 ± 5.2 descargas (t = -3.9; pareado por sorteo: s41 · s43 · s47)
+- **horizonte a 25 s**: 25 s / 24k → 25 s / 48k · -1.9 → +3.1 = +5.0 ± 45.2 descargas (t = +0.1; pareado por sorteo: s7 · s11 · s13)
+- **precio a 24k**: 10 s / 24k → 25 s / 24k · -14.8 → -1.9 = +12.9 ± 21.5 descargas (t = +0.6; sin parear: 25s/24k tiene 3 sorteos y 10s/24k 3, y no comparten ninguno)
+- **precio a 48k**: 10 s / 48k → 25 s / 48k · -34.9 → +3.1 = +38.0 ± 32.2 descargas (t = +1.2; sin parear: 25s/48k tiene 3 sorteos y 10s/48k 3, y no comparten ninguno)
+
+### jugado 25 s · rastro puerta
+- **horizonte a 10 s**: 10 s / 24k → 10 s / 48k · -22.5 → -42.0 = -19.5 ± 13.8 descargas (t = -1.4; pareado por sorteo: s41 · s43 · s47)
+- **horizonte a 25 s**: 25 s / 24k → 25 s / 48k · -0.1 → +24.8 = +25.0 ± 55.7 descargas (t = +0.4; pareado por sorteo: s7 · s11 · s13)
+- **precio a 24k**: 10 s / 24k → 25 s / 24k · -22.5 → -0.1 = +22.4 ± 20.9 descargas (t = +1.1; sin parear: 25s/24k tiene 3 sorteos y 10s/24k 3, y no comparten ninguno)
+- **precio a 48k**: 10 s / 48k → 25 s / 48k · -42.0 → +24.8 = +66.8 ± 40.5 descargas (t = +1.6; sin parear: 25s/48k tiene 3 sorteos y 10s/48k 3, y no comparten ninguno)
+
+## Reparto del castigo entre las cuatro casillas
+
+El castigo de referencia es el de la casilla donde la puerta pierde: 10 s de entrenamiento y 24 000 ticks de selección. Se descompone en el salto de HORIZONTE con el precio quieto, el salto de PRECIO con el horizonte corto, y lo que queda —la interacción— cuando se mueven los dos a la vez. Aditivo = las dos causas se suman sin tocarse.
+
+### jugado 10 s · rastro fijo
+
+- castigo base (10 s / 24k): **-17.7**
+- horizonte ×2 con el precio quieto: **-18.1**
+- precio 10 s → 25 s con el horizonte corto: **+4.3**
+- celda 25 s / 48k: **-0.8** · predicción aditiva -31.5 ⇒ interacción **+30.6**
+
+### jugado 10 s · rastro puerta
+
+- castigo base (10 s / 24k): **-18.5**
+- horizonte ×2 con el precio quieto: **-14.5**
+- precio 10 s → 25 s con el horizonte corto: **+14.9**
+- celda 25 s / 48k: **+8.6** · predicción aditiva -18.1 ⇒ interacción **+26.7**
+
+### jugado 25 s · rastro fijo
+
+- castigo base (10 s / 24k): **-14.8**
+- horizonte ×2 con el precio quieto: **-20.1**
+- precio 10 s → 25 s con el horizonte corto: **+12.9**
+- celda 25 s / 48k: **+3.1** · predicción aditiva -22.0 ⇒ interacción **+25.1**
+
+### jugado 25 s · rastro puerta
+
+- castigo base (10 s / 24k): **-22.5**
+- horizonte ×2 con el precio quieto: **-19.5**
+- precio 10 s → 25 s con el horizonte corto: **+22.4**
+- celda 25 s / 48k: **+24.8** · predicción aditiva -19.6 ⇒ interacción **+44.4**
+
+## Cómo se lee
+
+- si el salto de horizonte es parecido a 10 s y a 25 s, el horizonte cobra un peaje que no depende del precio, y el reparto es «nivel del precio + peaje del horizonte»;
+- si a 25 s el horizonte no mueve nada, las dos causas no son separables: el horizonte sólo muerde donde el depósito es barato;
+- una interacción grande y del mismo signo que los dos saltos significa que el 2×2 no se reparte en dos sumandos: hay que leerlo casilla a casilla.
+
+Estas cifras todavía NO las deriva `scripts/partida-figures.py` (cubre el eje del precio de F11h): lo que el documento afirme de ellas hay que añadirlo al derivador y al guardarraíl antes de dar la sección por comprobada.
