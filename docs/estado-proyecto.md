@@ -839,64 +839,59 @@ cargara un pool entrenado a 25 s —entonces el precio sería la condición de E
 pool y no un impuesto a un reflejo que no decide—, o una glándula bastante más
 holgada que dejara de negar el 88 % sin borrar el rastro.
 
-<!-- F11l: esqueleto pendiente de reparto. Al llegar el volcado, rellenar la tabla, las cuatro
-     viñetas y el veredicto, dar de alta las claves en scripts/partida-figures.py y en
-     scripts/check-doc-figures.sh, y sólo entonces quitar este comentario. -->
+**F11l — el 2×2 completo (2026-10-29): a 25 s el horizonte deja de cobrar, y el
+castigo no se reparte en dos sumandos.** F11j dobló el horizonte de selección
+SÓLO a 10 s —donde la puerta pierde— y encontró que el castigo crece: con eso el
+horizonte quedaba descartado como causa a ese precio, pero no decía qué hace
+cuando el depósito es holgado. Ésta es la casilla que faltaba para poblar las
+cuatro del 2×2 (precio de ENTRENAMIENTO × horizonte de SELECCIÓN). Se entrena con
+la misma receta de búsqueda (`GLAND=25 REFILL=6 TICKS=48000 ARMS=red|fijo
+SEED=… SUFFIX=p25h2g…|p25h2s… scripts/run-gland-200.sh`; dos tandas de tres
+—10:43:43→16:11:26 y 16:11:26→21:37:04—, 19 662 / 19 617 / 19 538 s y 19 454 /
+19 536 / 19 536 s, las seis con EXIT=0) y con las semillas de GA 7/11/13, no las
+41/43/47 de F11j: el eje que esta celda tiene que dejar pareado es el HORIZONTE a
+25 s, y las tiradas de 24 000 a ese precio ya existen con esas tres en F11g, así
+que el salto se lee sorteo a sorteo —el de precio, en cambio, queda sin parear en
+las dos filas—. Los seis pools nuevos se juegan con las 24 semillas de partida de
+siempre —6 pools × 2 precios × 2 rastros × 24 = 576 partidas—
+(`artifacts/p25h2-bench-run.sh`), y las otras tres casillas no se repiten: se leen
+de sus volcados, 10 s · 24k de F11i, 10 s · 48k de F11j y 25 s · 24k de F11g.
 
-**F11l — el 2×2 completo, precio × horizonte (2026-10-29, campaña en curso):
-pendiente de reparto.** F11j dobló el horizonte de selección SÓLO a 10 s —donde
-la puerta pierde— y encontró que el castigo crece; con eso el horizonte queda
-descartado como causa a ese precio, pero no dice qué hace cuando el precio es
-holgado. Si a 25 s doblar la ventana cuesta del orden de lo que costó en aquel
-control, el horizonte es ADITIVO —un peaje fijo por mirar poco, que se suma al
-nivel del precio— y el reparto del castigo entre las dos
-causas queda cerrado; si no cuesta nada, las dos causas no son separables y el
-horizonte sólo muerde donde el depósito es barato. Ésta es la casilla que falta
-para tener las cuatro del 2×2 (precio de entrenamiento × horizonte de
-selección) con todas sus celdas pobladas, y se entrena con la misma receta de
-búsqueda que el resto del eje (`GLAND=25 REFILL=6 TICKS=48000`; semillas de GA
-7/11/13, las de F11g, para leer el salto de horizonte sorteo a sorteo y no el de
-precio, que queda sin parear en las dos filas de 48 000) en las dos variantes
-del depósito y en dos tandas de tres (`artifacts/p25h2-driver.sh`).
-
-Las otras tres casillas no se repiten: se leen de sus volcados —10 s · 24k de
-F11i, 10 s · 48k de F11j y 25 s · 24k de F11g— y sólo los dos brazos nuevos se
-juegan con las 24 semillas de partida de siempre (6 pools × 2 precios × 2
-rastros × 24 = 576 partidas, `artifacts/p25h2-bench-run.sh`, que se niega a
-repartir si falta una tirada).
-
-| entrenado | horizonte | jugado con puerta | jugado con reflejo | efecto | en relativo |
+| precio entrenado | horizonte | con puerta | con reflejo | efecto | en relativo |
 |---|---|---|---|---|---|
-| 10 s | 24k | — (F11i) | — (F11i) | — | — |
-| 10 s | 48k | — (F11j) | — (F11j) | — | — |
-| 25 s | 24k | — (F11g) | — (F11g) | — | — |
-| 25 s | 48k | **pendiente** | **pendiente** | **pendiente** | **pendiente** |
+| 10 s | 24k | 149,6 | 167,3 | −17,7 | −10,6 % |
+| 10 s | 48k | 197,6 | 233,4 | −35,8 | −15,3 % |
+| 25 s | 24k | 150,4 | 163,7 | −13,4 | −8,2 % |
+| 25 s | 48k | 201,2 | 202,1 | **−0,8** | −0,4 % |
 
-- **(pendiente) el salto de horizonte a 25 s, pareado por sorteo de GA**: signo,
-tamaño y t del cambio del efecto al doblar la ventana, en las dos recetas, con
-los tres deltas individuales a la vista —lo que hizo concluyente el control de
-10 s no fue la media sino que los tres sorteos se movieran igual—.
-- **(pendiente) el relativo**: el nivel absoluto no es comparable entre
-horizontes (a 48 000 ticks la partida del fitness dura el doble y el brazo de
-referencia también sube), así que la lectura va como porcentaje de su brazo.
-- **(pendiente) la dispersión entre tiradas**: rango de la celda nueva por
-sorteo, para decir si el efecto medido es mayor o menor que lo que mueve el
-sorteo.
-- **(pendiente) la lectura**: aditivo o no separable, y qué queda abierto en
-cualquiera de los dos casos.
+La tabla se juega a 10 s de glándula y con el rastro fijo, que es la condición
+con la que F11j publicó sus dos filas de 10 s —las de arriba son esas mismas
+cifras, recalculadas desde los mismos pools—; las otras tres formas de jugar
+(10 s con la puerta, 25 s con las dos) están en el volcado y no cambian ninguna
+lectura. El efecto es la media pareada por sorteo de GA —la misma tirada
+entrenada de las dos maneras y jugada con el mismo rastro, con las mismas semillas
+de partida— y el relativo la lleva a porcentaje de su brazo de referencia; por eso
+puede diferir en una décima de la resta de las dos columnas redondeadas.
 
-Veredicto: pendiente. Se escribe cuando `artifacts/pretrain-partida-200-p25h2-veredicto.txt`
-exista; hasta entonces no hay nada que redactar, porque un reparto sobre
-volcados a medias es peor que ninguno y el guion del bench lo dice en su log en
-vez de escribirlo.
+- **El horizonte cobra a 10 s y no cobra a 25 s.** Doblarlo mueve el efecto −18,1 ± 1,1 descargas a 10 s (t = −17,0) y +12,5 ± 31,4 a 25 s (t = +0,4). El segundo no es un cero medido con precisión: es un cero en el que los tres sorteos se van cada uno por su lado (+6,4 / +69,7 / −38,6 al doblar la ventana), que es justo lo que el control de 10 s no tenía —allí los tres se movían juntos—.
+- **La celda nueva cierra el 2×2, pero el ruido entre sorteos es mayor que el efecto.** Su efecto es el 0,4 % de su referencia, y sorteo a sorteo va de −18,0 a +19,0 entre sorteos: lo que la celda dice es «a 25 s × 48k no se mide castigo», no «la puerta gana».
+- **El reparto no cierra por suma.** Descompuesto sobre la casilla que peor le sienta a la puerta —base −17,7, horizonte ×2 a 10 s −18,1, precio a 24k +4,3, predicción aditiva −31,5 y celda real −0,8: interacción +30,6—, lo que sobra no es un residuo: la interacción es del tamaño de los dos sumandos juntos.
+- **Y no es un accidente de la condición de juego:** la interacción va de +25,1 a +44,4 descargas en las cuatro formas de jugar, siempre del mismo signo y siempre por encima del castigo que se quería repartir.
+- **Lo que la casilla cierra** es el reparto que F11j dejó abierto: el horizonte no es un peaje fijo que se sume al precio —a 25 s no cobra—, y el castigo grande vive en el depósito barato. Con el precio holgado queda en −13,4 a 24 000 ticks y desaparece a 48 000 (−0,8), que es la condición de despliegue que F11g y F11i ya pedían por otro camino.
 
-Cómo se cierra: el driver escribe `hecho` al acabar las dos tandas, el watcher
-del bench juega las 576 partidas y reparte las cuatro casillas con
-`scripts/gland-matrix-compare.py`; con ese volcado se rellenan la tabla, las
-cuatro viñetas y el veredicto, se dan de alta las claves nuevas en
-`scripts/partida-figures.py` y en `scripts/check-doc-figures.sh` —para que el
-guardarraíl exija cada cifra en cada push, como en F11j/F11k— y se quita el
-comentario que marca este esqueleto.
+Veredicto: el 2×2 queda **completo y no separable**. A 10 s doblar la ventana de
+selección agranda el castigo (−18,1 ± 1,1, t = −17,0); a 25 s no lo mueve
+(+12,5 ± 31,4, t = +0,4), y la interacción (+30,6, y de +25,1 a +44,4 en las
+cuatro formas de jugar) se come la predicción aditiva, así que las dos causas no
+se reparten en dos sumandos y hay que leer el 2×2 casilla a casilla. Lo que NO
+cierra: con tres sorteos por casilla la interacción no tiene error típico propio;
+2× sigue siendo una manipulación y no el horizonte de la partida (216 000 ticks,
+nueve veces la ventana de 24 000); y esta dispersión no distingue entre «a 25 s el
+horizonte es indiferente» y «esconde un efecto menor». Coste: seis tiradas de 200
+generaciones en dos tandas de tres —10 h 53 m de pared, 19 454–19 662 s por
+tirada— y 576 partidas del bench (23 min); las cifras de la sección las deriva
+`scripts/partida-figures.py` de los volcados del 2×2, así que el guardarraíl las
+exige en cada push.
 
 ## Lo que ya funciona (verificado, no prometido)
 
