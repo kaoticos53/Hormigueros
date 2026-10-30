@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-25 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 787/787 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 788/788 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -1018,7 +1018,7 @@ a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
 NEAT canónica. <!-- cifras-historicas: el cierre de v0.8.0 (run #37). -->Aquel
-cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **787/787
+cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **788/788
 tests** en Windows y verdes en Linux en CI en cada push, igual que los 6 scripts
 de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
@@ -1712,12 +1712,58 @@ No es supervivencia al borde: con el pool de fábrica las **40 adultas** se
 mantienen todo el horizonte y el stock oscila **55–150** en vez de caer a cero
 (a los 33 720 ticks de antes no quedaba ni una hormiga).
 
-**Lo que NO se tocó, a propósito.** La puesta repone a `λ_death = 1/240 s`, que
-es **3× la mortalidad real** de una obrera (vida 720 s): el excedente se apila
-como pupas que no encuentran vacante (610 pupas con las 40 adultas llenas a los
-200 000 ticks). Alinearlo con la vida bajó ese desperdicio 4× (156 pupas) pero
-**no movió la supervivencia** en ninguna de las tiradas, y sí mueve los 6 pines
-del mundo clásico; queda anotado como deuda medida, no como arreglo.
+**La segunda mitad: la puesta apilaba pupas que nunca eclosionaban.** Con la
+ronda ya sostenible, el excedente seguía a la vista en el HUD: **479 pupas en la
+colonia 0 y 943 en la 1** al cerrar la partida, con las 40 adultas llenas y
+**3 322 huevos puestos para 789 eclosiones**. La causa no era la comida:
+
+- **La reposición iba a `DeathRate = 1/240 s`, 3,4× la mortalidad real.** Una
+  obrera vive `BaseLifespan · (0,7 + 0,6·vigor)` —media **806 s**— y las bajas
+  medidas en la ronda (695–729 en 7 200 s para 80 obreras) dan **0,0012 s⁻¹ =
+  1/806**, justo `1/(720·1,12)`. La constante del catálogo es del mundo clásico.
+- **El término de déficit no descontaba la cría en vuelo.** `(Max − A)·KRepl`
+  empujaba a llenar el cupo sin mirar el huevo, la larva y la pupa que ya iban de
+  camino: con los 45 s de retardo de huevo→larva→pupa sobrellenaba, y las pupas
+  —que no mueren de viejas— se quedaban esperando vacante para siempre. La reina
+  ponía un **60 % por encima de las bajas** y un **31 % de la cría moría de
+  inanación como larva**: comida pagada dos veces.
+
+**Lo que se cambió** (`ColonyController` + `SpeciesDescriptor`; sólo la ronda, el
+mundo clásico conserva su término y su embudo, así que sus 6 pines no se mueven):
+
+- **`RealDeathRate = 1/(BaseLifespan·1,12)`** en el término de reposición. El
+  1,12 no es un ajuste: sale de `InitFromVigor` (0,7 + 0,6·0,7 con `g0` uniforme).
+- **El déficit descuenta el embudo**: `vacantes = Max − adultas − (huevos +
+  larvas + pupas)`.
+- **La puesta se para cuando el embudo cubre lo que crían las nodrizas**
+  (`adultas · NurseShare`, la misma cuenta con la que se paga la alimentación
+  larval — sin constante nueva).
+
+**Medido** (216 000 ticks, grid 96, laberinto + reclutamiento, pareja
+Lasius+Eciton con `warm-v2`, semillas 42 y 7):
+
+| | antes | después |
+|---|---|---|
+| pupas al cerrar (c0 / c1, semilla 42) | 479 / 943 | **3 / 3** |
+| pico de pupas | 479 / 943 | **6 / 6** |
+| huevos puestos en la ronda | 3 322 | **765** |
+| eclosiones | 789 | **738** |
+| adultas al cerrar | 40 / 40 | **40 / 40** |
+| descargas (s42 · s7) | 859 · 658 | 755 · 737 |
+
+El gasto en huevos cae **4,3×** y las eclosiones se mantienen (789 → 738): la
+colonia produce los mismos relevos sin criar un 70 % de cría condenada. En
+descargas el efecto cambia de signo entre las dos semillas (859→755 y 658→737),
+así que con dos semillas no se lee ni como mejora ni como pérdida — lo que sí
+cierra es la fuga: **el pico de pupas pasa de 943 a 6**.
+
+Reproducible con la partida del lanzador en el CLI (la línea `colonies` del
+stream trae `pupae`, `larvae` y `eggs` por colonia): `--mode game --seed 42 --grid
+96 --ticks 216000 --frame-every 600 --maze --recruitment --colonies 2 --species
+lasius,eciton --seed-pool tests/fixtures/warm-v2.antgenome`. Un guard más duro se
+probó y se **descartó por medido**: cerrar la puesta con el embudo lleno apaga el
+relevo con las 40 adultas y en la semilla 7 la colonia se apagaba (0 adultas,
+stock 0).
 
 ## Riesgos abiertos
 

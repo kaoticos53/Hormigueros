@@ -136,6 +136,18 @@ colonia que está viva. Los pines que lo impiden volver están en
 `RecruitmentTests` (`Cumulos_SeRepartenPorColonia_NoComoCuotaUnica` y
 `Cumulos_CaenDentroDelRadioQueLaColoniaPatrulla`).
 
+Al mirar la ronda con el HUD apareció la otra mitad del problema: la puesta
+apilaba **479 y 943 pupas** que nunca eclosionaban —con las 40 adultas llenas y
+**3 322 huevos para 789 eclosiones**— porque reponía a `DeathRate` (1/240 s, 3,4×
+la mortalidad real de una obrera, que vive 806 s de media) y el término de déficit
+no descontaba la cría en vuelo. Con `RealDeathRate`, el déficit que cuenta el
+embudo y la puesta acotada por las nodrizas (`adultas · NurseShare`), el **pico de
+pupas baja a 6**, los huevos puestos a **765** y las eclosiones se mantienen
+(**738**), con las 40 adultas igual. El mundo clásico conserva sus constantes y
+sus 6 pines no se mueven. Tabla completa en
+[`estado-proyecto.md`](estado-proyecto.md); el pin es
+`RoundSurvivalTests.Puesta_ConTropaLlena_NoApilaPupasSinVacante`.
+
 Partida completa (216 000 ticks, `--maze --export`): termina en 15,6 s de CPU,
 escribe `artifacts/evolved-42.antgenome` (53 KB, 61 genomas en la élite de la
 colonia 0) y la línea `end` declara `"exported":true`.

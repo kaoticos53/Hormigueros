@@ -244,6 +244,94 @@ namespace AntSim.Core.Tests
                 $"el mundo clásico debía pagar la ración entera y pagó {eaten2:0.0000} de {allowance2:0.0000}");
         }
 
+        /// <summary>
+        /// LA PUESTA NO APILA CRÍA QUE NADIE VA A CRIAR. Con la tropa llena y la
+        /// cola de pupas sin vacante (no mueren de viejas), la reina reponía a
+        /// `DeathRate` —1/240 s, 3,4× la mortalidad real de una obrera, que vive
+        /// `BaseLifespan · 0,7+0,6·vigor`— y encima empujaba el déficit sin descontar
+        /// la cría en vuelo. La partida de dos colonias cerraba con 479 y 943 pupas
+        /// y 3 322 huevos puestos para 789 eclosiones (un 31 % de la cría moría de
+        /// inanación como larva: comida pagada dos veces). Ahora la puesta se para
+        /// cuando el embudo cubre lo que las nodrizas sostienen —la misma cuenta con
+        /// la que se paga la alimentación larval— y repone a la mortalidad REAL.
+        ///
+        /// El mundo clásico conserva su término y su embudo: es su economía cerrada,
+        /// con seis pines de hash fijados.
+        /// </summary>
+        [Fact]
+        public void Puesta_ConTropaLlena_NoApilaPupasSinVacante()
+        {
+            int capacidad = (int)(ColonyController.MaxAdultsPerColony * ColonyController.NurseShare);
+            Assert.True(capacidad > 0, "la capacidad del embudo salió 0");
+
+            // — la ronda —
+            var sim = MazeWorld();
+            var ronda = sim.Colonies[0];
+            LlenarTropa(ronda);
+            ronda.Stock = ronda.StockMax;
+            ronda.ConsumeEma = 1f;
+
+            int puestas = 0, picoRonda = 0;
+            for (int i = 0; i < 18_000; i++) // 600 s
+            {
+                puestas += Paso(ronda, sim.Tick);
+                int cria = ronda.Eggs.Count + ronda.Larvae.Count + ronda.Pupae.Count;
+                Assert.True(cria <= capacidad,
+                    $"la ronda acumuló {cria} crías con {ronda.AdultCountAlive} adultas: " +
+                    $"las nodrizas sostienen {capacidad}");
+                picoRonda = Math.Max(picoRonda, ronda.Pupae.Count);
+            }
+            Assert.True(puestas > 0, "la ronda dejó de poner: se queda sin relevo");
+            Assert.True(picoRonda <= capacidad, $"pico de {picoRonda} pupas");
+
+            // — el mundo clásico, con el mismo estado: conserva su término —
+            var clasico = new WorldSim(42UL, Grid, colonyCount: 1, maze: true);
+            var cc = clasico.Colonies[0];
+            LlenarTropa(cc);
+            cc.Stock = cc.StockMax;
+            cc.ConsumeEma = 1f;
+
+            int puestasClasico = 0, picoClasico = 0;
+            for (int i = 0; i < 18_000; i++)
+            {
+                puestasClasico += Paso(cc, clasico.Tick);
+                picoClasico = Math.Max(picoClasico, cc.Pupae.Count);
+            }
+            Assert.True(puestasClasico > puestas * 3,
+                $"el clásico debía reponer a su `DeathRate` y puso {puestasClasico} contra {puestas}");
+            Assert.True(picoClasico > capacidad,
+                $"el clásico conserva su embudo y su pico fue {picoClasico} (capacidad de la ronda {capacidad})");
+        }
+
+        /// <summary>Tropa a tope del cupo duro de la colonia.</summary>
+        private static void LlenarTropa(Colony c)
+        {
+            c.Eggs.Clear(); c.Larvae.Clear(); c.Pupae.Clear();
+            while (c.AdultCountAlive < ColonyController.MaxAdultsPerColony)
+            {
+                var a = new Ant
+                {
+                    Id = (uint)(900 + c.AdultCountAlive),
+                    ColonyId = c.Id,
+                    X = c.NestX,
+                    Y = c.NestY,
+                };
+                a.InitFromVigor(c.Species.EnergyCapacity, c.Species.BaseLifespan, 0.8f);
+                c.Adults.Add(a);
+            }
+        }
+
+        /// <summary>Un paso del controlador; devuelve cuántos huevos puso.</summary>
+        private static int Paso(Colony c, ulong tick)
+        {
+            var events = new List<SimEvent>();
+            ColonyController.Step(c, SimConstants.FixedDtSeconds, tick, events, ref NextId());
+            int puestas = 0;
+            foreach (var e in events)
+                if (e.Kind == SimEventKind.EggLaid) puestas++;
+            return puestas;
+        }
+
         /// <summary>La pared no se atraviesa: la hormiga que empuja de frente se
         /// apoya y gira. Antes de esto se quedaba empujando el muro para siempre
         /// (55 inmóviles &gt;3 s en la partida canónica, con el bocado en la boca).</summary>
