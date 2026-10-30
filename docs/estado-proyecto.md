@@ -1731,13 +1731,29 @@ embudo, así que sus 6 pines no se mueven):
   (`adultas · NurseShare`, la misma cuenta con la que se paga la alimentación
   larval — sin constante nueva).
 
-**Lo que se probó y NO entró.** Reponer a la mortalidad real de la obrera
-(`1/(BaseLifespan·1,12)` = 1/806 s, contra el 1/240 de `DeathRate`) parecía la otra
-mitad del arreglo. Medido por separado, no sostiene nada: sola no rescata ninguna
-semilla (en la 11 la colonia 0 se extinguía igual), deja la cola creciendo (93–149
-pupas) porque el déficit sigue sin mirar la cría en vuelo, y **cuesta descargas**
-(1 595 → 1 432 en la semilla 42). Con el embudo solo, las tres semillas viven y
-cada columna mejora, así que se retiró.
+**Qué mitad rescata la semilla 11, y a qué precio.** Cada brazo se compiló por
+separado sobre el mismo árbol y se midió la partida de la semilla 11 entera:
+
+| variante | pico pupas c0/c1 | huevos | eclosiones | descargas | adultas al cerrar |
+|---|---|---|---|---|---|
+| puesta vieja | 62/239 | 1 036 | 315 | 334 | **0 / 0** |
+| sólo mortalidad real | 36/93 | 1 435 | 620 | 739 | **0** / 40 |
+| **sólo embudo** | **6/6** | 847 | 777 | 1 364 | **40 / 40** |
+
+El rescate es del **embudo**: es la única variante que mantiene vivas las dos
+colonias. Su precio es el techo de cría en vuelo —`adultas · NurseShare` = **6**
+con la tropa llena, justo el pico medido— y no se le encontró coste en las tres
+semillas: todas cierran con la tropa llena y stock 117–150. El único coste que sí
+se midió alrededor de esta palanca es el del guard más duro que se descartó antes
+de escribirlo así: apagar la puesta con el embudo lleno mataba la semilla 7.
+
+Reponer a la mortalidad real de la obrera (`1/(BaseLifespan·1,12)` = 1/806 s,
+contra el 1/240 de `DeathRate`) parecía la otra mitad. Medido igual, **no
+aporta nada y cuesta**: sola no rescata ninguna semilla (en la 11 la colonia 0 se
+extinguía igual), deja la cola creciendo (93–149 pupas) porque el déficit sigue sin
+mirar la cría en vuelo, y **quita 163 descargas** en la semilla 42 (1 595 → 1 432)
+además de eclosionar 42 menos. Con el embudo solo las tres semillas viven y cada
+columna mejora, así que se retiró.
 
 **Medido** (216 000 ticks, grid 96, laberinto + reclutamiento, pareja
 Lasius+Eciton con `warm-v2`, semillas 42, 7 y 11):
