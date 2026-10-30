@@ -1,0 +1,60 @@
+# F11n — el enfrentamiento que faltaba: el par a 25 s contra el juego de fábrica
+# la partida del lanzador: grid 96, laberinto, reclutamiento, 216000 ticks; 24 semillas de partida
+# semillas: 42,7,99,1234,3,11,555,2024,5,13,17,23,64,128,256,512,777,888,999,1500,2025,31337,60013,98765
+# el par candidato promedia las SIETE tiradas de cada receta por semilla de partida, así que el pareado es (receta − juego de hoy) y no (sorteo afortunado − juego de hoy)
+
+| brazo | pool | puerta | glándula | descargas (media ± σ) | total | semillas |
+|---|---|---|---|---|---|---|
+| fabrica·reflejo·0s | pretrain-maze-los3.antgenome | no | 0 s | 108.4 ± 31.4 | 2601 | 24/24 |
+| fabrica·puerta·0s | pretrain-maze-los3.antgenome | sí | 0 s | 109.5 ± 31.4 | 2629 | 24/24 |
+| fabrica·reflejo·25s | pretrain-maze-los3.antgenome | no | 25 s | 113.9 ± 32.6 | 2734 | 24/24 |
+| fabrica·puerta·25s | pretrain-maze-los3.antgenome | sí | 25 s | 111.1 ± 32.3 | 2667 | 24/24 |
+| puerta-s7·puerta·25s | pretrain-partida-200-gl-red.antgenome | sí | 25 s | 180.4 ± 61.4 | 4330 | 24/24 |
+| puerta-s11·puerta·25s | pretrain-partida-200-p25g11-red.antgenome | sí | 25 s | 155.0 ± 45.3 | 3721 | 24/24 |
+| puerta-s13·puerta·25s | pretrain-partida-200-p25g13-red.antgenome | sí | 25 s | 171.7 ± 56.1 | 4121 | 24/24 |
+| puerta-s23·puerta·25s | pretrain-partida-200-p25g23-red.antgenome | sí | 25 s | 163.4 ± 45.3 | 3921 | 24/24 |
+| puerta-s29·puerta·25s | pretrain-partida-200-p25g29-red.antgenome | sí | 25 s | 159.1 ± 58.3 | 3819 | 24/24 |
+| puerta-s31·puerta·25s | pretrain-partida-200-p25g31-red.antgenome | sí | 25 s | 163.3 ± 46.4 | 3919 | 24/24 |
+| puerta-s37·puerta·25s | pretrain-partida-200-p25g37-red.antgenome | sí | 25 s | 170.9 ± 55.4 | 4102 | 24/24 |
+| puerta-s7·reflejo·25s | pretrain-partida-200-gl-red.antgenome | no | 25 s | 167.3 ± 51.1 | 4016 | 24/24 |
+| puerta-s11·reflejo·25s | pretrain-partida-200-p25g11-red.antgenome | no | 25 s | 149.7 ± 48.1 | 3592 | 24/24 |
+| puerta-s13·reflejo·25s | pretrain-partida-200-p25g13-red.antgenome | no | 25 s | 169.1 ± 60.6 | 4059 | 24/24 |
+| puerta-s23·reflejo·25s | pretrain-partida-200-p25g23-red.antgenome | no | 25 s | 164.2 ± 52.8 | 3941 | 24/24 |
+| puerta-s29·reflejo·25s | pretrain-partida-200-p25g29-red.antgenome | no | 25 s | 146.7 ± 45.9 | 3520 | 24/24 |
+| puerta-s31·reflejo·25s | pretrain-partida-200-p25g31-red.antgenome | no | 25 s | 176.9 ± 62.3 | 4245 | 24/24 |
+| puerta-s37·reflejo·25s | pretrain-partida-200-p25g37-red.antgenome | no | 25 s | 157.9 ± 46.3 | 3790 | 24/24 |
+| reflejo-s7·reflejo·25s | pretrain-partida-200-gl-fijo.antgenome | no | 25 s | 157.6 ± 49.3 | 3782 | 24/24 |
+| reflejo-s11·reflejo·25s | pretrain-partida-200-p25s11-fijo.antgenome | no | 25 s | 185.0 ± 64.1 | 4440 | 24/24 |
+| reflejo-s13·reflejo·25s | pretrain-partida-200-p25s13-fijo.antgenome | no | 25 s | 149.2 ± 51.0 | 3582 | 24/24 |
+| reflejo-s23·reflejo·25s | pretrain-partida-200-p25s23-fijo.antgenome | no | 25 s | 121.5 ± 44.1 | 2916 | 24/24 |
+| reflejo-s29·reflejo·25s | pretrain-partida-200-p25s29-fijo.antgenome | no | 25 s | 158.1 ± 49.5 | 3794 | 24/24 |
+| reflejo-s31·reflejo·25s | pretrain-partida-200-p25s31-fijo.antgenome | no | 25 s | 160.2 ± 53.5 | 3844 | 24/24 |
+| reflejo-s37·reflejo·25s | pretrain-partida-200-p25s37-fijo.antgenome | no | 25 s | 157.7 ± 49.1 | 3784 | 24/24 |
+| reflejo-s7·puerta·25s | pretrain-partida-200-gl-fijo.antgenome | sí | 25 s | 163.8 ± 57.1 | 3932 | 24/24 |
+| reflejo-s11·puerta·25s | pretrain-partida-200-p25s11-fijo.antgenome | sí | 25 s | 193.5 ± 81.9 | 4645 | 24/24 |
+| reflejo-s13·puerta·25s | pretrain-partida-200-p25s13-fijo.antgenome | sí | 25 s | 150.2 ± 51.0 | 3604 | 24/24 |
+| reflejo-s23·puerta·25s | pretrain-partida-200-p25s23-fijo.antgenome | sí | 25 s | 127.5 ± 48.5 | 3060 | 24/24 |
+| reflejo-s29·puerta·25s | pretrain-partida-200-p25s29-fijo.antgenome | sí | 25 s | 168.0 ± 60.8 | 4032 | 24/24 |
+| reflejo-s31·puerta·25s | pretrain-partida-200-p25s31-fijo.antgenome | sí | 25 s | 172.1 ± 61.1 | 4131 | 24/24 |
+| reflejo-s37·puerta·25s | pretrain-partida-200-p25s37-fijo.antgenome | sí | 25 s | 160.0 ± 60.1 | 3840 | 24/24 |
+
+## Los tres pareados que deciden (por semilla de partida)
+
+- **el par candidato − el juego de hoy**: +57.9 ± 9.6 descargas (t = +6.0; gana en 20/24 semillas)
+- **la receta del reflejo a 25 s − el juego de hoy**: +47.2 ± 9.0 (t = +5.2; gana en 20/24 semillas)
+- **el par candidato − la receta del reflejo a 25 s**: +10.7 ± 3.4 (t = +3.2; gana en 19/24 semillas; las dos recetas con siete tiradas)
+
+## Lo que pone cada pieza
+
+- **la puerta dentro de su pool a 25 s**: +4.6 ± 2.8 descargas al promediar las siete tiradas (rango por tirada -13.6 a +13.1)
+- **la puerta sola, con la glándula apagada (fábrica)**: +1.2 ± 3.2 descargas (t = +0.4; 13/24 semillas)
+- **el precio solo, con el reflejo (fábrica)**: +5.5 ± 4.6 descargas (t = +1.2; 16/24 semillas)
+- **el par sobre el pool de fábrica**: +2.8 ± 5.0 descargas (t = +0.6; 13/24 semillas)
+
+## El criterio de F11n, aplicado
+
+- semillas a favor del par: **20/24** (el criterio pide ≥16/24)
+- margen del par: **+57.9** descargas; dispersión entre tiradas de su receta: **8.6** (el criterio pide superarla)
+- dispersión entre tiradas de la receta del reflejo: **18.7**
+- **veredicto: SE ADOPTA** (las dos a 16/24)
+

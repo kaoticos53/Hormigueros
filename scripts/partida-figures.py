@@ -34,6 +34,13 @@ Y desde F11l, del mismo documento:
     sin cifra y se calculan aquí—, el reparto del castigo con su predicción aditiva y la
     interacción en las cuatro formas de jugar.
 
+Y desde F11n, del mismo documento:
+  · el enfrentamiento del lanzador —el par de la puerta a 25 s contra el juego de fábrica—: los
+    tres pareados con su t y sus semillas, la dispersión de cada receta, lo que pone cada pieza,
+    el pedestal de fábrica que calibra el banco y la cuenta de brazos y de partidas. Este volcado
+    no comparte formato con los demás: escribe viñetas con el nombre en negrita y una tabla de
+    brazos, y se lee por el nombre de la viñeta, no por su posición.
+
 DOS CIFRAS QUE EL VOLCADO OBLIGÓ A CORREGIR EN EL DOCUMENTO, y que por eso están aquí escritas:
   · el relativo de la celda 25 s · puerta a 48k: con las medias redondeadas del volcado (205,8 y
     247,8) da −16,9 %, no el −17,0 % que salía de las medias sin redondear;
@@ -79,6 +86,8 @@ P10G4_VS_P107_FIJO = "artifacts/pretrain-partida-200-p10g4-vs-p107-fijo.txt"
 P10G4_VS_P107_PUERTA = "artifacts/pretrain-partida-200-p10g4-vs-p107-puerta.txt"
 P107_CHAMPION = "artifacts/pretrain-partida-200-p107-champion.txt"
 P25G7_CHAMPION = "artifacts/pretrain-partida-200-p25g7-champion.txt"
+# F11n: el enfrentamiento del lanzador, que no comparte formato con los de arriba.
+P10H2_DUEL = "artifacts/pretrain-partida-200-p10h2-duel.txt"
 
 # ── El signo y el guion DEL DOCUMENTO, no los del volcado ─────────────────────
 # Los volcados escriben el menos con guion ASCII (-6.7) y el rango con guion medio
@@ -87,6 +96,7 @@ P25G7_CHAMPION = "artifacts/pretrain-partida-200-p25g7-champion.txt"
 # 140 en la lista).
 MINUS = "\u2212"
 GUION = "\u2013"
+MIDOT = "\u00b7"  # el «·» con que el volcado del enfrentamiento separa brazo, pool y glándula
 
 
 def num(x: float, dec: int = 1) -> str:
@@ -713,6 +723,104 @@ def k_sin_precio_menos(raiz: Path) -> dict:
     return {"p": str(round((1 - g / s) * 100)), "a": miles(g, 1), "b": miles(s, 1)}
 
 
+# ── F11n: el enfrentamiento del lanzador (par a 25 s contra el juego de fábrica) ──
+# Este volcado es el único que escribe pareados como viñetas —«- **nombre**: cifra»— y los
+# brazos como filas de tabla, así que se lee por el NOMBRE de la viñeta y no por su posición:
+# reordenar el generador no mueve ninguna cifra, y cambiarle el nombre a una viñeta se declara
+# en vez de derivar otra cosa.
+RE_DUEL_VINETA = re.compile(r"^- \*\*(?P<n>[^*]+)\*\*: (?P<resto>.+)$")
+# El generador no es regular con la palabra «descargas»: unas viñetas la llevan y otras van de la
+# media al «(t = …)» directamente. Se acepta en las dos formas, y el «gana en» también es opcional
+# porque las viñetas de piezas dicen «(t = …; 13/24 semillas)».
+RE_DUEL_PAR = re.compile(
+    r"^(?P<m>[+-][\d.]+) ± (?P<se>[\d.]+) (?:descargas )?\(t = (?P<t>[+-][\d.]+); "
+    r"(?:gana en )?(?P<w>\d+)/(?P<n>\d+) semillas")
+RE_DUEL_DENTRO = re.compile(
+    r"^(?P<m>[+-][\d.]+) ± (?P<se>[\d.]+) descargas al promediar las siete tiradas "
+    r"\(rango por tirada (?P<lo>[+-][\d.]+) a (?P<hi>[+-][\d.]+)\)$")
+
+
+def duel_vineta(raiz: Path, nombre: str) -> str:
+    """Lo que sigue a los dos puntos en la viñeta que lleva ese nombre en negrita."""
+    for linea in leer(raiz, P10H2_DUEL):
+        m = RE_DUEL_VINETA.match(linea)
+        if m and m["n"].strip() == nombre:
+            return m["resto"].strip()
+    raise FaltaCifra(f"{P10H2_DUEL}: no hay viñeta «{nombre}»")
+
+
+def duel_pareado(raiz: Path, nombre: str) -> dict:
+    """Media, error típico, t y semillas a favor de un pareado del enfrentamiento."""
+    m = RE_DUEL_PAR.match(duel_vineta(raiz, nombre))
+    if not m:
+        raise FaltaCifra(f"{P10H2_DUEL}: la viñeta «{nombre}» no trae media ± se, t y semillas")
+    return {"m": num_mas(float(m["m"])), "se": num(float(m["se"])),
+            "t": num_mas(float(m["t"])), "w": m["w"], "n": m["n"]}
+
+
+def duel_dentro(raiz: Path) -> dict:
+    """La puerta dentro del pool que la entrenó: promediada sobre las siete tiradas, con su rango."""
+    m = RE_DUEL_DENTRO.match(duel_vineta(raiz, "la puerta dentro de su pool a 25 s"))
+    if not m:
+        raise FaltaCifra(f"{P10H2_DUEL}: la viñeta de la puerta dentro de su pool no trae su rango")
+    return {"m": num_mas(float(m["m"])), "se": num(float(m["se"])),
+            "lo": num(float(m["lo"])), "hi": num_mas(float(m["hi"]))}
+
+
+def duel_criterio(raiz: Path, nombre: str) -> str:
+    """Lo que sigue a los dos puntos en una viñeta del criterio (ahí el nombre NO va en negrita)."""
+    patron = re.compile(r"^- " + re.escape(nombre) + r": (?P<resto>.+)$")
+    for linea in leer(raiz, P10H2_DUEL):
+        m = patron.match(linea)
+        if m:
+            return m["resto"].strip()
+    raise FaltaCifra(f"{P10H2_DUEL}: no hay viñeta del criterio «{nombre}»")
+
+
+def duel_dispersion(raiz: Path) -> dict:
+    """La dispersión entre tiradas de cada receta, que el volcado publica al lado del margen."""
+    resto = duel_criterio(raiz, "margen del par")
+    m = re.search(r"dispersión entre tiradas de su receta: \*\*(?P<v>[\d.]+)\*\*", resto)
+    if not m:
+        raise FaltaCifra(f"{P10H2_DUEL}: el margen del par no trae la dispersión de su receta")
+    dr = duel_criterio(raiz, "dispersión entre tiradas de la receta del reflejo").strip("*")
+    try:
+        return {"d": num(float(m["v"])), "dr": num(float(dr))}
+    except ValueError as e:
+        raise FaltaCifra(f"{P10H2_DUEL}: la dispersión del reflejo no es un número ({dr!r})") from e
+
+
+def duel_brazo(raiz: Path, etiqueta: str) -> dict:
+    """Media y σ de un brazo de la tabla: el pedestal con el que se calibra el banco."""
+    for linea in leer(raiz, P10H2_DUEL):
+        if not linea.startswith("| "):
+            continue
+        celdas = [c.strip() for c in linea.strip().strip("|").split("|")]
+        if len(celdas) < 6 or celdas[0] != etiqueta:
+            continue
+        partes = celdas[4].split("±")
+        if len(partes) != 2:
+            raise FaltaCifra(f"{P10H2_DUEL}: la fila «{etiqueta}» no trae «media ± σ»")
+        return {"mean": num(float(partes[0].strip())), "sd": num(float(partes[1].strip()))}
+    raise FaltaCifra(f"{P10H2_DUEL}: no hay fila de brazo «{etiqueta}»")
+
+
+def duel_cuenta(raiz: Path) -> dict:
+    """Cuántas partidas sostienen el reparto: brazos de la tabla por semillas de la cabecera."""
+    brazos = semillas = 0
+    for linea in leer(raiz, P10H2_DUEL):
+        t = linea.strip()
+        if t.startswith("| ") and not set(t) <= set("|- "):
+            # La cabecera empieza por «brazo»; las filas de dato, por la etiqueta del brazo.
+            if t.strip("|").split("|")[0].strip() != "brazo":
+                brazos += 1
+        if t.startswith("# semillas: "):
+            semillas = len([s for s in t.split(":", 1)[1].split(",") if s.strip()])
+    if not brazos or not semillas:
+        raise FaltaCifra(f"{P10H2_DUEL}: no pude contar brazos ({brazos}) o semillas ({semillas})")
+    return {"brazos": str(brazos), "semillas": str(semillas), "partidas": str(brazos * semillas)}
+
+
 def _casilla_2x2(precio: int, horizonte: int) -> str:
     """Las fuentes de una casilla del 2×2: el volcado del reparto y sus dos campañas de réplicas."""
     return " + ".join((P25H2_VEREDICTO,) + CELDAS_2X2[(precio, horizonte)])
@@ -841,6 +949,31 @@ CIFRAS: list[tuple[str, str, str]] = [
     ("F11l interacciones en las cuatro formas de jugar", P25H2_VEREDICTO,
      "la interacción va de {a} a {b} descargas en las cuatro formas de jugar"),
     ("F11l dispersión de la celda nueva", _casilla_2x2(25, 48), "va de {lo} a {hi} entre sorteos"),
+
+    # ── F11n: el enfrentamiento del lanzador (par a 25 s contra el juego de hoy) ──
+    # Los pareados se citan con sus semillas porque son la mitad del criterio pre-registrado:
+    # sin ellas, la cifra no dice si se adoptó con margen o por un sorteo afortunado.
+    ("F11n · el par contra fábrica", P10H2_DUEL,
+     "el par a 25 s gana {m} ± {se} descargas al juego de hoy (t = {t}; {w}/{n} semillas)"),
+    ("F11n · la receta del reflejo contra fábrica", P10H2_DUEL,
+     "la receta del reflejo a 25 s gana {m} ± {se} (t = {t}; {w}/{n} semillas)"),
+    ("F11n · el par sobre su receta", P10H2_DUEL,
+     "el par le gana a su propia receta del reflejo {m} ± {se} descargas (t = {t}; {w}/{n} semillas)"),
+    ("F11n · la dispersión de cada receta", P10H2_DUEL,
+     "la dispersión entre tiradas es {d} en la receta del par y {dr} en la del reflejo"),
+    ("F11n · la puerta dentro de su pool", P10H2_DUEL,
+     "la puerta dentro del pool que la entrenó: {m} ± {se} descargas al promediar las siete "
+     "tiradas (rango por tirada {lo} a {hi})"),
+    ("F11n · la puerta sola", P10H2_DUEL,
+     "la puerta sola sobre el pool de fábrica: {m} ± {se} (t = {t}; {w}/{n} semillas)"),
+    ("F11n · el precio solo", P10H2_DUEL,
+     "el precio solo sobre el pool de fábrica: {m} ± {se} (t = {t}; {w}/{n} semillas)"),
+    ("F11n · el par sobre el pool de fábrica", P10H2_DUEL,
+     "el par completo sobre el pool de fábrica: {m} ± {se} (t = {t}; {w}/{n} semillas)"),
+    ("F11n · pedestal de fábrica", P10H2_DUEL,
+     "los dos brazos de fábrica dan {a} ± {b} con la glándula apagada y {c} ± {d} a 25 s"),
+    ("F11n · la cuenta de partidas", P10H2_DUEL,
+     "{brazos} brazos por {semillas} semillas: {partidas} partidas"),
 ]
 
 # Qué celda del volcado alimenta cada cifra. Va aparte de la lista de arriba para
@@ -939,6 +1072,25 @@ CELDAS = {
     "F11l reparto": lambda r: reparto_matriz(r),
     "F11l interacciones en las cuatro formas de jugar": lambda r: interacciones_matriz(r),
     "F11l dispersión de la celda nueva": lambda r: rango_celda_nueva(r),
+    # F11n
+    "F11n · el par contra fábrica": lambda r: duel_pareado(r, "el par candidato " + MINUS +
+                                                          " el juego de hoy"),
+    "F11n · la receta del reflejo contra fábrica": lambda r: duel_pareado(
+        r, "la receta del reflejo a 25 s " + MINUS + " el juego de hoy"),
+    "F11n · el par sobre su receta": lambda r: duel_pareado(
+        r, "el par candidato " + MINUS + " la receta del reflejo a 25 s"),
+    "F11n · la dispersión de cada receta": lambda r: duel_dispersion(r),
+    "F11n · la puerta dentro de su pool": lambda r: duel_dentro(r),
+    "F11n · la puerta sola": lambda r: duel_pareado(
+        r, "la puerta sola, con la glándula apagada (fábrica)"),
+    "F11n · el precio solo": lambda r: duel_pareado(r, "el precio solo, con el reflejo (fábrica)"),
+    "F11n · el par sobre el pool de fábrica": lambda r: duel_pareado(r, "el par sobre el pool de fábrica"),
+    "F11n · pedestal de fábrica": lambda r: {
+        "a": duel_brazo(r, "fabrica" + MIDOT + "reflejo" + MIDOT + "0s")["mean"],
+        "b": duel_brazo(r, "fabrica" + MIDOT + "reflejo" + MIDOT + "0s")["sd"],
+        "c": duel_brazo(r, "fabrica" + MIDOT + "reflejo" + MIDOT + "25s")["mean"],
+        "d": duel_brazo(r, "fabrica" + MIDOT + "reflejo" + MIDOT + "25s")["sd"]},
+    "F11n · la cuenta de partidas": lambda r: duel_cuenta(r),
 }
 
 
@@ -1170,6 +1322,54 @@ def _falsos_f11l() -> dict[str, str]:
     }
 
 
+def _falsos_f11n() -> dict[str, str]:
+    """Volcado de mentira para F11n: el formato del enfrentamiento, con cifras legibles a mano.
+
+    Lleva TRES semillas (el real lleva 24) para que la cuenta de partidas se pueda comprobar de
+    cabeza, y una fila de fábrica con σ distinta en cada precio para que el σ no se confunda.
+    """
+    filas = [
+        "# F11n — volcado de mentira: el enfrentamiento del lanzador",
+        "# la partida del lanzador: grid 96, laberinto, reclutamiento, 216000 ticks",
+        "# semillas: 42,7,99",
+        "",
+        "| brazo | pool | puerta | glándula | descargas (media ± σ) | total | semillas |",
+        "|---|---|---|---|---|---|---|",
+        "| fabrica·reflejo·0s | pretrain-maze-los3.antgenome | no | 0 s | 100.0 ± 10.0 | 300 | 3/3 |",
+        "| fabrica·puerta·0s | pretrain-maze-los3.antgenome | sí | 0 s | 101.0 ± 10.0 | 303 | 3/3 |",
+        "| fabrica·reflejo·25s | pretrain-maze-los3.antgenome | no | 25 s | 105.0 ± 11.0 | 315 | 3/3 |",
+        "| fabrica·puerta·25s | pretrain-maze-los3.antgenome | sí | 25 s | 102.0 ± 11.0 | 306 | 3/3 |",
+        "",
+        "## Los tres pareados que deciden (por semilla de partida)",
+        "",
+        "- **el par candidato " + MINUS + " el juego de hoy**: +50.5 ± 9.1 descargas "
+        "(t = +5.5; gana en 18/24 semillas)",
+        "- **la receta del reflejo a 25 s " + MINUS + " el juego de hoy**: +40.0 ± 8.0 "
+        "(t = +5.0; gana en 18/24 semillas)",
+        "- **el par candidato " + MINUS + " la receta del reflejo a 25 s**: +10.5 ± 3.0 "
+        "(t = +3.5; gana en 17/24 semillas; las dos recetas con siete tiradas)",
+        "",
+        "## Lo que pone cada pieza",
+        "",
+        "- **la puerta dentro de su pool a 25 s**: +4.0 ± 2.5 descargas al promediar las siete "
+        "tiradas (rango por tirada -12.0 a +11.0)",
+        "- **la puerta sola, con la glándula apagada (fábrica)**: +1.0 ± 3.0 descargas "
+        "(t = +0.3; 2/3 semillas)",
+        "- **el precio solo, con el reflejo (fábrica)**: +5.0 ± 4.0 descargas (t = +1.2; 2/3 semillas)",
+        "- **el par sobre el pool de fábrica**: +2.0 ± 5.0 descargas (t = +0.4; 2/3 semillas)",
+        "",
+        "## El criterio de F11n, aplicado",
+        "",
+        "- semillas a favor del par: **18/24** (el criterio pide ≥16/24)",
+        "- margen del par: **+50.5** descargas; dispersión entre tiradas de su receta: "
+        "**8.0** (el criterio pide superarla)",
+        "- dispersión entre tiradas de la receta del reflejo: **18.0**",
+        "- **veredicto: SE ADOPTA** (las dos a 16/24)",
+        "",
+    ]
+    return {P10H2_DUEL: "\n".join(filas)}
+
+
 def selftest() -> int:
     """Comprueba el derivador sin repo: formato, aritmética y que la deriva se note."""
     lineas = {
@@ -1202,6 +1402,7 @@ def selftest() -> int:
     }
     lineas.update(_falsos_f11jk())
     lineas.update(_falsos_f11l())
+    lineas.update(_falsos_f11n())
     fallo = 0
 
     def decir(ok: bool, texto: str) -> None:
@@ -1288,6 +1489,52 @@ def selftest() -> int:
               "la interacción va de +34,0 a +39,0 descargas en las cuatro formas de jugar",
               "los extremos de la interacción salen de las cuatro formas de jugar")
 
+        # ── F11n: el enfrentamiento del lanzador, leído por el nombre de cada viñeta ──
+        decir(figs["F11n · el par contra fábrica"] ==
+              "el par a 25 s gana +50,5 ± 9,1 descargas al juego de hoy (t = +5,5; 18/24 semillas)",
+              "el pareado del par sale con su t y sus semillas, con el «+» del documento")
+        decir(figs["F11n · el par sobre su receta"] ==
+              "el par le gana a su propia receta del reflejo +10,5 ± 3,0 descargas "
+              "(t = +3,5; 17/24 semillas)",
+              "el pareado entre recetas se encuentra por su nombre, no por su posición")
+        decir(figs["F11n · la dispersión de cada receta"] ==
+              "la dispersión entre tiradas es 8,0 en la receta del par y 18,0 en la del reflejo",
+              "las dos dispersiones salen de las dos viñetas del criterio")
+        decir(figs["F11n · la puerta dentro de su pool"] ==
+              "la puerta dentro del pool que la entrenó: +4,0 ± 2,5 descargas al promediar las "
+              "siete tiradas (rango por tirada " + MINUS + "12,0 a +11,0)",
+              "el rango por tirada sale con el menos tipográfico y el «+» del lado alto")
+        decir(figs["F11n · pedestal de fábrica"] ==
+              "los dos brazos de fábrica dan 100,0 ± 10,0 con la glándula apagada y 105,0 ± 11,0 a 25 s",
+              "el pedestal se lee de las filas de tabla, cada precio con su σ")
+        decir(figs["F11n · la cuenta de partidas"] == "4 brazos por 3 semillas: 12 partidas",
+              "la cuenta sale de los brazos de la tabla y las semillas de la cabecera")
+
+        # Fail-closed en el enfrentamiento: sin su volcado no hay cifra que derivar.
+        with tempfile.TemporaryDirectory() as tmp3:
+            raiz3 = Path(tmp3)
+            (raiz3 / "artifacts").mkdir()
+            for fuente, texto in lineas.items():
+                if fuente != P10H2_DUEL:
+                    (raiz3 / fuente).write_text(texto, encoding="utf-8")
+            try:
+                duel_pareado(raiz3, "el par candidato " + MINUS + " el juego de hoy")
+                decir(False, "un enfrentamiento sin su volcado tiene que parar la derivación")
+            except FaltaCifra as e:
+                decir(P10H2_DUEL in str(e), f"el volcado del enfrentamiento que falta se declara: {e}")
+
+        # Y una viñeta renombrada tampoco se acepta: se lee por nombre, no por posición.
+        # Se restaura después, porque las comprobaciones de abajo vuelven a derivar este volcado.
+        (raiz / P10H2_DUEL).write_text(
+            lineas[P10H2_DUEL].replace("el par candidato " + MINUS + " el juego de hoy",
+                                       "el par frente al juego de ayer"), encoding="utf-8")
+        try:
+            duel_pareado(raiz, "el par candidato " + MINUS + " el juego de hoy")
+            decir(False, "una viñeta renombrada tiene que parar la derivación")
+        except FaltaCifra:
+            decir(True, "una viñeta con otro nombre no se lee como cifra")
+        (raiz / P10H2_DUEL).write_text(lineas[P10H2_DUEL], encoding="utf-8")
+
         # Que la deriva SE NOTE: cambiar el volcado cambia el fragmento exigido.
         (raiz / P107_REPLICAS).write_text(
             lineas[P107_REPLICAS].replace("**165.1**", "**167.9**"), encoding="utf-8")
@@ -1361,7 +1608,7 @@ def main(argv: list[str]) -> int:
         # Una casilla del 2×2 lee varios volcados a la vez: para no contar de más, el resumen
         # cuenta los que son un fichero y deja dicho que los demás suman sus réplicas.
         sueltos = {f for _c, f, _p in CIFRAS if " + " not in f}
-        print(f"\n{len(CIFRAS)} cifras de {len(sueltos)} volcados de F11h–F11l "
+        print(f"\n{len(CIFRAS)} cifras de {len(sueltos)} volcados de F11h–F11n "
               f"(más las réplicas que cada casilla del 2×2 declara)")
         return 0
 
