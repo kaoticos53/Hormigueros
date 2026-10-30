@@ -29,6 +29,10 @@ namespace AntSim.Core.Tests
             Assert.Equal(core.TrailDeposit, vista.TrailDeposit);
             Assert.Equal(core.TrailHalfLife, vista.TrailHalfLife);
             Assert.Equal(core.TrailFollow, vista.TrailFollow);
+            // F11n: la puerta y su precio — el par que adopta el lanzador.
+            Assert.Equal(core.TrailByBrain, vista.TrailByBrain);
+            Assert.Equal(core.TrailGlandSeconds, vista.TrailGlandSeconds);
+            Assert.Equal(core.TrailGlandRefillSeconds, vista.TrailGlandRefillSeconds);
             Assert.True(core.IsDefault);
             Assert.True(vista.IsDefault);
             Assert.Equal(core.Describe(), vista.Describe());
@@ -43,6 +47,8 @@ namespace AntSim.Core.Tests
             Assert.Equal(RecruitmentTuning.MaxTrailDeposit, RecruitmentKnobs.MaxTrailDeposit);
             Assert.Equal(RecruitmentTuning.MaxTrailHalfLife, RecruitmentKnobs.MaxTrailHalfLife);
             Assert.Equal(RecruitmentTuning.MaxTrailFollow, RecruitmentKnobs.MaxTrailFollow);
+            Assert.Equal(RecruitmentTuning.MaxTrailGland, RecruitmentKnobs.MaxTrailGland);
+            Assert.Equal(RecruitmentTuning.MaxTrailGlandRefill, RecruitmentKnobs.MaxTrailGlandRefill);
         }
 
         [Fact]
@@ -58,6 +64,9 @@ namespace AntSim.Core.Tests
                 (new RecruitmentTuning { TrailDeposit = 9f }, new RecruitmentKnobs { TrailDeposit = 9f }),
                 (new RecruitmentTuning { TrailHalfLife = 0f }, new RecruitmentKnobs { TrailHalfLife = 0f }),
                 (new RecruitmentTuning { TrailFollow = -1f }, new RecruitmentKnobs { TrailFollow = -1f }),
+                (new RecruitmentTuning { TrailGlandSeconds = 121f }, new RecruitmentKnobs { TrailGlandSeconds = 121f }),
+                (new RecruitmentTuning { TrailGlandRefillSeconds = 0.01f },
+                 new RecruitmentKnobs { TrailGlandRefillSeconds = 0.01f }),
             };
 
             foreach (var (core, vista) in malos)
@@ -100,6 +109,44 @@ namespace AntSim.Core.Tests
             Assert.Equal(core.Describe(), vista.Describe());
             Assert.Equal("montones=2 (12–16 ítems, radio 30 u) · rastro=1.5× / 60 s / sigue 0", vista.Describe());
             Assert.Contains("montones=2", settings.Describe()); // el log del editor dice lo mismo
+        }
+
+        [Fact]
+        public void ElParDeLaPuerta_DelLanzadorAlMundo_ConLosMismosNumeros()
+        {
+            // F11n: lo que el lanzador expone es el PAR —la red abre el depósito y
+            // una glándula de 25 s con 6 s de recarga lo cobra— con el pool que lo
+            // entrenó. Las dos tablas tienen que describirlo igual, cifra a cifra.
+            var settings = LaunchSettings.Defaults();
+            settings.Pool = "pretrain-partida-200-gl-red";
+            settings.TrailByBrain = true;
+            settings.TrailGlandSeconds = 25f;
+            settings.TrailGlandRefillSeconds = 6f;
+
+            var vista = settings.ToRecruitmentKnobs();
+            var core = new RecruitmentTuning
+            {
+                Clusters = vista.Clusters,
+                ClusterMin = vista.ClusterMin,
+                ClusterMax = vista.ClusterMax,
+                ClusterRadius = vista.ClusterRadius,
+                TrailDeposit = vista.TrailDeposit,
+                TrailHalfLife = vista.TrailHalfLife,
+                TrailFollow = vista.TrailFollow,
+                TrailByBrain = vista.TrailByBrain,
+                TrailGlandSeconds = vista.TrailGlandSeconds,
+                TrailGlandRefillSeconds = vista.TrailGlandRefillSeconds,
+            };
+
+            Assert.False(vista.IsDefault);   // el juego de fábrica queda fuera
+            Assert.False(core.IsDefault);
+            Assert.Equal(core.Describe(), vista.Describe());
+            Assert.Equal(
+                "montones=8 (6–10 ítems, radio 18 u) · rastro=1× / 2100 s / sigue 8" +
+                " / puerta del cerebro / glándula 25 s (recarga 6 s en el nido)",
+                vista.Describe());
+            Assert.Contains("puerta del cerebro", settings.Describe());
+            Assert.Contains("glándula 25 s", settings.Describe());
         }
     }
 }

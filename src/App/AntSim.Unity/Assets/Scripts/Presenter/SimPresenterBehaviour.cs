@@ -64,6 +64,16 @@ namespace AntSim.Unity.Scripts.Presenter
         [Tooltip("Ganancia del reflejo que sigue el rastro (rad/s a plena asimetría). -1 = default (8).")]
         public float TrailFollow = -1f;
 
+        // — F11n: el PAR de la puerta (puerta del cerebro + glándula con precio) —
+        // Entra como CONFIGURACIÓN, no como default: una escena sin estos campos
+        // (la de fábrica) sigue jugando el rastro fijo y gratis de F8.
+        [Tooltip("F11: el CEREBRO abre el depósito (DepositFood/DepositHome) en vez del reflejo fijo. false = juego de fábrica.")]
+        public bool TrailByBrain = false;
+        [Tooltip("F11b: precio del rastro, segundos de depósito a plena tasa que caben en la glándula. -1 = default (0 = sin precio).")]
+        public float TrailGland = -1f;
+        [Tooltip("F11b: segundos que tarda la glándula en llenarse en el nido. -1 = default (3).")]
+        public float TrailGlandRefill = -1f;
+
         [Header("Canales opt-in del stream (telemetría pura: no cambian el hash)")]
         [Tooltip("Canal E (F4.5): feromonas de la colonia 0 cada N ticks. 0 = desactivado.")]
         public int PheroEvery = 0;
@@ -487,6 +497,9 @@ namespace AntSim.Unity.Scripts.Presenter
             if (TrailDeposit >= 0f) tuning.TrailDeposit = TrailDeposit;
             if (TrailHalfLife >= 0f) tuning.TrailHalfLife = TrailHalfLife;
             if (TrailFollow >= 0f) tuning.TrailFollow = TrailFollow;
+            if (TrailByBrain) tuning.TrailByBrain = true;
+            if (TrailGland >= 0f) tuning.TrailGlandSeconds = TrailGland;
+            if (TrailGlandRefill >= 0f) tuning.TrailGlandRefillSeconds = TrailGlandRefill;
             return tuning;
         }
 

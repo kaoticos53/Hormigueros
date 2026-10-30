@@ -14,6 +14,8 @@
 #   bash scripts/play-game.sh --species lasius,eciton --speed 60
 #   bash scripts/play-game.sh --clusters 2 --cluster-size 12:16   montones grandes
 #   bash scripts/play-game.sh --trail-half-life 60 --trail-follow 0  rastro efímero y ciego
+#   bash scripts/play-game.sh --pool pretrain-partida-200-gl-red \
+#       --trail-by-brain --trail-gland 25 --trail-gland-refill 6  EL PAR de F11n
 #   bash scripts/play-game.sh --dry-run                      no abre Unity
 #
 # PERILLAS DEL RECLUTAMIENTO (F8): --clusters, --cluster-size MIN:MAX,
@@ -55,6 +57,11 @@ CLUSTER_RADIUS=18
 TRAIL_DEPOSIT=1
 TRAIL_HALF_LIFE=2100
 TRAIL_FOLLOW=8
+# F11n: el PAR de la puerta. Apagado en el default (juego de fábrica); se
+# enciende con --trail-by-brain, --trail-gland y --trail-gland-refill.
+TRAIL_BY_BRAIN=0
+TRAIL_GLAND=0
+TRAIL_GLAND_REFILL=3
 
 usage() {
   cat <<'EOF'
@@ -64,6 +71,7 @@ usage() {
                [--frame-every N] [--no-recruitment] [--dry-run]
                [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U]
                [--trail-deposit F] [--trail-half-life S] [--trail-follow G]
+               [--trail-by-brain] [--trail-gland S] [--trail-gland-refill S]
 
   Reclutamiento (F8) — default entre paréntesis:
     --clusters N            montones de comida que siembra el mundo (8)
@@ -73,11 +81,18 @@ usage() {
     --trail-half-life S     vida media del rastro en segundos (2100 = 7x la clásica)
     --trail-follow G        giro que provoca el rastro, rad/s (8; 0 = no lo sigue)
 
+  El par de la puerta (F11n) — default entre paréntesis:
+    --trail-by-brain        el cerebro abre el depósito (off = reflejo fijo)
+    --trail-gland S         precio del rastro: segundos de glándula (0 = gratis)
+    --trail-gland-refill S  segundos de vacía a llena en el nido (3)
+
   Ejemplos:
     bash scripts/play-game.sh
     bash scripts/play-game.sh --pool pretrain-neat --grid 256 --ticks 12000
     bash scripts/play-game.sh --clusters 2 --cluster-size 12:16 --cluster-radius 30
     bash scripts/play-game.sh --trail-half-life 60 --trail-follow 0
+    bash scripts/play-game.sh --pool pretrain-partida-200-gl-red \
+        --trail-by-brain --trail-gland 25 --trail-gland-refill 6
 
 EOF
 }
@@ -97,6 +112,9 @@ while [[ $# -gt 0 ]]; do
     --trail-deposit)  TRAIL_DEPOSIT="${2:-}"; shift 2 ;;
     --trail-half-life) TRAIL_HALF_LIFE="${2:-}"; shift 2 ;;
     --trail-follow)   TRAIL_FOLLOW="${2:-}"; shift 2 ;;
+    --trail-by-brain) TRAIL_BY_BRAIN=1; shift ;;
+    --trail-gland)    TRAIL_GLAND="${2:-}"; shift 2 ;;
+    --trail-gland-refill) TRAIL_GLAND_REFILL="${2:-}"; shift 2 ;;
     --no-recruitment) RECRUITMENT=0; shift ;;
     --dry-run)     DRY_RUN=1; shift ;;
     --help|-h)     usage; exit 0 ;;
@@ -134,6 +152,9 @@ awk -v r="$CLUSTER_RADIUS" 'BEGIN{exit !(r+0>=1 && r+0<=120)}'      || fail "--c
 awk -v d="$TRAIL_DEPOSIT" 'BEGIN{exit !(d+0>=0 && d+0<=5)}'         || fail "--trail-deposit fuera de rango [0, 5]: $TRAIL_DEPOSIT"
 awk -v h="$TRAIL_HALF_LIFE" 'BEGIN{exit !(h+0>=1 && h+0<=3600)}'    || fail "--trail-half-life fuera de rango [1, 3600] s: $TRAIL_HALF_LIFE"
 awk -v g="$TRAIL_FOLLOW" 'BEGIN{exit !(g+0>=0 && g+0<=20)}'         || fail "--trail-follow fuera de rango [0, 20] rad/s: $TRAIL_FOLLOW"
+# F11n: la puerta y su precio. Los mismos rangos que RecruitmentTuning.
+awk -v s="$TRAIL_GLAND" 'BEGIN{exit !(s+0>=0 && s+0<=120)}'         || fail "--trail-gland fuera de rango [0, 120] s (0 = sin precio): $TRAIL_GLAND"
+awk -v r="$TRAIL_GLAND_REFILL" 'BEGIN{exit !(r+0>=0.05 && r+0<=60)}' || fail "--trail-gland-refill fuera de rango [0.05, 60] s: $TRAIL_GLAND_REFILL"
 
 # ── Resolver pool ───────────────────────────────────────────────────────────
 POOL_PATH=""
@@ -177,6 +198,9 @@ POOL_PATH_WIN="$(cygpath -w "$POOL_PATH" 2>/dev/null || printf '%s' "$POOL_PATH"
     echo "trailDeposit=$TRAIL_DEPOSIT"
     echo "trailHalfLife=$TRAIL_HALF_LIFE"
     echo "trailFollow=$TRAIL_FOLLOW"
+    echo "trailByBrain=$TRAIL_BY_BRAIN"
+    echo "trailGland=$TRAIL_GLAND"
+    echo "trailGlandRefill=$TRAIL_GLAND_REFILL"
 } > "$SETTINGS_FILE"
 
 # ── Buscar Unity ────────────────────────────────────────────────────────────
@@ -239,6 +263,9 @@ echo "Reclutamiento: $([[ "$RECRUITMENT" == "1" ]] && echo sí || echo no) (cúm
 if [[ "$RECRUITMENT" == "1" ]]; then
     echo "Montones:     $CLUSTERS ($SIZE_MIN-$SIZE_MAX ítems, radio $CLUSTER_RADIUS u)"
     echo "Rastro:       ${TRAIL_DEPOSIT}x QMaxFood/s · vida media ${TRAIL_HALF_LIFE} s · sigue ${TRAIL_FOLLOW} rad/s"
+    if [[ "$TRAIL_BY_BRAIN" == "1" || "$TRAIL_GLAND" != "0" ]]; then
+        echo "Puerta:       $([[ "$TRAIL_BY_BRAIN" == "1" ]] && echo 'sí (el cerebro abre el depósito)' || echo 'no (reflejo fijo)') · glándula ${TRAIL_GLAND} s (recarga ${TRAIL_GLAND_REFILL} s)"
+    fi
 fi
 echo "Ajustes:      $SETTINGS_FILE"
 echo ""

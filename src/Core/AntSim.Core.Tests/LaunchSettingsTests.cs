@@ -31,6 +31,11 @@ namespace AntSim.Core.Tests
             Assert.Equal(1f, s.TrailDeposit);
             Assert.Equal(2100f, s.TrailHalfLife);
             Assert.Equal(8f, s.TrailFollow);
+            // F11n: el par de la puerta llega APAGADO — la partida de fábrica sigue
+            // con el reflejo y la glándula gratis (glándula 0 y recarga de 3 s).
+            Assert.False(s.TrailByBrain);
+            Assert.Equal(0f, s.TrailGlandSeconds);
+            Assert.Equal(3f, s.TrailGlandRefillSeconds);
             Assert.True(s.ToRecruitmentKnobs().IsDefault);
             Assert.True(s.TryValidate(out var err), err);
         }
@@ -55,7 +60,10 @@ namespace AntSim.Core.Tests
                 "clusterRadius=30.5\n" +
                 "trailDeposit=1.5\n" +
                 "trailHalfLife=60\n" +
-                "trailFollow=0\n";
+                "trailFollow=0\n" +
+                "trailByBrain=1\n" +
+                "trailGland=25\n" +
+                "trailGlandRefill=6\n";
 
             Assert.True(LaunchSettings.TryParse(text, out var s, out var err), err);
             Assert.Equal("pretrain-neat", s.Pool);
@@ -75,6 +83,9 @@ namespace AntSim.Core.Tests
             Assert.Equal(1.5f, s.TrailDeposit);
             Assert.Equal(60f, s.TrailHalfLife);
             Assert.Equal(0f, s.TrailFollow); // 0 = lo huele pero no lo sigue (control)
+            Assert.True(s.TrailByBrain);      // F11n: la puerta del cerebro
+            Assert.Equal(25f, s.TrailGlandSeconds);
+            Assert.Equal(6f, s.TrailGlandRefillSeconds);
             Assert.True(s.TryValidate(out var errTuning), errTuning);
         }
 
@@ -99,7 +110,10 @@ namespace AntSim.Core.Tests
                 ClusterRadius = 12.25f,
                 TrailDeposit = 0.5f,
                 TrailHalfLife = 45f,
-                TrailFollow = 3.5f
+                TrailFollow = 3.5f,
+                TrailByBrain = true,
+                TrailGlandSeconds = 25f,
+                TrailGlandRefillSeconds = 6f
             };
 
             Assert.True(LaunchSettings.TryParse(original.Serialize(), out var back, out var err), err);
@@ -120,6 +134,9 @@ namespace AntSim.Core.Tests
             Assert.Equal(original.TrailDeposit, back.TrailDeposit);
             Assert.Equal(original.TrailHalfLife, back.TrailHalfLife);
             Assert.Equal(original.TrailFollow, back.TrailFollow);
+            Assert.Equal(original.TrailByBrain, back.TrailByBrain);
+            Assert.Equal(original.TrailGlandSeconds, back.TrailGlandSeconds);
+            Assert.Equal(original.TrailGlandRefillSeconds, back.TrailGlandRefillSeconds);
         }
 
         [Fact]
@@ -150,6 +167,8 @@ namespace AntSim.Core.Tests
         [InlineData("trailDeposit=-1", "trailDeposit fuera de rango")]
         [InlineData("trailHalfLife=0", "trailHalfLife fuera de rango")]
         [InlineData("trailFollow=99", "trailFollow fuera de rango")]
+        [InlineData("trailGland=121", "trailGland fuera de rango")]
+        [InlineData("trailGlandRefill=0.01", "trailGlandRefill fuera de rango")]
         public void Parse_ValoresInvalidos_RechazadosConMotivo(string line, string motivo)
         {
             Assert.False(LaunchSettings.TryParse(line, out _, out var err));
@@ -163,6 +182,7 @@ namespace AntSim.Core.Tests
         [InlineData("clusters=muchos")]
         [InlineData("clusterSize=6")]
         [InlineData("trailHalfLife=siempre")]
+        [InlineData("trailGland=caro")]
         public void Parse_ValoresNoNumericos_Rechazados(string line)
         {
             Assert.False(LaunchSettings.TryParse(line, out _, out var err));

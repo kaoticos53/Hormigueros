@@ -64,6 +64,25 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>Ganancia del reflejo que sigue el rastro (rad/s a plena asimetría).</summary>
         public float TrailFollow = 8f;
 
+        // — F11n: el PAR de la puerta como configuración, no como default —
+        // La puerta sola no paga sobre el pool de fábrica ni el precio solo
+        // raciona la señal: lo que F11n adoptó es el par —la red abre el depósito
+        // y la glándula de 25 s lo cobra— con su propio pool
+        // (`pretrain-partida-200-gl-red`). Entra como banderas del lanzador y por
+        // eso la partida de fábrica sigue siendo la de siempre (glándula 0, sin
+        // puerta) sin mover un byte del mundo compartido.
+
+        /// <summary>F11 — el CEREBRO abre el depósito (`DepositFood`/`DepositHome`)
+        /// en vez del reflejo fijo de F8.</summary>
+        public bool TrailByBrain;
+
+        /// <summary>F11b — precio del rastro: segundos de depósito a plena tasa que
+        /// caben en la glándula (0 = sin precio, el default de fábrica).</summary>
+        public float TrailGlandSeconds;
+
+        /// <summary>F11b — segundos que tarda la glándula en llenarse en el nido.</summary>
+        public float TrailGlandRefillSeconds = 3f;
+
         // Rangos: los mismos que acepta el mundo/CLI (WorldUnits, SpeedControlModel).
         public const int MinGrid = 16;
         public const int MaxGrid = 1024;
@@ -98,6 +117,9 @@ namespace AntSim.Unity.Scripts.Streaming
             sb.Append("trailDeposit=").Append(TrailDeposit.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
             sb.Append("trailHalfLife=").Append(TrailHalfLife.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
             sb.Append("trailFollow=").Append(TrailFollow.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
+            sb.Append("trailByBrain=").Append(TrailByBrain ? '1' : '0').Append('\n');
+            sb.Append("trailGland=").Append(TrailGlandSeconds.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
+            sb.Append("trailGlandRefill=").Append(TrailGlandRefillSeconds.ToString("0.###", CultureInfo.InvariantCulture)).Append('\n');
             return sb.ToString();
         }
 
@@ -176,6 +198,15 @@ namespace AntSim.Unity.Scripts.Streaming
                     case "trailfollow":
                         if (!TryFloat(value, out settings.TrailFollow, out error)) return false;
                         break;
+                    case "trailbybrain":
+                        settings.TrailByBrain = value == "1" || value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "trailgland":
+                        if (!TryFloat(value, out settings.TrailGlandSeconds, out error)) return false;
+                        break;
+                    case "trailglandrefill":
+                        if (!TryFloat(value, out settings.TrailGlandRefillSeconds, out error)) return false;
+                        break;
                     default:
                         break; // clave desconocida: se ignora (compatibilidad)
                 }
@@ -238,6 +269,9 @@ namespace AntSim.Unity.Scripts.Streaming
             TrailDeposit = TrailDeposit,
             TrailHalfLife = TrailHalfLife,
             TrailFollow = TrailFollow,
+            TrailByBrain = TrailByBrain,
+            TrailGlandSeconds = TrailGlandSeconds,
+            TrailGlandRefillSeconds = TrailGlandRefillSeconds,
         };
 
         /// <summary>Lista de tokens alfabéticos separados por comas (la del CLI: <c>--species</c>).</summary>

@@ -14,6 +14,8 @@
 #   .\scripts\play-game.ps1 --speed 60                mas rapido
 #   .\scripts\play-game.ps1 --clusters 2 --cluster-size 12:16   montones grandes
 #   .\scripts\play-game.ps1 --trail-half-life 60 --trail-follow 0   rastro efimero y ciego
+#   .\scripts\play-game.ps1 --pool pretrain-partida-200-gl-red --trail-by-brain --trail-gland 25 --trail-gland-refill 6
+#                                                    EL PAR de la puerta (F11n)
 #   .\scripts\play-game.ps1 --dry-run                solo muestra lo que aplica
 #
 # PERILLAS DEL RECLUTAMIENTO (F8): --clusters, --cluster-size MIN:MAX,
@@ -49,6 +51,11 @@ param(
     [float]$TrailDeposit = 1,
     [float]$TrailHalfLife = 2100,
     [float]$TrailFollow = 8,
+    # F11n: el PAR de la puerta (puerta del cerebro + glandula con precio).
+    # Apagado en el default: sin banderas la partida es la de fabrica.
+    [switch]$TrailByBrain,
+    [float]$TrailGland = 0,
+    [float]$TrailGlandRefill = 3,
     [switch]$NoRecruitment,
     [switch]$DryRun,
     # play-game.bat delega el texto CRUDO (%*): cmd parte los argumentos por
@@ -82,6 +89,7 @@ function Set-FromFlags {
         $key = $key.ToLowerInvariant()
 
         if ($key -eq 'dry-run') { $script:DryRunFlag = $true; $i++; continue }
+        if ($key -eq 'trail-by-brain') { $script:TrailByBrain = $true; $i++; continue }
         if ($key -eq 'no-recruitment') { $script:RecruitmentOff = $true; $i++; continue }
         if ($key -eq 'help' -or $key -eq 'h') { $script:HelpFlag = $true; $i++; continue }
 
@@ -110,11 +118,14 @@ function Set-FromFlags {
             'trail-deposit'  { if (-not $PSBoundParameters.ContainsKey('TrailDeposit'))   { $script:TrailDeposit = [float]$val } }
             'trail-half-life'{ if (-not $PSBoundParameters.ContainsKey('TrailHalfLife'))  { $script:TrailHalfLife = [float]$val } }
             'trail-follow'   { if (-not $PSBoundParameters.ContainsKey('TrailFollow'))    { $script:TrailFollow = [float]$val } }
+            'trail-gland'    { if (-not $PSBoundParameters.ContainsKey('TrailGland'))     { $script:TrailGland = [float]$val } }
+            'trail-gland-refill' { if (-not $PSBoundParameters.ContainsKey('TrailGlandRefill')) { $script:TrailGlandRefill = [float]$val } }
             default {
                 Write-Host "  X opcion desconocida: --$key" -ForegroundColor Red
                 Write-Host "    Opciones: --pool --grid --colonies --ticks --species --speed --frame-every"
                 Write-Host "              --clusters N --cluster-size MIN:MAX --cluster-radius U"
                 Write-Host "              --trail-deposit F --trail-half-life S --trail-follow G"
+                Write-Host "              --trail-by-brain --trail-gland S --trail-gland-refill S"
                 Write-Host "              --no-recruitment --dry-run --help"
                 exit 2
             }
@@ -136,6 +147,7 @@ if ($HelpFlag) {
     Write-Host "                [--frame-every N] [--no-recruitment] [--dry-run]"
     Write-Host "                [--clusters N] [--cluster-size MIN:MAX] [--cluster-radius U]"
     Write-Host "                [--trail-deposit F] [--trail-half-life S] [--trail-follow G]"
+    Write-Host "                [--trail-by-brain] [--trail-gland S] [--trail-gland-refill S]"
     Write-Host ""
     Write-Host "  Reclutamiento (F8) - default entre parentesis:"
     Write-Host "    --clusters N          montones de comida que siembra el mundo (8)"
@@ -145,11 +157,17 @@ if ($HelpFlag) {
     Write-Host "    --trail-half-life S   vida media del rastro en segundos (2100 = 7x la clasica)"
     Write-Host "    --trail-follow G      giro que provoca el rastro, rad/s (8; 0 = no lo sigue)"
     Write-Host ""
+    Write-Host "  El par de la puerta (F11n) - default entre parentesis:"
+    Write-Host "    --trail-by-brain        el cerebro abre el deposito (off = reflejo fijo)"
+    Write-Host "    --trail-gland S         precio del rastro: segundos de glandula (0 = gratis)"
+    Write-Host "    --trail-gland-refill S  segundos de vacia a llena en el nido (3)"
+    Write-Host ""
     Write-Host "  Ejemplos:"
     Write-Host "    .\scripts\play-game.ps1"
     Write-Host "    .\scripts\play-game.ps1 --pool pretrain-neat --grid 256 --ticks 12000"
     Write-Host "    .\scripts\play-game.ps1 --clusters 2 --cluster-size 12:16 --cluster-radius 30"
     Write-Host "    .\scripts\play-game.ps1 --trail-half-life 60 --trail-follow 0"
+    Write-Host "    .\scripts\play-game.ps1 --pool pretrain-partida-200-gl-red --trail-by-brain --trail-gland 25 --trail-gland-refill 6"
     Write-Host ""
     exit 0
 }
@@ -200,6 +218,9 @@ if ($ClusterRadius -lt 1 -or $ClusterRadius -gt 120) { Write-Host "  X --cluster
 if ($TrailDeposit -lt 0 -or $TrailDeposit -gt 5) { Write-Host "  X --trail-deposit fuera de rango [0, 5]: $TrailDeposit" -ForegroundColor Red; exit 2 }
 if ($TrailHalfLife -lt 1 -or $TrailHalfLife -gt 3600) { Write-Host "  X --trail-half-life fuera de rango [1, 3600] s: $TrailHalfLife" -ForegroundColor Red; exit 2 }
 if ($TrailFollow -lt 0 -or $TrailFollow -gt 20) { Write-Host "  X --trail-follow fuera de rango [0, 20] rad/s: $TrailFollow" -ForegroundColor Red; exit 2 }
+# F11n: la puerta y su precio. Los mismos rangos que RecruitmentTuning.
+if ($TrailGland -lt 0 -or $TrailGland -gt 120) { Write-Host "  X --trail-gland fuera de rango [0, 120] s (0 = sin precio): $TrailGland" -ForegroundColor Red; exit 2 }
+if ($TrailGlandRefill -lt 0.05 -or $TrailGlandRefill -gt 60) { Write-Host "  X --trail-gland-refill fuera de rango [0.05, 60] s: $TrailGlandRefill" -ForegroundColor Red; exit 2 }
 if (-not $Species -or $Species -notmatch '^[A-Za-z]+(,[A-Za-z]+)*$') {
     Write-Host "  X --species invalida: '$Species' (p. ej. lasius o lasius,eciton)" -ForegroundColor Red
     exit 2
@@ -249,7 +270,10 @@ $lines = @(
     "clusterRadius=$($ClusterRadius.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
     "trailDeposit=$($TrailDeposit.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
     "trailHalfLife=$($TrailHalfLife.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
-    "trailFollow=$($TrailFollow.ToString([System.Globalization.CultureInfo]::InvariantCulture))"
+    "trailFollow=$($TrailFollow.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
+    "trailByBrain=$(if ($TrailByBrain) { 1 } else { 0 })",
+    "trailGland=$($TrailGland.ToString([System.Globalization.CultureInfo]::InvariantCulture))",
+    "trailGlandRefill=$($TrailGlandRefill.ToString([System.Globalization.CultureInfo]::InvariantCulture))"
 )
 Set-Content -Path $SettingsFile -Value $lines -Encoding ASCII
 
@@ -322,6 +346,10 @@ Write-Host "  Frame every:  $FrameEvery"
 if ($Recruitment) {
     Write-Host "  Montones:     $Clusters ($sizeMin-$sizeMax items, radio $ClusterRadius u)"
     Write-Host "  Rastro:       $TrailDeposit x QMaxFood/s - vida media $TrailHalfLife s - sigue $TrailFollow rad/s"
+    if ($TrailByBrain -or $TrailGland -ne 0) {
+        $gate = if ($TrailByBrain) { "si (el cerebro abre el deposito)" } else { "no (reflejo fijo)" }
+        Write-Host "  Puerta:       $gate - glandula $TrailGland s (recarga $TrailGlandRefill s)"
+    }
 } else {
     Write-Host "  Montones:     (reclutamiento apagado)"
 }

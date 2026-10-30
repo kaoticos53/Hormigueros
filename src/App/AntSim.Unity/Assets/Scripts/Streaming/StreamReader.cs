@@ -109,6 +109,19 @@ namespace AntSim.Unity.Scripts.Streaming
                     psi.ArgumentList.Add(recruitmentKnobs.TrailHalfLife.ToString("0.###", CultureInfo.InvariantCulture));
                     psi.ArgumentList.Add("--trail-follow");
                     psi.ArgumentList.Add(recruitmentKnobs.TrailFollow.ToString("0.###", CultureInfo.InvariantCulture));
+                    // F11n: el PAR de la puerta. La puerta sola no paga sobre el pool
+                    // de fábrica y el precio solo borra la señal, así que viajan
+                    // juntas y solo cuando el lanzador las pide: sin ellas la línea
+                    // de comandos es la de siempre y el mundo no cambia ni un byte.
+                    if (recruitmentKnobs.TrailByBrain)
+                        psi.ArgumentList.Add("--trail-by-brain");
+                    if (recruitmentKnobs.TrailGlandSeconds > 0f)
+                    {
+                        psi.ArgumentList.Add("--trail-gland");
+                        psi.ArgumentList.Add(recruitmentKnobs.TrailGlandSeconds.ToString("0.###", CultureInfo.InvariantCulture));
+                        psi.ArgumentList.Add("--trail-gland-refill");
+                        psi.ArgumentList.Add(recruitmentKnobs.TrailGlandRefillSeconds.ToString("0.###", CultureInfo.InvariantCulture));
+                    }
                 }
             }
             if (pheroEvery > 0)

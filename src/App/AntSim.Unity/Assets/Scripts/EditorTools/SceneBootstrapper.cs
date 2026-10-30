@@ -141,6 +141,13 @@ namespace AntSim.Unity.Scripts.EditorTools
             presenter.TrailDeposit = settings.TrailDeposit;
             presenter.TrailHalfLife = settings.TrailHalfLife;
             presenter.TrailFollow = settings.TrailFollow;
+            // F11n: el par de la puerta —la red abre el depósito y la glándula de
+            // 25 s lo cobra— con el pool que lo entrenó. Es configuración del
+            // lanzador: con los defaults del mundo estas tres líneas dejan el
+            // juego de fábrica tal cual (sin puerta, glándula 0).
+            presenter.TrailByBrain = settings.TrailByBrain;
+            presenter.TrailGland = settings.TrailGlandSeconds;
+            presenter.TrailGlandRefill = settings.TrailGlandRefillSeconds;
             presenter.ExportElite = true;              // la élite se guarda al acabar
             // PoolPath (la ruta YA resuelta del lanzador) manda; si no, el nombre
             // se resuelve como el default histórico: artifacts/<nombre>.antgenome.

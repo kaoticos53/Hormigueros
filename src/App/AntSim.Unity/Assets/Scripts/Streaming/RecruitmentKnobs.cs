@@ -9,7 +9,7 @@ namespace AntSim.Unity.Scripts.Streaming
     ///
     /// ESPEJO DELIBERADO de <c>AntSim.Core.World.RecruitmentTuning</c>. Unity no
     /// referencia el Core (no hay asmdef ni plugin: la vista solo conoce sus
-    /// modelos puros), así que estos siete valores existen en los dos lados. Lo
+    /// modelos puros), así que estas perillas existen en los dos lados. Lo
     /// que impide que deriven NO es la disciplina sino una prueba
     /// (<c>RecruitmentKnobsTests</c>): compara defaults y rangos de las dos
     /// tablas, y si alguien toca una sola, la suite falla.
@@ -38,6 +38,17 @@ namespace AntSim.Unity.Scripts.Streaming
         /// <summary>Ganancia del reflejo que sigue el rastro (rad/s a plena asimetría).</summary>
         public float TrailFollow = 8f;
 
+        /// <summary>F11 — la PUERTA: ¿el depósito lo abre el cerebro? false (default)
+        /// es el rastro fijo de F8 (la cargada siempre deja, con la misma fuerza).</summary>
+        public bool TrailByBrain;
+
+        /// <summary>F11b — PRECIO del rastro: segundos de depósito a plena tasa que
+        /// caben en la glándula (0 = gratis, el default de F8).</summary>
+        public float TrailGlandSeconds;
+
+        /// <summary>F11b — segundos que tarda la glándula en llenarse en el nido.</summary>
+        public float TrailGlandRefillSeconds = 3f;
+
         // Los mismos rangos que RecruitmentTuning (lo fija la prueba de espejo).
         public const int MaxClusters = 64;
         public const int MaxClusterItems = 40;
@@ -45,6 +56,8 @@ namespace AntSim.Unity.Scripts.Streaming
         public const float MaxTrailDeposit = 5f;
         public const float MaxTrailHalfLife = 3600f;
         public const float MaxTrailFollow = 20f;
+        public const float MaxTrailGland = 120f;
+        public const float MaxTrailGlandRefill = 60f;
 
         public static RecruitmentKnobs Default => new RecruitmentKnobs();
 
@@ -53,7 +66,8 @@ namespace AntSim.Unity.Scripts.Streaming
         public bool IsDefault =>
             Clusters == 8 && ClusterMin == 6 && ClusterMax == 10
             && ClusterRadius == 18f && TrailDeposit == 1f
-            && TrailHalfLife == 2100f && TrailFollow == 8f;
+            && TrailHalfLife == 2100f && TrailFollow == 8f
+            && !TrailByBrain && TrailGlandSeconds == 0f && TrailGlandRefillSeconds == 3f;
 
         /// <summary>Reglas de rango, con el mismo texto que el Core y el CLI.</summary>
         public bool TryValidate(out string error)
@@ -76,13 +90,21 @@ namespace AntSim.Unity.Scripts.Streaming
             { error = $"trailHalfLife fuera de rango [1, {F(MaxTrailHalfLife)}] s: {F(TrailHalfLife)}"; return false; }
             if (TrailFollow < 0f || TrailFollow > MaxTrailFollow)
             { error = $"trailFollow fuera de rango [0, {F(MaxTrailFollow)}] rad/s: {F(TrailFollow)}"; return false; }
+            if (TrailGlandSeconds < 0f || TrailGlandSeconds > MaxTrailGland)
+            { error = $"trailGland fuera de rango [0, {F(MaxTrailGland)}] s (0 = sin precio): {F(TrailGlandSeconds)}"; return false; }
+            if (TrailGlandRefillSeconds < 0.05f || TrailGlandRefillSeconds > MaxTrailGlandRefill)
+            { error = $"trailGlandRefill fuera de rango [0.05, {F(MaxTrailGlandRefill)}] s: {F(TrailGlandRefillSeconds)}"; return false; }
             return true;
         }
 
         /// <summary>Línea compacta con los números que se van a aplicar.</summary>
         public string Describe() =>
             $"montones={Clusters} ({ClusterMin}–{ClusterMax} ítems, radio {F(ClusterRadius)} u) · " +
-            $"rastro={F(TrailDeposit)}× / {F(TrailHalfLife)} s / sigue {F(TrailFollow)}";
+            $"rastro={F(TrailDeposit)}× / {F(TrailHalfLife)} s / sigue {F(TrailFollow)}" +
+            (TrailByBrain ? " / puerta del cerebro" : "") +
+            (TrailGlandSeconds > 0f
+                ? $" / glándula {F(TrailGlandSeconds)} s (recarga {F(TrailGlandRefillSeconds)} s en el nido)"
+                : "");
 
         private static string F(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
     }
