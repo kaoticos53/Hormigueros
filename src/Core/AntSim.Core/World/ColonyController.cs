@@ -292,22 +292,19 @@ public static class ColonyController
             ? (1.0f + 0.35f * ((stockRatio - 0.60f) / 0.40f))
             : Math.Clamp(stockRatio / 0.20f, 0.05f, 1.0f);
 
-        // SOSTENIBILIDAD (ronda, 2026-10-30). Dos correcciones a la puesta que el
-        // mundo clásico no puede adoptar sin mover sus pines de hash:
+        // SOSTENIBILIDAD (ronda, 2026-10-30). El DÉFICIT descuenta la cría que ya
+        // va en camino y la puesta se para cuando el embudo cubre lo que las
+        // nodrizas pueden criar. Sin eso, la cola de pupas crecía sin techo —no
+        // mueren de viejas y no eclosionan sin vacante—: la ronda de dos colonias
+        // cerraba con 479 y 943 pupas, 3 322 huevos puestos para 789 eclosiones y
+        // un 31 % de la cría muriendo de inanación como larva. Medido: pico 6
+        // pupas y 845 huevos, con las 40 adultas igual.
         //
-        // 1) La REPOSICIÓN se mide con la mortalidad real de la especie, no con la
-        //    constante `DeathRate`. `DeathRate` vale 1/240 s y una obrera vive
-        //    `BaseLifespan · (0,7 + 0,6·vigor)` = 806 s de media: 3,4× menos. Con la
-        //    constante la reina ponía un 60 % por encima de las bajas.
-        // 2) El DÉFICIT descuenta la cría que ya va en camino, y la puesta se para
-        //    cuando el embudo cubre lo que las nodrizas pueden criar.
-        //
-        // Sin las dos, la cola de pupas crecía sin techo —no mueren de viejas y no
-        // eclosionan sin vacante—: la ronda de dos colonias cerraba con 479 y 943
-        // pupas, 3 322 huevos puestos para 789 eclosiones y un 31 % de la cría
-        // muriendo de inanación como larva. Medido: pico 6 pupas, 765 huevos y 738
-        // eclosiones, con las 40 adultas igual.
-        float reposicion = c.RecruitmentEconomy ? sp.RealDeathRate : sp.DeathRate;
+        // El mundo clásico no puede adoptar esto sin mover sus pines de hash, así
+        // que va bajo `RecruitmentEconomy`. Se probó además reponer a la mortalidad
+        // REAL (`1/(BaseLifespan·1,12)` = 1/806 s) en vez de a `DeathRate` (1/240):
+        // medido, no rescataba ninguna semilla por sí solo, dejaba la cola creciendo
+        // (93–149 pupas) y costaba 163 descargas en la semilla 42, así que se retiró.
         int enEmbudo = 0;
         bool puedePoner = true;
         if (c.RecruitmentEconomy)
@@ -325,7 +322,7 @@ public static class ColonyController
         // sobrellenaba en los 45 s de retardo de huevo→larva→pupa.
         int vacantes = Math.Max(0, MaxAdultsPerColony - c.AdultCountAlive - enEmbudo);
         float lambda = puedePoner
-            ? Math.Clamp(vacantes * KRepl * inflowGate + c.AdultCountAlive * reposicion,
+            ? Math.Clamp(vacantes * KRepl * inflowGate + c.AdultCountAlive * sp.DeathRate,
                          0f, LambdaMax) * rho * qQueen * huecos * stockFeedback
             : 0f;
 

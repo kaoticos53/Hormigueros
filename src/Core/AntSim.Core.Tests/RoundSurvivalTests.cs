@@ -246,17 +246,16 @@ namespace AntSim.Core.Tests
 
         /// <summary>
         /// LA PUESTA NO APILA CRÍA QUE NADIE VA A CRIAR. Con la tropa llena y la
-        /// cola de pupas sin vacante (no mueren de viejas), la reina reponía a
-        /// `DeathRate` —1/240 s, 3,4× la mortalidad real de una obrera, que vive
-        /// `BaseLifespan · 0,7+0,6·vigor`— y encima empujaba el déficit sin descontar
-        /// la cría en vuelo. La partida de dos colonias cerraba con 479 y 943 pupas
-        /// y 3 322 huevos puestos para 789 eclosiones (un 31 % de la cría moría de
-        /// inanación como larva: comida pagada dos veces). Ahora la puesta se para
-        /// cuando el embudo cubre lo que las nodrizas sostienen —la misma cuenta con
-        /// la que se paga la alimentación larval— y repone a la mortalidad REAL.
+        /// cola de pupas sin vacante (no mueren de viejas), la reina empujaba el
+        /// déficit sin descontar la cría en vuelo. La partida de dos colonias cerraba
+        /// con 479 y 943 pupas y 3 322 huevos puestos para 789 eclosiones (un 31 % de
+        /// la cría moría de inanación como larva: comida pagada dos veces). Ahora el
+        /// déficit descuenta la cría en camino y la puesta se para cuando el embudo
+        /// cubre lo que las nodrizas sostienen —la misma cuenta con la que se paga la
+        /// alimentación larval—.
         ///
-        /// El mundo clásico conserva su término y su embudo: es su economía cerrada,
-        /// con seis pines de hash fijados.
+        /// El mundo clásico NO tiene embudo: es su economía cerrada, con seis pines de
+        /// hash fijados, y por eso sigue apilando aunque reponga igual.
         /// </summary>
         [Fact]
         public void Puesta_ConTropaLlena_NoApilaPupasSinVacante()

@@ -1715,29 +1715,29 @@ mantienen todo el horizonte y el stock oscila **55–150** en vez de caer a cero
 **La segunda mitad: la puesta apilaba pupas que nunca eclosionaban.** Con la
 ronda ya sostenible, el excedente seguía a la vista en el HUD: **479 pupas en la
 colonia 0 y 943 en la 1** al cerrar la partida, con las 40 adultas llenas y
-**3 322 huevos puestos para 789 eclosiones**. La causa no era la comida:
+**3 322 huevos puestos para 789 eclosiones**. La causa no era la comida: **el
+término de déficit no descontaba la cría en vuelo.** `(Max − A)·KRepl` empujaba a
+llenar el cupo sin mirar el huevo, la larva y la pupa que ya iban de camino, así
+que con los 45 s de retardo de huevo→larva→pupa sobrellenaba y las pupas —que no
+mueren de viejas— se quedaban esperando vacante para siempre. Un **31 % de la cría
+moría de inanación como larva**: comida pagada dos veces.
 
-- **La reposición iba a `DeathRate = 1/240 s`, 3,4× la mortalidad real.** Una
-  obrera vive `BaseLifespan · (0,7 + 0,6·vigor)` —media **806 s**— y las bajas
-  medidas en la ronda (695–729 en 7 200 s para 80 obreras) dan **0,0012 s⁻¹ =
-  1/806**, justo `1/(720·1,12)`. La constante del catálogo es del mundo clásico.
-- **El término de déficit no descontaba la cría en vuelo.** `(Max − A)·KRepl`
-  empujaba a llenar el cupo sin mirar el huevo, la larva y la pupa que ya iban de
-  camino: con los 45 s de retardo de huevo→larva→pupa sobrellenaba, y las pupas
-  —que no mueren de viejas— se quedaban esperando vacante para siempre. La reina
-  ponía un **60 % por encima de las bajas** y un **31 % de la cría moría de
-  inanación como larva**: comida pagada dos veces.
+**Lo que se cambió** (`ColonyController`; sólo la ronda, el mundo clásico no tiene
+embudo, así que sus 6 pines no se mueven):
 
-**Lo que se cambió** (`ColonyController` + `SpeciesDescriptor`; sólo la ronda, el
-mundo clásico conserva su término y su embudo, así que sus 6 pines no se mueven):
-
-- **`RealDeathRate = 1/(BaseLifespan·1,12)`** en el término de reposición. El
-  1,12 no es un ajuste: sale de `InitFromVigor` (0,7 + 0,6·0,7 con `g0` uniforme).
 - **El déficit descuenta el embudo**: `vacantes = Max − adultas − (huevos +
   larvas + pupas)`.
 - **La puesta se para cuando el embudo cubre lo que crían las nodrizas**
   (`adultas · NurseShare`, la misma cuenta con la que se paga la alimentación
   larval — sin constante nueva).
+
+**Lo que se probó y NO entró.** Reponer a la mortalidad real de la obrera
+(`1/(BaseLifespan·1,12)` = 1/806 s, contra el 1/240 de `DeathRate`) parecía la otra
+mitad del arreglo. Medido por separado, no sostiene nada: sola no rescata ninguna
+semilla (en la 11 la colonia 0 se extinguía igual), deja la cola creciendo (93–149
+pupas) porque el déficit sigue sin mirar la cría en vuelo, y **cuesta descargas**
+(1 595 → 1 432 en la semilla 42). Con el embudo solo, las tres semillas viven y
+cada columna mejora, así que se retiró.
 
 **Medido** (216 000 ticks, grid 96, laberinto + reclutamiento, pareja
 Lasius+Eciton con `warm-v2`, semillas 42, 7 y 11):
@@ -1745,21 +1745,20 @@ Lasius+Eciton con `warm-v2`, semillas 42, 7 y 11):
 | (s42 · s7 · s11) | antes | después |
 |---|---|---|
 | pico de pupas, c0 / c1 | 479/943 · 210/914 · 62/239 | **6/6 · 6/6 · 6/6** |
-| huevos puestos en la ronda | 3 322 · 3 120 · 1 036 | **765 · 741 · 781** |
-| eclosiones | 789 · 789 · 315 | **738 · 730 · 775** |
-| adultas al cerrar, c0 / c1 | 40/40 · 40/40 · **0/0** | **40/40 · 40/40 · 36/40** |
-| descargas, total de las dos colonias | 1 686 · 1 224 · 334 | **1 432 · 1 352 · 1 327** |
+| huevos puestos en la ronda | 3 322 · 3 120 · 1 036 | **845 · 852 · 847** |
+| eclosiones | 789 · 789 · 315 | **780 · 783 · 777** |
+| adultas al cerrar, c0 / c1 | 40/40 · 40/40 · **0/0** | **40/40 · 40/40 · 40/40** |
+| descargas, total de las dos colonias | 1 686 · 1 224 · 334 | **1 595 · 1 393 · 1 364** |
 
-En las dos semillas que ya vivían, el gasto en huevos cae **4,3×** y las
-eclosiones se mantienen (789 → 738): la colonia produce los mismos relevos sin
-criar un 70 % de cría condenada. En descargas no hay dirección: entre las dos
-semillas vivas en las DOS versiones el signo cambia (s42 1 686→1 432, s7
-1 224→1 352; **−126** en total sobre ~2 900, un 4 %), así que no se lee ni como
-mejora ni como pérdida. La tercera semilla no es comparable entre versiones — y
-por eso pesa más: con la puesta vieja las dos colonias **se extinguen** antes del
-horizonte (0 adultas, stock 0, 334 descargas) y con la corrección llegan vivas
-(36 y 40 adultas, 1 327 descargas). La fuga de comida no era sólo cara: era
-letal. Lo que sí cierra en todas es la cola: **el pico de pupas pasa de 943 a 6**.
+El gasto en huevos cae **3,8×** y las eclosiones no sólo se mantienen: en la
+semilla que moría pasan de 315 a 777. La cría que no llega a obrera —comida
+pagada para nada— pasa de **2 533 huevos a 65**. En descargas el signo sigue
+cambiando entre las dos semillas que ya vivían (s42 1 686→1 595, s7
+1 224→1 393; **−91** y **+169**), así que no se lee como mejora. La tercera no es comparable entre versiones — y por
+eso pesa más: con la puesta vieja las dos colonias **se extinguen** antes del
+horizonte (0 adultas, stock 0, 334 descargas) y con el embudo llegan al horizonte
+(40/40, 1 364). La fuga de comida no era sólo cara: era letal. Lo que sí cierra en
+las tres es la cola: **el pico de pupas pasa de 943 a 6**.
 
 Reproducible con la partida del lanzador en el CLI (la línea `colonies` del
 stream trae `pupae`, `larvae` y `eggs` por colonia): `--mode game --seed 42 --grid

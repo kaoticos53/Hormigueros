@@ -58,24 +58,6 @@ public sealed class SpeciesDescriptor
     public float BaseLifespan = 720f;      // s (modulada por vigor)
 
     /// <summary>
-    /// Vida útil MEDIA de una obrera, en segundos. <see cref="Ant.InitFromVigor"/>
-    /// no da `BaseLifespan` a todas: reparte `BaseLifespan · (0,7 + 0,6·vigor)` y el
-    /// vigor nace con `g0` uniforme en [0,4, 1] (media 0,7) — así que la media del
-    /// factor es 0,7 + 0,6·0,7 = 1,12. No es una cifra de ajuste: la mortalidad
-    /// medida en la ronda de dos colonias (695–729 bajas en 7 200 s para 80 obreras,
-    /// 0,00121–0,00127 s⁻¹) cae exactamente en 1/(720·1,12) = 1/806.
-    /// </summary>
-    public const float MeanLifespanFactor = 0.7f + 0.6f * 0.7f;
-
-    /// <summary>
-    /// Mortalidad REAL de una obrera (s⁻¹): la inversa de su vida útil media. Es la
-    /// tasa a la que una colonia llena tiene que reponer, y la que usa la puesta de
-    /// la ronda. <see cref="DeathRate"/> (1/240) es 3,4× esta cifra: sirve como
-    /// término del mundo clásico, cuyos pines de hash están fijados.
-    /// </summary>
-    public float RealDeathRate => 1f / (BaseLifespan * MeanLifespanFactor);
-
-    /// <summary>
     /// Tasa ideal de alimentación larval (b_ideal): la suficiente para que una
     /// larva bien alimentada alcance KFull dentro de LarvaTimeMax (con 10% de
     /// margen). Deriva de las constantes → nunca es internamente inconsistente.
