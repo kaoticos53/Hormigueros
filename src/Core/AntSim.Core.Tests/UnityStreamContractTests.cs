@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using AntSim.Core.Scenario;
@@ -304,6 +305,138 @@ namespace AntSim.Core.Tests
             string hash = endLine.Substring(i, endLine.IndexOf('"', i) - i);
 
             Assert.Equal(CanonicalStreamHash, hash);
+        }
+
+        /// <summary>
+        /// F11n — CONTRATO del bloque `trail`, que el HUD lee para publicar el
+        /// gasto de la glándula al cerrar la ronda.
+        ///
+        /// QUÉ FIJA. El bloque vive DENTRO de la línea `end` (no en un objeto
+        /// aparte), con las claves `food`, `home`, `denied`, `gland` en ese orden
+        /// y en el formato canónico del stream (punto decimal, tres decimales como
+        /// mucho, cultura invariante). Y sólo viaja cuando la partida lo pide:
+        /// pedirlo no puede mover el mundo (mismo hash, mismo tick) y no pedirlo
+        /// deja la línea `end` del juego de fábrica sin una sola letra nueva.
+        ///
+        /// LAS DOS CARAS DEL PRESUPUESTO. La ronda se mide con recarga holgada
+        /// (6 s: la glándula se rellena más rápido de lo que se gasta y `denied`
+        /// queda en cero) y con recarga lenta (60 s: el presupuesto se agota y el
+        /// rastro deja depósito sin pagar). Sin el segundo brazo el pin pasaba
+        /// siempre por el cero, y el cero es justo la cifra que el HUD publica
+        /// como «sin pagar»: un `denied` que no se moviera nunca habría pasado
+        /// inadvertido con el mismo bloque bien formado.
+        ///
+        /// POR QUÉ. Renombrar una clave, reordenarlas o emitirlas siempre no rompe
+        /// nada visible: el parser devuelve cero y el HUD publica «0 s gastados»,
+        /// que es una mentira silenciosa. Este pin la convierte en un fallo de
+        /// suite, y el `hash` de arriba impide que el informe se cuele en el mundo.
+        /// </summary>
+        [Fact]
+        public void TrailReport_ElBloqueDeLaLineaEndEsContrato_YSoloViajaSiSePide()
+        {
+            static string EndOf(string stream)
+                => stream.Split('\n').Last(l => !string.IsNullOrWhiteSpace(l)).TrimEnd('\r');
+            static string HashOf(string end)
+            {
+                int i = end.IndexOf("\"hash\":\"", StringComparison.Ordinal) + "\"hash\":\"".Length;
+                return end.Substring(i, end.IndexOf('"', i) - i);
+            }
+            static string Token(string block, string key)
+            {
+                int i = block.IndexOf("\"" + key + "\":", StringComparison.Ordinal) + key.Length + 3;
+                int j = i;
+                while (j < block.Length && block[j] != ',' && block[j] != '}') j++;
+                return block.Substring(i, j - i);
+            }
+            static float Num(string block, string key)
+                => float.Parse(Token(block, key), CultureInfo.InvariantCulture);
+
+            void Check(float glandSeconds, float refillSeconds, bool denies)
+            {
+                string arm = $"glándula {glandSeconds} s / recarga {refillSeconds} s";
+                var tuning = new RecruitmentTuning
+                {
+                    TrailByBrain = true,
+                    TrailGlandSeconds = glandSeconds,
+                    TrailGlandRefillSeconds = refillSeconds,
+                };
+                string with = GameScenario.Run(42, ticks: 600, colonies: 1, grid: 96,
+                    frameEvery: 30, recruitment: true, recruitmentTuning: tuning,
+                    trailReport: true);
+                string without = GameScenario.Run(42, ticks: 600, colonies: 1, grid: 96,
+                    frameEvery: 30, recruitment: true, recruitmentTuning: tuning,
+                    trailReport: false);
+
+                // — Sin pedirlo, la línea `end` es la de siempre —
+                string plain = EndOf(without);
+                Assert.DoesNotContain("\"trail\"", plain);
+
+                // — Pedirlo no mueve el mundo: mismo tick y mismo hash —
+                string reported = EndOf(with);
+                Assert.Equal(HashOf(plain), HashOf(reported));
+                Assert.StartsWith("{\"end\":true", reported);
+
+                // — El bloque va dentro de `end` y sus cuatro claves, en orden —
+                int at = reported.IndexOf("\"trail\":{", StringComparison.Ordinal);
+                Assert.True(at > 0, $"[{arm}] la línea end no trae el bloque trail: {reported}");
+                string block = reported.Substring(at);
+                Assert.EndsWith("}}", block);              // cierra `trail` y con él `end`
+                Assert.Equal("\"trail\":{\"food\":", block.Substring(0, "\"trail\":{\"food\":".Length));
+                Assert.Equal(6, block.Split(':').Length);   // cuatro claves: ni una más
+                int kFood = block.IndexOf("\"food\":", StringComparison.Ordinal);
+                int kHome = block.IndexOf("\"home\":", StringComparison.Ordinal);
+                int kDenied = block.IndexOf("\"denied\":", StringComparison.Ordinal);
+                int kGland = block.IndexOf("\"gland\":", StringComparison.Ordinal);
+                Assert.True(kFood < kHome && kHome < kDenied && kDenied < kGland,
+                    $"[{arm}] el orden de las claves del informe es contrato: {block}");
+
+                // — Formato canónico: cada número se reescribe igual con "0.###" —
+                foreach (string key in new[] { "food", "home", "denied", "gland" })
+                {
+                    string token = Token(block, key);
+                    Assert.Equal(token, float.Parse(token, CultureInfo.InvariantCulture)
+                        .ToString("0.###", CultureInfo.InvariantCulture));
+                }
+
+                // — El parser devuelve exactamente esos números —
+                var parser = new AntSim.Unity.Scripts.Streaming.GameStreamParser();
+                foreach (var line in with.Split('\n')) parser.ParseLine(line);
+                var trail = parser.Trail;
+                Assert.NotNull(trail);
+                Assert.Equal(Num(block, "food"), trail!.Value.Food);
+                Assert.Equal(Num(block, "home"), trail.Value.Home);
+                Assert.Equal(Num(block, "denied"), trail.Value.Denied);
+                Assert.Equal(Num(block, "gland"), trail.Value.Gland);
+
+                // — Y la cifra no es un cero disfrazado de informe —
+                Assert.True(trail.Value.Gland > 0f,
+                    $"[{arm}] la ronda con precio tiene que gastar glándula");
+                Assert.True(trail.Value.Food + trail.Value.Home > 0f,
+                    $"[{arm}] y tiene que depositar rastro");
+                Assert.InRange(trail.Value.DeniedPercent, 0f, 100f);
+                // El porcentaje es el cociente de los guiones de medida, no otro.
+                Assert.Equal(100f * trail.Value.Denied /
+                             (trail.Value.Denied + trail.Value.Food + trail.Value.Home),
+                             trail.Value.DeniedPercent);
+
+                // — La negación es la de la recarga, no un cero de relleno —
+                if (denies)
+                {
+                    Assert.True(trail.Value.Denied > 0f,
+                        $"[{arm}] con la recarga lenta la ronda tiene que dejar depósito sin pagar: {block}");
+                    Assert.True(trail.Value.DeniedPercent > 0f,
+                        $"[{arm}] y el porcentaje tiene que verlo: {block}");
+                }
+                else
+                {
+                    Assert.Equal(0f, trail.Value.Denied);
+                }
+            }
+
+            // La glándula se rellena más rápido de lo que se gasta: no se niega nada.
+            Check(glandSeconds: 25f, refillSeconds: 6f, denies: false);
+            // El presupuesto se agota y la recarga tarda 60 s: el rastro queda a medias.
+            Check(glandSeconds: 5f, refillSeconds: 60f, denies: true);
         }
 
         [Fact]
