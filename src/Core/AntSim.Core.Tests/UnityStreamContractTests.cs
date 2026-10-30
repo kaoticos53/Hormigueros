@@ -326,6 +326,14 @@ namespace AntSim.Core.Tests
         /// como «sin pagar»: un `denied` que no se moviera nunca habría pasado
         /// inadvertido con el mismo bloque bien formado.
         ///
+        /// Y EL DEPÓSITO DE COMIDA. A 600 ticks no hay ni una carga: las hormigas
+        /// depositan rastro de casa desde que caminan, y el de comida solo cuando
+        /// vuelven con algo. El tercer brazo corre 12 000 ticks con el rastro FIJO
+        /// (sin puerta) porque la puerta le concede la decisión al cerebro, que
+        /// con este pool no deposita comida nunca —`food` se quedaba en 0 con el
+        /// bloque perfectamente formado, que es el otro cero que este pin tenía
+        /// que dejar de creerse—.
+        ///
         /// POR QUÉ. Renombrar una clave, reordenarlas o emitirlas siempre no rompe
         /// nada visible: el parser devuelve cero y el HUD publica «0 s gastados»,
         /// que es una mentira silenciosa. Este pin la convierte en un fallo de
@@ -351,19 +359,21 @@ namespace AntSim.Core.Tests
             static float Num(string block, string key)
                 => float.Parse(Token(block, key), CultureInfo.InvariantCulture);
 
-            void Check(float glandSeconds, float refillSeconds, bool denies)
+            AntSim.Unity.Scripts.Streaming.GameStreamParser.TrailReportView Run(
+                float glandSeconds, float refillSeconds, int ticks, bool byBrain)
             {
-                string arm = $"glándula {glandSeconds} s / recarga {refillSeconds} s";
+                string arm = $"glándula {glandSeconds} s / recarga {refillSeconds} s / " +
+                              $"{ticks} ticks / {(byBrain ? "puerta" : "rastro fijo")}";
                 var tuning = new RecruitmentTuning
                 {
-                    TrailByBrain = true,
+                    TrailByBrain = byBrain,
                     TrailGlandSeconds = glandSeconds,
                     TrailGlandRefillSeconds = refillSeconds,
                 };
-                string with = GameScenario.Run(42, ticks: 600, colonies: 1, grid: 96,
+                string with = GameScenario.Run(42, ticks: ticks, colonies: 1, grid: 96,
                     frameEvery: 30, recruitment: true, recruitmentTuning: tuning,
                     trailReport: true);
-                string without = GameScenario.Run(42, ticks: 600, colonies: 1, grid: 96,
+                string without = GameScenario.Run(42, ticks: ticks, colonies: 1, grid: 96,
                     frameEvery: 30, recruitment: true, recruitmentTuning: tuning,
                     trailReport: false);
 
@@ -419,24 +429,29 @@ namespace AntSim.Core.Tests
                              (trail.Value.Denied + trail.Value.Food + trail.Value.Home),
                              trail.Value.DeniedPercent);
 
-                // — La negación es la de la recarga, no un cero de relleno —
-                if (denies)
-                {
-                    Assert.True(trail.Value.Denied > 0f,
-                        $"[{arm}] con la recarga lenta la ronda tiene que dejar depósito sin pagar: {block}");
-                    Assert.True(trail.Value.DeniedPercent > 0f,
-                        $"[{arm}] y el porcentaje tiene que verlo: {block}");
-                }
-                else
-                {
-                    Assert.Equal(0f, trail.Value.Denied);
-                }
+                return trail.Value;
             }
 
             // La glándula se rellena más rápido de lo que se gasta: no se niega nada.
-            Check(glandSeconds: 25f, refillSeconds: 6f, denies: false);
+            var holgada = Run(glandSeconds: 25f, refillSeconds: 6f, ticks: 600, byBrain: true);
+            Assert.Equal(0f, holgada.Denied);
+
             // El presupuesto se agota y la recarga tarda 60 s: el rastro queda a medias.
-            Check(glandSeconds: 5f, refillSeconds: 60f, denies: true);
+            var racionada = Run(glandSeconds: 5f, refillSeconds: 60f, ticks: 600, byBrain: true);
+            Assert.True(racionada.Denied > 0f,
+                "con la recarga lenta la ronda tiene que dejar depósito sin pagar: " +
+                $"food={racionada.Food} home={racionada.Home} denied={racionada.Denied}");
+            Assert.True(racionada.DeniedPercent > 0f,
+                $"y el porcentaje tiene que verlo: {racionada.DeniedPercent} %");
+
+            // Con rastro fijo las hormigas vuelven con carga y el depósito de comida
+            // entra en el informe; el presupuesto, al horizonte largo, también se agota.
+            var conComida = Run(glandSeconds: 25f, refillSeconds: 6f, ticks: 12_000, byBrain: false);
+            Assert.True(conComida.Food > 0f,
+                "el rastro de comida tiene que entrar en el informe con datos reales: " +
+                $"food={conComida.Food} home={conComida.Home} denied={conComida.Denied}");
+            Assert.True(conComida.Denied > 0f,
+                $"y a 12 000 ticks el presupuesto también se agota: denied={conComida.Denied}");
         }
 
         [Fact]
