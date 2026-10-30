@@ -99,10 +99,42 @@ Semilla 42, grid 96, 2 colonias, pool `pretrain-warm-v2`, CLI `--mode game`:
 La demografía empata con el mundo abierto a 20 000 ticks; lo que queda por debajo
 es NAVEGACIÓN (la vuelta con carga se pierde en las paredes), no comida
 disponible — llenar el mapa de ítems no lo arregla, lo arregla la evolución por
-nacimientos. **El mundo clásico también se extingue** hacia los 30 000–36 000 ticks
-con este pool (es la economía de la colonia, anterior a F6): el laberinto no
-adelanta el final, y el horizonte de 2 h se eligió por ritmo de partida, no porque
-la colonia esté garantizada hasta el final.
+nacimientos. **El mundo clásico también se extinguía** hacia los 30 000–36 000
+ticks con este pool (es la economía de la colonia, anterior a F6): el laberinto no
+adelantaba el final, y el horizonte de 2 h se eligió por ritmo de partida, no
+porque la colonia estuviera garantizada hasta el final.
+
+### 5bis. La ronda ya llega al horizonte (2026-10-30)
+
+Aquella frase —«no está garantizada hasta el final»— dejó de ser cierta y merece
+el número: la ronda de **dos colonias** con laberinto y reclutamiento se apagaba
+hacia el tick **33 000–46 000 de 216 000**, con **974 ep de comida sin recoger en
+151 ítems** en el tablero. No era escasez: era alcance.
+
+- Los montones caían a **100–220 u** del nido y las obreras patrullan ~100 u
+  (mediana 93 u; sólo un 11 % pasa de 200). La colonia 0 hacía **8 descargas y
+  41 ep en 40 000 ticks** (0,001 ep/s): un viaje cada ~38 min de simulación.
+- La cuota de montones era **global**: con dos colonias cada nido se quedaba con
+  **4 de los 8**, la mitad de la oferta de una colonia sola.
+
+La siembra del mundo con reclutamiento pasó a **banda 40–120 u** y a **montones
+por colonia** (repartidos en rueda, también en la reposición). El mundo clásico
+no cambia ni un byte y los 6 pines de CI no se mueven.
+
+**Medido** (216 000 ticks, grid 96, laberinto + reclutamiento, semillas 42, 7, 11
+y 13):
+
+| partida | antes | después |
+|---|---|---|
+| 2 × Lasius, `pretrain-maze-los3` | 69 600 / 92 400 (semilla 42) | **4/4 semillas con las dos colonias vivas** |
+| pareja Lasius+Eciton, `pretrain-maze-los3` | 47 040 / 39 120 (semilla 42) | **4/4 semillas con las dos colonias vivas** |
+| pareja con `warm-v2` (pool del fixture) | 33 720 / 83 160 (semilla 42) | **2/2 medidas con las dos vivas** (semilla 7: c0 toca 0 en 132 000 y se repone) |
+
+Con el pool de fábrica las **40 adultas** se sostienen todo el horizonte y el
+stock oscila **55–150** en vez de caer a cero: el saqueo ya se juega sobre una
+colonia que está viva. Los pines que lo impiden volver están en
+`RecruitmentTests` (`Cumulos_SeRepartenPorColonia_NoComoCuotaUnica` y
+`Cumulos_CaenDentroDelRadioQueLaColoniaPatrulla`).
 
 Partida completa (216 000 ticks, `--maze --export`): termina en 15,6 s de CPU,
 escribe `artifacts/evolved-42.antgenome` (53 KB, 61 genomas en la élite de la

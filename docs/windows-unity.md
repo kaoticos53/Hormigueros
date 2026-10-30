@@ -46,7 +46,7 @@ quedaba 8× fuera de cámara).
 | `--speed` | `120` | `10`–`160` |
 | `--frame-every` | `1` | `1`–`60` |
 | `--no-recruitment` | — | apaga los cúmulos de comida y los reflejos de rastro (mundo clásico) |
-| `--clusters` | `8` | `0`–`64` montones de comida (0 = sin montones, control A/B) |
+| `--clusters` | `8` | `0`–`64` montones de comida **por colonia** (0 = sin montones, control A/B) |
 | `--cluster-size` | `6:10` | `1`–`40` ítems por montón, como `MIN:MAX` |
 | `--cluster-radius` | `18` | `1`–`120` u de radio del montón |
 | `--trail-deposit` | `1` | `0`–`5` × QMaxFood/s que deja la hormiga cargada |

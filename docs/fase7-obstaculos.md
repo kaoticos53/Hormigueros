@@ -228,12 +228,16 @@ para el mundo clásico) pasan tres cosas, y solo en la partida:
 
 - **Cúmulos ADEMÁS de lo aleatorio, RICOS y AL ALCANCE.** La siembra clásica
   sigue intacta (mismo flujo del RNG, mismos pines) y encima se siembran 8
-  montones de 6–10 ítems de **10 ep** (el tope del contrato; una migaja suelta
-  vale 4–6) a **100–220 u de una colonia**. Las dos cosas están medidas, no
-  elegidas a ojo: las obreras patrullan ~100 u alrededor del nido (mediana 93 u,
-  solo un 11 % pasa de 200 u) y un montón sembrado «en cualquier sitio» no lo
-  visita nadie — el rastro no tenía a quién guiar y el viaje pagaba un acarreo
-  largo. Con la banda de forrajeo y el bocado rico, el viaje se paga solo.
+  montones **por colonia** de 6–10 ítems de **10 ep** (el tope del contrato; una
+  migaja suelta vale 4–6) a **40–120 u de una colonia**. Las tres cosas están
+  medidas, no elegidas a ojo: las obreras patrullan ~100 u alrededor del nido
+  (mediana 93 u, sólo un 11 % pasa de 200 u), un montón sembrado «en cualquier
+  sitio» no lo visita nadie, y una cuota GLOBAL de montones deja a cada nido de
+  una partida de dos con la mitad de la oferta. *(La banda nació en 100–220 u y
+  se cerró a 40–120 u el 2026-10-30: con la vieja la ronda de dos colonias se
+  apagaba a los 33 000–46 000 ticks de 216 000 con el tablero lleno — ver
+  `fase6-terreno.md` §5bis.)* Con la banda de forrajeo y el bocado rico, el viaje
+  se paga solo.
 - **Dos reflejos innatos, no salidas del cerebro.** La hormiga deja el rastro
   según lo que está HACIENDO: la que **busca** va dejando rastro de **casa**
   (el camino de vuelta al nido) y la que vuelve **cargada** deja rastro de
@@ -424,8 +428,13 @@ edad. Lo que queda es el techo del propio forrajeo —el pool entrenado tarda
 el mantenimiento de 40 adultas, sin margen para criar—; por eso la ronda sigue
 terminando, más tarde y por vejez, no por inanición. Subir la comida del
 tablero (más montones, banda más cercana, bocados de 10 ep también fuera de los
-montones) se probó y **no** alarga la ronda: el límite no es la oferta, es el
-ritmo al que la política la encuentra.
+montones) se probó y **no** alargaba las descargas a horizonte fijo: el límite no
+es la oferta, es el ritmo al que la política la encuentra. **Corrección medida
+(2026-10-30)**: eso se midió sobre *descargas*, no sobre *supervivencia* — con la
+banda dentro del radio de patrulla y los montones por colonia, la ronda de dos
+colonias sí deja de morirse (33 000–46 000 → horizonte completo en 4/4 semillas;
+`fase6-terreno.md` §5bis). La oferta no cambia el ritmo del forrajeo, pero sí
+decide si el nido llega a jugar la ronda entera.
 
 ## 8quater. El rastro es una huella: ancho de hormiga, vida ×7 y colores por tipo (2026-10-24)
 

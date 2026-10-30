@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-25 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 785/785 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 787/787 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -1018,7 +1018,7 @@ a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
 NEAT canónica. <!-- cifras-historicas: el cierre de v0.8.0 (run #37). -->Aquel
-cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **785/785
+cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **787/787
 tests** en Windows y verdes en Linux en CI en cada push, igual que los 6 scripts
 de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
@@ -1673,6 +1673,51 @@ sondas, canal 12 reconvertido a sensor de presa, eventos 17–19, bloque
    cambia, los contratos no.
 
 <!-- /cifras-historicas -->
+
+## Sostenibilidad de la ronda de dos colonias (2026-10-30)
+
+**El síntoma.** La ronda del lanzador se apagaba hacia el tick 33 000–46 000 de
+216 000 **con el tablero lleno**: a los 33 720 ticks las dos colonias estaban
+extintas y en el mapa quedaban **974 ep en 151 ítems sin recoger**. El saqueo
+tenía media ronda de margen, pero se jugaba sobre un mundo que se moría antes.
+
+**La causa, medida** (pareja Lasius+Eciton, `--maze --recruitment`, semilla 42):
+
+1. **Los montones caían fuera del alcance real.** La banda era 100–220 u del
+   nido y las obreras patrullan ~100 u (mediana 93 u; sólo un 11 % pasa de
+   200 u). Resultado: **8 descargas y 41 ep en 40 000 ticks** en la colonia 0
+   (0,001 ep/s) — un viaje completo cada ~38 min de simulación.
+2. **La cuota de montones era GLOBAL.** Con dos colonias, cada nido se
+   quedaba con **4 de los 8 montones**: la mitad de la oferta que tiene una
+   colonia sola, que es justo la que sí llegaba al horizonte.
+
+**Lo que se cambió** (`WorldSim`; sólo la siembra del mundo con reclutamiento,
+ni una constante del mundo clásico y ni un pin de CI):
+
+- **Banda 40–120 u** (`FoodClusterMinDistance`/`…MaxDistance`): el viaje cabe
+  en una salida.
+- **Montones POR COLONIA, repartidos en rueda** (`FoodClusterCount` es ahora
+  por nido; el reparto de reposición también va en rueda).
+
+**Medido** (216 000 ticks, grid 96, laberinto + reclutamiento, 4 semillas:
+42, 7, 11, 13; «vivas al horizonte» = ninguna colonia sin adultas):
+
+| partida | antes | después |
+|---|---|---|
+| 2 × Lasius, `pretrain-maze-los3` | 69 600 / 92 400 (semilla 42) | **4/4 semillas, las dos vivas** |
+| pareja Lasius+Eciton, `pretrain-maze-los3` | 47 040 / 39 120 (semilla 42) | **4/4 semillas, las dos vivas** |
+| pareja con `warm-v2` (el pool del fixture) | 33 720 / 83 160 (semilla 42) | **2/2 medidas, las dos vivas** (semilla 7: c0 toca 0 en 132 000 y se repone) |
+
+No es supervivencia al borde: con el pool de fábrica las **40 adultas** se
+mantienen todo el horizonte y el stock oscila **55–150** en vez de caer a cero
+(a los 33 720 ticks de antes no quedaba ni una hormiga).
+
+**Lo que NO se tocó, a propósito.** La puesta repone a `λ_death = 1/240 s`, que
+es **3× la mortalidad real** de una obrera (vida 720 s): el excedente se apila
+como pupas que no encuentran vacante (610 pupas con las 40 adultas llenas a los
+200 000 ticks). Alinearlo con la vida bajó ese desperdicio 4× (156 pupas) pero
+**no movió la supervivencia** en ninguna de las tiradas, y sí mueve los 6 pines
+del mundo clásico; queda anotado como deuda medida, no como arreglo.
 
 ## Riesgos abiertos
 

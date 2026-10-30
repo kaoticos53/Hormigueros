@@ -98,6 +98,94 @@ namespace AntSim.Core.Tests
             Assert.DoesNotContain(clasico.Items, i => i.Amount > 6f + 1e-3f);
         }
 
+        /// <summary>
+        /// SOSTENIBILIDAD DE LA RONDA — la oferta de montones se reparte POR
+        /// COLONIA y en rueda. Con una sola cuota global, dos colonias se
+        /// quedaban con la mitad de montones cada una y la partida de pareja moría
+        /// de hambre a los ~46 000 ticks con más de 1 000 ep en el tablero; los
+        /// mismos montones sostienen a UNA colonia hasta el horizonte.
+        /// </summary>
+        [Fact]
+        public void Cumulos_SeRepartenPorColonia_NoComoCuotaUnica()
+        {
+            // Tamaño fijo de montón para que la cuenta sea exacta (el sorteo de
+            // 6–10 hace que «bocados / máximo» no sea un conteo).
+            var tuning = new RecruitmentTuning { Clusters = 5, ClusterMin = 4, ClusterMax = 4 };
+            var una = new WorldSim(seed: 42UL, gridCells: Grid, colonyCount: 1,
+                recruitment: true, recruitmentTuning: tuning);
+            var dos = new WorldSim(seed: 42UL, gridCells: Grid, colonyCount: 2,
+                recruitment: true, recruitmentTuning: tuning);
+
+            // Una cuota POR COLONIA: el doble de nidos, el doble de bocados ricos.
+            Assert.Equal(5 * 4, Ricos(una));
+            Assert.Equal(2 * 5 * 4, Ricos(dos));
+
+            // Y la rueda es equilibrada: cada nido tiene SU cuota de montones al
+            // alcance, no una colonia con todos y la otra sin ninguno.
+            var centros = CentrosDeCumulo(dos);
+            Assert.Equal(2 * 5, centros.Count);
+            foreach (var colony in dos.Colonies)
+            {
+                int suyos = 0;
+                foreach (var c in centros)
+                {
+                    float dx = c.x - colony.NestX, dy = c.y - colony.NestY;
+                    if (MathF.Sqrt(dx * dx + dy * dy) <= dos.FoodClusterMaxDistance + 2f * dos.FoodClusterRadius)
+                        suyos++;
+                }
+                Assert.True(suyos >= 5,
+                    $"la colonia {colony.Id} tiene {suyos} montones al alcance y le tocan 5");
+            }
+        }
+
+        /// <summary>
+        /// SOSTENIBILIDAD DE LA RONDA — la banda de los montones cabe en el radio
+        /// que la colonia patrulla de verdad (mediana 93 u; solo un 11 % de las
+        /// obreras pasa de 200 u). Con la banda vieja (100–220 u) los montones
+        /// caían fuera del alcance real: 33 720 ticks de ronda de 216 000. Este pin
+        /// fija los números para que nadie los devuelva al borde sin medirlo.
+        /// </summary>
+        [Fact]
+        public void Cumulos_CaenDentroDelRadioQueLaColoniaPatrulla()
+        {
+            var sim = new WorldSim(seed: 42UL, gridCells: Grid, colonyCount: 2, recruitment: true);
+
+            Assert.True(sim.FoodClusterMaxDistance <= 140f,
+                $"la banda de montones llega a {sim.FoodClusterMaxDistance} u: fuera del radio de patrulla");
+            Assert.True(sim.FoodClusterMinDistance > 2f * sim.FoodClusterRadius,
+                $"la banda arranca a {sim.FoodClusterMinDistance} u: los montones caerían dentro del cúmulo de nido");
+        }
+
+        /// <summary>Bocados ricos (10 ep = <see cref="FoodItem.MaxValue"/>): la firma
+        /// del montón, porque la siembra clásica nunca pasa de 6 ep.</summary>
+        private static int Ricos(WorldSim sim)
+        {
+            int ricos = 0;
+            foreach (var item in sim.Items)
+                if (MathF.Abs(item.Amount - sim.FoodClusterItemAmount) < 1e-3f) ricos++;
+            return ricos;
+        }
+
+        /// <summary>Centros de montón aproximados: los bocados ricos agrupados por
+        /// cercanía (el primero que aparece de cada grupo hace de centro).</summary>
+        private static System.Collections.Generic.List<(float x, float y)> CentrosDeCumulo(WorldSim sim)
+        {
+            var centros = new System.Collections.Generic.List<(float x, float y)>();
+            float r2 = sim.FoodClusterRadius * sim.FoodClusterRadius * 2f;
+            foreach (var item in sim.Items)
+            {
+                if (MathF.Abs(item.Amount - sim.FoodClusterItemAmount) >= 1e-3f) continue;
+                bool visto = false;
+                foreach (var c in centros)
+                {
+                    float dx = item.X - c.x, dy = item.Y - c.y;
+                    if (dx * dx + dy * dy <= r2) { visto = true; break; }
+                }
+                if (!visto) centros.Add((item.X, item.Y));
+            }
+            return centros;
+        }
+
         [Fact]
         public void AjustesDelLanzador_LleganAlMundoAntesDeSembrar()
         {

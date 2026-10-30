@@ -242,9 +242,10 @@ public sealed class WorldSim
             // una hormiga puede anunciar como «aquí hay comida» y que se ven en
             // el tablero como un punto caliente del rastro de comida. El guard es
             // por si el terreno rechazara centros: nunca un bucle sin salida.
+            int pileTarget = FoodClusterCount * Math.Max(1, _colonies.Count);
             int piles = 0;
-            for (int guard = 0; guard < 256 && piles < FoodClusterCount; guard++)
-                if (SpawnCluster()) piles++;
+            for (int guard = 0; guard < 256 && piles < pileTarget; guard++)
+                if (SpawnCluster(piles % Math.Max(1, _colonies.Count))) piles++;
             // Nivel al que se REPONEN los montones (ver RespawnItems): el total que
             // dejó la siembra inicial, no solo la cuota de ítems sueltos.
             _pileFloor = _items.Count;
@@ -423,7 +424,12 @@ public sealed class WorldSim
     /// suelo de 0,4 deja oler la boca del nido, que es por donde se sale.</summary>
     public float RecruitmentTrailSourceDistance { get; set; } = 240f;
 
-    /// <summary>Montones que se siembran ADEMÁS de la comida aleatoria (F8).</summary>
+    /// <summary>Montones que se siembran ADEMÁS de la comida aleatoria (F8), POR
+    /// COLONIA: el mundo reparte la misma oferta a cada nido en vez de partir una
+    /// sola cuota entre todos. Con el reparto global, dos colonias se quedaban con
+    /// la mitad de montones cada una y la ronda de pareja moría de hambre teniendo
+    /// el mapa lleno (medido: c0 extinta en 46 200 ticks de 216 000 con los mismos
+    /// montones que sostienen una colonia sola hasta el horizonte).</summary>
     public int FoodClusterCount { get; set; } = 8;
 
     /// <summary>Ítems por montón (F8).</summary>
@@ -440,15 +446,25 @@ public sealed class WorldSim
     /// por debajo de este nivel se repone UN montón por paso.</summary>
     private int _pileFloor;
 
+    /// <summary>Índice de la colonia que recibe el próximo montón repuesto: los
+    /// montones se reparten POR COLONIA y en rueda, así que ninguna se queda sin
+    /// parche mientras la otra acumula.</summary>
+    private int _pileSeed;
+
     /// <summary>Radio del montón en unidades (F8). A 18 u el grueso de un montón
     /// cabe en 2–3 celdas de feromona, así que el rastro nace como un punto
     /// caliente y no como una mancha informe.</summary>
     public float FoodClusterRadius { get; set; } = 18f;
 
     /// <summary>Banda de distancia al nido (u) donde caen los montones (F8):
-    /// dentro del radio que la colonia patrulla de verdad.</summary>
-    public float FoodClusterMinDistance { get; set; } = 100f;
-    public float FoodClusterMaxDistance { get; set; } = 220f;
+    /// dentro del radio que la colonia patrulla de verdad. Antes era 100–220 u y
+    /// las obreras patrullan ~100 u (solo un 11 % pasa de 200): los montones
+    /// quedaban fuera del alcance real y la colonia se moría de hambre con más de
+    /// 1 000 ep sin recoger en el tablero. Con 40–120 u el viaje cabe en una salida
+    /// y la ronda de dos colonias llega al horizonte en las cuatro semillas
+    /// medidas (docs/fase6-terreno.md §5).</summary>
+    public float FoodClusterMinDistance { get; set; } = 40f;
+    public float FoodClusterMaxDistance { get; set; } = 120f;
 
     /// <summary>Topología del cerebro de esta partida (copia defensiva).</summary>
     public int[] BrainSizes => (int[])_brainSizes.Clone();
@@ -1643,7 +1659,8 @@ public sealed class WorldSim
         // F8: los montones se reponen ADEMÁS, y de uno en uno: un montón son 6–10
         // ítems y el presupuesto clásico de 2 por paso tardaría una eternidad en
         // volver a formar uno visible en el tablero.
-        if (Recruitment && _items.Count < _pileFloor) SpawnCluster();
+        if (Recruitment && _items.Count < _pileFloor)
+            SpawnCluster(_pileSeed++ % Math.Max(1, _colonies.Count));
     }
 
     private bool SpawnItem()
@@ -1662,9 +1679,9 @@ public sealed class WorldSim
     /// se reintentan: reintentar por ítem desordenaría el flujo del RNG sin ganar
     /// nada).
     /// </summary>
-    private bool SpawnCluster()
+    private bool SpawnCluster(int? colonyIndex = null)
     {
-        if (!TryFindClusterCenter(out float cx, out float cy)) return false;
+        if (!TryFindClusterCenter(out float cx, out float cy, colonyIndex)) return false;
 
         int size = FoodClusterMin +
             (int)(_worldRng.NextDouble01() * (FoodClusterMax - FoodClusterMin + 1));
@@ -1690,12 +1707,13 @@ public sealed class WorldSim
     /// un 11 % pasa de 200, así que un montón al otro lado del mapa no lo visita
     /// nadie y el rastro no tiene a quién guiar.
     /// </summary>
-    private bool TryFindClusterCenter(out float cx, out float cy)
+    private bool TryFindClusterCenter(out float cx, out float cy, int? colonyIndex = null)
     {
         cx = cy = 0f;
         for (int attempt = 0; attempt < 8; attempt++)
         {
-            var colony = _colonies[(int)(_worldRng.NextDouble01() * _colonies.Count) % _colonies.Count];
+            int pick = colonyIndex ?? (int)(_worldRng.NextDouble01() * _colonies.Count);
+            var colony = _colonies[pick % _colonies.Count];
             float bearing = (float)(_worldRng.NextDouble01() * Math.PI * 2.0);
             float dist = FoodClusterMinDistance +
                 (float)_worldRng.NextDouble01() * (FoodClusterMaxDistance - FoodClusterMinDistance);
