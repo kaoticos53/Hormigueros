@@ -1740,27 +1740,34 @@ mundo clásico conserva su término y su embudo, así que sus 6 pines no se muev
   larval — sin constante nueva).
 
 **Medido** (216 000 ticks, grid 96, laberinto + reclutamiento, pareja
-Lasius+Eciton con `warm-v2`, semillas 42 y 7):
+Lasius+Eciton con `warm-v2`, semillas 42, 7 y 11):
 
-| | antes | después |
+| (s42 · s7 · s11) | antes | después |
 |---|---|---|
-| pupas al cerrar (c0 / c1, semilla 42) | 479 / 943 | **3 / 3** |
-| pico de pupas | 479 / 943 | **6 / 6** |
-| huevos puestos en la ronda | 3 322 | **765** |
-| eclosiones | 789 | **738** |
-| adultas al cerrar | 40 / 40 | **40 / 40** |
-| descargas (s42 · s7) | 859 · 658 | 755 · 737 |
+| pico de pupas, c0 / c1 | 479/943 · 210/914 · 62/239 | **6/6 · 6/6 · 6/6** |
+| huevos puestos en la ronda | 3 322 · 3 120 · 1 036 | **765 · 741 · 781** |
+| eclosiones | 789 · 789 · 315 | **738 · 730 · 775** |
+| adultas al cerrar, c0 / c1 | 40/40 · 40/40 · **0/0** | **40/40 · 40/40 · 36/40** |
+| descargas, total de las dos colonias | 1 686 · 1 224 · 334 | **1 432 · 1 352 · 1 327** |
 
-El gasto en huevos cae **4,3×** y las eclosiones se mantienen (789 → 738): la
-colonia produce los mismos relevos sin criar un 70 % de cría condenada. En
-descargas el efecto cambia de signo entre las dos semillas (859→755 y 658→737),
-así que con dos semillas no se lee ni como mejora ni como pérdida — lo que sí
-cierra es la fuga: **el pico de pupas pasa de 943 a 6**.
+En las dos semillas que ya vivían, el gasto en huevos cae **4,3×** y las
+eclosiones se mantienen (789 → 738): la colonia produce los mismos relevos sin
+criar un 70 % de cría condenada. En descargas no hay dirección: entre las dos
+semillas vivas en las DOS versiones el signo cambia (s42 1 686→1 432, s7
+1 224→1 352; **−126** en total sobre ~2 900, un 4 %), así que no se lee ni como
+mejora ni como pérdida. La tercera semilla no es comparable entre versiones — y
+por eso pesa más: con la puesta vieja las dos colonias **se extinguen** antes del
+horizonte (0 adultas, stock 0, 334 descargas) y con la corrección llegan vivas
+(36 y 40 adultas, 1 327 descargas). La fuga de comida no era sólo cara: era
+letal. Lo que sí cierra en todas es la cola: **el pico de pupas pasa de 943 a 6**.
 
 Reproducible con la partida del lanzador en el CLI (la línea `colonies` del
 stream trae `pupae`, `larvae` y `eggs` por colonia): `--mode game --seed 42 --grid
-96 --ticks 216000 --frame-every 600 --maze --recruitment --colonies 2 --species
-lasius,eciton --seed-pool tests/fixtures/warm-v2.antgenome`. Un guard más duro se
+96 --ticks 216000 --frame-every 30 --maze --recruitment --colonies 2 --species
+lasius,eciton --seed-pool tests/fixtures/warm-v2.antgenome`. El `--frame-every 30`
+no es cosmético: `colmetrics` y `metrics` son VENTANAS que se vacían al cerrarse,
+así que a 600 ticks por frame sólo se lee la última de 30 —los totales de la
+tabla salen de sumar la ventana cerrada de cada frame—. Un guard más duro se
 probó y se **descartó por medido**: cerrar la puesta con el embudo lleno apaga el
 relevo con las 40 adultas y en la semilla 7 la colonia se apagaba (0 adultas,
 stock 0).
