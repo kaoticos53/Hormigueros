@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-25 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 776/776 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 780/780 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -981,16 +981,19 @@ par sobre ese pool no paga. Que entre como configuración y no como default es
 además lo que deja quietos los seis pines de hash: no cambia el mundo de nadie,
 aparece una forma de jugarlo que antes solo existía en la línea del CLI.
 
-Coste de lo adoptado: dos perillas nuevas en `RecruitmentKnobs`
-y `LaunchSettings` —campo, serialización, parseo, validación y descripción— más
-la prueba de espejo que impide que diverjan, las dos banderas en la línea del CLI
-que arma `StreamReader`, la ayuda y los rangos de `play-game.sh` y
-`play-game.ps1`, y si la glándula se quiere VER en pantalla, el parser del stream,
-su modelo y la tarjeta del HUD con su prueba (el mundo ya publica `denied` y
-`gland` desde `GameScenario`, pero ningún parser los lee). Son ocho ficheros y un
-pool `.antgenome` más en el catálogo; y si el par fuera el DEFAULT los seis pines
-de hash se moverían, porque el mundo cambia a propósito —entra como
-configuración, así que no se mueven—.
+Coste de lo adoptado, ya implementado: tres perillas nuevas en `RecruitmentKnobs`
+y `LaunchSettings` —puerta, precio y recarga, con campo, serialización, parseo,
+validación y descripción—, los tres centinelas de `SimPresenterBehaviour` con su
+asignación en `SceneBootstrapper`, las tres banderas en la línea del CLI que arma
+`StreamReader` y la ayuda y los rangos de `play-game.sh` y `play-game.ps1`; la
+prueba de espejo las cubre en los dos sentidos (defaults, rangos, motivos de
+rechazo y la descripción del par). Entran apagadas: sin banderas la línea del CLI
+es la de siempre, así que los seis pines de hash no se mueven y la partida de
+fábrica sigue en glándula 0. Lo que NO entra todavía es la glándula en pantalla
+—el mundo ya publica `denied` y `gland` desde `GameScenario`, pero ningún parser
+los lee, así que el HUD sigue publicando el rastro de F8—; y el par se pide con su
+pool (`--pool pretrain-partida-200-gl-red`), que es el que su receta corona, no
+con el de fábrica.
 
 Lo que la decisión NO compra, y conviene tenerlo escrito al lado: el +47,2 y el
 +57,9 comparan una receta de 200 generaciones con warm-start desde
@@ -1011,7 +1014,7 @@ a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
 NEAT canónica. <!-- cifras-historicas: el cierre de v0.8.0 (run #37). -->Aquel
-cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **776/776
+cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **780/780
 tests** en Windows y verdes en Linux en CI en cada push, igual que los 6 scripts
 de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las
