@@ -169,6 +169,9 @@ analizar_fichero() {
 # guardarraíles: `python3` en el runner de CI, `python` en Git Bash de Windows y
 # `py` como último recurso.
 PARTIDA_TOOL="scripts/partida-figures.py"
+# El analizador del contrafactual de F11n: no deriva cifras de documento todavía,
+# pero su aritmética (entrenamiento + precio = total) es la que los citará.
+SPLIT_TOOL="scripts/gland-p0x-split.py"
 
 resolver_python() {
   local cand
@@ -350,6 +353,20 @@ if [[ "${1:-}" == "--selftest" ]]; then
     printf '%s\n' "$salida" | tail -3 | sed 's/^/  /'
   else
     echo "  X el selftest del derivador de cifras de partida falla"
+    printf '%s\n' "$salida" | sed 's/^/      /'
+    FALLO=1
+  fi
+
+  # El reparto del contrafactual (F11o) se prueba igual, aquí al lado del
+  # derivador que va a citarlo: su aritmética es la del documento (entrenamiento +
+  # precio = total) y un log de mentira la deja cuadrar a mano. Sin intérprete, X.
+  if [[ -z "$PY" ]]; then
+    echo "  X no hay Python 3 en el PATH: no puedo probar el reparto del contrafactual"
+    FALLO=1
+  elif salida="$(PYTHONUTF8=1 "$PY" "$ROOT/$SPLIT_TOOL" --selftest 2>&1)"; then
+    printf '%s\n' "$salida" | tail -2 | sed 's/^/  /'
+  else
+    echo "  X el selftest del reparto del contrafactual falla"
     printf '%s\n' "$salida" | sed 's/^/      /'
     FALLO=1
   fi

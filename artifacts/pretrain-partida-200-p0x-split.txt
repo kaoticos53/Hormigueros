@@ -1,0 +1,40 @@
+# El reparto del contrafactual (F11o): cuánto del +47,2 es entrenamiento y cuánto precio
+# fuente: artifacts/pretrain-partida-200-p0x-bench.log · 24 semillas de partida que ninguna tirada vio
+# familias: fabrica=1 pool · p0x-s*=7 tiradas sin precio · p25-s*=7 tiradas con precio de 25 s
+# manos (semilla de GA) compartidas por p0x y p25: s11, s13, s23, s29, s31, s37, s7
+
+## Las tres familias en la partida del lanzador
+
+| precio de juego | rastro | fabrica | p0x (sin precio) | p25 (con precio) |
+|---|---|---|---|---|
+| 0 s | fijo | 108.4 | 206.1 | 178.1 |
+| 0 s | puerta | 109.5 | 196.5 | 181.3 |
+| 25 s | fijo | 113.9 | 151.6 | 155.6 |
+| 25 s | puerta | 111.1 | 156.2 | 162.2 |
+
+## El reparto, jugado a 25 s y con el reflejo fijo
+
+- **fabrica, el juego de hoy** (glándula apagada): 108.4 descargas (media de las 24 semillas)
+- **la glándula sola sobre la fábrica** (apagada → 25 s): +5.5 descargas — el mismo interruptor de F11n
+- **entrenamiento** (fabrica → p0x, sin precio ni en entrenamiento ni al jugar): +43.2 ± 4.0 descargas (rango entre tiradas +28…+59; 7/7 tiradas a favor)
+- **precio** (p0x → p25, pareado por mano, jugado a 25 s los dos): +4.0 ± 6.9 descargas (rango entre tiradas -15…+41; 3/7 tiradas a favor)
+- **total** (fabrica → p25): +47.2 ± 7.1 descargas
+  - de ese total, el entrenamiento pone 91% y el precio 9%
+  - la cuenta cuadra sin residuo: +43.2 + +4.0 = +47.2 (el total medido es +47.2)
+  - pareado por semilla de partida (media de las 7 manos): +4.0 ± 2.6 descargas (gana en 16/24 semillas)
+
+## El mismo pareado jugado SIN precio (glándula a 0 s)
+
+- **p25 − p0x**: -28.0 ± 13.4 descargas (t = -2.1; 2/7 tiradas a favor del pool entrenado con precio)
+  - si fuera ≈ 0, entrenar con el precio no costaría nada cuando el juego no lo cobra; si es negativo, el pool aprendió a depender de un rastro que el juego de fábrica nunca produce
+
+| mano (GA) | p0x a 0 s | p25 a 0 s | sin precio | p0x a 25 s | p25 a 25 s | precio |
+|---|---|---|---|---|---|---|
+| s11 | 193.2 | 196.5 | +3.3 | 144.2 | 185.0 | +40.8 |
+| s13 | 195.6 | 146.5 | -49.1 | 154.5 | 149.2 | -5.2 |
+| s23 | 200.5 | 120.2 | -80.3 | 136.1 | 121.5 | -14.6 |
+| s29 | 240.8 | 183.7 | -57.2 | 149.2 | 158.1 | +8.9 |
+| s31 | 207.6 | 225.3 | +17.7 | 167.4 | 160.2 | -7.2 |
+| s37 | 189.6 | 181.8 | -7.8 | 161.0 | 157.7 | -3.3 |
+| s7 | 215.5 | 192.8 | -22.8 | 148.6 | 157.6 | +9.0 |
+| **media de las 7** | 206.1 | 178.1 | -28.0 | 151.6 | 155.6 | +4.0 |
