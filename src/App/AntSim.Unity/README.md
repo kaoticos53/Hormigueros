@@ -136,7 +136,10 @@ idénticos. El cambio es estrictamente sustractivo — cero avisos nuevos.
 
 ## Abrir el proyecto (arranque rápido)
 
-1. Publica el CLI:
+1. Publica el CLI (los lanzadores `scripts/play-game.*` ya lo hacen solos: lo
+   republican si falta **o si hay fuentes más nuevas que el exe**, y si no lo
+   dicen con `CLI al día:`; hacerlo a mano sólo hace falta cuando no se usa el
+   lanzador):
    ```bash
    dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim
    ```

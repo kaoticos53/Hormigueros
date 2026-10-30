@@ -26,6 +26,24 @@ banderas: `play-game.bat --grid 256 --species lasius,eciton`). El script abre el
 **Editor de Unity**, no `Unity Hub`, y no debe abrirse una segunda instancia del
 mismo proyecto.
 
+### El CLI se republica solo cuando está viejo
+
+Antes de abrir Unity, el lanzador mira `build/antsim/antsim.exe` y lo compila en
+dos casos, no en uno:
+
+- **falta el exe**, o
+- **hay fuentes más nuevas que el exe** — cualquier `*.cs` o `*.csproj` de
+  `src/Tools/AntSim.Cli` o `src/Core/AntSim.Core` con fecha posterior (`bin` y
+  `obj` quedan fuera: los escribe el propio `publish`).
+
+En el segundo caso lo dice con el motivo (`Compilando el CLI (hay fuentes más
+nuevas que el exe)…`); cuando está al día imprime `CLI al día:` y no compila
+nada. Mirar sólo si el exe *existía* dejaba la partida muda: el 2026-10-30 el
+`build/antsim` publicado era del 24, anterior a las banderas del par de F11n, y
+el lanzador abría Unity con el juego de fábrica mientras anunciaba el par. Si el
+`publish` falla, el lanzador sale con código 1 y lo dice, en vez de abrir una
+partida que no puede arrancar.
+
 ### Qué se inyecta en la escena
 
 Los ajustes **no** se teclean en el inspector: el lanzador los escribe en un

@@ -242,12 +242,45 @@ if [[ -z "$UNITY_BIN" ]]; then
     exit 3
 fi
 
-# ── Compilar el CLI si falta ────────────────────────────────────────────────
+# ── Compilar el CLI si falta o si el exe es más viejo que sus fuentes ───────
+# Mirar sólo si el exe EXISTE dejaba la partida muda: el 2026-10-30 el
+# `build/antsim` publicado era del 24, anterior a las banderas del par de F11n, y
+# el lanzador abría Unity con el juego de fábrica mientras anunciaba el par. La
+# fecha se compara contra `*.cs` y `*.csproj` de los dos proyectos que entran en
+# el binario (`bin` y `obj` fuera: los escribe el propio publish).
 CLI_EXE="$ROOT/build/antsim/antsim.exe"
+CLI_SRC=(src/Tools/AntSim.Cli src/Core/AntSim.Core)
+
+cli_viejo() {
+    local d
+    for d in "${CLI_SRC[@]}"; do
+        [[ -d "$ROOT/$d" ]] || continue
+        if [[ -n "$(find "$ROOT/$d" \( -path '*/bin' -o -path '*/obj' \) -prune \
+                     -o \( -name '*.cs' -o -name '*.csproj' \) -newer "$CLI_EXE" \
+                     -print -quit 2>/dev/null)" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 if [[ ! -f "$CLI_EXE" ]]; then
-    echo "Compilando el CLI…"
-    (cd "$ROOT" && dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim >/dev/null)
+    MOTIVO="falta el exe"
+elif cli_viejo; then
+    MOTIVO="hay fuentes más nuevas que el exe"
+else
+    MOTIVO=""
+fi
+
+if [[ -n "$MOTIVO" ]]; then
+    echo "Compilando el CLI ($MOTIVO)…"
+    if ! (cd "$ROOT" && dotnet publish src/Tools/AntSim.Cli -c Release -o build/antsim >/dev/null); then
+        echo "✗ El publish del CLI falló; sin él la partida no arranca" >&2
+        exit 1
+    fi
     echo "CLI compilado: $CLI_EXE"
+else
+    echo "CLI al día:   $CLI_EXE"
 fi
 
 echo "Unity:        $UNITY_BIN"

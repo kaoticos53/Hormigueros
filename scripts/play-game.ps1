@@ -313,11 +313,33 @@ if (-not $UnityBin) {
     exit 3
 }
 
-# ---- Compilar el CLI si no existe ----------------------------------------
+# ---- Compilar el CLI si no existe o si el exe esta viejo -------------------
+# Mirar solo si el exe EXISTE dejaba la partida muda: el 2026-10-30 el
+# build\antsim publicado era del 24, anterior a las banderas del par de F11n, y
+# el lanzador abria Unity con el juego de fabrica mientras anunciaba el par. La
+# fecha se compara contra los .cs y .csproj de los dos proyectos del binario
+# (bin y obj fuera: los escribe el propio publish).
 $cliDir = Join-Path $Root "build\antsim"
 $cliExe = Join-Path $cliDir "antsim.exe"
+$cliFuentes = @((Join-Path $Root "src\Tools\AntSim.Cli"), (Join-Path $Root "src\Core\AntSim.Core"))
+
+$motivo = ""
 if (-not (Test-Path $cliExe)) {
-    Write-Host "  Compilando el CLI..." -ForegroundColor Yellow
+    $motivo = "falta el exe"
+} else {
+    $exeFecha = (Get-Item $cliExe).LastWriteTimeUtc
+    $masNueva = Get-ChildItem -Path $cliFuentes -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object { ($_.Extension -eq '.cs' -or $_.Extension -eq '.csproj') -and
+                               $_.FullName -notmatch '\\(bin|obj)\\' } |
+                Sort-Object LastWriteTimeUtc -Descending |
+                Select-Object -First 1
+    if ($masNueva -and $masNueva.LastWriteTimeUtc -gt $exeFecha) {
+        $motivo = "hay fuentes mas nuevas que el exe: $(Split-Path $masNueva.FullName -Leaf)"
+    }
+}
+
+if ($motivo) {
+    Write-Host "  Compilando el CLI ($motivo)..." -ForegroundColor Yellow
     Push-Location $Root
     dotnet publish "src\Tools\AntSim.Cli" -c Release -o $cliDir 2>&1 | Out-Null
     Pop-Location
@@ -326,6 +348,8 @@ if (-not (Test-Path $cliExe)) {
         exit 1
     }
     Write-Host "  CLI compilado: $cliExe" -ForegroundColor Green
+} else {
+    Write-Host "  CLI al dia:   $cliExe"
 }
 
 # ---- Mostrar configuracion ------------------------------------------------
