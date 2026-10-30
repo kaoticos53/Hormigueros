@@ -145,8 +145,10 @@ fijo y la puerta lo recupera casi entero (−4,8 % frente al mundo gratis). O se
 el precio se paga en descargas y se cobra en una decisión que la red puede
 aprender a tomar; el mundo sin precio sigue rindiendo más en absoluto, pero es el
 mundo de F11, donde la decisión no tenía nada que decidir. Que la puerta y el
-precio pasen visiblemente al lanzador o a la escena —donde hoy no se exponen—
-queda pendiente de decisión: aquí solo se mide.
+precio pasen visiblemente al lanzador o a la escena —donde hasta F11n no se
+exponían— quedó pendiente de decisión: aquí solo se mide, y la decisión se tomó
+en F11n (sí: el enfrentamiento del mismo día contra el pool de fábrica la
+aprobó).
 El precio, además, se puede BARRER, y se ha barrido (`scripts/gland-price-sweep.py`:
 216 000 ticks, laberinto, 24 semillas que la selección no vio —las 8 de F11 más 16
 nuevas—, los dos pools × las dos puertas, la glándula en 0/10/25/40/60 s y la
@@ -804,10 +806,12 @@ sin puerta del cerebro) a 0 y a 25 s, con las 24 semillas de partida de siempre
 | 0 s (de fábrica) | 34 223,4 ± 9 735,7 | 89 816 ± 20 253 | 0 % | 0 s | 108,4 ± 31,4 |
 | 25 s | **44,6 ± 26,6** | **15 326 ± 4 974** | **87,8 %** | 19 213 s | 113,9 ± 32,6 |
 
-- **En el lanzador el precio no disciplina ninguna decisión: sólo raciona.** La
-  partida decide el depósito con el reflejo de F8 y no expone `--trail-by-brain`,
-  así que no hay salida del cerebro que cobrar; y el pool que carga está
-  entrenado sin precio. La evidencia del 25 s (F11g/F11h/F11i/F11j) es sobre
+- **En la partida que el lanzador abre de fábrica el precio no disciplina
+  ninguna decisión: sólo raciona.** Esa partida decide el depósito con el reflejo
+  de F8 y no expone `--trail-by-brain`, así que no hay salida del cerebro que
+  cobrar; y el pool que carga está entrenado sin precio. (El par de F11n, que sí
+  la expone, entra como configuración con su pool: esta medición es la del juego
+  que el lanzador abre por defecto.) La evidencia del 25 s (F11g/F11h/F11i/F11j) es sobre
   ENTRENAR con la puerta, y no se traslada a este par pool/reflejo.
 - **Lo que se pierde es exactamente lo que el lanzador enseña.** El rastro de
   comida cae de 34 223,4 a 44,6 —99,9 %, ×767— en las 24 semillas (0/24 a favor;
@@ -892,6 +896,113 @@ generaciones en dos tandas de tres —10 h 53 m de pared, 19 454–19 662 s por
 tirada— y 576 partidas del bench (23 min); las cifras de la sección las deriva
 `scripts/partida-figures.py` de los volcados del 2×2, así que el guardarraíl las
 exige en cada push.
+
+**F11n — el lanzador expone el par de la puerta, con el pool que lo entrenó
+(decisión, 2026-10-30): paga, y contra el juego de hoy también.** F11l cerró el
+2×2 y dejó dicha la condición del hallazgo: a 25 s de glándula el castigo de la
+puerta desaparece y a 10 s se agranda. La pregunta que quedaba es de producto, no
+de medida: ¿debe el lanzador ofrecer el PAR —puerta del cerebro más glándula de
+25 s— con un pool entrenado bajo ese régimen?
+
+Lo medido, con siete tiradas por receta y 24 semillas de partida que la selección
+no vio: la puerta paga dentro del pool que la entrenó (+5,6 ± 1,9 descargas al
+promediar las catorce tiradas de 25 s, t = 2,9; 12/14 a favor,
+`artifacts/pretrain-partida-200-p25g7-champion.txt`), pero de punta a punta —el
+mejor pool con puerta jugando con puerta contra el mejor pool sin ella jugando con
+el reflejo— la ventaja se queda en +4,1 ± 3,2 (t = 1,3; 17/24 semillas,
+`artifacts/pretrain-partida-200-p25g7-vs-p25-puerta.txt`), que no se distingue de
+cero. Y contra el pool que el juego carga de fábrica —`pretrain-maze-los3`, el
+campeón de laberinto de F7— no hay **ninguna** comparación: todas las de F11 son
+dentro de su propia familia, mismo warm-start y misma receta, así que ese +4,1 no
+dice cómo quedaría el juego de hoy.
+
+Primera decisión, con lo que había el 30 por la mañana: **no se expone todavía**,
+y el motivo no es la puerta sino el pool. Con el pool de fábrica —entrenado antes
+de que existiera el precio y sin la puerta— la puerta del cerebro es neutra o algo
+peor: F11b la midió en −6 ± 10 descargas (4/8) dentro del pool entrenado sin ella,
+y el barrido de precios la deja entre −14 y +10 a todos los precios, ninguno con
+t > 1. Exponer un interruptor que con el pool que el juego carga no paga es
+ofrecer una palanca que enseña lo contrario de lo medido. Y las dos piezas no se
+pueden separar: la puerta sin precio es F11 —la red solo puede adelgazar el
+rastro y empeora— y el precio sin puerta es F11m
+—sólo raciona y borra la señal—. Si algún día entra, entra el par.
+
+Criterio para adoptarlo, y es medible sin opinión: un enfrentamiento en la
+partida del lanzador —216 000 ticks, laberinto, las 24 semillas de siempre—
+entre lo que hay hoy (pool de fábrica, reflejo, glándula 0) y el par candidato
+(pool entrenado a 25 s con la puerta, puerta, glándula 25 s), con **las dos
+recetas replicadas**: F11d costó cuatro tiradas aprender que una sola tirada es
+el sorteo más afortunado, no la receta. Se adopta si el par gana con ≥16/24
+semillas y su margen supera la dispersión entre tiradas —que en este eje manda:
+F11h ya vio que parear por sorteo deja t por debajo de 1—; si no, el hallazgo se
+queda en el CLI, que es donde juegan todos los benches.
+
+Ese enfrentamiento existe desde el mismo 30 (`scripts/gland-launcher-duel.py`;
+evidencia en `artifacts/pretrain-partida-200-p10h2-duel.txt`): 32 brazos por 24
+semillas: 768 partidas de la partida del lanzador, todas terminadas en el tick
+216 000. El reparto, con las dos recetas promediadas por semilla de partida —lo
+que se compara es la receta, no el sorteo que cada una tuvo por suerte—:
+
+- el par a 25 s gana +57,9 ± 9,6 descargas al juego de hoy (t = +6,0; 20/24
+  semillas): el margen y las semillas que el criterio pide, las dos cosas.
+- la receta del reflejo a 25 s gana +47,2 ± 9,0 (t = +5,2; 20/24 semillas): el
+  pool reentrenado bajo el precio, sin la puerta, ya se lleva la mayor parte.
+- el par le gana a su propia receta del reflejo +10,7 ± 3,4 descargas (t = +3,2;
+  19/24 semillas): con las dos recetas replicadas la puerta deja de ser
+  indistinguible de cero. En el primer F11n eran +4,1 ± 3,2 con una tirada por
+  brazo; aquí son siete, y el signo se sostiene.
+- la dispersión entre tiradas es 8,6 en la receta del par y 18,7 en la del
+  reflejo: el margen la supera con holgura, que es la segunda mitad del criterio.
+
+Lo que pone cada pieza, del mismo volcado, y es lo que decide CÓMO se adopta:
+
+- la puerta dentro del pool que la entrenó: +4,6 ± 2,8 descargas al promediar las
+  siete tiradas (rango por tirada −13,6 a +13,1): real y pequeño —un 3 % del
+  nivel—, y ninguna tirada suelta lo demuestra.
+- la puerta sola sobre el pool de fábrica: +1,2 ± 3,2 (t = +0,4; 13/24 semillas):
+  sin reentrenar, el interruptor no mueve la aguja.
+- el precio solo sobre el pool de fábrica: +5,5 ± 4,6 (t = +1,2; 16/24 semillas).
+- el par completo sobre el pool de fábrica: +2,8 ± 5,0 (t = +0,6; 13/24 semillas).
+
+Leído así, el +57,9 no es un interruptor que se encienda sobre el `.antgenome`
+que el juego carga: es un pool nuevo que viene con la puerta. La puerta aporta
++10,7 sobre su propia receta y el resto lo pone reentrenar bajo el precio; sobre
+el pool de fábrica el par no se distingue de cero. Y el banco está calibrado para
+decirlo: los dos brazos de fábrica dan 108,4 ± 31,4 con la glándula apagada y
+113,9 ± 32,6 a 25 s, que son las cifras que F11m ya tenía registradas para esta
+misma partida, y el precio solo repite aquí su +5,5 del 29.
+
+**Decisión, con el criterio cumplido: se adopta.** El lanzador expone el par
+—puerta del cerebro más glándula de 25 s de depósito y 6 s de recarga— con el
+pool que su receta corona desde F11f (`pretrain-partida-200-gl-red`, primero de
+siete con la puerta puesta), y el juego de fábrica NO cambia: sigue siendo el que
+F11m decidió, con `--trail-gland 0`, porque el volcado dice precisamente que el
+par sobre ese pool no paga. Que entre como configuración y no como default es
+además lo que deja quietos los seis pines de hash: no cambia el mundo de nadie,
+aparece una forma de jugarlo que antes solo existía en la línea del CLI.
+
+Coste de lo adoptado: dos perillas nuevas en `RecruitmentKnobs`
+y `LaunchSettings` —campo, serialización, parseo, validación y descripción— más
+la prueba de espejo que impide que diverjan, las dos banderas en la línea del CLI
+que arma `StreamReader`, la ayuda y los rangos de `play-game.sh` y
+`play-game.ps1`, y si la glándula se quiere VER en pantalla, el parser del stream,
+su modelo y la tarjeta del HUD con su prueba (el mundo ya publica `denied` y
+`gland` desde `GameScenario`, pero ningún parser los lee). Son ocho ficheros y un
+pool `.antgenome` más en el catálogo; y si el par fuera el DEFAULT los seis pines
+de hash se moverían, porque el mundo cambia a propósito —entra como
+configuración, así que no se mueven—.
+
+Lo que la decisión NO compra, y conviene tenerlo escrito al lado: el +47,2 y el
++57,9 comparan una receta de 200 generaciones con warm-start desde
+`pretrain-maze-3k` y el precio encendido contra el campeón de laberinto de F7, que
+son 660 generaciones sin precio. Nadie ha separado todavía «entrenar con el
+precio paga» de «entrenar más paga», y mientras no se separe la ventaja se lee
+como receta completa y no como mérito del precio. Lo segundo que queda abierto es
+la puerta sola: +4,6 ± 2,8 dentro de su pool es real pero pequeño, y ninguna de
+las siete tiradas lo demuestra por separado (el rango por tirada va de −13,6 a
++13,1). Y lo que cerraría el asunto sin más vueltas: el mismo reentrenamiento de
+200 generaciones SIN precio y sin puerta, que diría cuánto del +47,2 es el precio
+y cuánto el entrenamiento.
 
 ## Lo que ya funciona (verificado, no prometido)
 
