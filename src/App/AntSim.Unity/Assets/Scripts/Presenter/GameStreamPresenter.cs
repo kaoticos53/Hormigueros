@@ -72,6 +72,11 @@ namespace AntSim.Unity.Scripts.Streaming
         /// extinción, no por agotar el horizonte).</summary>
         public bool Extinct => _parser.Extinct;
 
+        /// <summary>F11n: el informe de la glándula de la ronda que acaba de cerrar
+        /// (null si la partida no pidió `--trail-report`). Lo publica el HUD al
+        /// terminar; durante la partida no hay cifra que enseñar.</summary>
+        public GameStreamParser.TrailReportView? Trail => _parser.Trail;
+
         /// <summary>Último TickView completo recibido (F4.2): el repartidor del
         /// HUD (tarjetas, toasts, inspector) lo consume una vez por tick.</summary>
         public GameStreamParser.TickView? CurrentTick => _curr;

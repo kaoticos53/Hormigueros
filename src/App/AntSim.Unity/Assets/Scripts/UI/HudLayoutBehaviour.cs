@@ -242,9 +242,18 @@ namespace AntSim.Unity.Scripts.Presenter
                     model.Width, model.Height, model.Cells);
             }
 
-            string line = presenter.Recruitment
-                ? Streaming.HudElementLayoutModel.RecruitmentLiveLine(_recruitmentLive)
-                : "";
+            // F11n: al cerrar la ronda el mundo escribe lo que la glándula gastó
+            // (`--trail-report`). Esa cifra ocupa la línea del tablero porque el
+            // tablero ya no cambia; durante la partida no hay nada que publicar y
+            // la línea sigue diciendo lo que hay en él.
+            var trail = presenter.Presenter != null ? presenter.Presenter.Trail : null;
+            string gland = Streaming.HudElementLayoutModel.GlandLine(
+                trail, presenter.ActiveRecruitment);
+            string line = !presenter.Recruitment
+                ? ""
+                : (gland.Length > 0
+                    ? gland
+                    : Streaming.HudElementLayoutModel.RecruitmentLiveLine(_recruitmentLive));
             if (text.text != line) text.text = line;
         }
 

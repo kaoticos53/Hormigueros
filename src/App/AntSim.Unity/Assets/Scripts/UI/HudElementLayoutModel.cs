@@ -75,7 +75,30 @@ namespace AntSim.Unity.Scripts.Streaming
                    "× / " + F(knobs.TrailHalfLife) + " s / sigue " + F(knobs.TrailFollow) + " rad/s";
         }
 
+        /// <summary>
+        /// F11n — el informe de la GLÁNDULA al cerrar la ronda, en el sitio de la
+        /// línea del tablero (misma caja): cuánto del presupuesto se gastó y qué
+        /// parte de lo pedido quedó sin pagar. Solo hay informe si la partida pide
+        /// `--trail-report` y la glándula tiene precio: sin precio no hay
+        /// presupuesto que reportar, y un cero se leería como «no se gastó nada».
+        /// Vacío = no hay nada que publicar (la línea del tablero se queda).
+        /// </summary>
+        public static string GlandLine(GameStreamParser.TrailReportView? trail,
+            RecruitmentKnobs knobs)
+        {
+            if (trail is not GameStreamParser.TrailReportView r) return "";
+            if (knobs == null || knobs.TrailGlandSeconds <= 0f) return "";
+            return "glándula " + F(knobs.TrailGlandSeconds) + " s · " +
+                   F(r.Gland) + " s gastados en el rastro · " +
+                   Pct(r.DeniedPercent) + " % de lo pedido quedó sin pagar";
+        }
+
         private static string F(float v) => v.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+        /// <summary>Un porcentaje con un decimal: es la precisión con la que se
+        /// publican los del rastro en los documentos, así que el HUD y el volcado
+        /// no dicen «16,4 %» y «16,363 %» de lo mismo.</summary>
+        private static string Pct(float v) => v.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
 
         /// <summary>Caja de la línea de cifras DEL TABLERO (F8): montones, ítems y
         /// celdas de rastro pintadas. Va debajo de la línea de configuración, en la

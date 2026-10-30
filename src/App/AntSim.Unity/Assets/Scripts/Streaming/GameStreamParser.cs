@@ -299,6 +299,32 @@ namespace AntSim.Unity.Scripts.Streaming
             public GraphView? Graph;                              // canal F (F5.2c)
         }
 
+        /// <summary>
+        /// F11n — el informe de la GLÁNDULA, que el mundo escribe en la línea `end`
+        /// cuando la partida pide `--trail-report`: los segundos de presupuesto que
+        /// el rastro consumió de verdad y la cantidad de depósito que no se pudo
+        /// pagar, junto a lo que sí se depositó (comida y casa). Son totales de la
+        /// ronda, no de un tick: el mundo no publica la glándula tick a tick.
+        /// </summary>
+        public readonly struct TrailReportView
+        {
+            public readonly float Food, Home, Denied, Gland;
+            public TrailReportView(float food, float home, float denied, float gland)
+            { Food = food; Home = home; Denied = denied; Gland = gland; }
+
+            /// <summary>Fracción (0–100) de lo PEDIDO que quedó sin pagar: el mismo
+            /// cociente que usan los guiones de medida —negado / (negado + comida +
+            /// casa)—, para que el HUD y el volcado no puedan decir cosas distintas.</summary>
+            public float DeniedPercent
+            {
+                get
+                {
+                    float asked = Denied + Food + Home;
+                    return asked > 0f ? 100f * Denied / asked : 0f;
+                }
+            }
+        }
+
         /// <summary>Un rectángulo de pared del terreno, en CELDAS (F6).</summary>
         public readonly struct MazeRect
         {
@@ -328,6 +354,10 @@ namespace AntSim.Unity.Scripts.Streaming
         /// cortó por extinción (no por agotar el horizonte). Es la señal con la que
         /// el juego distingue «se murieron todas» de «se acabó el tiempo».</summary>
         public bool Extinct { get; private set; }
+
+        /// <summary>F11n: el informe de la glándula de la ronda. Null cuando la
+        /// partida no pidió `--trail-report` — el HUD entonces no inventa cifras.</summary>
+        public TrailReportView? Trail { get; private set; }
 
         /// <summary>
         /// Parsea una línea del stream. Devuelve el TickView de los ticks completos;
@@ -363,6 +393,12 @@ namespace AntSim.Unity.Scripts.Streaming
                 FinalTick = (ulong)p.Num("tick");
                 FinalHash = p.Str("hash");
                 Extinct = raw.Contains("\"extinct\":true");
+                // F11n: el bloque `trail` solo viaja con --trail-report; sin él la
+                // línea `end` es la de siempre y esto se queda en null.
+                if (raw.Contains("\"trail\":{", StringComparison.Ordinal))
+                    Trail = new TrailReportView(
+                        (float)p.Num("food"), (float)p.Num("home"),
+                        (float)p.Num("denied"), (float)p.Num("gland"));
                 return null;
             }
 

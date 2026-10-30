@@ -121,6 +121,12 @@ namespace AntSim.Unity.Scripts.Streaming
                         psi.ArgumentList.Add(recruitmentKnobs.TrailGlandSeconds.ToString("0.###", CultureInfo.InvariantCulture));
                         psi.ArgumentList.Add("--trail-gland-refill");
                         psi.ArgumentList.Add(recruitmentKnobs.TrailGlandRefillSeconds.ToString("0.###", CultureInfo.InvariantCulture));
+                        // F11n: con precio se pide también el informe de la glándula en
+                        // la línea `end` —segundos gastados y lo que el presupuesto no
+                        // pudo pagar—, que es lo que el HUD publica al cerrar la ronda.
+                        // Sin precio no hay presupuesto que reportar: el stream queda
+                        // sin el bloque y la línea `end` es la de siempre.
+                        psi.ArgumentList.Add("--trail-report");
                     }
                 }
             }

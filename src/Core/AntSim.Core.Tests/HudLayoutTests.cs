@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using AntSim.Core.Scenario;
+using AntSim.Core.World;
 using AntSim.Unity.Scripts.Streaming;
 using Xunit;
 // Alias local, para no escribir el espacio de nombres completo en cada cuenta
@@ -446,6 +447,112 @@ namespace AntSim.Core.Tests
             Assert.True(LineHeight(text) <= HudElementLayoutModel.RecruitmentLiveHeight,
                 $"la línea del tablero pide {Px(LineHeight(text))} de alto y la caja " +
                 $"reserva {HudElementLayoutModel.RecruitmentLiveHeight} px");
+        }
+
+        // ————— F11n: el informe de la glándula —————
+
+        [Fact]
+        public void InformeDeLaGlandula_SeLeeDeLaLineaEnd_YNoSeInventaSinElla()
+        {
+            var parser = new GameStreamParser();
+            Assert.Null(parser.Trail);   // todavía no cerró nada
+
+            // Sin --trail-report la línea `end` es la de siempre: no hay bloque.
+            parser.ParseLine("{\"end\":true,\"tick\":216000,\"hash\":\"abc\"}");
+            Assert.Null(parser.Trail);
+
+            parser.ParseLine("{\"end\":true,\"tick\":216000,\"hash\":\"abc\"," +
+                             "\"trail\":{\"food\":34223.4,\"home\":89816.2," +
+                             "\"denied\":24266.9,\"gland\":19213.4}}");
+            var trail = parser.Trail;
+            Assert.NotNull(trail);
+            Assert.Equal(34223.4f, trail!.Value.Food, 1);
+            Assert.Equal(89816.2f, trail.Value.Home, 1);
+            Assert.Equal(24266.9f, trail.Value.Denied, 1);
+            Assert.Equal(19213.4f, trail.Value.Gland, 1);
+            // El cociente es el de los guiones de medida (negado / lo pedido).
+            Assert.Equal(16.4f, trail.Value.DeniedPercent, 1);
+        }
+
+        [Fact]
+        public void InformeDeLaGlandula_DiceLoGastadoYLoNoPagado_SoloConPrecio()
+        {
+            var knobs = new RecruitmentKnobs
+            {
+                TrailByBrain = true,
+                TrailGlandSeconds = 25f,
+                TrailGlandRefillSeconds = 6f,
+            };
+            var trail = new GameStreamParser.TrailReportView(
+                food: 34223.4f, home: 89816.2f, denied: 24266.9f, gland: 19213.4f);
+
+            string line = HudElementLayoutModel.GlandLine(trail, knobs);
+            Assert.Equal("glándula 25 s · 19213.4 s gastados en el rastro · " +
+                         "16.4 % de lo pedido quedó sin pagar", line);
+
+            // Sin informe no hay línea; y sin precio no hay presupuesto que contar
+            // (un «0 s» se leería como «no se gastó nada»).
+            Assert.Equal("", HudElementLayoutModel.GlandLine(null, knobs));
+            Assert.Equal("", HudElementLayoutModel.GlandLine(trail, RecruitmentKnobs.Default));
+        }
+
+        [Fact]
+        public void InformeDeLaGlandula_CabeEnLaCajaDelTablero_ConElPeorCaso()
+        {
+            // Los topes que acepta el mundo: 120 s de glándula y una ronda con
+            // cifras de siete dígitos en los tres depósitos.
+            var knobs = new RecruitmentKnobs
+            {
+                TrailGlandSeconds = RecruitmentKnobs.MaxTrailGland,
+                TrailGlandRefillSeconds = RecruitmentKnobs.MaxTrailGlandRefill,
+            };
+            var trail = new GameStreamParser.TrailReportView(
+                food: 9999999.9f, home: 9999999.9f, denied: 9999999.9f, gland: 9999999.9f);
+            string text = HudElementLayoutModel.GlandLine(trail, knobs);
+
+            float ancho = RenderedWidth(text);
+            Assert.True(ancho <= HudElementLayoutModel.RecruitmentLiveWidth,
+                $"el informe mide {Px(ancho)} y la caja reserva " +
+                $"{Px(HudElementLayoutModel.RecruitmentLiveWidth)} px: «{text}»");
+            Assert.True(LineHeight(text) <= HudElementLayoutModel.RecruitmentLiveHeight,
+                $"el informe pide {Px(LineHeight(text))} de alto y la caja reserva " +
+                $"{Px(HudElementLayoutModel.RecruitmentLiveHeight)} px");
+        }
+
+        [Fact]
+        public void InformeDeLaGlandula_DelStreamReal_AlCerrarLaRonda()
+        {
+            // Extremo a extremo: el mundo gasta glándula al depositar y lo escribe
+            // en la línea `end`; el parser lo lee y la línea del HUD lo publica.
+            var tuning = new RecruitmentTuning
+            {
+                TrailByBrain = true,
+                TrailGlandSeconds = 25f,
+                TrailGlandRefillSeconds = 6f,
+            };
+            string stream = GameScenario.Run(42, ticks: 600, colonies: 1, grid: 96,
+                frameEvery: 30, recruitment: true, recruitmentTuning: tuning,
+                trailReport: true);
+
+            var parser = new GameStreamParser();
+            foreach (var line in stream.Split('\n')) parser.ParseLine(line);
+
+            var trail = parser.Trail;
+            Assert.NotNull(trail);
+            Assert.True(trail!.Value.Gland > 0f,
+                "la partida con puerta y precio tiene que gastar glándula");
+            Assert.InRange(trail.Value.DeniedPercent, 0f, 100f);
+
+            var knobs = new RecruitmentKnobs
+            {
+                TrailByBrain = true,
+                TrailGlandSeconds = 25f,
+                TrailGlandRefillSeconds = 6f,
+            };
+            string text = HudElementLayoutModel.GlandLine(trail, knobs);
+            Assert.Contains("glándula 25 s", text);
+            Assert.Contains("s gastados en el rastro", text);
+            Assert.Contains("% de lo pedido quedó sin pagar", text);
         }
 
         [Fact]
