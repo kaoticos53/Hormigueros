@@ -1,7 +1,7 @@
 # Estado del proyecto — consolidado
 
 *Actualizado: 2026-10-25 · HEAD: `v0.8.0` (tag de cierre de la F5.3) ·
-suite: 788/788 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
+suite: 790/790 (Windows) · tags: `v0.4.0` (Fase 4), `v0.5.0` (F5.2a), `v0.6.0` (F5.2b),
 `v0.6.1` (CI fix), `v0.7.0` (F5.2c NEAT), `v0.8.0` (F5.3 escala)*
 
 Mapa de las fases del proyecto: qué está terminado, qué queda y dónde
@@ -1018,7 +1018,7 @@ a bit. Fijado en CI con **SEIS pines de hash**, verdes en Linux en el último
 push (`v0.8.0`, run #37 del 2026-09-19): stream canónico, replay con drops a
 3000 y 6000 ticks, la partida Atta canónica, la de INVASIÓN canónica y la
 NEAT canónica. <!-- cifras-historicas: el cierre de v0.8.0 (run #37). -->Aquel
-cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **788/788
+cierre fue con 773/773.<!-- /cifras-historicas --> Hoy la suite tiene **790/790
 tests** en Windows y verdes en Linux en CI en cada push, igual que los 6 scripts
 de pin. El job `test` incluye además **seis pasos que
 verifican instrumentos sin editor**: el analizador de compilación de Unity, las

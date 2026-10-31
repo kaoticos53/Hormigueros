@@ -219,6 +219,9 @@ semilla se mantiene dentro de cada modo.
 4. **No inventa umbrales**: los de §2 salen del benchmark Fase 3ter y del
    pipeline de CI; si el benchmark se regenera, `PoolPresetsTests` obliga a
    actualizar presets y esta tabla se revisa con él.
+5. **No recorta la cría**: `pupae` se pinta tal como llega. El techo de la cola
+   lo pone el mundo (puesta acotada por `adultas · NurseShare`), no la vista —
+   y por eso se puede vigilar desde fuera (§9).
 
 ## 7. Tareas del Core que este contrato destapa (baratas, para F4.2)
 
@@ -302,3 +305,33 @@ TODO(F4.4): métrica de tramo NORMALIZADA — `leg / max(pickup − radio, ε)`
 un forrajeo de proximidad confunde oferta corta con competencia baja.
 Mientras tanto: el ámbar por leg corto de la §8 se lee como "cadena corta
 observada", no como colonia enferma.
+
+## 9. El techo de nodrizas, vigilado desde la vista
+
+La puesta de la ronda se para cuando la cola de cría cubre lo que crían las
+nodrizas (`adultas · NurseShare`), así que `pupae` tiene un techo duro: **6** con
+la tropa llena. El HUD **no lo recorta** (§6.5): pinta el número del stream tal
+cual. Esa es justo la propiedad que se puede comprobar desde fuera — si la
+tarjeta enseña 7, o el mundo se salió de su economía o el stream dejó de ser el
+que se midió.
+
+La cadena se fija en dos puntos, y cada uno cubre lo que el otro no ve:
+
+| pieza | dónde | qué fija |
+|---|---|---|
+| `NurseCeilingModel` | `Assets/Scripts/Streaming/`, modelo PURO | El techo tal como lo calcula la vista: `max(1, (int)(adultas · 0,15))` y `Hard = 6`. Es **espejo deliberado** del Core (Unity no referencia el Core). |
+| `NurseCeilingTests` | suite headless | Que el espejo no derive (`NurseShare`, `MaxAdults` y la fórmula, adultos 0…40) y que el stream con el que se pinta el HUD **nunca trae más de 6** en la pareja con laberinto y reclutamiento — y que **llega a 6**, para no pasar mirando el arranque. |
+| `ProbeHudPupae` | `scripts/unity/ProbeHudPupae.cs` | Lo que la PARTIDA enseña: lee los `Text` de las tarjetas, saca `colonia N`, `adultas/40` y `pupas N` del texto real y devuelve `HUDPUPAE\|tick=…\|techo=6\|c0=40/5/ok\|…\|excede=0`. |
+| `check-hud-pupae.sh` | `scripts/` | El «nunca»: muestrea la partida viva cada N segundos, acumula picos por colonia y falla (rc 1) si alguna muestra pasó el techo. Sin editor en Play sale rc 3 — no se declara verde por no haber mirado. |
+
+```bash
+bash scripts/play-game.sh --species lasius,eciton \
+    --pool tests/fixtures/warm-v2.antgenome --speed 10   # en otra terminal
+scripts/check-hud-pupae.sh                               # 12 muestras, cada 10 s
+```
+
+Medido en la partida de la semilla 42 (pareja, grid 96, `--speed 10`): 20
+muestras entre los ticks 19 043 y 81 405 dieron picos de **6** en las dos colonias
+de 39–40 adultas; ninguna muestra por encima, rc 0. Y en la ronda completa de las
+tres semillas (42, 7, 11) el pico es 6/6 en las seis colonias, frente a 62–943
+con la puesta vieja (`docs/estado-proyecto.md`).
