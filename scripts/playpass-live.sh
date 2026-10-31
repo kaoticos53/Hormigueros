@@ -68,6 +68,18 @@
 #     hoja de medida) en artifacts/playpass-sparkline-pixels/. Falla cerrado: sin
 #     captura o sin PNG conservados, el paso NO es verde.
 #
+#   + CRÍA DEL HUD (F12): la puesta está acotada por lo que crían las nodrizas
+#     (`adultas · NurseShare`), así que `pupae` tiene un techo duro —6 con la
+#     tropa llena— y el HUD lo pinta SIN recortarlo. `ProbeHudPupae` lee el `Text`
+#     real de las tarjetas durante la partida (una muestra cada `--pupae-step`
+#     segundos, en la misma ventana que las demás) y el veredicto es el del guard
+#     suelto (`scripts/check-hud-pupae.sh --analyze`): falla SÓLO si alguna tarjeta
+#     pintó más pupas que el techo. No poder medir (sin tarjeta todavía, cambio de
+#     ronda) se publica como aviso y NO rompe el pase — aquí «no pude mirar» no es
+#     «el HUD se desmadró», que es la diferencia con iconos, gráfica y paredes.
+#     Volcado en artifacts/playpass-hud-pupae.txt; `--analyze-pupae` lo rejuzga
+#     sin editor.
+#
 # LA SEÑAL ES LA MUESTRA, NO UNA FOTO: el stream del CLI llega entero de golpe y
 # el presenter lo reproduce con buffer, así que una sola lectura en el instante
 # equivocado no ve nada. Las muestras se acumulan cada segundo hasta el último
@@ -283,6 +295,21 @@ WALL_PY=""
 WALL_SCRIPT="$ROOT/scripts/playpass-walls.py"
 WALL_DIR="$ROOT/artifacts/playpass-wall-pixels"
 
+# El TECHO DE NODRIZAS, mirado en el HUD de la partida (F12). El pase YA juega la
+# partida entera, así que la cría se muestrea EN SU VENTANA —el volcado sale de la
+# misma sesión que las muestras, ticks con ticks— en vez de abrir una segunda. El
+# veredicto lo pone `scripts/check-hud-pupae.sh --analyze`: una sola política para
+# el guard suelto y el paso, y se puede repetir sin editor.
+#
+# FALLA SÓLO SI EL HUD SE DESMADRA —alguna tarjeta pinta más pupas de las que el
+# mundo sostiene— y no por no poder medir: a diferencia de los iconos, aquí no
+# poder medir no es una promesa incumplida sino una foto que faltó (el arranque, un
+# cambio de ronda, un tick sin tarjeta todavía). Eso se dice y no rompe el pase.
+PUPAE_FILE="$ROOT/artifacts/playpass-hud-pupae.txt"
+PUPAE_ANALYZE=0
+PUPAE_STEP=5
+PUPAE_SCRIPT="$ROOT/scripts/check-hud-pupae.sh"
+
 # Dónde vive la evidencia en PÍXELES del rumbo (`ProbeAntHeadingPixels` la escribe en
 # `<proyecto>/Temp/`, que Unity borra al cerrar el editor): el PNG con una hormiga por
 # rumbo y el rumbo esperado pintado encima es lo que se mira para creerse la medida.
@@ -306,7 +333,7 @@ FP_LIVE=(artifacts/playpass-samples.txt artifacts/playpass-visual.txt \
          artifacts/playpass-scene.txt artifacts/playpass-hud-icons.txt \
          artifacts/playpass-hud-icons/ artifacts/playpass-sparkline-pixels.txt \
          artifacts/playpass-sparkline-pixels/ artifacts/playpass-wall-pixels.txt \
-         artifacts/playpass-wall-pixels/)
+         artifacts/playpass-wall-pixels/ artifacts/playpass-hud-pupae.txt)
 # (`playpass-scene.txt` entra en la lista por su línea `presenter.live tick=… ants=…`,
 # que es una lectura del mundo EN MARCHA; lo que describe —materiales, rects— son
 # ASSETS, y ésos sí se comparan, como ficheros del alcance.)
@@ -672,6 +699,9 @@ while [[ $# -gt 0 ]]; do
     --analyze-walls)  WALL_ANALYZE=1; shift ;;
     --wall-dump)      WALL_DUMP="$2"; shift 2 ;;
     --wall-crops)     WALL_CROPS="$2"; shift 2 ;;
+    --analyze-pupae)  PUPAE_ANALYZE=1; shift ;;
+    --pupae-dump)     PUPAE_FILE="$2"; shift 2 ;;
+    --pupae-step)     PUPAE_STEP="$2"; shift 2 ;;
     --no-canonicalize) CANONICALIZE=0; shift ;;
     --recanonicalize)  RECANONICALIZE=1; shift ;;
     --no-discard-churn) DISCARD_CHURN=0; shift ;;
@@ -1270,6 +1300,44 @@ analyze_walls() {
   return 1
 }
 
+# ── La CRÍA del HUD contra el techo de nodrizas (F12) ───────────────────────
+# El tramo que ni el Core ni el stream pueden ver: la puesta está acotada por
+# `adultas · NurseShare`, el HUD pinta `pupae` sin recortarlo, y entre el mundo y
+# el píxel están el stream, el parser, el modelo de la tarjeta y el `Text`. La
+# sonda (`ProbeHudPupae`) lee ese `Text` y aquí se aplica la POLÍTICA: el veredicto
+# es el del guard suelto (`check-hud-pupae.sh --analyze`), así que la regla vive en
+# un solo sitio y el paso del pass es el mismo que se corre a mano.
+#
+# A DIFERENCIA de iconos/gráfica/paredes, no poder medir NO rompe: el guard suelto
+# sale con 2 sin techo o 3 sin editor, y esas dos cosas no son «el HUD pinta de
+# más». Se publican como aviso para no convertir el paso en una puerta de
+# infraestructura que nadie puede satisfacer. Lo que sí rompe es `rc=1`: una
+# muestra que pintó más pupas que el techo.
+analyze_pupae() { # analyze_pupae <volcado> → ≠0 SÓLO si alguna muestra pasó el techo
+  local dump="$1" rc=0 out line
+
+  if [[ ! -f "$PUPAE_SCRIPT" ]]; then
+    log "  ! falta el guard $PUPAE_SCRIPT: no se juzga la cría del HUD (no se falla por eso)"
+    return 0
+  fi
+  if [[ ! -s "$dump" ]] || ! grep -q '^HUDPUPAE' "$dump" 2>/dev/null; then
+    log "  ! no hay muestras de la cría en $dump (el HUD no se midió); no se falla por eso"
+    return 0
+  fi
+
+  out="$(bash "$PUPAE_SCRIPT" --analyze "$dump" 2>&1)" || rc=$?
+  while IFS= read -r line; do log "  ${line%$'\r'}"; done <<<"$out"
+
+  case $rc in
+    0) log "  ✓ la cría del HUD no pasa el techo de nodrizas en ninguna muestra"; return 0 ;;
+    1) echo "  ✗ FALLO (cría): alguna tarjeta del HUD pintó MÁS pupas que el techo de nodrizas" >&2
+       echo "    (la puesta se acota por adultas · NurseShare: si el HUD pasa de 6, o el mundo se salió de su economía o el stream dejó de ser el que se midió)" >&2
+       return 1 ;;
+    *) log "  ! el guard no pudo juzgar el volcado (rc=$rc); no se falla por eso"
+       return 0 ;;
+  esac
+}
+
 # ── 8bis. La HUELLA del árbol: el pase no acumula estado ─────────────────────
 # POR QUÉ. Todo lo que este pase afirma —«los assets quedaron canónicos», «el árbol
 # no se queda sucio»— descansa en un supuesto que hasta ahora nadie comprobaba: que
@@ -1633,6 +1701,30 @@ if [[ $SELFTEST -eq 1 ]]; then
     echo "✓ selftest de las paredes ok (verde pasa · laberinto invisible falla · sin volcado falla · frame conservado)"
   fi
 
+  # — Cría del HUD contra el techo de nodrizas: la POLÍTICA del paso —
+  # Aquí no hay dobles: el veredicto lo pone el guard real sobre un volcado con el
+  # formato de la sonda, que es lo que el paso acaba de escribir en la partida. Se
+  # prueban las dos caras (6 pasa, 7 rompe) y los dos modos de NO medir (volcado
+  # vacío y fichero ausente), que no pueden romper: «no pude mirar» no es «el HUD
+  # se desmadró», y esa es la diferencia con iconos, gráfica y paredes.
+  f10=0
+  pupae_ok="$tmp/pupae-ok.txt"
+  printf 'HUDPUPAE|tick=100|techo=6|c0=40/6/ok|c1=40/6/ok|pico=6|excede=0\nHUDPUPAE|tick=200|techo=6|c0=40/4/ok|c1=40/6/ok|pico=6|excede=0\n' > "$pupae_ok"
+  pupae_bad="$tmp/pupae-bad.txt"
+  printf 'HUDPUPAE|tick=100|techo=6|c0=40/6/ok|c1=40/6/ok|pico=6|excede=0\nHUDPUPAE|tick=200|techo=6|c0=40/7/EXCEDE|c1=40/6/ok|pico=7|excede=1\n' > "$pupae_bad"
+  r=0; QUIET=1 analyze_pupae "$pupae_ok" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 ]]; then echo "✗ selftest(cría): un HUD con 6 pupas rompió el paso" >&2; f10=1; fi
+  r=0; QUIET=1 analyze_pupae "$pupae_bad" >/dev/null 2>&1 || r=$?
+  if [[ $r -eq 0 ]]; then echo "✗ selftest(cría): una tarjeta con 7 pupas pasó en verde" >&2; f10=1; fi
+  : > "$tmp/pupae-vacio.txt"
+  r=0; QUIET=1 analyze_pupae "$tmp/pupae-vacio.txt" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 ]]; then echo "✗ selftest(cría): un volcado vacío rompió el paso (no medir no es desmadrarse)" >&2; f10=1; fi
+  r=0; QUIET=1 analyze_pupae "$tmp/no-existe-pupae.txt" >/dev/null 2>&1 || r=$?
+  if [[ $r -ne 0 ]]; then echo "✗ selftest(cría): no tener volcado rompió el paso" >&2; f10=1; fi
+  if [[ $f10 -eq 0 ]]; then
+    echo "✓ selftest de la cría ok (6 pasa · 7 rompe · sin medir no rompe)"
+  fi
+
   # — Huella del árbol: el invariante «dos pasadas dejan el mismo diff» —
   # Las funciones son `git status` + `git hash-object` sobre el alcance, así que se
   # prueban con GIT de verdad, en un repositorio de mentira: el caso «cambió un asset»
@@ -1717,7 +1809,7 @@ if [[ $SELFTEST -eq 1 ]]; then
   fi
 
   rm -rf "$tmp"
-  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 && $f8 -eq 0 && $f9 -eq 0 ]] || exit 1
+  [[ $f1 -eq 0 && $f4 -eq 0 && $f5 -eq 0 && $f6 -eq 0 && $f7 -eq 0 && $f8 -eq 0 && $f9 -eq 0 && $f10 -eq 0 ]] || exit 1
   exit 0
 fi
 
@@ -1766,6 +1858,16 @@ if [[ $WALL_ANALYZE -eq 1 ]]; then
   WALL_CROPS="${WALL_CROPS:-$WALL_DIR}"
   log "▶ Midiendo las paredes del laberinto: $WALL_DUMP · frame en $WALL_CROPS"
   if analyze_walls "$WALL_DUMP" "$WALL_CROPS"; then exit 0; fi
+  exit 1
+fi
+
+# ── Modo solo-análisis (cría del HUD) ───────────────────────────────────────
+# El MISMO veredicto que decide el paso de la ruta viva, sobre el volcado que dejó
+# la partida: así se reproduce sin abrir Unity, y el paso se puede verificar en los
+# dos sentidos (verde y roto) sin jugar otra ronda.
+if [[ $PUPAE_ANALYZE -eq 1 ]]; then
+  log "▶ Juzgando la cría del HUD: $PUPAE_FILE"
+  if analyze_pupae "$PUPAE_FILE"; then exit 0; fi
   exit 1
 fi
 
@@ -2174,6 +2276,13 @@ SAMPLES="${OUT:-$ROOT/artifacts/playpass-samples.txt}"
 mkdir -p "$(dirname "$SAMPLES")"
 echo "# tick|speed|keys|children|world|relay|anim (playpass-live.sh, seed $SEED grid $GRID speed $SPEED ticks $TICKS)" > "$SAMPLES"
 
+# El volcado de la CRÍA (F12): una línea `HUDPUPAE|…` por muestra —con el tick del
+# mundo— para que la ventana medida se pueda leer y rejuzgar después, igual que
+# las demás muestras. `--pupae-dump` lo lleva a otro sitio.
+mkdir -p "$(dirname "$PUPAE_FILE")"
+echo "# HuDPUPAE: techo de nodrizas en el HUD (playpass-live.sh, seed $SEED grid $GRID speed $SPEED ticks $TICKS)" > "$PUPAE_FILE"
+pupae_next=0
+
 # El script arranca Play: si falla a mitad, no se deja el editor jugando.
 PLAY_STARTED=0
 cleanup_play() {
@@ -2185,7 +2294,7 @@ trap cleanup_play EXIT
 # primera vez DURANTE la partida recarga el dominio y congela el mundo: pasó de
 # verdad (73 muestras clavadas en el tick 105, sin un solo error en la consola).
 log "▶ Compilando las sondas (antes de Play, para no recargar el dominio en partida)…"
-for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeSparklinePixels ProbeWallPixels ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
+for _probe in ProbeToastsSet ProbeToastsSample ProbeSceneInspect ProbeVisualSample ProbeHudIconShot ProbeSparklinePixels ProbeWallPixels ProbeHudPupae ProbeCanonicalizeAssets ProbeActorOrientation ProbeAntHeadingPixels; do
   UCMD run_script --file "$(winpath "$PROBE_DIR/$_probe.cs")" >/dev/null 2>&1 || true
 done
 wait_for_compiled || true
@@ -2258,6 +2367,17 @@ while :; do
   line="$(sample_once)"
   printf '%s\n' "$line" >> "$SAMPLES"
   samples=$((samples+1))
+
+  # La cría del HUD, en la MISMA ventana que la partida: cada PUPAE_STEP segundos,
+  # no en cada muestra — la sonda lee los `Text`, pero duplicar cada llamada al CLI
+  # no añade ventana. La sonda ya está compilada (lista de antes de Play), así que
+  # este `run_script` no recarga el dominio.
+  now="$(date +%s)"
+  if [[ $now -ge $pupae_next ]]; then
+    pline="$(UCMD run_script --file "$(winpath "$PROBE_DIR/ProbeHudPupae.cs")" 2>/dev/null | cmd_result 2>/dev/null || true)"
+    if [[ "$pline" == HUDPUPAE* ]]; then printf '%s\n' "$pline" >> "$PUPAE_FILE"; fi
+    pupae_next=$(( now + PUPAE_STEP ))
+  fi
   tick="${line%%|*}"
   # Tick estancado: la recarga de dominio que dispara un script recién compilado
   # puede dejar el mundo congelado (o el editor en pausa) sin dejar error. Se
@@ -2447,6 +2567,21 @@ if analyze_walls "$WALL_DUMP" "${WALL_CROPS:-$WALL_DIR}"; then
   log "✓ el terreno que colisiona está en pantalla (medidor scripts/playpass-walls.py en verde)"
 else
   RCWALL=1
+fi
+
+# ── 6sexies. La cría del HUD contra el techo de nodrizas (F12) ───────────────
+# Antes del bloque 4 por el mismo motivo que iconos, gráfica y paredes: esa fase
+# reconstruye la escena y vuelve a entrar en Play, así que las muestras de ESTA
+# partida ya no serían las mismas. Veredicto propio: un fallo aquí es la CRÍA
+# (una tarjeta enseñando más pupas de las que el mundo sostiene), no un glifo, ni
+# una barra, ni el terreno.
+RCPUPAE=0
+log ""
+log "▶ Cría del HUD: ninguna tarjeta pinta más pupas que el techo de nodrizas (F12)"
+if analyze_pupae "$PUPAE_FILE"; then
+  log "✓ la puesta del HUD se queda dentro del techo de nodrizas"
+else
+  RCPUPAE=1
 fi
 
 # ── 7. Bloque 4: interacción (entradas sin dispositivo) ─────────────────────
@@ -2669,9 +2804,9 @@ fi
 
 # ── 9. Resumen ───────────────────────────────────────────────────────────────
 log ""
-if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCSPARK -eq 0 && $RCWALL -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
-  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto, iconos, gráfica y terreno (F5.1/F6) verificados en vivo" \
-                      || log "✓ bloques 3 y 5 + aspecto, iconos, gráfica y terreno (F5.1/F6) verificados en vivo"
+if [[ $RC35 -eq 0 && $RC4 -eq 0 && $RCF5 -eq 0 && $RCICON -eq 0 && $RCSPARK -eq 0 && $RCWALL -eq 0 && $RCPUPAE -eq 0 && $RCDISCARD -eq 0 && $RCFP -eq 0 ]]; then
+  [[ $BLOCK4 -eq 1 ]] && log "✓ Play pass completo: bloques 3, 4 y 5 + aspecto, iconos, gráfica, terreno y cría (F5.1/F6/F12) verificados en vivo" \
+                      || log "✓ bloques 3 y 5 + aspecto, iconos, gráfica, terreno y cría (F5.1/F6/F12) verificados en vivo"
   [[ $FP_COMPARED -eq 1 ]] && log "  ✓ y el árbol quedó con la MISMA huella que la pasada anterior ($FP_FILE): el pase no acumula estado"
   exit 0
 fi
@@ -2683,6 +2818,7 @@ fi
 [[ $RCICON -ne 0 ]] && echo "✗ los iconos del HUD fallaron (ver arriba)" >&2 || true
 [[ $RCSPARK -ne 0 ]] && echo "✗ las barras de descargas de la gráfica fallaron (ver arriba)" >&2 || true
 [[ $RCWALL -ne 0 ]] && echo "✗ las paredes del terreno no se miden como están en pantalla (ver arriba)" >&2 || true
+[[ $RCPUPAE -ne 0 ]] && echo "✗ la cría del HUD pasó el techo de nodrizas (ver arriba)" >&2 || true
 [[ $RC4 -ne 0 ]] && echo "✗ el bloque 4 falló (ver arriba)" >&2 || true
 [[ $RCDISCARD -ne 0 ]] && echo "✗ el descarte del churn no dejó el árbol limpio (ver arriba)" >&2 || true
 [[ $RCFP -ne 0 ]] && echo "✗ la huella del árbol cambió entre dos pasadas del mismo montaje (ver arriba)" >&2 || true

@@ -11,22 +11,28 @@
 #
 # CÓMO. Muestrea el texto REAL de las tarjetas con `scripts/unity/ProbeHudPupae.cs`
 # cada `--interval` segundos, `--samples` veces, y falla si alguna muestra pinta
-# más pupas que el techo (`NurseCeilingModel.Hard`, espejo del Core fijado por
-# prueba). Una sola foto no puede afirmar «nunca»: se acumula y se decide al final.
+# más pupas que el techo. Una sola foto no puede afirmar «nunca»: se acumula y se
+# decide al final.
 #
 # Uso:
 #   scripts/play-game.sh --species lasius,eciton \
 #       --pool tests/fixtures/warm-v2.antgenome --speed 10     # en otra terminal
 #   scripts/check-hud-pupae.sh                                  # 12 muestras cada 10 s
 #   scripts/check-hud-pupae.sh --samples 20 --interval 5
+#   scripts/check-hud-pupae.sh --analyze artifacts/playpass-hud-pupae.txt
 #   scripts/check-hud-pupae.sh --selftest                       # el veredicto, sin editor
+#
+# `--analyze` juzga un volcado YA tomado (una línea `HUDPUPAE|…` por muestra) con
+# el MISMO veredicto que el muestreo: es lo que usa el play pass, que muestrea
+# dentro de su propia partida en vez de abrir otra.
 #
 # Códigos de salida: 0 verde · 1 alguna muestra pasó el techo · 2 falló la sonda
 # · 3 no hay editor en Play (o falta el CLI).
 #
 # No lanza Unity: medir una partida que hay que arrancar y cerrar es otra cosa
 # (y ensucia `Game.unity`, que el lanzador reescribe con su configuración). Este
-# guard se engancha a la que ya esté corriendo.
+# guard se engancha a la que ya esté corriendo, y el play pass lo hace sin
+# cambiar de sesión.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -36,27 +42,31 @@ PROBE="$ROOT/scripts/unity/ProbeHudPupae.cs"
 
 SAMPLES=12
 INTERVAL=10
+ANALYZE=""
 SELFTEST=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --samples)  SAMPLES="$2";  shift 2 ;;
         --interval) INTERVAL="$2"; shift 2 ;;
+        --analyze)  ANALYZE="$2";  shift 2 ;;
         --selftest) SELFTEST=1;    shift ;;
         -h|--help)
-            sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,/^set -euo pipefail/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
             exit 0 ;;
         *) echo "✗ opción desconocida: $1" >&2; exit 3 ;;
     esac
 done
 
-command -v python3 >/dev/null 2>&1 \
-    || { echo "✗ falta python3 (se usa para leer el JSON del CLI y el veredicto)" >&2; exit 3; }
-
-# El veredicto lo decide python: acumula picos por colonia y cuenta las muestras
-# que excedieron. Lee las líneas HUDPUPAE por stdin, una por muestra.
-juzga() {
-    python3 -c '
+# ── El veredicto (puro: lo usan el muestreo, --analyze y --selftest) ────────
+# Lee una línea `HUDPUPAE|…` por muestra y decide. Acumula picos por colonia y
+# el número de muestras que excedieron: una sola no dice «nunca».
+#
+# ASCII a propósito: la consola de Windows es cp1252 y una flecha o un punto
+# medio en un print matan el veredicto con UnicodeEncodeError (medido: la
+# comprobación salía en verde por fuera y el script moría antes de decidir).
+veredicto() {
+    python3 -c "
 import sys
 
 techo = None
@@ -67,61 +77,69 @@ ticks = []
 
 for raw in sys.stdin:
     raw = raw.strip()
-    if not raw:
+    if not raw or not raw.startswith('HUDPUPAE'):
         continue
-    campos = dict(p.split("=", 1) for p in raw.split("|")[1:] if "=" in p)
-    if "techo" in campos:
-        techo = int(campos["techo"])
-    if "tick" in campos:
-        ticks.append(int(campos["tick"]))
-    if campos.get("error") == "sin-tarjetas":
+    campos = dict(p.split('=', 1) for p in raw.split('|')[1:] if '=' in p)
+    if 'techo' in campos:
+        techo = int(campos['techo'])
+    if 'tick' in campos:
+        ticks.append(int(campos['tick']))
+    if campos.get('error') == 'sin-tarjetas':
         sin_tarjetas += 1
     for k, v in campos.items():
-        if not k.startswith("c"):
+        if not k.startswith('c'):
             continue
-        pupas = v.split("/")[1]
+        adultos, pupas = v.split('/')[:2]
         pico[k] = max(pico.get(k, 0), int(pupas))
-    if campos.get("excede") == "1":
+    if campos.get('excede') == '1':
         excede += 1
 
 if techo is None:
-    print("ERROR: las muestras no traen techo", file=sys.stderr)
+    print('ERROR: las muestras no traen techo')
     sys.exit(2)
 
-# ASCII a proposito: la consola de Windows es cp1252 y una flecha o un punto
-# medio en un print matan el veredicto con UnicodeEncodeError (medido: la
-# comprobacion salia en verde por fuera y el script moria antes de decidir).
 print()
-print("techo de nodrizas: %d" % techo)
-print("pico por colonia: " + " | ".join("%s %d" % (k, v) for k, v in sorted(pico.items())))
-print("ventana: tick %d -> %d" % (min(ticks), max(ticks)) if ticks else "ventana: sin tick")
+print(f'techo de nodrizas: {techo}')
+print('pico por colonia: ' + ' | '.join(f'{k} {v}' for k, v in sorted(pico.items())))
+print(f'ventana: tick {min(ticks)} -> {max(ticks)}' if ticks else 'ventana: sin tick')
 if sin_tarjetas:
-    print("! %d muestra(s) sin tarjeta pintada (arranque o cambio de ronda)" % sin_tarjetas)
+    print(f'! {sin_tarjetas} muestra(s) sin tarjeta pintada (arranque o cambio de ronda)')
 
 if excede:
-    print("FALLO: %d muestra(s) pintaron MAS pupas que el techo %d" % (excede, techo))
+    print(f'FALLO: {excede} muestra(s) pintaron MAS pupas que el techo {techo}')
     sys.exit(1)
 maxp = max(pico.values()) if pico else 0
-print("OK: ninguna muestra paso el techo (%d <= %d en todas)" % (maxp, techo))
+print(f'OK: ninguna muestra paso el techo ({maxp} <= {techo} en todas)')
 sys.exit(0)
-'
+"
 }
 
-# `--selftest`: el veredicto, con muestras SINTÉTICAS y sin editor. Un guard que
-# sólo sabe decir «verde» no protege de nada, así que la rama roja se prueba aquí.
-if [[ "$SELFTEST" == "1" ]]; then
-    limpio=0; roto=0
-    printf '%s\n' 'HUDPUPAE|tick=1|techo=6|c0=40/6/ok|c1=40/5/ok|pico=6|excede=0' | juzga >/dev/null || limpio=$?
-    printf '%s\n' 'HUDPUPAE|tick=2|techo=6|c0=40/7/EXCEDE|c1=40/5/ok|pico=7|excede=1' | juzga >/dev/null || roto=$?
-    if [[ $limpio -eq 0 && $roto -eq 1 ]]; then
+# ── El veredicto, sin editor: sobre un volcado ya tomado ────────────────────
+if [[ -n "$ANALYZE" ]]; then
+    [[ -f "$ANALYZE" ]] || { echo "✗ no hay volcado: $ANALYZE" >&2; exit 2; }
+    veredicto < "$ANALYZE"
+    exit $?
+fi
+
+# ── El veredicto, sin editor: con muestras de mentira ───────────────────────
+# Prueba las dos caras que importan —verde con 6, rojo con 7— porque el guard
+# sólo vale si se le ha visto fallar.
+if [[ $SELFTEST -eq 1 ]]; then
+    rc_ok=0
+    printf 'HUDPUPAE|tick=100|techo=6|c0=40/6/ok|c1=40/6/ok|pico=6|excede=0\n' | veredicto >/dev/null || rc_ok=$?
+    rc_bad=0
+    printf 'HUDPUPAE|tick=100|techo=6|c0=40/7/EXCEDE|c1=40/6/ok|pico=7|excede=1\n' | veredicto >/dev/null || rc_bad=$?
+    if [[ $rc_ok -eq 0 && $rc_bad -eq 1 ]]; then
         echo "✓ selftest: verde con 6 · rojo con 7"
         exit 0
     fi
-    echo "✗ selftest: limpio=$limpio (esperado 0) · roto=$roto (esperado 1)" >&2
+    echo "✗ selftest: verde rc=$rc_ok (esperado 0) · rojo rc=$rc_bad (esperado 1)" >&2
     exit 2
 fi
 
 [[ -f "$PROBE" ]] || { echo "✗ falta la sonda: $PROBE" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 \
+    || { echo "✗ falta python3 (se usa para leer el JSON del CLI)" >&2; exit 3; }
 
 source "$ROOT/scripts/lib/unity-cli.sh"
 
@@ -162,15 +180,7 @@ sys.stdout.write(out)
 # «verde» por no haber mirado nada — el falso positivo que este script existe
 # para no repetir.
 status="$(UCMD editor_status 2>/dev/null || true)"
-# Sin editor, el CLI contesta un sobre con `success:false` (o nada): no es lo
-# mismo que un editor vivo que no está en Play, y el mensaje tiene que decirlo.
-connected="$(printf '%s' "$status" | python3 -c "
-import sys, json
-try: d = json.load(sys.stdin)
-except Exception:
-    print(0); sys.exit(0)
-print(1 if d.get('success') and (d.get('data') or {}).get('result') else 0)" 2>/dev/null || echo 0)"
-if [[ "$connected" != "1" ]]; then
+if [[ -z "$status" ]]; then
     echo "✗ no hay ningún Unity Editor conectado al proyecto ($PROJECT)" >&2
     echo "  ábrelo con: scripts/play-game.sh --species lasius,eciton --pool tests/fixtures/warm-v2.antgenome" >&2
     exit 3
@@ -204,4 +214,4 @@ for i in $(seq 1 "$SAMPLES"); do
     if [[ $i -lt $SAMPLES ]]; then sleep "$INTERVAL"; fi
 done
 
-printf '%s\n' "${MUESTRAS[@]}" | juzga
+printf '%s\n' "${MUESTRAS[@]}" | veredicto

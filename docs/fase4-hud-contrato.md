@@ -322,12 +322,13 @@ La cadena se fija en dos puntos, y cada uno cubre lo que el otro no ve:
 | `NurseCeilingModel` | `Assets/Scripts/Streaming/`, modelo PURO | El techo tal como lo calcula la vista: `max(1, (int)(adultas · 0,15))` y `Hard = 6`. Es **espejo deliberado** del Core (Unity no referencia el Core). |
 | `NurseCeilingTests` | suite headless | Que el espejo no derive (`NurseShare`, `MaxAdults` y la fórmula, adultos 0…40) y que el stream con el que se pinta el HUD **nunca trae más de 6** en la pareja con laberinto y reclutamiento — y que **llega a 6**, para no pasar mirando el arranque. |
 | `ProbeHudPupae` | `scripts/unity/ProbeHudPupae.cs` | Lo que la PARTIDA enseña: lee los `Text` de las tarjetas, saca `colonia N`, `adultas/40` y `pupas N` del texto real y devuelve `HUDPUPAE\|tick=…\|techo=6\|c0=40/5/ok\|…\|excede=0`. |
-| `check-hud-pupae.sh` | `scripts/` | El «nunca»: muestrea la partida viva cada N segundos, acumula picos por colonia y falla (rc 1) si alguna muestra pasó el techo. Sin editor en Play sale rc 3 — no se declara verde por no haber mirado. |
+| `check-hud-pupae.sh` | `scripts/` | El «nunca»: muestrea la partida viva cada N segundos, acumula picos por colonia y falla (rc 1) si alguna muestra pasó el techo. Sin editor en Play sale rc 3 — no se declara verde por no haber mirado. Su veredicto es también el del **play pass** (`--analyze` sobre el volcado de la propia partida), que ahí sí distingue: rompe sólo si el HUD pinta de más, y no medir es un aviso. |
 
 ```bash
 bash scripts/play-game.sh --species lasius,eciton \
     --pool tests/fixtures/warm-v2.antgenome --speed 10   # en otra terminal
 scripts/check-hud-pupae.sh                               # 12 muestras, cada 10 s
+scripts/check-hud-pupae.sh --analyze artifacts/playpass-hud-pupae.txt   # lo que midió el pass
 ```
 
 Medido en la partida de la semilla 42 (pareja, grid 96, `--speed 10`): 20
